@@ -17,7 +17,7 @@ DxRenderer::~DxRenderer()
     }
 }
 
-bool InitD3D12(DxRenderer* pRenderer, bool enableDebug)
+bool InitDx(DxRenderer* pRenderer, bool enableDebug)
 {
     if (IsNull(pRenderer)) {
         return false;

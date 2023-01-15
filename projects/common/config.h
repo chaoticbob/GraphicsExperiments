@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -10,6 +11,29 @@
 #    include <wrl/client.h>
 using Microsoft::WRL::ComPtr;
 #endif
+
+#define GREX_LOG_INFO(MSG)                     \
+    {                                          \
+        std::stringstream ss_grex_log_info;    \
+        ss_grex_log_info << "INFO : " << MSG;  \
+        Print(ss_grex_log_info.str().c_str()); \
+    }
+
+#define GREX_LOG_ERROR(MSG)                    \
+    {                                          \
+        std::stringstream ss_grex_log_info;    \
+        ss_grex_log_info << "ERROR: " << MSG;  \
+        Print(ss_grex_log_info.str().c_str()); \
+    }
+
+inline void Print(const char* c_str)
+{
+#if defined(WIN32)
+    OutputDebugStringA(c_str);
+#else
+    std::cout << c_str;
+#endif
+}
 
 template <typename T>
 bool IsNull(const T* ptr)
@@ -30,4 +54,30 @@ size_t SizeInBytes(const std::vector<T>& container)
 {
     size_t n = container.size() * sizeof(T);
     return n;
+}
+
+template <typename T>
+uint32_t CountU32(const std::vector<T>& container)
+{
+    return static_cast<uint32_t>(container.size());
+}
+
+template <typename T>
+T* DataPtr(std::vector<T>& container)
+{
+    return container.empty() ? nullptr : container.data();
+}
+
+template <typename T>
+const T* DataPtr(const std::vector<T>& container)
+{
+    return container.empty() ? nullptr : container.data();
+}
+
+template <typename T>
+bool Contains(const T& elem, const std::vector<T>& container)
+{
+    auto it    = std::find(container.begin(), container.end(), elem);
+    bool found = (it != container.end());
+    return found;
 }

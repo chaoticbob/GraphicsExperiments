@@ -2,7 +2,7 @@
 
 #include <cassert>
 
-Window::Window(uint32_t width, uint32_t height)
+Window::Window(uint32_t width, uint32_t height, const char* pTitle)
     : mWidth(width),
       mHeight(height)
 {
@@ -14,7 +14,7 @@ Window::Window(uint32_t width, uint32_t height)
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-    mWindow = glfwCreateWindow(static_cast<int>(mWidth), static_cast<int>(mHeight), "D3D12 triangle ray trace", nullptr, nullptr);
+    mWindow = glfwCreateWindow(static_cast<int>(mWidth), static_cast<int>(mHeight), pTitle, nullptr, nullptr);
     if (!mWindow) {
         assert(false);
         return;
@@ -33,9 +33,9 @@ Window::~Window()
     glfwTerminate();
 }
 
-std::unique_ptr<Window> Window::Create(uint32_t width, uint32_t height)
+std::unique_ptr<Window> Window::Create(uint32_t width, uint32_t height, const char* pTitle)
 {
-    Window* pWindow = new Window(width, height);
+    Window* pWindow = new Window(width, height, pTitle);
     if (IsNull(pWindow)) {
         return nullptr;
     }

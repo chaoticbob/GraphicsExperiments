@@ -19,12 +19,12 @@
 class Window
 {
 private:
-    Window(uint32_t width, uint32_t height);
+    Window(uint32_t width, uint32_t height, const char* pTitle);
 
 public:
     ~Window();
 
-    static std::unique_ptr<Window> Create(uint32_t width, uint32_t height);
+    static std::unique_ptr<Window> Create(uint32_t width, uint32_t height, const char* pTitle);
 
     uint32_t    GetWidth() const { return mWidth; }
     uint32_t    GetHeight() const { return mHeight; }

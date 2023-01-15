@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.0)
 
-project(0001_d3d12_basic_ray_tracing)
+project(001_raytracing_basic_d3d12)
 
 add_executable(
-    0001_d3d12_basic_ray_tracing
-    0001_d3d12_basic_ray_tracing.cpp
+    001_raytracing_basic_d3d12
+    001_raytracing_basic_d3d12.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/dx_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/dx_renderer.cpp
@@ -13,13 +13,13 @@ add_executable(
 )
 
 target_include_directories(
-    0001_d3d12_basic_ray_tracing
+    001_raytracing_basic_d3d12
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
            ${GREX_THIRD_PARTY_DIR}/glm
 )
 
 target_link_libraries(
-    0001_d3d12_basic_ray_tracing
+    001_raytracing_basic_d3d12
     PUBLIC glfw
            d3d12
            dxgi

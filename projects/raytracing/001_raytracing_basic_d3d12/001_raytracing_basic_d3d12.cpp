@@ -15,13 +15,13 @@
             ss << "*** FUNCTION CALL FAILED *** \n"; \
             ss << "FUNCTION: " << #FN << "\n";       \
             ss << "\n";                              \
-            OutputDebugStringA(ss.str().c_str());    \
+            GREX_LOG_ERROR(ss.str().c_str());        \
             assert(false);                           \
         }                                            \
     }
 
 // =============================================================================
-// Shder code
+// Shader code
 // =============================================================================
 const char* gRayTracingShaders = R"(
 
@@ -99,7 +99,7 @@ void CreateRayTracingStateObject(
     size_t               shadeBinarySize,
     const void*          pShaderBinary,
     ID3D12StateObject**  ppStateObject);
-void CreateShaderTables(
+void CreateShaderRecordTables(
     DxRenderer*        pRenderer,
     ID3D12StateObject* pStateObject,
     ID3D12Resource**   ppRayGenSRT,
@@ -118,7 +118,7 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
 
-    if (!InitD3D12(renderer.get(), gEnableDebug)) {
+    if (!InitDx(renderer.get(), gEnableDebug)) {
         return EXIT_FAILURE;
     }
 
@@ -164,7 +164,7 @@ int main(int argc, char** argv)
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error: " << errorMsg << "\n";
-            OutputDebugStringA(ss.str().c_str());
+            GREX_LOG_ERROR(ss.str().c_str());
             return EXIT_FAILURE;
         }
 
@@ -204,12 +204,12 @@ int main(int argc, char** argv)
         &stateObject);
 
     // *************************************************************************
-    // Shader tables
+    // Shader record tables
     // *************************************************************************
     ComPtr<ID3D12Resource> rgenSRT;
     ComPtr<ID3D12Resource> missSRT;
     ComPtr<ID3D12Resource> hitgSRT;
-    CreateShaderTables(
+    CreateShaderRecordTables(
         renderer.get(),
         stateObject.Get(),
         &rgenSRT,
@@ -276,7 +276,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight);
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "001_raytracing_basic_d3d12");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -618,7 +618,7 @@ void CreateRayTracingStateObject(
     CHECK_CALL(pRenderer->Device->CreateStateObject(&stateObjectDesc, IID_PPV_ARGS(ppStateObject)));
 }
 
-void CreateShaderTables(
+void CreateShaderRecordTables(
     DxRenderer*        pRenderer,
     ID3D12StateObject* pStateObject,
     ID3D12Resource**   ppRayGenSRT,

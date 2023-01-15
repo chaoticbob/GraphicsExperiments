@@ -116,20 +116,18 @@ message("Found Vulkan:")
 message("  Vulkan include directory: ${VULKAN_INCLUDE_DIR}")
 message("  Vulkan library directory: ${VULKAN_LIBRARY_DIR}")
 
-## ------------------------------------------------------------------------------
-## Extras
-## ------------------------------------------------------------------------------
-#if (GREX_ENABLE_GLSLANG)
-#    set(BUILD_SHARED_LIBS       OFF CACHE BOOL "" FORCE)
-#    set(BUILD_EXTERNAL          OFF CACHE BOOL "" FORCE)
-#    set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
-#    set(ENABLE_GLSLANG_JS       OFF CACHE BOOL "" FORCE)
-#    set(ENABLE_HLSL             OFF CACHE BOOL "" FORCE)
-#    set(ENABLE_PCH              OFF CACHE BOOL "" FORCE)
-#    set(ENABLE_CTEST            OFF CACHE BOOL "" FORCE)
-#    add_subdirectory(${GREX_EXTRAS_DIR}/glslang)
-#    message("Enabled GLSL runtime shader compilation with glslang")
-#endif()
+# ------------------------------------------------------------------------------
+# glslang
+# ------------------------------------------------------------------------------
+set(BUILD_SHARED_LIBS       OFF CACHE BOOL "" FORCE)
+set(BUILD_EXTERNAL          OFF CACHE BOOL "" FORCE)
+set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
+set(ENABLE_GLSLANG_JS       OFF CACHE BOOL "" FORCE)
+set(ENABLE_HLSL             OFF CACHE BOOL "" FORCE)
+set(ENABLE_PCH              OFF CACHE BOOL "" FORCE)
+set(ENABLE_CTEST            OFF CACHE BOOL "" FORCE)
+add_subdirectory(${GREX_THIRD_PARTY_DIR}/glslang)
+message("Enabled GLSL runtime shader compilation with glslang")
 
 
 # ------------------------------------------------------------------------------
