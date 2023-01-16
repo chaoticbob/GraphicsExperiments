@@ -11,3 +11,9 @@ makes it easier to compare / contrast how something is done in each API.
 
 Both versions also make use of run time shader compilation. D3D12 uses [DXC](https://github.com/microsoft/DirectXShaderCompiler) and Vulkan
 uses [glslang](https://github.com/KhronosGroup/glslang).
+
+### basic procedural
+Very back ray tracing example of procedural using an intersetion shader. Ray traces
+a hard coded sphere. Sphere is hard coded in the intersection shader.
+
+This experiment builds off of **raytracing_basic**. 
