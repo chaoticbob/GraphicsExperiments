@@ -1,7 +1,7 @@
 # Ray Tracing
 
 ### raytracing_basic
-Super simple ray tracing examples using D3D12 and Vulkan. These borrow from 
+Super simple ray tracing experiments using D3D12 and Vulkan. These borrow from 
 the [DirectX-Graphics-Samples](https://github.com/microsoft/DirectX-Graphics-Samples) 
 and [SaschaWillem's Vulkan Examples](https://github.com/SaschaWillems/Vulkan). They've 
 been rewritten in a way that helps me follow the code should I need a refresher.
@@ -13,7 +13,7 @@ Both versions also make use of run time shader compilation. D3D12 uses [DXC](htt
 uses [glslang](https://github.com/KhronosGroup/glslang).
 
 ### basic procedural
-Very back ray tracing example of tracing a procedural using an intersection shader. Ray traces
-a hard coded sphere. Sphere is hard coded in the intersection shader.
+Very basic ray tracing experiments of procedural AABB using an intersection shader. Ray traces
+a hardcoded sphere. Sphere is hardcoded in the intersection shader.
 
 This experiment builds off of **raytracing_basic**. 
