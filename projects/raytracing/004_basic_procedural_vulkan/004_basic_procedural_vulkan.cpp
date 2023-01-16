@@ -67,12 +67,67 @@ const char* gShaderCHIT = R"(
 #extension GL_EXT_nonuniform_qualifier : enable
 
 layout(location = 0) rayPayloadInEXT vec3 hitValue;
-hitAttributeEXT vec2 attribs;
+
+hitAttributeEXT vec3 hitPosition;
 
 void main()
 {
-  const vec3 barycentricCoords = vec3(1.0f - attribs.x - attribs.y, attribs.x, attribs.y);
-  hitValue = barycentricCoords;
+    // Lambert shading
+    vec3 lightPos = vec3(2, 5, -5);
+    vec3 lightDir = normalize(lightPos - hitPosition);
+    float d = 0.8 * clamp(dot(lightDir, normalize(hitPosition)), 0, 1);
+    float a = 0.2;
+
+    hitValue = vec3(clamp(a + d, 0, 1));
+}
+)";
+
+const char* gShaderRINT = R"(
+//
+// Based on:
+//   https://github.com/georgeouzou/vk_exp/blob/master/shaders/sphere.rint
+//
+#version 460
+#extension GL_EXT_ray_tracing : enable
+
+hitAttributeEXT vec3 hitPosition;
+
+// this method is documented in raytracing gems book
+vec2 gems_intersections(vec3 orig, vec3 dir, vec3 center, float radius)
+{
+	vec3 f = orig - center;
+	float a = dot(dir, dir);
+	float bi = dot(-f, dir);
+	float c = dot(f, f) - radius * radius;
+	vec3 s = f + (bi/a)*dir;
+	float discr = radius * radius - dot(s, s);
+
+	vec2 t = vec2(-1.0, -1.0);
+	if (discr >= 0) {
+		float q = bi + sign(bi) * sqrt(a*discr);
+		float t1 = c / q;
+		float t2 = q / a;
+		t = vec2(t1, t2);
+	}
+	return t;
+}
+
+void main()
+{
+	vec3 orig = gl_WorldRayOriginEXT;
+	vec3 dir = gl_WorldRayDirectionEXT;
+
+	vec3 aabb_max = vec3(1, 1, 1);
+	vec3 aabb_min = vec3(-1, -1, -1);
+	vec3 center = (aabb_max + aabb_min) / vec3(2.0);
+	float radius = (aabb_max.x - aabb_min.x) / 2.0;
+
+	vec2 t = gems_intersections(orig, dir, center, radius);
+
+	hitPosition =  orig + t.x * dir;
+	reportIntersectionEXT(t.x, 0);
+	hitPosition =  orig + t.y * dir;
+	reportIntersectionEXT(t.y, 0);	
 }
 )";
 
@@ -104,14 +159,17 @@ void CreateShaderModules(
     const std::vector<uint32_t>& spirvRGEN,
     const std::vector<uint32_t>& spirvCHIT,
     const std::vector<uint32_t>& spirvMISS,
+    const std::vector<uint32_t>& spirvRINT,
     VkShaderModule*              pModuleRGEN,
     VkShaderModule*              pModuleCHIT,
-    VkShaderModule*              pModuleMISS);
+    VkShaderModule*              pModuleMISS,
+    VkShaderModule*              pModuleRINT);
 void CreateRayTracingPipeline(
     VulkanRenderer*  pRenderer,
     VkShaderModule   moduleRGEN,
     VkShaderModule   moduleCHIT,
     VkShaderModule   moduleMISS,
+    VkShaderModule   moduleRINT,
     VkPipelineLayout pipelineLayout,
     VkPipeline*      pPipeline);
 void CreateShaderBindingTables(
@@ -119,7 +177,7 @@ void CreateShaderBindingTables(
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR& rayTracingProperties,
     VkPipeline                                       pipeline,
     VulkanBuffer*                                    pRayGenSBT,
-    VulkanBuffer*                                    pClosestHitSBT,
+    VulkanBuffer*                                    pHitGroupSBT,
     VulkanBuffer*                                    pMissSBT);
 void CreateBLAS(VulkanRenderer* pRenderer, VulkanBuffer* pBLASBuffer, VkAccelerationStructureKHR* pBLAS);
 void CreateTLAS(VulkanRenderer* pRenderer, VkAccelerationStructureKHR blas, VulkanBuffer* pTLASBuffer, VkAccelerationStructureKHR* pTLAS);
@@ -149,6 +207,7 @@ int main(int argc, char** argv)
     std::vector<uint32_t> spirvRGEN;
     std::vector<uint32_t> spirvCHIT;
     std::vector<uint32_t> spirvMISS;
+    std::vector<uint32_t> spirvRINT;
     {
         std::string   errorMsg;
         CompileResult res = CompileGLSL(gShaderRGEN, "main", VK_SHADER_STAGE_RAYGEN_BIT_KHR, {}, &spirvRGEN, &errorMsg);
@@ -165,6 +224,15 @@ int main(int argc, char** argv)
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (CHIT): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            return EXIT_FAILURE;
+        }
+
+        res = CompileGLSL(gShaderRINT, "main", VK_SHADER_STAGE_INTERSECTION_BIT_KHR, {}, &spirvRINT, &errorMsg);
+        if (res != COMPILE_SUCCESS) {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (RINT): " << errorMsg << "\n";
             GREX_LOG_ERROR(ss.str().c_str());
             return EXIT_FAILURE;
         }
@@ -200,14 +268,17 @@ int main(int argc, char** argv)
     VkShaderModule moduleRGEN = VK_NULL_HANDLE;
     VkShaderModule moduleCHIT = VK_NULL_HANDLE;
     VkShaderModule moduleMISS = VK_NULL_HANDLE;
+    VkShaderModule moduleRINT = VK_NULL_HANDLE;
     CreateShaderModules(
         renderer.get(),
         spirvRGEN,
         spirvCHIT,
         spirvMISS,
+        spirvRINT,
         &moduleRGEN,
         &moduleCHIT,
-        &moduleMISS);
+        &moduleMISS,
+        &moduleRINT);
 
     // *************************************************************************
     // Get ray tracing properties
@@ -234,6 +305,7 @@ int main(int argc, char** argv)
         moduleRGEN,
         moduleCHIT,
         moduleMISS,
+        moduleRINT,
         pipelineLayout,
         &pipeline);
 
@@ -247,14 +319,14 @@ int main(int argc, char** argv)
     //
     // *************************************************************************
     VulkanBuffer rgenSBT = {};
-    VulkanBuffer chitSBT = {};
+    VulkanBuffer hitgSBT = {};
     VulkanBuffer missSBT = {};
     CreateShaderBindingTables(
         renderer.get(),
         rayTracingProperties,
         pipeline,
         &rgenSBT,
-        &chitSBT,
+        &hitgSBT,
         &missSBT);
 
     // *************************************************************************
@@ -353,7 +425,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "002_raytracing_basic_vulkan");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "004_basic_procedural_vulkan");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -476,10 +548,10 @@ int main(int argc, char** argv)
             rgenShaderSBTEntry.stride        = alignedHandleSize;
             rgenShaderSBTEntry.size          = alignedHandleSize;
 
-            VkStridedDeviceAddressRegionKHR chitShaderSBTEntry = {};
-            chitShaderSBTEntry.deviceAddress = GetDeviceAddress(renderer.get(), &chitSBT);
-            chitShaderSBTEntry.stride        = alignedHandleSize;
-            chitShaderSBTEntry.size          = alignedHandleSize;
+            VkStridedDeviceAddressRegionKHR hitgShaderSBTEntry = {};
+            hitgShaderSBTEntry.deviceAddress = GetDeviceAddress(renderer.get(), &hitgSBT);
+            hitgShaderSBTEntry.stride        = alignedHandleSize;
+            hitgShaderSBTEntry.size          = 2 * alignedHandleSize;
 
             VkStridedDeviceAddressRegionKHR missShaderSBTEntry = {};
             missShaderSBTEntry.deviceAddress = GetDeviceAddress(renderer.get(), &missSBT);
@@ -492,7 +564,7 @@ int main(int argc, char** argv)
                 cmdBuf.CommandBuffer,
                 &rgenShaderSBTEntry,
                 &missShaderSBTEntry,
-                &chitShaderSBTEntry,
+                &hitgShaderSBTEntry,
                 &callableShaderSbtEntry,
                 gWindowWidth,
                 gWindowHeight,
@@ -575,9 +647,11 @@ void CreateShaderModules(
     const std::vector<uint32_t>& spirvRGEN,
     const std::vector<uint32_t>& spirvCHIT,
     const std::vector<uint32_t>& spirvMISS,
+    const std::vector<uint32_t>& spirvRINT,
     VkShaderModule*              pModuleRGEN,
     VkShaderModule*              pModuleCHIT,
-    VkShaderModule*              pModuleMISS)
+    VkShaderModule*              pModuleMISS,
+    VkShaderModule*              pModuleRINT)
 {
     // Ray gen
     {
@@ -605,6 +679,15 @@ void CreateShaderModules(
 
         CHECK_CALL(vkCreateShaderModule(pRenderer->Device, &createInfo, nullptr, pModuleMISS));
     }
+
+    // Intersection
+    {
+        VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+        createInfo.codeSize                 = SizeInBytes(spirvRINT);
+        createInfo.pCode                    = DataPtr(spirvRINT);
+
+        CHECK_CALL(vkCreateShaderModule(pRenderer->Device, &createInfo, nullptr, pModuleRINT));
+    }
 }
 
 void CreateRayTracingPipeline(
@@ -612,6 +695,7 @@ void CreateRayTracingPipeline(
     VkShaderModule   moduleRGEN,
     VkShaderModule   moduleCHIT,
     VkShaderModule   moduleMISS,
+    VkShaderModule   moduleRINT,
     VkPipelineLayout pipelineLayout,
     VkPipeline*      pPipeline)
 {
@@ -635,6 +719,15 @@ void CreateRayTracingPipeline(
 
         shaderStages.push_back(createInfo);
     }
+    // Intersection
+    {
+        VkPipelineShaderStageCreateInfo createInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        createInfo.stage                           = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
+        createInfo.module                          = moduleRINT;
+        createInfo.pName                           = "main";
+
+        shaderStages.push_back(createInfo);
+    }
     // Miss
     {
         VkPipelineShaderStageCreateInfo createInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
@@ -644,7 +737,6 @@ void CreateRayTracingPipeline(
 
         shaderStages.push_back(createInfo);
     }
-
     // Shader groups
     std::vector<VkRayTracingShaderGroupCreateInfoKHR> shaderGroups = {};
     // Ray gen
@@ -658,14 +750,14 @@ void CreateRayTracingPipeline(
 
         shaderGroups.push_back(createInfo);
     }
-    // Closest hit
+    // Closest hit + Intersection
     {
         VkRayTracingShaderGroupCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR};
-        createInfo.type                                 = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
+        createInfo.type                                 = VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR;
         createInfo.generalShader                        = VK_SHADER_UNUSED_KHR;
         createInfo.closestHitShader                     = 1; // shaderStages[1]
         createInfo.anyHitShader                         = VK_SHADER_UNUSED_KHR;
-        createInfo.intersectionShader                   = VK_SHADER_UNUSED_KHR;
+        createInfo.intersectionShader                   = 2; // shaderStages[2]
 
         shaderGroups.push_back(createInfo);
     }
@@ -673,7 +765,7 @@ void CreateRayTracingPipeline(
     {
         VkRayTracingShaderGroupCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR};
         createInfo.type                                 = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-        createInfo.generalShader                        = 2; // shaderStages[2]
+        createInfo.generalShader                        = 3; // shaderStages[3]
         createInfo.closestHitShader                     = VK_SHADER_UNUSED_KHR;
         createInfo.anyHitShader                         = VK_SHADER_UNUSED_KHR;
         createInfo.intersectionShader                   = VK_SHADER_UNUSED_KHR;
@@ -707,7 +799,7 @@ void CreateShaderBindingTables(
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR& rayTracingProperties,
     VkPipeline                                       pipeline,
     VulkanBuffer*                                    pRayGenSBT,
-    VulkanBuffer*                                    pClosestHitSBT,
+    VulkanBuffer*                                    pHitGroupSBT,
     VulkanBuffer*                                    pMissSBT)
 {
     // Hardcoded group count
@@ -729,8 +821,10 @@ void CreateShaderBindingTables(
     //  +--------+
     //  |  CHIT  | offset = alignedHandleSize
     //  +--------+
-    //  |  MISS  | offset = 2 * handleSize
-    //  ----------
+    //  |  RINT  | offset = 2 * handleSize
+    //  +--------+
+    //  |  MISS  | offset = 3 * handleSize
+    //  +--------+
     //
     std::vector<char> handlesData(handesDataSize);
     CHECK_CALL(fn_vkGetRayTracingShaderGroupHandlesKHR(
@@ -745,8 +839,8 @@ void CreateShaderBindingTables(
     VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
 
     char* pShaderGroupHandleRGEN = handlesData.data();
-    char* pShaderGroupHandleCHIT = handlesData.data() + alignedHandleSize;
-    char* pShaderGroupHandleMISS = handlesData.data() + 2 * alignedHandleSize;
+    char* pShaderGroupHandleHITG = handlesData.data() + alignedHandleSize;
+    char* pShaderGroupHandleMISS = handlesData.data() + 3 * alignedHandleSize;
 
     //
     // Create buffers for each shader group's SBT and copy the
@@ -766,15 +860,16 @@ void CreateShaderBindingTables(
             shaderGroupBaseAlignment, // minAlignment
             pRayGenSBT));             // pBuffer
     }
-    // Closest hit
+    // Closest hit + Intersection
     {
+        // Copy 2*alignedHandleSize to make sure we get both handles
         CHECK_CALL(CreateBuffer(
             pRenderer,                // pRenderer
-            handleSize,               // srcSize
-            pShaderGroupHandleCHIT,   // pSrcData
+            2 * alignedHandleSize,    // srcSize
+            pShaderGroupHandleHITG,   // pSrcData
             usageFlags,               // usageFlags
             shaderGroupBaseAlignment, // minAlignment
-            pClosestHitSBT));         // pBuffer
+            pHitGroupSBT));         // pBuffer
     }
     // Miss
     {
@@ -791,72 +886,36 @@ void CreateShaderBindingTables(
 void CreateBLAS(VulkanRenderer* pRenderer, VulkanBuffer* pBLASBuffer, VkAccelerationStructureKHR* pBLAS)
 {
     // clang-format off
-    std::vector<float> vertices =
+    std::vector<VkAabbPositionsKHR> aabbs =
     {
-         0.0f,  1.0f, 0.0f,
-         1.0f, -1.0f, 0.0f,
-        -1.0f, -1.0f, 0.0f
-    };  
-
-    std::vector<uint32_t> indices =
-    {
-        0, 1, 2
+        { -1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f }
     };
-
-	VkTransformMatrixKHR transformMatrix = {
-		1.0f, 0.0f, 0.0f, 0.0f,
-		0.0f, 1.0f, 0.0f, 0.0f,
-		0.0f, 0.0f, 1.0f, 0.0f
-	};
     // clang-format on
 
     // Create geometry buffers
-    VulkanBuffer vertexBuffer;
-    VulkanBuffer indexBuffer;
-    VulkanBuffer transformBuffer;
+    VulkanBuffer aabbBuffer;
     {
         VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
 
         CHECK_CALL(CreateBuffer(
-            pRenderer,             // pRenderer
-            SizeInBytes(vertices), // srcSize
-            DataPtr(vertices),     // pSrcData
-            usageFlags,            // usageFlags
-            0,                     // minAlignment
-            &vertexBuffer));       // pBuffer
-
-        CHECK_CALL(CreateBuffer(
-            pRenderer,            // pRenderer
-            SizeInBytes(indices), // srcSize
-            DataPtr(indices),     // pSrcData
-            usageFlags,           // usageFlags
-            0,                    // minAlignment
-            &indexBuffer));       // pBuffer
-
-        CHECK_CALL(CreateBuffer(
-            pRenderer,               // pRenderer
-            sizeof(transformMatrix), // srcSize
-            &transformMatrix,        // pSrcData
-            usageFlags,              // usageFlags
-            0,                       // minAlignment
-            &transformBuffer));      // pBuffer
+            pRenderer,          // pRenderer
+            SizeInBytes(aabbs), // srcSize
+            DataPtr(aabbs),     // pSrcData
+            usageFlags,         // usageFlags
+            0,                  // minAlignment
+            &aabbBuffer));      // pBuffer
     }
 
     // Get acceleration structure build size
     VkAccelerationStructureBuildSizesInfoKHR buildSizesInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR};
     {
         // Geometry
-        VkAccelerationStructureGeometryKHR geometry             = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
-        geometry.flags                                          = VK_GEOMETRY_OPAQUE_BIT_KHR;
-        geometry.geometryType                                   = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-        geometry.geometry.triangles.sType                       = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-        geometry.geometry.triangles.vertexFormat                = VK_FORMAT_R32G32B32_SFLOAT;
-        geometry.geometry.triangles.vertexData.deviceAddress    = GetDeviceAddress(pRenderer, &vertexBuffer);
-        geometry.geometry.triangles.vertexStride                = 12;
-        geometry.geometry.triangles.maxVertex                   = 3;
-        geometry.geometry.triangles.indexType                   = VK_INDEX_TYPE_UINT32;
-        geometry.geometry.triangles.indexData.deviceAddress     = GetDeviceAddress(pRenderer, &indexBuffer);
-        geometry.geometry.triangles.transformData.deviceAddress = GetDeviceAddress(pRenderer, &transformBuffer);
+        VkAccelerationStructureGeometryKHR geometry = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
+        geometry.flags                              = VK_GEOMETRY_OPAQUE_BIT_KHR;
+        geometry.geometryType                       = VK_GEOMETRY_TYPE_AABBS_KHR;
+        geometry.geometry.aabbs.sType               = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
+        geometry.geometry.aabbs.data.deviceAddress  = GetDeviceAddress(pRenderer, &aabbBuffer);
+        geometry.geometry.aabbs.stride              = sizeof(VkAabbPositionsKHR);
 
         // Build geometry info
         VkAccelerationStructureBuildGeometryInfoKHR buildGeometryInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
@@ -932,17 +991,12 @@ void CreateBLAS(VulkanRenderer* pRenderer, VulkanBuffer* pBLASBuffer, VkAccelera
     //
     {
         // Geometry
-        VkAccelerationStructureGeometryKHR geometry             = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
-        geometry.flags                                          = VK_GEOMETRY_OPAQUE_BIT_KHR;
-        geometry.geometryType                                   = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-        geometry.geometry.triangles.sType                       = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-        geometry.geometry.triangles.vertexFormat                = VK_FORMAT_R32G32B32_SFLOAT;
-        geometry.geometry.triangles.vertexData.deviceAddress    = GetDeviceAddress(pRenderer, &vertexBuffer);
-        geometry.geometry.triangles.vertexStride                = 12;
-        geometry.geometry.triangles.maxVertex                   = 3;
-        geometry.geometry.triangles.indexType                   = VK_INDEX_TYPE_UINT32;
-        geometry.geometry.triangles.indexData.deviceAddress     = GetDeviceAddress(pRenderer, &indexBuffer);
-        geometry.geometry.triangles.transformData.deviceAddress = GetDeviceAddress(pRenderer, &transformBuffer);
+        VkAccelerationStructureGeometryKHR geometry = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
+        geometry.flags                              = VK_GEOMETRY_OPAQUE_BIT_KHR;
+        geometry.geometryType                       = VK_GEOMETRY_TYPE_AABBS_KHR;
+        geometry.geometry.aabbs.sType               = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
+        geometry.geometry.aabbs.data.deviceAddress  = GetDeviceAddress(pRenderer, &aabbBuffer);
+        geometry.geometry.aabbs.stride              = sizeof(VkAabbPositionsKHR);
 
         // Build geometry info
         VkAccelerationStructureBuildGeometryInfoKHR buildGeometryInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
@@ -980,9 +1034,7 @@ void CreateBLAS(VulkanRenderer* pRenderer, VulkanBuffer* pBLASBuffer, VkAccelera
     }
 
     DestroyBuffer(pRenderer, &scratchBuffer);
-    DestroyBuffer(pRenderer, &vertexBuffer);
-    DestroyBuffer(pRenderer, &indexBuffer);
-    DestroyBuffer(pRenderer, &transformBuffer);
+    DestroyBuffer(pRenderer, &aabbBuffer);
 }
 
 void CreateTLAS(VulkanRenderer* pRenderer, VkAccelerationStructureKHR blas, VulkanBuffer* pTLASBuffer, VkAccelerationStructureKHR* pTLAS)

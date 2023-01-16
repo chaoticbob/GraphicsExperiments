@@ -47,6 +47,7 @@ void MyRaygenShader()
 	const float2 pixelCenter = (float2)DispatchRaysIndex() + float2(0.5, 0.5);
 	const float2 inUV = pixelCenter/(float2)DispatchRaysDimensions();
 	float2 d = inUV * 2.0 - 1.0;
+    d.y = -d.y;
 
 	float4 origin = mul(Cam.ViewInverse, float4(0,0,0,1));
 	float4 target = mul(Cam.ProjInverse, float4(d.x, d.y, 1, 1));
