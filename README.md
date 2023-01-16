@@ -9,15 +9,15 @@ Whatever comes to mind. Right now there is only a raytracing example.
 
 # Some Stuff
 1. The main idea behind these graphics experiments is to show how XYZ is done without a bunch of noise around it. 
-Sometimes noise can't be avoided.
-2. Use as little wrapper code as possible. Yes, this will mean there's some bloat due to code duplication.
+Sometimes noise is unavoidable.
+2. Experiments strives to use as little wrapper code as possible. Yes, this will mean there's some bloat due to code duplication.
 3. Minimize on error handling so that it doesn't obfuscate what the experiment is trying to accomplish.
 
 ### Windowing
 [glfw](https://github.com/glfw/glfw) is used to create platform windows. 
 
 ### Vulkan
-Vulkan experiments will use [VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) 
+Vulkan experiments use [VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) 
 to simplify buffer and image creation and keeps the code significantly smaller.
 
 # Dependencies
