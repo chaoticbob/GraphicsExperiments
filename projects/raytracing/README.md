@@ -13,7 +13,7 @@ Both versions also make use of run time shader compilation. D3D12 uses [DXC](htt
 uses [glslang](https://github.com/KhronosGroup/glslang).
 
 ### basic procedural
-Very back ray tracing example of procedural using an intersetion shader. Ray traces
+Very back ray tracing example of tracing a procedural using an intersection shader. Ray traces
 a hard coded sphere. Sphere is hard coded in the intersection shader.
 
 This experiment builds off of **raytracing_basic**. 
