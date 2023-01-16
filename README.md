@@ -22,7 +22,15 @@ Vulkan experiments use [VulkanMemoryAllocator](https://github.com/GPUOpen-Librar
 to simplify buffer and image creation and keeps the code significantly smaller.
 
 # Dependencies
+* Vulkan SDK 1.3.236.0
+* Windows SDK Version 10.0.22621.0
+* [DirectXShaderCompiler](https://github.com/microsoft/DirectXShaderCompiler) v1.7.2212 (Dec 16, 2022) for DXIL.DLL (if needed - see note below)
 * [glfw](https://github.com/glfw/glfw)
 * [glm](https://github.com/g-truc/glm)
 * [glslang](https://github.com/KhronosGroup/glslang)
 * [VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)
+
+## DXIL.DLL
+If shader compilation on D3D12 fails because DXIL.DLL can't be found, copy it from
+the [DirectXShaderCompiler v1.7.2212 release](https://github.com/microsoft/DirectXShaderCompiler/releases).
+
