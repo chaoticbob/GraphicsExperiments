@@ -21,7 +21,7 @@ Vulkan experiments will use [VulkanMemoryAllocator](https://github.com/GPUOpen-L
 to simplify buffer and image creation and keeps the code significantly smaller.
 
 # Dependencies
-[glfw](https://github.com/glfw/glfw)
-[glm](https://github.com/g-truc/glm)
-[glslang](https://github.com/KhronosGroup/glslang)
-[VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)
+* [glfw](https://github.com/glfw/glfw)
+* [glm](https://github.com/g-truc/glm)
+* [glslang](https://github.com/KhronosGroup/glslang)
+* [VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)
