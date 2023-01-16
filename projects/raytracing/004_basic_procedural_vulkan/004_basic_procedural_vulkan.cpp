@@ -85,7 +85,7 @@ hitAttributeEXT vec3 hitPosition;
 void main()
 {
     // Lambert shading
-    vec3 lightPos = vec3(2, 5, -5);
+    vec3 lightPos = vec3(2, 5, 5);
     vec3 lightDir = normalize(lightPos - hitPosition);
     float d = 0.8 * clamp(dot(lightDir, normalize(hitPosition)), 0, 1);
     float a = 0.2;
@@ -107,11 +107,11 @@ hitAttributeEXT vec3 hitPosition;
 // this method is documented in raytracing gems book
 vec2 gems_intersections(vec3 orig, vec3 dir, vec3 center, float radius)
 {
-	vec3 f = orig - center;
+	vec3  f = orig - center;
 	float a = dot(dir, dir);
 	float bi = dot(-f, dir);
 	float c = dot(f, f) - radius * radius;
-	vec3 s = f + (bi/a)*dir;
+	vec3  s = f + (bi/a)*dir;
 	float discr = radius * radius - dot(s, s);
 
 	vec2 t = vec2(-1.0, -1.0);
@@ -125,7 +125,7 @@ vec2 gems_intersections(vec3 orig, vec3 dir, vec3 center, float radius)
 }
 
 void main()
-{
+{   
 	vec3 orig = gl_WorldRayOriginEXT;
 	vec3 dir = gl_WorldRayDirectionEXT;
 
@@ -134,12 +134,12 @@ void main()
 	vec3 center = (aabb_max + aabb_min) / vec3(2.0);
 	float radius = (aabb_max.x - aabb_min.x) / 2.0;
 
+    // Might be some wonky behavior if inside sphere
 	vec2 t = gems_intersections(orig, dir, center, radius);
+    float thit = min(t.x, t.y);    
 
-	hitPosition =  orig + t.x * dir;
-	reportIntersectionEXT(t.x, 0);
-	hitPosition =  orig + t.y * dir;
-	reportIntersectionEXT(t.y, 0);	
+	hitPosition =  orig + thit * dir;
+	reportIntersectionEXT(thit, 0);
 }
 )";
 

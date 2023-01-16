@@ -26,19 +26,22 @@
 const char* gRayTracingShaders = R"(
 
 struct CameraProperties {
-	float4x4 ViewInverse;
-	float4x4 ProjInverse;
+    float4x4 ViewInverse;
+    float4x4 ProjInverse;
 };
 
 RaytracingAccelerationStructure  Scene        : register(t0); // Acceleration structure
 RWTexture2D<float4>              RenderTarget : register(u1); // Output textures
 ConstantBuffer<CameraProperties> Cam          : register(b2); // Constant buffer
 
-typedef BuiltInTriangleIntersectionAttributes MyAttributes;
-
 struct RayPayload
 {
     float4 color;
+};
+
+struct ProceduralPrimitiveAttributes
+{
+    float3 position;
 };
 
 [shader("raygeneration")]
@@ -72,10 +75,61 @@ void MyMissShader(inout RayPayload payload)
 }
 
 [shader("closesthit")]
-void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
+void MyClosestHitShader(inout RayPayload payload, in ProceduralPrimitiveAttributes attr)
 {
-    float3 barycentrics = float3(1 - attr.barycentrics.x - attr.barycentrics.y, attr.barycentrics.x, attr.barycentrics.y);
-    payload.color = float4(barycentrics, 1);
+    // Lambert shading
+    float3 lightPos = float3(2, 5, 5);
+    float3 lightDir = normalize(lightPos - attr.position);
+    float d = 0.8 * saturate(dot(lightDir, normalize(attr.position)));
+    float a = 0.2;
+    
+    float3 color = (float3)saturate(a + d);
+    payload.color = float4(color, 1);
+}
+
+//
+// Based on:
+//   https://github.com/georgeouzou/vk_exp/blob/master/shaders/sphere.rint
+//
+// this method is documented in raytracing gems book
+float2 gems_intersections(float3 orig, float3 dir, float3 center, float radius)
+{
+	float3 f = orig - center;
+	float  a = dot(dir, dir);
+	float  bi = dot(-f, dir);
+	float  c = dot(f, f) - radius * radius;
+	float3 s = f + (bi/a)*dir;
+	float  discr = radius * radius - dot(s, s);
+
+	float2 t = float2(-1.0, -1.0);
+	if (discr >= 0) {
+		float q = bi + sign(bi) * sqrt(a*discr);
+		float t1 = c / q;
+		float t2 = q / a;
+		t = float2(t1, t2);
+	}
+	return t;
+}
+
+[shader("intersection")]
+void MyIntersectionShader()
+{
+	float3 orig = ObjectRayOrigin();
+	float3 dir = ObjectRayDirection();
+
+	float3 aabb_max = float3(1, 1, 1);
+	float3 aabb_min = float3(-1, -1, -1);
+	float3 center = (aabb_max + aabb_min) / (float3)2.0;
+	float radius = (aabb_max.x - aabb_min.x) / 2.0;
+
+    // Might be some wonky behavior if inside sphere
+	float2 t = gems_intersections(orig, dir, center, radius);
+    float thit = min(t.x, t.y);    
+
+    ProceduralPrimitiveAttributes attr;
+
+	attr.position =  orig + thit * dir;
+	ReportHit(thit, 0, attr);
 }
 )";
 
@@ -86,10 +140,11 @@ static uint32_t gWindowWidth  = 1280;
 static uint32_t gWindowHeight = 720;
 static bool     gEnableDebug  = true;
 
-static LPCWSTR gHitGroupName         = L"MyHitGroup";
-static LPCWSTR gRayGenShaderName     = L"MyRaygenShader";
-static LPCWSTR gMissShaderName       = L"MyMissShader";
-static LPCWSTR gClosestHitShaderName = L"MyClosestHitShader";
+static LPCWSTR gHitGroupName           = L"MyHitGroup";
+static LPCWSTR gRayGenShaderName       = L"MyRaygenShader";
+static LPCWSTR gMissShaderName         = L"MyMissShader";
+static LPCWSTR gClosestHitShaderName   = L"MyClosestHitShader";
+static LPCWSTR gIntersectionShaderName = L"MyIntersectionShader";
 
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
 void CreateLocalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
@@ -277,7 +332,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "001_raytracing_basic_d3d12");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "003_basic_procedural_d3d12");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -464,7 +519,7 @@ void CreateRayTracingStateObject(
     enum
     {
         DXIL_LIBRARY_INDEX       = 0,
-        TRIANGLE_HIT_GROUP_INDEX  = 1,
+        AABB_HIT_GROUP_INDEX  = 1,
         SHADER_CONFIG_INDEX      = 2,
         LOCAL_ROOT_SIG_INDEX     = 3,
         SHADER_ASSOCIATION_INDEX = 4,
@@ -508,10 +563,16 @@ void CreateRayTracingStateObject(
     chitExport.ExportToRename    = nullptr;
     chitExport.Flags             = D3D12_EXPORT_FLAG_NONE;
 
+    D3D12_EXPORT_DESC rintExport = {};
+    rintExport.Name              = gIntersectionShaderName;
+    rintExport.ExportToRename    = nullptr;
+    rintExport.Flags             = D3D12_EXPORT_FLAG_NONE;
+
     std::vector<D3D12_EXPORT_DESC> exports;
     exports.push_back(rgenExport);
     exports.push_back(missExport);
     exports.push_back(chitExport);
+    exports.push_back(rintExport);
 
     D3D12_DXIL_LIBRARY_DESC dxilLibraryDesc = {};
     dxilLibraryDesc.DXILLibrary             = {pShaderBinary, shadeBinarySize};
@@ -523,7 +584,7 @@ void CreateRayTracingStateObject(
     pSubobject->pDesc                 = &dxilLibraryDesc;
 
     // ---------------------------------------------------------------------
-    // Triangle hit group
+    // AABB hit group
     //
     // A hit group specifies closest hit, any hit and intersection shaders
     // to be executed when a ray intersects the geometry's triangle/AABB.
@@ -531,12 +592,13 @@ void CreateRayTracingStateObject(
     // shader, so others are not set.
     //
     // ---------------------------------------------------------------------
-    D3D12_HIT_GROUP_DESC hitGroupDesc   = {};
-    hitGroupDesc.HitGroupExport         = gHitGroupName;
-    hitGroupDesc.Type                   = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-    hitGroupDesc.ClosestHitShaderImport = gClosestHitShaderName;
+    D3D12_HIT_GROUP_DESC hitGroupDesc     = {};
+    hitGroupDesc.HitGroupExport           = gHitGroupName;
+    hitGroupDesc.Type                     = D3D12_HIT_GROUP_TYPE_PROCEDURAL_PRIMITIVE;
+    hitGroupDesc.ClosestHitShaderImport   = gClosestHitShaderName;
+    hitGroupDesc.IntersectionShaderImport = gIntersectionShaderName;
 
-    pSubobject        = &subobjects[TRIANGLE_HIT_GROUP_INDEX];
+    pSubobject        = &subobjects[AABB_HIT_GROUP_INDEX];
     pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
     pSubobject->pDesc = &hitGroupDesc;
 
@@ -549,7 +611,7 @@ void CreateRayTracingStateObject(
     // ---------------------------------------------------------------------
     D3D12_RAYTRACING_SHADER_CONFIG shaderConfig = {};
     shaderConfig.MaxPayloadSizeInBytes          = 4 * sizeof(float); // float4 color
-    shaderConfig.MaxAttributeSizeInBytes        = 2 * sizeof(float); // float2 barycentrics
+    shaderConfig.MaxAttributeSizeInBytes        = 3 * sizeof(float); // float3 position
 
     pSubobject        = &subobjects[SHADER_CONFIG_INDEX];
     pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG;
@@ -633,7 +695,7 @@ void CreateShaderRecordTables(
     D3D12_RESOURCE_DESC desc = {};
     desc.Dimension           = D3D12_RESOURCE_DIMENSION_BUFFER;
     desc.Alignment           = 0;
-    desc.Width               = alignedShaderRecordSize + 8;  // 8 bytes for constant buffer descriptor in ray gen
+    desc.Width               = alignedShaderRecordSize + 8; // 8 bytes for constant buffer descriptor in ray gen
     desc.Height              = 1;
     desc.DepthOrArraySize    = 1;
     desc.MipLevels           = 1;
@@ -661,6 +723,8 @@ void CreateShaderRecordTables(
         nullptr,                           // pOptimizedClearValue
         IID_PPV_ARGS(ppMissSRT)));         // riidResource, ppvResource
 
+    // Readjust size for both closest hit and intersection
+    desc.Width = 2 * alignedShaderRecordSize;
     CHECK_CALL(pRenderer->Device->CreateCommittedResource(
         &heapProperties,                   // pHeapProperties
         D3D12_HEAP_FLAG_NONE,              // HeapFlags
@@ -678,41 +742,30 @@ void CreateShaderRecordTables(
 
     CHECK_CALL(CreateBuffer(pRenderer, shaderRecordSize, rayGenShaderIdentifier, ppRayGenSRT));
     CHECK_CALL(CreateBuffer(pRenderer, shaderRecordSize, missShaderIdentifier, ppMissSRT));
-    CHECK_CALL(CreateBuffer(pRenderer, shaderRecordSize, hitGroupShaderIdentifier, ppHitGroupSRT));
+    
+    // Copy both closest hit and intersection identifiers
+    CHECK_CALL(CreateBuffer(pRenderer, 2 * shaderRecordSize, hitGroupShaderIdentifier, ppHitGroupSRT));
 }
 
 void CreateBLAS(DxRenderer* pRenderer, ID3D12Resource** ppBLAS)
 {
     // clang-format off
-    std::vector<float> vertices =
+    std::vector<D3D12_RAYTRACING_AABB> aabbs =
     {
-         0.0f,  1.0f, 0.0f,
-         1.0f, -1.0f, 0.0f,
-        -1.0f, -1.0f, 0.0f
-    };  
-
-    std::vector<uint32_t> indices =
-    {
-        0, 1, 2
+        { -1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f }
     };
     // clang-format on
 
-    ComPtr<ID3D12Resource> vertexBuffer;
-    ComPtr<ID3D12Resource> indexBuffer;
+    ComPtr<ID3D12Resource> aabbBuffer;
 
-    CHECK_CALL(CreateBuffer(pRenderer, SizeInBytes(vertices), vertices.data(), &vertexBuffer));
-    CHECK_CALL(CreateBuffer(pRenderer, SizeInBytes(indices), indices.data(), &indexBuffer));
+    CHECK_CALL(CreateBuffer(pRenderer, SizeInBytes(aabbs), aabbs.data(), &aabbBuffer));
 
-    D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc       = {};
-    geometryDesc.Type                                 = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-    geometryDesc.Triangles.IndexFormat                = DXGI_FORMAT_R32_UINT;
-    geometryDesc.Triangles.IndexCount                 = 3;
-    geometryDesc.Triangles.IndexBuffer                = indexBuffer->GetGPUVirtualAddress();
-    geometryDesc.Triangles.VertexFormat               = DXGI_FORMAT_R32G32B32_FLOAT;
-    geometryDesc.Triangles.VertexCount                = 3;
-    geometryDesc.Triangles.VertexBuffer.StartAddress  = vertexBuffer->GetGPUVirtualAddress();
-    geometryDesc.Triangles.VertexBuffer.StrideInBytes = 12;
-    geometryDesc.Flags                                = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+    D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc = {};
+    geometryDesc.Type                           = D3D12_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS;
+    geometryDesc.AABBs.AABBCount                = 1;
+    geometryDesc.AABBs.AABBs.StartAddress       = aabbBuffer->GetGPUVirtualAddress();
+    geometryDesc.AABBs.AABBs.StrideInBytes      = sizeof(D3D12_RAYTRACING_AABB);
+    geometryDesc.Flags                          = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
 
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
     //
