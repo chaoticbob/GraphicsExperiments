@@ -61,6 +61,18 @@ void main()
 
 )";
 
+const char* gShaderMISS = R"(
+#version 460
+#extension GL_EXT_ray_tracing : enable
+
+layout(location = 0) rayPayloadInEXT vec3 hitValue;
+
+void main()
+{
+    hitValue = vec3(0.0, 0.0, 0.0);
+}
+)";
+
 const char* gShaderCHIT = R"(
 #version 460
 #extension GL_EXT_ray_tracing : enable
@@ -131,18 +143,6 @@ void main()
 }
 )";
 
-const char* gShaderMISS = R"(
-#version 460
-#extension GL_EXT_ray_tracing : enable
-
-layout(location = 0) rayPayloadInEXT vec3 hitValue;
-
-void main()
-{
-    hitValue = vec3(0.0, 0.0, 0.0);
-}
-)";
-
 // =============================================================================
 // Globals
 // =============================================================================
@@ -157,18 +157,18 @@ void CreatePipelineLayout(VulkanRenderer* pRenderer, VkDescriptorSetLayout descr
 void CreateShaderModules(
     VulkanRenderer*              pRenderer,
     const std::vector<uint32_t>& spirvRGEN,
-    const std::vector<uint32_t>& spirvCHIT,
     const std::vector<uint32_t>& spirvMISS,
+    const std::vector<uint32_t>& spirvCHIT,
     const std::vector<uint32_t>& spirvRINT,
     VkShaderModule*              pModuleRGEN,
-    VkShaderModule*              pModuleCHIT,
     VkShaderModule*              pModuleMISS,
+    VkShaderModule*              pModuleCHIT,
     VkShaderModule*              pModuleRINT);
 void CreateRayTracingPipeline(
     VulkanRenderer*  pRenderer,
     VkShaderModule   moduleRGEN,
-    VkShaderModule   moduleCHIT,
     VkShaderModule   moduleMISS,
+    VkShaderModule   moduleCHIT,
     VkShaderModule   moduleRINT,
     VkPipelineLayout pipelineLayout,
     VkPipeline*      pPipeline);
@@ -177,8 +177,8 @@ void CreateShaderBindingTables(
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR& rayTracingProperties,
     VkPipeline                                       pipeline,
     VulkanBuffer*                                    pRayGenSBT,
-    VulkanBuffer*                                    pHitGroupSBT,
-    VulkanBuffer*                                    pMissSBT);
+    VulkanBuffer*                                    pMissSBT,
+    VulkanBuffer*                                    pHitGroupSBT);
 void CreateBLAS(VulkanRenderer* pRenderer, VulkanBuffer* pBLASBuffer, VkAccelerationStructureKHR* pBLAS);
 void CreateTLAS(VulkanRenderer* pRenderer, VkAccelerationStructureKHR blas, VulkanBuffer* pTLASBuffer, VkAccelerationStructureKHR* pTLAS);
 void CreateUniformBuffer(VulkanRenderer* pRenderer, VulkanBuffer* pBuffer);
@@ -205,8 +205,8 @@ int main(int argc, char** argv)
     //
     // *************************************************************************
     std::vector<uint32_t> spirvRGEN;
-    std::vector<uint32_t> spirvCHIT;
     std::vector<uint32_t> spirvMISS;
+    std::vector<uint32_t> spirvCHIT;
     std::vector<uint32_t> spirvRINT;
     {
         std::string   errorMsg;
@@ -215,6 +215,15 @@ int main(int argc, char** argv)
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (RGEN): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            return EXIT_FAILURE;
+        }
+
+        res = CompileGLSL(gShaderMISS, "main", VK_SHADER_STAGE_MISS_BIT_KHR, {}, &spirvMISS, &errorMsg);
+        if (res != COMPILE_SUCCESS) {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (MISS): " << errorMsg << "\n";
             GREX_LOG_ERROR(ss.str().c_str());
             return EXIT_FAILURE;
         }
@@ -233,15 +242,6 @@ int main(int argc, char** argv)
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (RINT): " << errorMsg << "\n";
-            GREX_LOG_ERROR(ss.str().c_str());
-            return EXIT_FAILURE;
-        }
-
-        res = CompileGLSL(gShaderMISS, "main", VK_SHADER_STAGE_MISS_BIT_KHR, {}, &spirvMISS, &errorMsg);
-        if (res != COMPILE_SUCCESS) {
-            std::stringstream ss;
-            ss << "\n"
-               << "Shader compiler error (MISS): " << errorMsg << "\n";
             GREX_LOG_ERROR(ss.str().c_str());
             return EXIT_FAILURE;
         }
@@ -266,18 +266,18 @@ int main(int argc, char** argv)
     // Shader module
     // *************************************************************************
     VkShaderModule moduleRGEN = VK_NULL_HANDLE;
-    VkShaderModule moduleCHIT = VK_NULL_HANDLE;
     VkShaderModule moduleMISS = VK_NULL_HANDLE;
+    VkShaderModule moduleCHIT = VK_NULL_HANDLE;
     VkShaderModule moduleRINT = VK_NULL_HANDLE;
     CreateShaderModules(
         renderer.get(),
         spirvRGEN,
-        spirvCHIT,
         spirvMISS,
+        spirvCHIT,
         spirvRINT,
         &moduleRGEN,
-        &moduleCHIT,
         &moduleMISS,
+        &moduleCHIT,
         &moduleRINT);
 
     // *************************************************************************
@@ -303,8 +303,8 @@ int main(int argc, char** argv)
     CreateRayTracingPipeline(
         renderer.get(),
         moduleRGEN,
-        moduleCHIT,
         moduleMISS,
+        moduleCHIT,
         moduleRINT,
         pipelineLayout,
         &pipeline);
@@ -319,15 +319,15 @@ int main(int argc, char** argv)
     //
     // *************************************************************************
     VulkanBuffer rgenSBT = {};
-    VulkanBuffer hitgSBT = {};
     VulkanBuffer missSBT = {};
+    VulkanBuffer hitgSBT = {};
     CreateShaderBindingTables(
         renderer.get(),
         rayTracingProperties,
         pipeline,
         &rgenSBT,
-        &hitgSBT,
-        &missSBT);
+        &missSBT,
+        &hitgSBT);
 
     // *************************************************************************
     // Bottom level acceleration structure
@@ -548,15 +548,15 @@ int main(int argc, char** argv)
             rgenShaderSBTEntry.stride        = alignedHandleSize;
             rgenShaderSBTEntry.size          = alignedHandleSize;
 
-            VkStridedDeviceAddressRegionKHR hitgShaderSBTEntry = {};
-            hitgShaderSBTEntry.deviceAddress = GetDeviceAddress(renderer.get(), &hitgSBT);
-            hitgShaderSBTEntry.stride        = alignedHandleSize;
-            hitgShaderSBTEntry.size          = 2 * alignedHandleSize;
-
             VkStridedDeviceAddressRegionKHR missShaderSBTEntry = {};
             missShaderSBTEntry.deviceAddress = GetDeviceAddress(renderer.get(), &missSBT);
             missShaderSBTEntry.stride        = alignedHandleSize;
             missShaderSBTEntry.size          = alignedHandleSize;
+
+            VkStridedDeviceAddressRegionKHR hitgShaderSBTEntry = {};
+            hitgShaderSBTEntry.deviceAddress = GetDeviceAddress(renderer.get(), &hitgSBT);
+            hitgShaderSBTEntry.stride        = alignedHandleSize;
+            hitgShaderSBTEntry.size          = 2 * alignedHandleSize;
 
             VkStridedDeviceAddressRegionKHR callableShaderSbtEntry = {};
 
@@ -645,12 +645,12 @@ void CreatePipelineLayout(VulkanRenderer* pRenderer, VkDescriptorSetLayout descr
 void CreateShaderModules(
     VulkanRenderer*              pRenderer,
     const std::vector<uint32_t>& spirvRGEN,
-    const std::vector<uint32_t>& spirvCHIT,
     const std::vector<uint32_t>& spirvMISS,
+    const std::vector<uint32_t>& spirvCHIT,
     const std::vector<uint32_t>& spirvRINT,
     VkShaderModule*              pModuleRGEN,
-    VkShaderModule*              pModuleCHIT,
     VkShaderModule*              pModuleMISS,
+    VkShaderModule*              pModuleCHIT,
     VkShaderModule*              pModuleRINT)
 {
     // Ray gen
@@ -662,15 +662,6 @@ void CreateShaderModules(
         CHECK_CALL(vkCreateShaderModule(pRenderer->Device, &createInfo, nullptr, pModuleRGEN));
     }
 
-    // Closeset hit
-    {
-        VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        createInfo.codeSize                 = SizeInBytes(spirvCHIT);
-        createInfo.pCode                    = DataPtr(spirvCHIT);
-
-        CHECK_CALL(vkCreateShaderModule(pRenderer->Device, &createInfo, nullptr, pModuleCHIT));
-    }
-
     // Miss
     {
         VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
@@ -678,6 +669,15 @@ void CreateShaderModules(
         createInfo.pCode                    = DataPtr(spirvMISS);
 
         CHECK_CALL(vkCreateShaderModule(pRenderer->Device, &createInfo, nullptr, pModuleMISS));
+    }
+
+    // Closeset hit
+    {
+        VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+        createInfo.codeSize                 = SizeInBytes(spirvCHIT);
+        createInfo.pCode                    = DataPtr(spirvCHIT);
+
+        CHECK_CALL(vkCreateShaderModule(pRenderer->Device, &createInfo, nullptr, pModuleCHIT));
     }
 
     // Intersection
@@ -693,8 +693,8 @@ void CreateShaderModules(
 void CreateRayTracingPipeline(
     VulkanRenderer*  pRenderer,
     VkShaderModule   moduleRGEN,
-    VkShaderModule   moduleCHIT,
     VkShaderModule   moduleMISS,
+    VkShaderModule   moduleCHIT,
     VkShaderModule   moduleRINT,
     VkPipelineLayout pipelineLayout,
     VkPipeline*      pPipeline)
@@ -706,6 +706,15 @@ void CreateRayTracingPipeline(
         VkPipelineShaderStageCreateInfo createInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
         createInfo.stage                           = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
         createInfo.module                          = moduleRGEN;
+        createInfo.pName                           = "main";
+
+        shaderStages.push_back(createInfo);
+    }
+    // Miss
+    {
+        VkPipelineShaderStageCreateInfo createInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        createInfo.stage                           = VK_SHADER_STAGE_MISS_BIT_KHR;
+        createInfo.module                          = moduleMISS;
         createInfo.pName                           = "main";
 
         shaderStages.push_back(createInfo);
@@ -728,15 +737,6 @@ void CreateRayTracingPipeline(
 
         shaderStages.push_back(createInfo);
     }
-    // Miss
-    {
-        VkPipelineShaderStageCreateInfo createInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
-        createInfo.stage                           = VK_SHADER_STAGE_MISS_BIT_KHR;
-        createInfo.module                          = moduleMISS;
-        createInfo.pName                           = "main";
-
-        shaderStages.push_back(createInfo);
-    }
     // Shader groups
     std::vector<VkRayTracingShaderGroupCreateInfoKHR> shaderGroups = {};
     // Ray gen
@@ -750,25 +750,25 @@ void CreateRayTracingPipeline(
 
         shaderGroups.push_back(createInfo);
     }
+    // Miss
+    {
+        VkRayTracingShaderGroupCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR};
+        createInfo.type                                 = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+        createInfo.generalShader                        = 1; // shaderStages[1]
+        createInfo.closestHitShader                     = VK_SHADER_UNUSED_KHR;
+        createInfo.anyHitShader                         = VK_SHADER_UNUSED_KHR;
+        createInfo.intersectionShader                   = VK_SHADER_UNUSED_KHR;
+
+        shaderGroups.push_back(createInfo);
+    }
     // Closest hit + Intersection
     {
         VkRayTracingShaderGroupCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR};
         createInfo.type                                 = VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR;
         createInfo.generalShader                        = VK_SHADER_UNUSED_KHR;
-        createInfo.closestHitShader                     = 1; // shaderStages[1]
+        createInfo.closestHitShader                     = 2; // shaderStages[2]
         createInfo.anyHitShader                         = VK_SHADER_UNUSED_KHR;
-        createInfo.intersectionShader                   = 2; // shaderStages[2]
-
-        shaderGroups.push_back(createInfo);
-    }
-    // Miss
-    {
-        VkRayTracingShaderGroupCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR};
-        createInfo.type                                 = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-        createInfo.generalShader                        = 3; // shaderStages[3]
-        createInfo.closestHitShader                     = VK_SHADER_UNUSED_KHR;
-        createInfo.anyHitShader                         = VK_SHADER_UNUSED_KHR;
-        createInfo.intersectionShader                   = VK_SHADER_UNUSED_KHR;
+        createInfo.intersectionShader                   = 3; // shaderStages[3]
 
         shaderGroups.push_back(createInfo);
     }
@@ -799,8 +799,8 @@ void CreateShaderBindingTables(
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR& rayTracingProperties,
     VkPipeline                                       pipeline,
     VulkanBuffer*                                    pRayGenSBT,
-    VulkanBuffer*                                    pHitGroupSBT,
-    VulkanBuffer*                                    pMissSBT)
+    VulkanBuffer*                                    pMissSBT,
+    VulkanBuffer*                                    pHitGroupSBT)
 {
     // Hardcoded group count
     const uint32_t groupCount = 3;
@@ -819,11 +819,11 @@ void CreateShaderBindingTables(
     //  +--------+
     //  |  RGEN  | offset = 0
     //  +--------+
-    //  |  CHIT  | offset = alignedHandleSize
+    //  |  MISS  | offset = alignedHandleSize
     //  +--------+
-    //  |  RINT  | offset = 2 * handleSize
+    //  |  CHIT  | offset = 2 * handleSize
     //  +--------+
-    //  |  MISS  | offset = 3 * handleSize
+    //  |  RINT  | offset = 3 * handleSize
     //  +--------+
     //
     std::vector<char> handlesData(handesDataSize);
@@ -839,8 +839,8 @@ void CreateShaderBindingTables(
     VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
 
     char* pShaderGroupHandleRGEN = handlesData.data();
-    char* pShaderGroupHandleHITG = handlesData.data() + alignedHandleSize;
-    char* pShaderGroupHandleMISS = handlesData.data() + 3 * alignedHandleSize;
+    char* pShaderGroupHandleMISS = handlesData.data() + alignedHandleSize;
+    char* pShaderGroupHandleHITG = handlesData.data() + 2 * alignedHandleSize;
 
     //
     // Create buffers for each shader group's SBT and copy the
@@ -860,6 +860,16 @@ void CreateShaderBindingTables(
             shaderGroupBaseAlignment, // minAlignment
             pRayGenSBT));             // pBuffer
     }
+    // Miss
+    {
+        CHECK_CALL(CreateBuffer(
+            pRenderer,                // pRenderer
+            handleSize,               // srcSize
+            pShaderGroupHandleMISS,   // pSrcData
+            usageFlags,               // usageFlags
+            shaderGroupBaseAlignment, // minAlignment
+            pMissSBT));               // pBuffer
+    }
     // Closest hit + Intersection
     {
         // Copy 2*alignedHandleSize to make sure we get both handles
@@ -870,16 +880,6 @@ void CreateShaderBindingTables(
             usageFlags,               // usageFlags
             shaderGroupBaseAlignment, // minAlignment
             pHitGroupSBT));         // pBuffer
-    }
-    // Miss
-    {
-        CHECK_CALL(CreateBuffer(
-            pRenderer,                // pRenderer
-            handleSize,               // srcSize
-            pShaderGroupHandleMISS,   // pSrcData
-            usageFlags,               // usageFlags
-            shaderGroupBaseAlignment, // minAlignment
-            pMissSBT));               // pBuffer
     }
 }
 
