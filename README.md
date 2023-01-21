@@ -26,6 +26,10 @@ At the time of this writing, January 2023, the ray tracing experiments have been
 on the **public beta drivers** from AMD and NVIDIA. Sometimes things don't work correctly -
 that's just life using beta drivers. In time the features will move to regular drivers. 
 
+For Vulkan, the drivers need to support 1.3 along with [VK_EXT_descriptor_buffer](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_EXT_descriptor_buffer.html) 
+and [VK_KHR_dynamic_rendering](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_dynamic_rendering.html). 
+And obviously the ray tracing related extensions.
+
 # Dependencies
 * Vulkan SDK 1.3.236.0
 * Windows SDK Version 10.0.22621.0
