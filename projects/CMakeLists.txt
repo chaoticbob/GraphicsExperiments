@@ -14,5 +14,7 @@ add_subdirectory(raytracing/003_basic_procedural_d3d12)
 add_subdirectory(raytracing/004_basic_procedural_vulkan)
 add_subdirectory(raytracing/005_sphereflake_d3d12)
 add_subdirectory(raytracing/006_sphereflake_vulkan)
+add_subdirectory(raytracing/007_basic_reflection_d3d12)
+add_subdirectory(raytracing/008_basic_reflection_vulkan)
 
 add_subdirectory(misc/gen_sphereflake_coords)

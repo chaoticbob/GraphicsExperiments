@@ -66,3 +66,26 @@ D3D12 Notes:
 
 Vulkan Notes:
 * Uses shader record parameters
+
+## basic_reflection
+![alt text](../../images/screenshots/raytracing/basic_reflection.png?raw=true)
+
+**Shows basic reflection via closest hit shader**
+
+Building from the **spherefalke** experiment, basic reflection is added to the closest hit shader.
+The key thing to keep an eye on in this experiment is how similar/different the ray payload is handled
+in D3D12 vs Vulkan. 
+
+The shading in this experiment is really hacky, just tuned enough to let the reflection come through.
+
+This experiment uses [Eric Haines' sphereflake algorithm from SPD](https://www.realtimerendering.com/resources/SPD/) to generate AABBs for
+a sphereflake.
+
+This experiment builds off of **sphereflake**.
+
+D3D12 Notes:
+* Uses local root signature and parameters
+
+Vulkan Notes:
+* Uses shader record parameters
+
