@@ -345,9 +345,7 @@ int main(int argc, char** argv)
         char* pData = nullptr;
         CHECK_CALL(hitgSRT->Map(0, nullptr, reinterpret_cast<void**>(&pData)));
 
-        // size_t shaderRecordSize = Align<size_t>(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + 8, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
         size_t offset = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-        // offset += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
         memcpy(pData + offset, &va, 8);
 
         hitgSRT->Unmap(0, nullptr);
@@ -366,7 +364,7 @@ int main(int argc, char** argv)
 
         D3D12_CPU_DESCRIPTOR_HANDLE descriptor = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
 
-        // RWTexture2D<float4> RenderTarget : register(u1);
+        // Output texture (u1)
         renderer->Device->CreateUnorderedAccessView(outputTexture.Get(), nullptr, &uavDesc, descriptor);
     }
 

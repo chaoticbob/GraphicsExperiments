@@ -241,6 +241,7 @@ int main(int argc, char** argv)
 
         D3D12_CPU_DESCRIPTOR_HANDLE descriptor = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
 
+        // Output texture (u1)
         renderer->Device->CreateUnorderedAccessView(outputTexture.Get(), nullptr, &uavDesc, descriptor);
     }
 
