@@ -89,3 +89,28 @@ D3D12 Notes:
 Vulkan Notes:
 * Uses shader record parameters
 
+## basic_shadow
+![alt text](../../images/screenshots/raytracing/basic_shadow.png?raw=true)
+
+**Shows basic shadow using a miss shadow shader and skipping the closest hit shader if there's a hit**
+
+Building from the **basic_reflection** experiment, basic shadow is added to the closest hit shader.
+The key thing to keep an eye on in this experiment is the use of the shadow miss shader and the flags 
+called in the closest hit shader to end traces on first hit and skip the closeset hit shader.
+
+The shading in this experiment is really hacky, just tuned enough to let the shadows come through.
+
+This experiment uses [Eric Haines' sphereflake algorithm from SPD](https://www.realtimerendering.com/resources/SPD/) to generate AABBs for
+a sphereflake.
+
+This experiment builds off of **basic_reflection**.
+
+D3D12 Notes:
+* Uses local root signature and parameters
+* Uses TraceRay's MissShaderIndex function parameter to reference the two miss shaders.
+
+Vulkan Notes:
+* Uses shader record parameters
+* Uses traceRayExt's missIndex function parameter to reference the two miss shaders.
+
+
