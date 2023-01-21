@@ -54,7 +54,18 @@ void main()
 
     hitValue = vec3(0.0);
 
-    traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, origin.xyz, tmin, direction.xyz, tmax, 0);
+    traceRayEXT(
+        topLevelAS,           // topLevel
+        gl_RayFlagsOpaqueEXT, // rayFlags
+        0xff,                 // cullMask
+        0,                    // sbtRecordOffset
+        0,                    // sbtRecordStride
+        0,                    // missIndex
+        origin.xyz,           // origin
+        tmin,                 // Tmin
+        direction.xyz,        // direction
+        tmax,                 // Tmax
+        0);                   // payload
 
 	imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(hitValue, 0.0));
 }
@@ -806,10 +817,10 @@ void CreateShaderBindingTables(
     const uint32_t groupCount = 3;
 
     // Handle sizes
-    uint32_t handleSize                 = rayTracingProperties.shaderGroupHandleSize;
-    uint32_t shaderGroupHandleAlignment = rayTracingProperties.shaderGroupHandleAlignment;
-    uint32_t alignedHandleSize          = Align(handleSize, shaderGroupHandleAlignment);
-    uint32_t handesDataSize             = groupCount * alignedHandleSize;
+    uint32_t groupHandleSize        = rayTracingProperties.shaderGroupHandleSize;
+    uint32_t groupHandleAlignment   = rayTracingProperties.shaderGroupHandleAlignment;
+    uint32_t alignedGroupHandleSize = Align(groupHandleSize, groupHandleAlignment);
+    uint32_t totalGroupDataSize     = groupCount * groupHandleSize;
 
     //
     // This is what the shader group handles look like
@@ -824,21 +835,21 @@ void CreateShaderBindingTables(
     //  |  HITG  | offset = 64
     //  +--------+
     //
-    std::vector<char> handlesData(handesDataSize);
+    std::vector<char> groupHandlesData(totalGroupDataSize);
     CHECK_CALL(fn_vkGetRayTracingShaderGroupHandlesKHR(
-        pRenderer->Device,    // device
-        pipeline,             // pipeline
-        0,                    // firstGroup
-        groupCount,           // groupCount
-        handesDataSize,       // dataSize
-        handlesData.data())); // pData)
+        pRenderer->Device,         // device
+        pipeline,                  // pipeline
+        0,                         // firstGroup
+        groupCount,                // groupCount
+        totalGroupDataSize,        // dataSize
+        groupHandlesData.data())); // pData)
 
     // Usage flags for SBT buffer
     VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
 
-    char* pShaderGroupHandleRGEN = handlesData.data();
-    char* pShaderGroupHandleMISS = handlesData.data() + alignedHandleSize;
-    char* pShaderGroupHandleHITG = handlesData.data() + 2 * alignedHandleSize;
+    char* pShaderGroupHandleRGEN = groupHandlesData.data();
+    char* pShaderGroupHandleMISS = groupHandlesData.data() + groupHandleSize;
+    char* pShaderGroupHandleHITG = groupHandlesData.data() + 2 * groupHandleSize;
 
     //
     // Create buffers for each shader group's SBT and copy the
@@ -852,7 +863,7 @@ void CreateShaderBindingTables(
     {
         CHECK_CALL(CreateBuffer(
             pRenderer,                // pRenderer
-            handleSize,               // srcSize
+            groupHandleSize,          // srcSize
             pShaderGroupHandleRGEN,   // pSrcData
             usageFlags,               // usageFlags
             shaderGroupBaseAlignment, // minAlignment
@@ -862,7 +873,7 @@ void CreateShaderBindingTables(
     {
         CHECK_CALL(CreateBuffer(
             pRenderer,                // pRenderer
-            handleSize,               // srcSize
+            groupHandleSize,          // srcSize
             pShaderGroupHandleMISS,   // pSrcData
             usageFlags,               // usageFlags
             shaderGroupBaseAlignment, // minAlignment
@@ -872,7 +883,7 @@ void CreateShaderBindingTables(
     {
         CHECK_CALL(CreateBuffer(
             pRenderer,                // pRenderer
-            alignedHandleSize,        // srcSize
+            groupHandleSize,          // srcSize
             pShaderGroupHandleHITG,   // pSrcData
             usageFlags,               // usageFlags
             shaderGroupBaseAlignment, // minAlignment

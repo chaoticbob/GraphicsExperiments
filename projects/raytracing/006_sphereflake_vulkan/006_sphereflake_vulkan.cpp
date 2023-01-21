@@ -57,7 +57,18 @@ void main()
 
     hitValue = vec3(0.0);
 
-    traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, origin.xyz, tmin, direction.xyz, tmax, 0);
+    traceRayEXT(
+        topLevelAS,           // topLevel
+        gl_RayFlagsOpaqueEXT, // rayFlags
+        0xff,                 // cullMask
+        0,                    // sbtRecordOffset
+        0,                    // sbtRecordStride
+        0,                    // missIndex
+        origin.xyz,           // origin
+        tmin,                 // Tmin
+        direction.xyz,        // direction
+        tmax,                 // Tmax
+        0);                   // payload
 
 	imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(hitValue, 1.0));
 }
@@ -893,10 +904,10 @@ void CreateShaderBindingTables(
     const uint32_t groupCount = 3;
 
     // Handle sizes
-    uint32_t handleSize                 = rayTracingProperties.shaderGroupHandleSize;
-    uint32_t shaderGroupHandleAlignment = rayTracingProperties.shaderGroupHandleAlignment;
-    uint32_t alignedHandleSize          = Align(handleSize, shaderGroupHandleAlignment);
-    uint32_t handesDataSize             = groupCount * alignedHandleSize;
+    uint32_t groupHandleSize        = rayTracingProperties.shaderGroupHandleSize;
+    uint32_t groupHandleAlignment   = rayTracingProperties.shaderGroupHandleAlignment;
+    uint32_t alignedGroupHandleSize = Align(groupHandleSize, groupHandleAlignment);
+    uint32_t totalGroupDataSize     = groupCount * groupHandleSize;
 
     //
     // This is what the shader group handles look like
@@ -911,21 +922,21 @@ void CreateShaderBindingTables(
     //  |  HITG  | offset = 64
     //  +--------+
     //
-    std::vector<char> handlesData(handesDataSize);
+    std::vector<char> groupHandlesData(totalGroupDataSize);
     CHECK_CALL(fn_vkGetRayTracingShaderGroupHandlesKHR(
-        pRenderer->Device,    // device
-        pipeline,             // pipeline
-        0,                    // firstGroup
-        groupCount,           // groupCount
-        handesDataSize,       // dataSize
-        handlesData.data())); // pData)
+        pRenderer->Device,         // device
+        pipeline,                  // pipeline
+        0,                         // firstGroup
+        groupCount,                // groupCount
+        totalGroupDataSize,        // dataSize
+        groupHandlesData.data())); // pData)
 
     // Usage flags for SBT buffer
     VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
 
-    char* pShaderGroupHandleRGEN = handlesData.data();
-    char* pShaderGroupHandleMISS = handlesData.data() + alignedHandleSize;
-    char* pShaderGroupHandleHITG = handlesData.data() + 2 * alignedHandleSize;
+    char* pShaderGroupHandleRGEN = groupHandlesData.data();
+    char* pShaderGroupHandleMISS = groupHandlesData.data() + groupHandleSize;
+    char* pShaderGroupHandleHITG = groupHandlesData.data() + 2 * groupHandleSize;
 
     //
     // Create buffers for each shader group's SBT and copy the
@@ -939,7 +950,7 @@ void CreateShaderBindingTables(
     {
         CHECK_CALL(CreateBuffer(
             pRenderer,                // pRenderer
-            handleSize,               // srcSize
+            groupHandleSize,          // srcSize
             pShaderGroupHandleRGEN,   // pSrcData
             usageFlags,               // usageFlags
             shaderGroupBaseAlignment, // minAlignment
@@ -949,7 +960,7 @@ void CreateShaderBindingTables(
     {
         CHECK_CALL(CreateBuffer(
             pRenderer,                // pRenderer
-            handleSize,               // srcSize
+            groupHandleSize,          // srcSize
             pShaderGroupHandleMISS,   // pSrcData
             usageFlags,               // usageFlags
             shaderGroupBaseAlignment, // minAlignment
@@ -957,24 +968,46 @@ void CreateShaderBindingTables(
     }
     // HITG: closest hit + intersection
     {
+        //
+        // This hit group's shader record size is 64 since we need space after
+        // the group handle to store the virtual address for the sphere buffer.
+        //
+        // NOTE: A single identifier is used for all the shaders in the hit group.
+        //       This is why there is not separate shader records for the closest hit
+        //       shader and the intersection shader.
+        //
+
         // 8 bytes for sphere buffer
-        size_t            shaderRecordSize = Align(alignedHandleSize + 8, alignedHandleSize);
-        std::vector<char> shaderRecord(shaderRecordSize);
-        char*             pData = shaderRecord.data();
-
-        memcpy(pData, pShaderGroupHandleHITG, alignedHandleSize);
-        pData += alignedHandleSize;
-
-        VkDeviceAddress sphereBufferAddress = GetDeviceAddress(pRenderer, pSphereBuffer);
-        memcpy(pData, &sphereBufferAddress, sizeof(sphereBufferAddress));
+        size_t shaderRecordSize = Align(alignedGroupHandleSize + 8, alignedGroupHandleSize);
 
         CHECK_CALL(CreateBuffer(
-            pRenderer,                 // pRenderer
-            SizeInBytes(shaderRecord), // srcSize
-            DataPtr(shaderRecord),     // pSrcData
-            usageFlags,                // usageFlags
-            shaderGroupBaseAlignment,  // minAlignment
-            pHitGroupSBT));            // pBuffer
+            pRenderer,                // pRenderer
+            shaderRecordSize,         // srcSize
+            nullptr,                  // pSrcData
+            usageFlags,               // usageFlags
+            shaderGroupBaseAlignment, // minAlignment
+            pHitGroupSBT));           // pBuffer
+
+        // Copy shader handles
+        {
+            char* pData = nullptr;
+            CHECK_CALL(vmaMapMemory(pRenderer->Allocator, pHitGroupSBT->Allocation, reinterpret_cast<void**>(&pData)));
+
+            // Shader group handle
+            memcpy(pData, pShaderGroupHandleHITG, groupHandleSize);
+            pData += alignedGroupHandleSize;
+
+            //
+            // Device address for sphere buffer
+            //
+            // This isn't required to be done here. We can map and copy the
+            // device address later if we want to.
+            //
+            VkDeviceAddress sphereBufferAddress = GetDeviceAddress(pRenderer, pSphereBuffer);
+            memcpy(pData, &sphereBufferAddress, sizeof(sphereBufferAddress));
+
+            vmaUnmapMemory(pRenderer->Allocator, pHitGroupSBT->Allocation);
+        }
     }
 }
 
