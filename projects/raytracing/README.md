@@ -6,7 +6,11 @@
 **Shows the output coordinates are the same for D3D12 and Vullkan**
 
 Barebones experiments showing that the output image/texture coordinates are the
-same for D3D12 and Vulkan. No acceleration structure used.
+same for D3D12 and Vulkan. 
+
+Notes:
+* Does not use acceleration structures
+* Does not use a local root signature or shader record parmeters
 
 ## raytracing_basic
 ![alt text](../../images/screenshots/raytracing/raytracing_basic.png?raw=true)
