@@ -775,7 +775,7 @@ void CreateDescriptorSetLayout(VulkanRenderer* pRenderer, VkDescriptorSetLayout*
         binding.binding                      = 0;
         binding.descriptorType               = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
         binding.descriptorCount              = 1;
-        binding.stageFlags                   = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+        binding.stageFlags                   = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 
         bindings.push_back(binding);
     }
