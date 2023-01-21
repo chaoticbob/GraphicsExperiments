@@ -290,6 +290,11 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
             assert(false && "vkCreateDevice failed");
             return false;
         }
+
+        
+        VkPhysicalDeviceProperties deviceProperties = {};
+        vkGetPhysicalDeviceProperties(pRenderer->PhysicalDevice, &deviceProperties);
+        GREX_LOG_INFO("Created device using " << deviceProperties.deviceName);
     }
 
     // Queue
