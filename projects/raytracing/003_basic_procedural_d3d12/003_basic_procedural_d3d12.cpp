@@ -147,11 +147,9 @@ static LPCWSTR gClosestHitShaderName   = L"MyClosestHitShader";
 static LPCWSTR gIntersectionShaderName = L"MyIntersectionShader";
 
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
-void CreateLocalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
 void CreateRayTracingStateObject(
     DxRenderer*          pRenderer,
     ID3D12RootSignature* pGlobalRootSig,
-    ID3D12RootSignature* pLocalRootSig,
     size_t               shadeBinarySize,
     const void*          pShaderBinary,
     ID3D12StateObject**  ppStateObject);
@@ -238,23 +236,12 @@ int main(int argc, char** argv)
     CreateGlobalRootSig(renderer.get(), &globalRootSig);
 
     // *************************************************************************
-    // Local root signature
-    //
-    // This is a root signature that enables a shader to have unique arguments
-    // that come from shader tables.
-    //
-    // *************************************************************************
-    ComPtr<ID3D12RootSignature> localRootSig;
-    CreateLocalRootSig(renderer.get(), &localRootSig);
-
-    // *************************************************************************
     // Ray tracing pipeline state object
     // *************************************************************************
     ComPtr<ID3D12StateObject> stateObject;
     CreateRayTracingStateObject(
         renderer.get(),
         globalRootSig.Get(),
-        localRootSig.Get(),
         shaderBinary->GetBufferSize(),
         shaderBinary->GetBufferPointer(),
         &stateObject);
@@ -295,23 +282,6 @@ int main(int argc, char** argv)
     // *************************************************************************
     ComPtr<ID3D12Resource> constantBuffer;
     CreateConstantBuffer(renderer.get(), rgenSRT.Get(), &constantBuffer);
-
-    // Update local root signature descriptor
-    //
-    // NOTE: Descriptors for local root signatures are written directly
-    //       into the shader record table for the shader that it
-    //       corresponds to.
-    //
-    {
-        auto va = constantBuffer->GetGPUVirtualAddress();
-
-        char* pData = nullptr;
-        CHECK_CALL(rgenSRT->Map(0, nullptr, reinterpret_cast<void**>(&pData)));
-
-        memcpy(pData + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, &va, 8);
-
-        rgenSRT->Unmap(0, nullptr);
-    }
 
     // *************************************************************************
     // Descriptor heaps
@@ -379,18 +349,28 @@ int main(int argc, char** argv)
         {
             commandList->SetComputeRootSignature(globalRootSig.Get());
             commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
+
+            // Acceleration structure (t0)
             commandList->SetComputeRootShaderResourceView(0, tlasBuffer->GetGPUVirtualAddress());
+            // Output texture (u1)
             commandList->SetComputeRootDescriptorTable(1, descriptorHeap->GetGPUDescriptorHandleForHeapStart());
+            // Constant buffer (b2)
+            commandList->SetComputeRootConstantBufferView(2, constantBuffer->GetGPUVirtualAddress());
 
             commandList->SetPipelineState1(stateObject.Get());
 
-            D3D12_DISPATCH_RAYS_DESC dispatchDesc  = {};
-            dispatchDesc.RayGenerationShaderRecord = {rgenSRT->GetGPUVirtualAddress(), rgenSRT->GetDesc().Width};
-            dispatchDesc.MissShaderTable           = {missSRT->GetGPUVirtualAddress(), missSRT->GetDesc().Width};
-            dispatchDesc.HitGroupTable             = {hitgSRT->GetGPUVirtualAddress(), hitgSRT->GetDesc().Width};
-            dispatchDesc.Width                     = gWindowWidth;
-            dispatchDesc.Height                    = gWindowHeight;
-            dispatchDesc.Depth                     = 1;
+            D3D12_DISPATCH_RAYS_DESC dispatchDesc               = {};
+            dispatchDesc.RayGenerationShaderRecord.StartAddress = rgenSRT->GetGPUVirtualAddress();
+            dispatchDesc.RayGenerationShaderRecord.SizeInBytes  = rgenSRT->GetDesc().Width;
+            dispatchDesc.MissShaderTable.StartAddress           = missSRT->GetGPUVirtualAddress();
+            dispatchDesc.MissShaderTable.SizeInBytes            = missSRT->GetDesc().Width;
+            dispatchDesc.MissShaderTable.StrideInBytes          = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
+            dispatchDesc.HitGroupTable.StartAddress             = hitgSRT->GetGPUVirtualAddress();
+            dispatchDesc.HitGroupTable.SizeInBytes              = hitgSRT->GetDesc().Width;
+            dispatchDesc.HitGroupTable.StrideInBytes            = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
+            dispatchDesc.Width                                  = gWindowWidth;
+            dispatchDesc.Height                                 = gWindowHeight;
+            dispatchDesc.Depth                                  = 1;
 
             commandList->DispatchRays(&dispatchDesc);
 
@@ -458,20 +438,25 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     range.RegisterSpace                     = 0;
     range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[2];
+    D3D12_ROOT_PARAMETER rootParameters[3];
     // Accleration structure (t0)
     rootParameters[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
     rootParameters[0].Descriptor.ShaderRegister = 0;
     rootParameters[0].Descriptor.RegisterSpace  = 0;
     rootParameters[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // Output texture (u1)
+    // Output texture (u1) - descriptor table because texture resources can't be root descriptors
     rootParameters[1].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
     rootParameters[1].DescriptorTable.pDescriptorRanges   = &range;
     rootParameters[1].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
+    // Constant buffer (b2)
+    rootParameters[2].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[2].Descriptor.ShaderRegister = 2;
+    rootParameters[2].Descriptor.RegisterSpace  = 0;
+    rootParameters[2].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
 
     D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-    rootSigDesc.NumParameters             = 2;
+    rootSigDesc.NumParameters             = 3;
     rootSigDesc.pParameters               = rootParameters;
 
     ComPtr<ID3DBlob> blob;
@@ -511,20 +496,17 @@ void CreateLocalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 void CreateRayTracingStateObject(
     DxRenderer*          pRenderer,
     ID3D12RootSignature* pGlobalRootSig,
-    ID3D12RootSignature* pLocalRootSig,
     size_t               shadeBinarySize,
     const void*          pShaderBinary,
     ID3D12StateObject**  ppStateObject)
 {
     enum
     {
-        DXIL_LIBRARY_INDEX       = 0,
+        DXIL_LIBRARY_INDEX    = 0,
         AABB_HIT_GROUP_INDEX  = 1,
-        SHADER_CONFIG_INDEX      = 2,
-        LOCAL_ROOT_SIG_INDEX     = 3,
-        SHADER_ASSOCIATION_INDEX = 4,
-        GLOBAL_ROOT_SIG_INDEX    = 5,
-        PIPELINE_CONFIG_INDEX    = 6,
+        SHADER_CONFIG_INDEX   = 2,
+        GLOBAL_ROOT_SIG_INDEX = 3,
+        PIPELINE_CONFIG_INDEX = 4,
         SUBOBJECT_COUNT,
     };
 
@@ -618,31 +600,6 @@ void CreateRayTracingStateObject(
     pSubobject->pDesc = &shaderConfig;
 
     // ---------------------------------------------------------------------
-    // Local root signature
-    //
-    // This is a root signature that enables a shader to have unique
-    // arguments that come from shader tables.
-    //
-    // ---------------------------------------------------------------------
-    pSubobject        = &subobjects[LOCAL_ROOT_SIG_INDEX];
-    pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
-    pSubobject->pDesc = &pLocalRootSig;
-
-    // ---------------------------------------------------------------------
-    // Shader association
-    // ---------------------------------------------------------------------
-    LPCWSTR shaderAssociationExports[1] = {gRayGenShaderName};
-
-    D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION rootSigAssociation = {};
-    rootSigAssociation.pSubobjectToAssociate                  = &subobjects[LOCAL_ROOT_SIG_INDEX];
-    rootSigAssociation.NumExports                             = 1;
-    rootSigAssociation.pExports                               = shaderAssociationExports;
-
-    pSubobject        = &subobjects[SHADER_ASSOCIATION_INDEX];
-    pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
-    pSubobject->pDesc = &rootSigAssociation;
-
-    // ---------------------------------------------------------------------
     // Global root signature
     //
     // This is a root signature that is shared across all raytracing shaders
@@ -688,14 +645,22 @@ void CreateShaderRecordTables(
     ID3D12Resource**   ppMissSRT,
     ID3D12Resource**   ppHitGroupSRT)
 {
-    UINT shaderIdentifierSize    = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-    UINT shaderRecordSize        = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-    UINT alignedShaderRecordSize = Align<UINT>(shaderRecordSize, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
+    ComPtr<ID3D12StateObjectProperties> stateObjectProperties;
+    CHECK_CALL(pStateObject->QueryInterface(IID_PPV_ARGS(&stateObjectProperties)));
 
+    void* pRayGenShaderIdentifier   = stateObjectProperties->GetShaderIdentifier(gRayGenShaderName);
+    void* pMissShaderIdentifier     = stateObjectProperties->GetShaderIdentifier(gMissShaderName);
+    void* pHitGroupShaderIdentifier = stateObjectProperties->GetShaderIdentifier(gHitGroupName);
+
+    UINT shaderRecordSize = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
+
+    // -------------------------------------------------------------------------
+    // Create buffers for SRTs
+    // -------------------------------------------------------------------------
     D3D12_RESOURCE_DESC desc = {};
     desc.Dimension           = D3D12_RESOURCE_DIMENSION_BUFFER;
     desc.Alignment           = 0;
-    desc.Width               = alignedShaderRecordSize + 8; // 8 bytes for constant buffer descriptor in ray gen
+    desc.Width               = shaderRecordSize;
     desc.Height              = 1;
     desc.DepthOrArraySize    = 1;
     desc.MipLevels           = 1;
@@ -707,44 +672,68 @@ void CreateShaderRecordTables(
     D3D12_HEAP_PROPERTIES heapProperties = {};
     heapProperties.Type                  = D3D12_HEAP_TYPE_UPLOAD;
 
-    CHECK_CALL(pRenderer->Device->CreateCommittedResource(
-        &heapProperties,                   // pHeapProperties
-        D3D12_HEAP_FLAG_NONE,              // HeapFlags
-        &desc,                             // pDesc
-        D3D12_RESOURCE_STATE_GENERIC_READ, // InitialResourceState
-        nullptr,                           // pOptimizedClearValue
-        IID_PPV_ARGS(ppRayGenSRT)));       // riidResource, ppvResource
+    // Ray gen
+    {
+        CHECK_CALL(pRenderer->Device->CreateCommittedResource(
+            &heapProperties,                   // pHeapProperties
+            D3D12_HEAP_FLAG_NONE,              // HeapFlags
+            &desc,                             // pDesc
+            D3D12_RESOURCE_STATE_GENERIC_READ, // InitialResourceState
+            nullptr,                           // pOptimizedClearValue
+            IID_PPV_ARGS(ppRayGenSRT)));       // riidResource, ppvResource
 
-    CHECK_CALL(pRenderer->Device->CreateCommittedResource(
-        &heapProperties,                   // pHeapProperties
-        D3D12_HEAP_FLAG_NONE,              // HeapFlags
-        &desc,                             // pDesc
-        D3D12_RESOURCE_STATE_GENERIC_READ, // InitialResourceState
-        nullptr,                           // pOptimizedClearValue
-        IID_PPV_ARGS(ppMissSRT)));         // riidResource, ppvResource
+        // Copy shader identifier
+        {
+            char* pData;
+            CHECK_CALL((*ppRayGenSRT)->Map(0, nullptr, reinterpret_cast<void**>(&pData)));
 
-    // Readjust size for both closest hit and intersection
-    desc.Width = 2 * alignedShaderRecordSize;
-    CHECK_CALL(pRenderer->Device->CreateCommittedResource(
-        &heapProperties,                   // pHeapProperties
-        D3D12_HEAP_FLAG_NONE,              // HeapFlags
-        &desc,                             // pDesc
-        D3D12_RESOURCE_STATE_GENERIC_READ, // InitialResourceState
-        nullptr,                           // pOptimizedClearValue
-        IID_PPV_ARGS(ppHitGroupSRT)));     // riidResource, ppvResource
+            memcpy(pData, pRayGenShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
 
-    ComPtr<ID3D12StateObjectProperties> stateObjectProperties;
-    CHECK_CALL(pStateObject->QueryInterface(IID_PPV_ARGS(&stateObjectProperties)));
+            (*ppRayGenSRT)->Unmap(0, nullptr);
+        }
+    }
 
-    void* rayGenShaderIdentifier   = stateObjectProperties->GetShaderIdentifier(gRayGenShaderName);
-    void* missShaderIdentifier     = stateObjectProperties->GetShaderIdentifier(gMissShaderName);
-    void* hitGroupShaderIdentifier = stateObjectProperties->GetShaderIdentifier(gHitGroupName);
+    // Miss
+    {
+        CHECK_CALL(pRenderer->Device->CreateCommittedResource(
+            &heapProperties,                   // pHeapProperties
+            D3D12_HEAP_FLAG_NONE,              // HeapFlags
+            &desc,                             // pDesc
+            D3D12_RESOURCE_STATE_GENERIC_READ, // InitialResourceState
+            nullptr,                           // pOptimizedClearValue
+            IID_PPV_ARGS(ppMissSRT)));         // riidResource, ppvResource
 
-    CHECK_CALL(CreateBuffer(pRenderer, shaderRecordSize, rayGenShaderIdentifier, ppRayGenSRT));
-    CHECK_CALL(CreateBuffer(pRenderer, shaderRecordSize, missShaderIdentifier, ppMissSRT));
-    
-    // Copy both closest hit and intersection identifiers
-    CHECK_CALL(CreateBuffer(pRenderer, 2 * shaderRecordSize, hitGroupShaderIdentifier, ppHitGroupSRT));
+        // Copy shader identifier
+        {
+            char* pData;
+            CHECK_CALL((*ppMissSRT)->Map(0, nullptr, reinterpret_cast<void**>(&pData)));
+
+            memcpy(pData, pMissShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+
+            (*ppMissSRT)->Unmap(0, nullptr);
+        }
+    }
+
+    // Hit group
+    {
+        CHECK_CALL(pRenderer->Device->CreateCommittedResource(
+            &heapProperties,                   // pHeapProperties
+            D3D12_HEAP_FLAG_NONE,              // HeapFlags
+            &desc,                             // pDesc
+            D3D12_RESOURCE_STATE_GENERIC_READ, // InitialResourceState
+            nullptr,                           // pOptimizedClearValue
+            IID_PPV_ARGS(ppHitGroupSRT)));     // riidResource, ppvResource
+
+        // Copy shader identifier
+        {
+            char* pData;
+            CHECK_CALL((*ppHitGroupSRT)->Map(0, nullptr, reinterpret_cast<void**>(&pData)));
+
+            memcpy(pData, pHitGroupShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+
+            (*ppHitGroupSRT)->Unmap(0, nullptr);
+        }
+    }
 }
 
 void CreateBLAS(DxRenderer* pRenderer, ID3D12Resource** ppBLAS)
