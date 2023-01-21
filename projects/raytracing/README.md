@@ -113,4 +113,12 @@ Vulkan Notes:
 * Uses shader record parameters
 * Uses traceRayExt's missIndex function parameter to reference the two miss shaders.
 
+## basic_shadow_dynamic
+![alt text](../../images/screenshots/raytracing/basic_shadow_dynamic.png?raw=true)
+
+**Shows basic shadow with moving light**
+
+Same as **basic_shadow** except with the light position updated via the constant/uniform buffer.
+
+
 
