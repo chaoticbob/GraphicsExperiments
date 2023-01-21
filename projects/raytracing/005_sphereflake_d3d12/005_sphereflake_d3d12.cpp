@@ -856,7 +856,7 @@ void CreateShaderRecordTables(
         // the shader identifier to store the virtual address for the sphere buffer.
         // 
         // NOTE: A single identifier is used for all the shaders in the hit group.
-        //       This is why there isn't multiple shader records for the closest hit
+        //       This is why there is not separate shader records for the closest hit
         //       shader and the intersection shader.
         //
 
