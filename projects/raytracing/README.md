@@ -25,7 +25,7 @@ Both versions also make use of run time shader compilation. D3D12 uses [DXC](htt
 uses [glslang](https://github.com/KhronosGroup/glslang).
 
 D3D12 Notes:
-* Does not use a root signature
+* Does not use a local root signature
 
 Vulkan Notes:
 * Uses VK_EXT_descriptor_buffer
@@ -42,7 +42,7 @@ a hardcoded sphere. Sphere is hardcoded in the intersection shader.
 This experiment builds off of **raytracing_basic**. 
 
 D3D12 Notes:
-* Does not use a root signature
+* Does not use a local root signature
 
 ## sphereflake
 ![alt text](../../images/screenshots/raytracing/sphereflake.png?raw=true)
@@ -56,3 +56,9 @@ This experiment uses [Eric Haines' sphereflake algorithm from SPD](https://www.r
 a sphereflake.
 
 This experiment builds off of **basic_procedural**.
+
+D3D12 Notes:
+* Uses local root signature and parameters
+
+Vulkan Notes:
+* Uses shader record parameters
