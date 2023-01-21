@@ -76,7 +76,16 @@ void MyRaygenShader()
     ray.TMax = 10000.0;
 
     RayPayload payload = {float4(0, 0, 0, 0)};
-    TraceRay(Scene, RAY_FLAG_FORCE_OPAQUE, ~0, 0, 1, 0, ray, payload);
+
+    TraceRay(
+        Scene,                 // AccelerationStructure
+        RAY_FLAG_FORCE_OPAQUE, // RayFlags
+        ~0,                    // InstanceInclusionMask
+        0,                     // RayContributionToHitGroupIndex
+        1,                     // MultiplierForGeometryContributionToHitGroupIndex
+        0,                     // MissShaderIndex
+        ray,                   // Ray
+        payload);              // Payload
 
     RenderTarget[DispatchRaysIndex().xy] = payload.color;
 }
@@ -859,13 +868,7 @@ void CreateShaderRecordTables(
             char* pData;
             CHECK_CALL((*ppHitGroupSRT)->Map(0, nullptr, reinterpret_cast<void**>(&pData)));
 
-            // Closest hit shader
             memcpy(pData, pHitGroup, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-            // pData += shaderRecordSize;
-            // pHitGroup += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-            //
-            //// Intersection shader
-            // memcpy(pData, pHitGroup, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
 
             (*ppHitGroupSRT)->Unmap(0, nullptr);
         }
