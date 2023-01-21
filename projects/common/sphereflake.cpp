@@ -10,7 +10,11 @@ using glm::mat4;
 using glm::vec3;
 using glm::vec4;
 
-void GenerateSpheres(
+//
+// Quick sphereflake generator using Eric Haines' sphereflake algorithm from SPD:
+// https://www.realtimerendering.com/resources/SPD/
+//
+void GenerateSphereFlake(
     int                       level,
     int                       maxLevels,
     float                     childRadius,
@@ -53,6 +57,6 @@ void GenerateSpheres(
         spheres.push_back(sphere);
 
         vec3 center = (sphere.aabbMax + sphere.aabbMin) / 2.0f;
-        GenerateSpheres(level + 1, maxLevels, childRadius / 3.0f, childRadius, center, dir, spheres);
+        GenerateSphereFlake(level + 1, maxLevels, childRadius / 3.0f, childRadius, center, dir, spheres);
     }
 }

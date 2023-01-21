@@ -588,7 +588,7 @@ void CreateSphereBuffer(DxRenderer* pRenderer, uint32_t* pNumSpheres, ID3D12Reso
     sphere.aabbMax = (radius * vec3(1, 1, 1)) + vec3(0, radius, 0);
     spheres.push_back(sphere);
 
-    GenerateSpheres(0, 5, radius / 3.0f, radius, vec3(0, radius, 0), vec3(0, 1, 0), spheres);
+    GenerateSphereFlake(0, 5, radius / 3.0f, radius, vec3(0, radius, 0), vec3(0, 1, 0), spheres);
 
     *pNumSpheres = CountU32(spheres);
 

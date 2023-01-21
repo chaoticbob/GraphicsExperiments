@@ -10,7 +10,7 @@ struct SphereFlake
     glm::vec3 aabbMax;
 };
 
-void GenerateSpheres(
+void GenerateSphereFlake(
     int                       level,
     int                       maxLevels,
     float                     childRadius,
