@@ -851,6 +851,15 @@ void CreateShaderRecordTables(
 
     // Hit group
     {
+        // 
+        // This hit group's shader record size is 64 since we need space after
+        // the shader identifier to store the virtual address for the sphere buffer.
+        // 
+        // NOTE: A single identifier is used for all the shaders in the hit group.
+        //       This is why there isn't multiple shader records for the closest hit
+        //       shader and the intersection shader.
+        //
+
         shaderRecordSize = Align<UINT32>(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + 8, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
         desc.Width       = shaderRecordSize;
 

@@ -717,6 +717,12 @@ void CreateShaderRecordTables(
 
     // Hit group
     {
+        // 
+        // NOTE: A single identifier is used for all the shaders in the hit group.
+        //       This is why there isn't multiple shader records for the closest hit
+        //       shader and the intersection shader.
+        //
+
         CHECK_CALL(pRenderer->Device->CreateCommittedResource(
             &heapProperties,                   // pHeapProperties
             D3D12_HEAP_FLAG_NONE,              // HeapFlags
