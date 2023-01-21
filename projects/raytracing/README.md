@@ -38,4 +38,7 @@ D3D12 Notes:
 Simple experiment that shows how to use a structured buffer as a shader record parameter
 in both Vulkan and D3D12. Shader record parameter is local root signature parmeter in D3D12 speak. 
 
+This experiment uses [Eric Haines' sphereflake algorithm from SPD](https://www.realtimerendering.com/resources/SPD/) to generate AABBs for
+a sphereflake.
+
 This experiment builds off of **basic_procedural**.
