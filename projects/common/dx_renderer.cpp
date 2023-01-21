@@ -118,7 +118,7 @@ bool InitDx(DxRenderer* pRenderer, bool enableDebug)
         char description[128];
         memset(description, 0, 128);
         for (size_t i = 0; i < 128; ++i) {
-            WCHAR c = desc.Description[i];
+            WCHAR c        = desc.Description[i];
             description[i] = static_cast<char>(c);
             if (c == 0) {
                 break;
@@ -337,6 +337,15 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData
     }
 
     return S_OK;
+}
+
+HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData, size_t minAlignment, ID3D12Resource** ppResource)
+{
+    if (minAlignment > 0) {
+        srcSize = Align<size_t>(srcSize, minAlignment);
+    }
+
+    return CreateBuffer(pRenderer, srcSize, pSrcData, ppResource);
 }
 
 HRESULT CreateUAVBuffer(DxRenderer* pRenderer, size_t size, D3D12_RESOURCE_STATES initialResourceState, ID3D12Resource** ppResource)

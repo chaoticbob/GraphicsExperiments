@@ -566,10 +566,11 @@ void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource* pRayGenSRT, ID3
     camera.viewInverse = glm::inverse(glm::translate(glm::mat4(1), glm::vec3(0.0f, 0.0f, -2.5f)));
 
     CHECK_CALL(CreateBuffer(
-        pRenderer,
-        sizeof(Camera),
-        &camera,
-        ppConstantBuffer));
+        pRenderer,          // pRenderer
+        sizeof(Camera),     // srcSize
+        &camera,            // pSrcData
+        256,                // minAlignment
+        ppConstantBuffer)); // ppResource
 }
 
 void CreateDescriptorHeap(DxRenderer* pRenderer, ID3D12DescriptorHeap** ppHeap)
