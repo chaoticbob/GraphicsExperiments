@@ -21,6 +21,11 @@ Sometimes noise is unavoidable.
 Vulkan experiments use [VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) 
 to simplify buffer and image creation and keeps the code significantly smaller.
 
+# Drivers
+At the time of this writing, January 2023, the ray tracing experiments have been tested 
+on the **public beta drivers** from AMD and NVIDIA. Sometimes things don't work correctly -
+that's just life using beta drivers. In time the features will move to regular drivers. 
+
 # Dependencies
 * Vulkan SDK 1.3.236.0
 * Windows SDK Version 10.0.22621.0
