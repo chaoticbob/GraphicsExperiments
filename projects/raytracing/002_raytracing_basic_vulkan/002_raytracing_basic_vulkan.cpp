@@ -224,8 +224,8 @@ int main(int argc, char** argv)
     //
     // The pipeline is created with 3 shader groups:
     //    1) Ray gen
-    //    2) Closest hit
-    //    3) Miss
+    //    2) Miss
+    //    3) Hitgroup
     //
     // *************************************************************************
     VkPipeline pipeline = VK_NULL_HANDLE;
@@ -242,8 +242,8 @@ int main(int argc, char** argv)
     //
     // This assumes that there are 3 shader groups in the pipeline:
     //    1) Ray gen
-    //    2) Closest hit
-    //    3) Miss
+    //    2) Miss
+    //    3) Hitgroup
     //
     // *************************************************************************
     VulkanBuffer rgenSBT = {};
@@ -722,15 +722,15 @@ void CreateShaderBindingTables(
     //
     // This is what the shader group handles look like
     // in handlesData based on the pipeline. The offsets
-    // are in bytes.
+    // are in bytes - assuming alignedHandleSize is 32 bytes.
     //
     //  +--------+
     //  |  RGEN  | offset = 0
     //  +--------+
-    //  |  MISS  | offset = alignedHandleSize
+    //  |  MISS  | offset = 32
     //  +--------+
-    //  |  CHIT  | offset = 2 * handleSize
-    //  ----------
+    //  |  CHIT  | offset = 64
+    //  +--------+
     //
     std::vector<char> handlesData(handesDataSize);
     CHECK_CALL(fn_vkGetRayTracingShaderGroupHandlesKHR(

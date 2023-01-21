@@ -158,7 +158,7 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
             return false;
         }
 
-        pRenderer->PhysicalDevice = physicalDevices[0];
+        pRenderer->PhysicalDevice = physicalDevices[1];
     }
 
     // Graphics queue family index

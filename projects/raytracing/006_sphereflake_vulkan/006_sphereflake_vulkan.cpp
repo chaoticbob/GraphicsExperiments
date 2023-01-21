@@ -2,9 +2,12 @@
 
 #include "vk_renderer.h"
 
+#include "sphereflake.h"
+
 #include <glm/glm.hpp>
 #include <glm/matrix.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+using glm::vec3;
 
 #define CHECK_CALL(FN)                               \
     {                                                \
@@ -41,13 +44,13 @@ layout(location = 0) rayPayloadEXT vec3 hitValue;
 void main() 
 {
 	const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
-	const vec2 inUV = pixelCenter/vec2(gl_LaunchSizeEXT.xy);
+	const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
 	vec2 d = inUV * 2.0 - 1.0;
     d.y = -d.y;
 
-	vec4 origin = cam.viewInverse * vec4(0,0,0,1);
+	vec4 origin = cam.viewInverse * vec4(0, 0, 0, 1);
 	vec4 target = cam.projInverse * vec4(d.x, d.y, 1, 1);
-	vec4 direction = cam.viewInverse*vec4(normalize(target.xyz), 0);
+	vec4 direction = normalize(cam.viewInverse * vec4(normalize(target.xyz), 0));
 
 	float tmin = 0.001;
 	float tmax = 10000.0;
@@ -56,7 +59,7 @@ void main()
 
     traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, origin.xyz, tmin, direction.xyz, tmax, 0);
 
-	imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(hitValue, 0.0));
+	imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(hitValue, 1.0));
 }
 
 )";
@@ -69,7 +72,7 @@ layout(location = 0) rayPayloadInEXT vec3 hitValue;
 
 void main()
 {
-    hitValue = vec3(0.0, 0.0, 0.0);
+    hitValue = vec3(0, 0, 0);
 }
 )";
 
@@ -80,14 +83,16 @@ const char* gShaderCHIT = R"(
 
 layout(location = 0) rayPayloadInEXT vec3 hitValue;
 
-hitAttributeEXT vec3 hitPosition;
+hitAttributeEXT vec3 hitNormal;
 
 void main()
 {
+    vec3 hitPosition = gl_WorldRayOriginEXT + gl_RayTmaxEXT * gl_WorldRayDirectionEXT;
+
     // Lambert shading
     vec3 lightPos = vec3(2, 5, 5);
     vec3 lightDir = normalize(lightPos - hitPosition);
-    float d = 0.8 * clamp(dot(lightDir, normalize(hitPosition)), 0, 1);
+    float d = 0.8 * clamp(dot(lightDir, hitNormal), 0, 1);
     float a = 0.2;
 
     hitValue = vec3(clamp(a + d, 0, 1));
@@ -100,9 +105,30 @@ const char* gShaderRINT = R"(
 //   https://github.com/georgeouzou/vk_exp/blob/master/shaders/sphere.rint
 //
 #version 460
-#extension GL_EXT_ray_tracing : enable
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_scalar_block_layout : require
 
-hitAttributeEXT vec3 hitPosition;
+struct Sphere {
+    float minX; 
+    float minY;
+    float minZ;
+    float maxX; 
+    float maxY;
+    float maxZ;
+};
+
+layout(buffer_reference, scalar, buffer_reference_align = 8) buffer SphereBuffer
+{
+	Sphere spheres[];
+};
+
+layout(shaderRecordEXT, std430) buffer ShaderRecord
+{
+	SphereBuffer sphereBuffer;
+};
+
+hitAttributeEXT vec3 hitNormal;
 
 // this method is documented in raytracing gems book
 vec2 gems_intersections(vec3 orig, vec3 dir, vec3 center, float radius)
@@ -129,17 +155,26 @@ void main()
 	vec3 orig = gl_WorldRayOriginEXT;
 	vec3 dir = gl_WorldRayDirectionEXT;
 
-	vec3 aabb_min = vec3(-1, -1, -1);
-	vec3 aabb_max = vec3(1, 1, 1);
+    Sphere sphere = sphereBuffer.spheres[gl_PrimitiveID];
+
+	vec3 aabb_min = vec3(sphere.minX, sphere.minY, sphere.minZ);
+	vec3 aabb_max = vec3(sphere.maxX, sphere.maxY, sphere.maxZ);
+
 	vec3 center = (aabb_max + aabb_min) / vec3(2.0);
 	float radius = (aabb_max.x - aabb_min.x) / 2.0;
 
     // Might be some wonky behavior if inside sphere
 	vec2 t = gems_intersections(orig, dir, center, radius);
-    float thit = min(t.x, t.y);    
 
-	hitPosition =  orig + thit * dir;
-	reportIntersectionEXT(thit, 0);
+    if (t.x > 0) {
+	    hitNormal = normalize((orig + t.x * dir) - center);
+	    reportIntersectionEXT(t.x, 0);
+    }
+    
+    if (t.y > 0) {
+	    hitNormal = normalize((orig + t.y * dir) - center);
+	    reportIntersectionEXT(t.y, 0);
+    }
 }
 )";
 
@@ -152,6 +187,7 @@ static bool     gEnableDebug        = true;
 static bool     gEnableRayTracing   = true;
 static uint32_t gUniformmBufferSize = 256;
 
+void CreateSphereBuffer(VulkanRenderer* pRenderer, uint32_t* pNumSpheres, VulkanBuffer* pBuffer);
 void CreateDescriptorSetLayout(VulkanRenderer* pRenderer, VkDescriptorSetLayout* pLayout);
 void CreatePipelineLayout(VulkanRenderer* pRenderer, VkDescriptorSetLayout descriptorSetLayout, VkPipelineLayout* pLayout);
 void CreateShaderModules(
@@ -176,10 +212,16 @@ void CreateShaderBindingTables(
     VulkanRenderer*                                  pRenderer,
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR& rayTracingProperties,
     VkPipeline                                       pipeline,
+    const VulkanBuffer*                              pSphereBuffer,
     VulkanBuffer*                                    pRayGenSBT,
     VulkanBuffer*                                    pMissSBT,
     VulkanBuffer*                                    pHitGroupSBT);
-void CreateBLAS(VulkanRenderer* pRenderer, VulkanBuffer* pBLASBuffer, VkAccelerationStructureKHR* pBLAS);
+void CreateBLAS(
+    VulkanRenderer*             pRenderer,
+    uint32_t                    numSpheres,
+    const VulkanBuffer*         pSphereBuffer,
+    VulkanBuffer*               pBLASBuffer,
+    VkAccelerationStructureKHR* pBLAS);
 void CreateTLAS(VulkanRenderer* pRenderer, VkAccelerationStructureKHR blas, VulkanBuffer* pTLASBuffer, VkAccelerationStructureKHR* pTLAS);
 void CreateUniformBuffer(VulkanRenderer* pRenderer, VulkanBuffer* pBuffer);
 void CreateDescriptorBuffer(
@@ -246,6 +288,13 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
     }
+
+    // *************************************************************************
+    // Sphere buffer
+    // *************************************************************************
+    uint32_t     numSpheres   = 0;
+    VulkanBuffer sphereBuffer = {};
+    CreateSphereBuffer(renderer.get(), &numSpheres, &sphereBuffer);
 
     // *************************************************************************
     // Descriptor Set Layout
@@ -325,6 +374,7 @@ int main(int argc, char** argv)
         renderer.get(),
         rayTracingProperties,
         pipeline,
+        &sphereBuffer,
         &rgenSBT,
         &missSBT,
         &hitgSBT);
@@ -334,7 +384,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     VulkanBuffer               blasBuffer = {};
     VkAccelerationStructureKHR blas       = VK_NULL_HANDLE;
-    CreateBLAS(renderer.get(), &blasBuffer, &blas);
+    CreateBLAS(renderer.get(), numSpheres, &sphereBuffer, &blasBuffer, &blas);
 
     // *************************************************************************
     // Top level acceleration structure
@@ -425,7 +475,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "004_basic_procedural_vulkan");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "006_sphereflake_vulkan");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -555,8 +605,8 @@ int main(int argc, char** argv)
 
             VkStridedDeviceAddressRegionKHR hitgShaderSBTEntry = {};
             hitgShaderSBTEntry.deviceAddress                   = GetDeviceAddress(renderer.get(), &hitgSBT);
-            hitgShaderSBTEntry.stride                          = alignedHandleSize;
-            hitgShaderSBTEntry.size                            = alignedHandleSize;
+            hitgShaderSBTEntry.stride                          = Align(alignedHandleSize + 8, rayTracingProperties.shaderGroupHandleSize);
+            hitgShaderSBTEntry.size                            = Align(alignedHandleSize + 8, rayTracingProperties.shaderGroupHandleSize);
 
             VkStridedDeviceAddressRegionKHR callableShaderSbtEntry = {};
 
@@ -589,6 +639,42 @@ int main(int argc, char** argv)
     vmaUnmapMemory(renderer->Allocator, descriptorBuffer.Allocation);
 
     return 0;
+}
+
+void CreateSphereBuffer(VulkanRenderer* pRenderer, uint32_t* pNumSpheres, VulkanBuffer* pBuffer)
+{
+    std::vector<SphereFlake> spheres;
+
+    SphereFlake sphere = {};
+
+    // Ground plane sphere
+    float groundSize = 1000.0f;
+    sphere.aabbMin   = (groundSize * vec3(-1, -1, -1)) - vec3(0, groundSize, 0);
+    sphere.aabbMax   = (groundSize * vec3(1, 1, 1)) - vec3(0, groundSize, 0);
+    spheres.push_back(sphere);
+
+    // Initial sphere
+    float radius   = 1;
+    sphere.aabbMin = (radius * vec3(-1, -1, -1)) + vec3(0, radius, 0);
+    sphere.aabbMax = (radius * vec3(1, 1, 1)) + vec3(0, radius, 0);
+    spheres.push_back(sphere);
+
+    GenerateSpheres(0, 4, radius / 3.0f, radius, vec3(0, radius, 0), vec3(0, 1, 0), spheres);
+
+    *pNumSpheres = CountU32(spheres);
+
+    VkBufferUsageFlags usageFlags =
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+        VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+
+    CHECK_CALL(CreateBuffer(
+        pRenderer,            // pRenderer
+        SizeInBytes(spheres), // srcSize
+        DataPtr(spheres),     // pSrcData
+        usageFlags,           // usageFlags
+        8,                    // minAlignment
+        pBuffer));            // pBuffer
 }
 
 void CreateDescriptorSetLayout(VulkanRenderer* pRenderer, VkDescriptorSetLayout* pLayout)
@@ -798,6 +884,7 @@ void CreateShaderBindingTables(
     VulkanRenderer*                                  pRenderer,
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR& rayTracingProperties,
     VkPipeline                                       pipeline,
+    const VulkanBuffer*                              pSphereBuffer,
     VulkanBuffer*                                    pRayGenSBT,
     VulkanBuffer*                                    pMissSBT,
     VulkanBuffer*                                    pHitGroupSBT)
@@ -870,39 +957,34 @@ void CreateShaderBindingTables(
     }
     // HITG: closest hit + intersection
     {
+        // 8 bytes for sphere buffer
+        size_t            shaderRecordSize = Align(alignedHandleSize + 8, alignedHandleSize);
+        std::vector<char> shaderRecord(shaderRecordSize);
+        char*             pData = shaderRecord.data();
+
+        memcpy(pData, pShaderGroupHandleHITG, alignedHandleSize);
+        pData += alignedHandleSize;
+
+        VkDeviceAddress sphereBufferAddress = GetDeviceAddress(pRenderer, pSphereBuffer);
+        memcpy(pData, &sphereBufferAddress, sizeof(sphereBufferAddress));
+
         CHECK_CALL(CreateBuffer(
-            pRenderer,                // pRenderer
-            alignedHandleSize,        // srcSize
-            pShaderGroupHandleHITG,   // pSrcData
-            usageFlags,               // usageFlags
-            shaderGroupBaseAlignment, // minAlignment
-            pHitGroupSBT));           // pBuffer
+            pRenderer,                 // pRenderer
+            SizeInBytes(shaderRecord), // srcSize
+            DataPtr(shaderRecord),     // pSrcData
+            usageFlags,                // usageFlags
+            shaderGroupBaseAlignment,  // minAlignment
+            pHitGroupSBT));            // pBuffer
     }
 }
 
-void CreateBLAS(VulkanRenderer* pRenderer, VulkanBuffer* pBLASBuffer, VkAccelerationStructureKHR* pBLAS)
+void CreateBLAS(
+    VulkanRenderer*             pRenderer,
+    uint32_t                    numSpheres,
+    const VulkanBuffer*         pSphereBuffer,
+    VulkanBuffer*               pBLASBuffer,
+    VkAccelerationStructureKHR* pBLAS)
 {
-    // clang-format off
-    std::vector<VkAabbPositionsKHR> aabbs =
-    {
-        { -1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f }
-    };
-    // clang-format on
-
-    // Create geometry buffers
-    VulkanBuffer aabbBuffer;
-    {
-        VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
-
-        CHECK_CALL(CreateBuffer(
-            pRenderer,          // pRenderer
-            SizeInBytes(aabbs), // srcSize
-            DataPtr(aabbs),     // pSrcData
-            usageFlags,         // usageFlags
-            0,                  // minAlignment
-            &aabbBuffer));      // pBuffer
-    }
-
     // Get acceleration structure build size
     VkAccelerationStructureBuildSizesInfoKHR buildSizesInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR};
     {
@@ -911,8 +993,8 @@ void CreateBLAS(VulkanRenderer* pRenderer, VulkanBuffer* pBLASBuffer, VkAccelera
         geometry.flags                              = VK_GEOMETRY_OPAQUE_BIT_KHR;
         geometry.geometryType                       = VK_GEOMETRY_TYPE_AABBS_KHR;
         geometry.geometry.aabbs.sType               = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
-        geometry.geometry.aabbs.data.deviceAddress  = GetDeviceAddress(pRenderer, &aabbBuffer);
-        geometry.geometry.aabbs.stride              = sizeof(VkAabbPositionsKHR);
+        geometry.geometry.aabbs.data.deviceAddress  = GetDeviceAddress(pRenderer, pSphereBuffer);
+        geometry.geometry.aabbs.stride              = sizeof(SphereFlake);
 
         // Build geometry info
         VkAccelerationStructureBuildGeometryInfoKHR buildGeometryInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
@@ -923,7 +1005,7 @@ void CreateBLAS(VulkanRenderer* pRenderer, VulkanBuffer* pBLASBuffer, VkAccelera
         buildGeometryInfo.geometryCount = 1;
         buildGeometryInfo.pGeometries   = &geometry;
 
-        const uint32_t maxPrimitiveCount = 1;
+        const uint32_t maxPrimitiveCount = numSpheres;
         fn_vkGetAccelerationStructureBuildSizesKHR(
             pRenderer->Device,
             VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
@@ -992,8 +1074,8 @@ void CreateBLAS(VulkanRenderer* pRenderer, VulkanBuffer* pBLASBuffer, VkAccelera
         geometry.flags                              = VK_GEOMETRY_OPAQUE_BIT_KHR;
         geometry.geometryType                       = VK_GEOMETRY_TYPE_AABBS_KHR;
         geometry.geometry.aabbs.sType               = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
-        geometry.geometry.aabbs.data.deviceAddress  = GetDeviceAddress(pRenderer, &aabbBuffer);
-        geometry.geometry.aabbs.stride              = sizeof(VkAabbPositionsKHR);
+        geometry.geometry.aabbs.data.deviceAddress  = GetDeviceAddress(pRenderer, pSphereBuffer);
+        geometry.geometry.aabbs.stride              = sizeof(SphereFlake);
 
         // Build geometry info
         VkAccelerationStructureBuildGeometryInfoKHR buildGeometryInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
@@ -1008,7 +1090,7 @@ void CreateBLAS(VulkanRenderer* pRenderer, VulkanBuffer* pBLASBuffer, VkAccelera
 
         // Build range info
         VkAccelerationStructureBuildRangeInfoKHR buildRangeInfo = {};
-        buildRangeInfo.primitiveCount                           = 1;
+        buildRangeInfo.primitiveCount                           = numSpheres;
 
         CommandObjects cmdBuf = {};
         CHECK_CALL(CreateCommandBuffer(pRenderer, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, &cmdBuf));
@@ -1031,7 +1113,6 @@ void CreateBLAS(VulkanRenderer* pRenderer, VulkanBuffer* pBLASBuffer, VkAccelera
     }
 
     DestroyBuffer(pRenderer, &scratchBuffer);
-    DestroyBuffer(pRenderer, &aabbBuffer);
 }
 
 void CreateTLAS(VulkanRenderer* pRenderer, VkAccelerationStructureKHR blas, VulkanBuffer* pTLASBuffer, VkAccelerationStructureKHR* pTLAS)
@@ -1053,6 +1134,9 @@ void CreateTLAS(VulkanRenderer* pRenderer, VkAccelerationStructureKHR blas, Vulk
     instance.accelerationStructureReference         = GetDeviceAddress(pRenderer, blas);
 
     // Instance buffer
+    //
+    // NOTE: Vulkan requires this buffer to be 16 bytes aligned
+    //
     VulkanBuffer instanceBuffer;
     {
         VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
@@ -1062,7 +1146,7 @@ void CreateTLAS(VulkanRenderer* pRenderer, VkAccelerationStructureKHR blas, Vulk
             sizeof(instance),  // srcSize
             &instance,         // pSrcData
             usageFlags,        // usageFlags
-            0,                 // minAlignment
+            16,                // minAlignment
             &instanceBuffer)); // pBuffer
     }
 
@@ -1199,7 +1283,8 @@ void CreateUniformBuffer(VulkanRenderer* pRenderer, VulkanBuffer* pBuffer)
 
     Camera camera      = {};
     camera.projInverse = glm::inverse(glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 512.0f));
-    camera.viewInverse = glm::inverse(glm::translate(glm::mat4(1), glm::vec3(0.0f, 0.0f, -2.5f)));
+    auto mat           = glm::lookAt(vec3(0, 4, 3), vec3(0, 1, 0), vec3(0, 1, 0));
+    camera.viewInverse = glm::inverse(mat);
 
     VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 

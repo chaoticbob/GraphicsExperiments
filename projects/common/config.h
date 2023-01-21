@@ -12,18 +12,18 @@
 using Microsoft::WRL::ComPtr;
 #endif
 
-#define GREX_LOG_INFO(MSG)                     \
-    {                                          \
-        std::stringstream ss_grex_log_info;    \
-        ss_grex_log_info << "INFO : " << MSG;  \
-        Print(ss_grex_log_info.str().c_str()); \
+#define GREX_LOG_INFO(MSG)                                 \
+    {                                                      \
+        std::stringstream ss_grex_log_info;                \
+        ss_grex_log_info << "INFO : " << MSG << std::endl; \
+        Print(ss_grex_log_info.str().c_str());             \
     }
 
-#define GREX_LOG_ERROR(MSG)                    \
-    {                                          \
-        std::stringstream ss_grex_log_info;    \
-        ss_grex_log_info << "ERROR: " << MSG;  \
-        Print(ss_grex_log_info.str().c_str()); \
+#define GREX_LOG_ERROR(MSG)                                \
+    {                                                      \
+        std::stringstream ss_grex_log_info;                \
+        ss_grex_log_info << "ERROR: " << MSG << std::endl; \
+        Print(ss_grex_log_info.str().c_str());             \
     }
 
 inline void Print(const char* c_str)

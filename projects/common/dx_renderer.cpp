@@ -114,6 +114,18 @@ bool InitDx(DxRenderer* pRenderer, bool enableDebug)
             assert(false && "D3D12CreateDevice failed");
             return false;
         }
+
+        char description[128];
+        memset(description, 0, 128);
+        for (size_t i = 0; i < 128; ++i) {
+            WCHAR c = desc.Description[i];
+            description[i] = static_cast<char>(c);
+            if (c == 0) {
+                break;
+            }
+        }
+
+        GREX_LOG_INFO("Created device using " << description);
     }
 
     // Device fence
@@ -129,7 +141,7 @@ bool InitDx(DxRenderer* pRenderer, bool enableDebug)
     }
 
     // Wait event
-    DWORD eventFlags               = 0;
+    DWORD eventFlags                 = 0;
     pRenderer->DeviceWaitEventHandle = CreateEventEx(NULL, NULL, eventFlags, EVENT_ALL_ACCESS);
     if (pRenderer->DeviceWaitEventHandle == INVALID_HANDLE_VALUE) {
         return false;
@@ -175,11 +187,11 @@ bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t he
     //
     HRESULT hr = pRenderer->Factory->CreateSwapChainForHwnd(
         pRenderer->Queue.Get(), // pDevice
-        hwnd,                 // hWnd
-        &desc,                // pDesc
-        nullptr,              // pFullscreenDesc
-        nullptr,              // pRestrictToOuput
-        &pSwapchain);         // ppSwapchain
+        hwnd,                   // hWnd
+        &desc,                  // pDesc
+        nullptr,                // pFullscreenDesc
+        nullptr,                // pRestrictToOuput
+        &pSwapchain);           // ppSwapchain
     if (FAILED(hr)) {
         assert(false && "IDXGIFactory::CreateSwapChain failed");
         return false;
@@ -201,7 +213,7 @@ bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t he
     }
 
     // Wait event
-    DWORD eventFlags                  = 0;
+    DWORD eventFlags                    = 0;
     pRenderer->SwapchainWaitEventHandle = CreateEventEx(NULL, NULL, eventFlags, EVENT_ALL_ACCESS);
     if (pRenderer->SwapchainWaitEventHandle == INVALID_HANDLE_VALUE) {
         return false;
@@ -312,15 +324,17 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData
         return hr;
     }
 
-    void* pData = nullptr;
-    hr          = (*ppResource)->Map(0, nullptr, &pData);
-    if (FAILED(hr)) {
-        return hr;
+    if (!IsNull(pSrcData)) {
+        void* pData = nullptr;
+        hr          = (*ppResource)->Map(0, nullptr, &pData);
+        if (FAILED(hr)) {
+            return hr;
+        }
+
+        memcpy(pData, pSrcData, srcSize);
+
+        (*ppResource)->Unmap(0, nullptr);
     }
-
-    memcpy(pData, pSrcData, srcSize);
-
-    (*ppResource)->Unmap(0, nullptr);
 
     return S_OK;
 }
