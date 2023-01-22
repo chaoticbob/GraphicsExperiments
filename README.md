@@ -37,6 +37,8 @@ And obviously the ray tracing related extensions.
 * [glfw](https://github.com/glfw/glfw)
 * [glm](https://github.com/g-truc/glm)
 * [glslang](https://github.com/KhronosGroup/glslang)
+* [ImGui](https://github.com/ocornut/imgui)
+* [tinyobj](https://github.com/tinyobjloader/tinyobjloader)
 * [VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)
 
 ## DXIL.DLL
