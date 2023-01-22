@@ -22,3 +22,4 @@ add_subdirectory(raytracing/011_basic_shadow_dynamic_d3d12)
 add_subdirectory(raytracing/012_basic_shadow_dynamic_vulkan)
 
 add_subdirectory(misc/gen_sphereflake_coords)
+add_subdirectory(misc/window_events)
