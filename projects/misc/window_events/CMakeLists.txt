@@ -10,10 +10,11 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/window.cpp
 )
 
+set_target_properties(window_events PROPERTIES FOLDER "misc")
+
 target_include_directories(
     window_events
     PUBLIC  ${GREX_PROJECTS_COMMON_DIR}
-            ${GREX_THIRD_PARTY_DIR}/glm
 )
 
 target_link_libraries(

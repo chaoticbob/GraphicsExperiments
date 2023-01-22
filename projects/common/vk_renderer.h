@@ -80,6 +80,7 @@ struct VulkanRenderer
     VkQueue          Queue                    = VK_NULL_HANDLE;
     VkSurfaceKHR     Surface                  = VK_NULL_HANDLE;
     VkSwapchainKHR   Swapchain                = VK_NULL_HANDLE;
+    uint32_t         SwapchainImageCount      = 0;
     VkSemaphore      ImageReadySemaphore      = VK_NULL_HANDLE;
     VkFence          ImageReadyFence          = VK_NULL_HANDLE;
     VkSemaphore      PresentReadySemaphore    = VK_NULL_HANDLE;

@@ -9,18 +9,23 @@
 
 struct DxRenderer
 {
-    bool                       DebugEnabled             = true;
-    ComPtr<IDXGIFactory5>      Factory                  = nullptr;
-    ComPtr<IDXGIAdapter4>      Adapter                  = nullptr;
-    ComPtr<ID3D12Device7>      Device                   = nullptr;
-    ComPtr<ID3D12Fence>        DeviceFence              = nullptr;
-    UINT                       DeviceFenceValue         = 0;
-    HANDLE                     DeviceWaitEventHandle    = nullptr;
-    ComPtr<ID3D12CommandQueue> Queue                    = nullptr;
-    ComPtr<IDXGISwapChain4>    Swapchain                = nullptr;
-    ComPtr<ID3D12Fence>        SwapchainFence           = nullptr;
-    UINT64                     SwapchainFenceValue      = 0;
-    HANDLE                     SwapchainWaitEventHandle = nullptr;
+    bool                                     DebugEnabled                  = true;
+    ComPtr<IDXGIFactory5>                    Factory                       = nullptr;
+    ComPtr<IDXGIAdapter4>                    Adapter                       = nullptr;
+    ComPtr<ID3D12Device7>                    Device                        = nullptr;
+    ComPtr<ID3D12Fence>                      DeviceFence                   = nullptr;
+    UINT                                     DeviceFenceValue              = 0;
+    HANDLE                                   DeviceWaitEventHandle         = nullptr;
+    ComPtr<ID3D12CommandQueue>               Queue                         = nullptr;
+    ComPtr<IDXGISwapChain4>                  Swapchain                     = nullptr;
+    UINT                                     SwapchainBufferCount          = 0;
+    DXGI_FORMAT                              SwapchainRTVFormat            = DXGI_FORMAT_UNKNOWN;
+    ComPtr<ID3D12Fence>                      SwapchainFence                = nullptr;
+    UINT64                                   SwapchainFenceValue           = 0;
+    HANDLE                                   SwapchainWaitEventHandle      = nullptr;
+    ComPtr<ID3D12DescriptorHeap>             SwapchainRTVDescriptorHeap    = nullptr;
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> SwapchainRTVDescriptorHandles = {};
+    ComPtr<ID3D12DescriptorHeap>             ImGuiFontDescriptorHeap       = nullptr;
 
     DxRenderer();
     ~DxRenderer();

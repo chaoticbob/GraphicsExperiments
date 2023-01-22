@@ -20,6 +20,21 @@
 #include <functional>
 namespace fs = std::filesystem;
 
+#if defined(ENABLE_IMGUI_D3D12)
+#    include "dx_renderer.h"
+#    include "backends/imgui_impl_glfw.h"
+#    include "backends/imgui_impl_dx12.h"
+#endif // defined(ENABLE_IMGUI_D3D12)
+
+#if defined(ENABLE_IMGUI_VULKAN)
+
+#    error "Vulkan ImGui support not available yet"
+
+#    include "vk_renderer.h"
+#    include "backends/imgui_impl_glfw.h"
+#    include "backends/imgui_impl_vulkan.h"
+#endif // defined(ENABLE_IMGUI_VULKAN)
+
 enum MouseButton
 {
     MOUSE_BUTTON_LEFT   = 0x1,
@@ -55,8 +70,18 @@ public:
     void AddMouseScrollCallbacks(std::function<void(float, float)> fn);
     void AddKeyDownCallbacks(std::function<void(int)> fn);
     void AddKeyUpCallbacks(std::function<void(int)> fn);
-    
+
     bool IsKeyDown(int key);
+
+#if defined(ENABLE_IMGUI_D3D12)
+    bool InitImGuiForD3D12(DxRenderer* pRenderer);
+    void ImGuiNewFrameD3D12();
+    void ImGuiRenderDrawData(DxRenderer* pRenderer, ID3D12GraphicsCommandList* pCtx);
+#endif // defined(ENABLE_IMGUI_D3D12)
+
+#if defined(ENABLE_IMGUI_VULKAN)
+    bool InitImGuiForVulkan(VulkanRenderer* pRenderer);
+#endif // defined(ENABLE_IMGUI_VULKAN)
 
 private:
     uint32_t    mWidth  = 0;
@@ -89,6 +114,7 @@ private:
 };
 
 fs::path GetExecutablePath();
+uint32_t GetProcessId();
 
 std::vector<char> LoadFile(const fs::path& absPath);
 

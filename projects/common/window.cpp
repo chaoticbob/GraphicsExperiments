@@ -21,9 +21,9 @@ struct WindowEvents
         if (it == sWindows.end()) {
             return;
         }
-        Window* pWindow = it->second;
+        Window* pAppWindow = it->second;
 
-        pWindow->WindowMoveEvent(eventX, eventY);
+        pAppWindow->WindowMoveEvent(eventX, eventY);
     }
 
     static void WindowResizeCallback(GLFWwindow* window, int eventWidth, int eventHeight)
@@ -32,9 +32,9 @@ struct WindowEvents
         if (it == sWindows.end()) {
             return;
         }
-        Window* pWindow = it->second;
+        Window* pAppWindow = it->second;
 
-        pWindow->WindowResizeEvent(eventWidth, eventHeight);
+        pAppWindow->WindowResizeEvent(eventWidth, eventHeight);
     }
 
     static void MouseButtonCallback(GLFWwindow* window, int eventButton, int eventAction, int eventMods)
@@ -43,7 +43,7 @@ struct WindowEvents
         if (it == sWindows.end()) {
             return;
         }
-        Window* pWindow = it->second;
+        Window* pAppWindow = it->second;
 
         int buttons = 0;
         if (eventButton == GLFW_MOUSE_BUTTON_LEFT) {
@@ -61,21 +61,21 @@ struct WindowEvents
         glfwGetCursorPos(window, &eventX, &eventY);
 
         if (eventAction == GLFW_PRESS) {
-            pWindow->MouseDownEvent(
+            pAppWindow->MouseDownEvent(
                 static_cast<int>(eventX),
                 static_cast<int>(eventY),
                 buttons);
         }
         else if (eventAction == GLFW_RELEASE) {
-            pWindow->MouseUpEvent(
+            pAppWindow->MouseUpEvent(
                 static_cast<int>(eventX),
                 static_cast<int>(eventY),
                 buttons);
         }
 
-        // if (pWindow->GetSettings()->enableImGui) {
-        //     ImGui_ImplGlfw_MouseButtonCallback(window, event_button, event_action, event_mods);
-        // }
+        // #if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN)
+        //         ImGui_ImplGlfw_MouseButtonCallback(window, eventButton, eventAction, eventMods);
+        // #endif
     }
 
     static void MouseMoveCallback(GLFWwindow* window, double eventX, double eventY)
@@ -84,7 +84,7 @@ struct WindowEvents
         if (it == sWindows.end()) {
             return;
         }
-        Window* pWindow = it->second;
+        Window* pAppWindow = it->second;
 
         uint32_t buttons = 0;
         if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
@@ -96,7 +96,7 @@ struct WindowEvents
         if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS) {
             buttons |= MOUSE_BUTTON_MIDDLE;
         }
-        pWindow->MouseMoveEvent(
+        pAppWindow->MouseMoveEvent(
             static_cast<int>(eventX),
             static_cast<int>(eventY),
             buttons);
@@ -108,15 +108,15 @@ struct WindowEvents
         if (it == sWindows.end()) {
             return;
         }
-        Window* pWindow = it->second;
+        Window* pAppWindow = it->second;
 
-        pWindow->MouseScrollEvent(
+        pAppWindow->MouseScrollEvent(
             static_cast<float>(xoffset),
             static_cast<float>(yoffset));
 
-        // if (pWindow->GetSettings()->enableImGui) {
-        //     ImGui_ImplGlfw_ScrollCallback(window, xoffset, yoffset);
-        // }
+        // #if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN)
+        //         ImGui_ImplGlfw_ScrollCallback(window, xoffset, yoffset);
+        // #endif
     }
 
     static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -125,18 +125,18 @@ struct WindowEvents
         if (it == sWindows.end()) {
             return;
         }
-        Window* pWindow = it->second;
+        Window* pAppWindow = it->second;
 
         if (action == GLFW_PRESS) {
-            pWindow->KeyDownEvent(key);
+            pAppWindow->KeyDownEvent(key);
         }
         else if (action == GLFW_RELEASE) {
-            pWindow->KeyUpEvent(key);
+            pAppWindow->KeyUpEvent(key);
         }
 
-        // if (pWindow->GetSettings()->enableImGui) {
-        //     ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
-        // }
+        // #if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN)
+        //         ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
+        // #endif
     }
 
     static void CharCallback(GLFWwindow* window, unsigned int c)
@@ -145,14 +145,13 @@ struct WindowEvents
         if (it == sWindows.end()) {
             return;
         }
-        Window* pWindow = it->second;
 
-        // if (pWindow->GetSettings()->enableImGui) {
-        //     ImGui_ImplGlfw_CharCallback(window, c);
-        // }
+        // #if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN)
+        //         ImGui_ImplGlfw_CharCallback(window, c);
+        // #endif
     }
 
-    static bool RegisterWindowEvents(GLFWwindow* window, Window* pWindow)
+    static bool RegisterWindowEvents(GLFWwindow* window, Window* pAppWindow)
     {
         auto it = sWindows.find(window);
         if (it != sWindows.end()) {
@@ -167,7 +166,7 @@ struct WindowEvents
         glfwSetKeyCallback(window, WindowEvents::KeyCallback);
         glfwSetCharCallback(window, WindowEvents::CharCallback);
 
-        sWindows[window] = pWindow;
+        sWindows[window] = pAppWindow;
 
         return true;
     }
@@ -211,6 +210,18 @@ Window::~Window()
     if (mWindow == nullptr) {
         return;
     }
+
+#if defined(ENABLE_IMGUI_D3D12)
+    ImGui_ImplDX12_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+#endif
+
+#if defined(ENABLE_IMGUI_VULKAN)
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+#endif
 
     glfwDestroyWindow(mWindow);
     mWindow = nullptr;
@@ -346,6 +357,60 @@ bool Window::IsKeyDown(int key)
     return false;
 }
 
+#if defined(ENABLE_IMGUI_D3D12)
+bool Window::InitImGuiForD3D12(DxRenderer* pRenderer)
+{
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+
+    if (!ImGui_ImplGlfw_InitForOther(mWindow, true)) {
+        return false;
+    }
+
+    bool res = ImGui_ImplDX12_Init(
+        pRenderer->Device.Get(),
+        static_cast<int>(pRenderer->SwapchainBufferCount),
+        pRenderer->SwapchainRTVFormat,
+        nullptr,
+        pRenderer->ImGuiFontDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+        pRenderer->ImGuiFontDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+    return res;
+}
+
+void Window::ImGuiNewFrameD3D12()
+{
+    ImGui_ImplDX12_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+}
+
+void Window::ImGuiRenderDrawData(DxRenderer* pRenderer, ID3D12GraphicsCommandList* pCtx)
+{
+    ID3D12DescriptorHeap* ppHeaps[1] = {pRenderer->ImGuiFontDescriptorHeap.Get()};
+    pCtx->SetDescriptorHeaps(1, ppHeaps);
+
+    ImGui::Render();
+    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), pCtx);
+}
+
+#endif // defined(ENABLE_IMGUI_D3D12)
+
+#if defined(ENABLE_IMGUI_VULKAN)
+static void CheckVkResult(VkResult err)
+{
+    if (err == 0)
+        return;
+    fprintf(stderr, "[vulkan] Error: VkResult = %d\n", err);
+    if (err < 0)
+        abort();
+}
+
+bool Window::InitImGuiForVulkan(VulkanRenderer* pRenderer)
+{
+    return false;
+}
+#endif // defined(ENABLE_IMGUI_VULKAN)
+
 // =============================================================================
 // Platform functions
 // =============================================================================
@@ -386,6 +451,17 @@ fs::path GetExecutablePath()
 #    error "unsupported platform"
 #endif
     return path;
+}
+
+uint32_t GetProcessId()
+{
+    uint32_t pid = UINT32_MAX;
+#if defined(__linux__)
+    pid = static_cast<uint32_t>(getpid());
+#elif defined(WIN32)
+    pid  = static_cast<uint32_t>(::GetCurrentProcessId());
+#endif
+    return pid;
 }
 
 std::vector<char> LoadFile(const fs::path& absPath)

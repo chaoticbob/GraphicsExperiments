@@ -381,6 +381,8 @@ bool InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_
             assert(false && "vkCreateSwapchainKHR failed");
             return false;
         }
+
+        pRenderer->SwapchainImageCount = imageCount;
     }
 
     // Transition image layouts to present

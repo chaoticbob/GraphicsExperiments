@@ -161,6 +161,20 @@ bool InitDx(DxRenderer* pRenderer, bool enableDebug)
         }
     }
 
+    // Imgui descriptor heap
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+        desc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        desc.NumDescriptors             = 1;
+        desc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+
+        HRESULT hr = pRenderer->Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pRenderer->ImGuiFontDescriptorHeap));
+        if (FAILED(hr)) {
+            assert(false && "ID3D12Device::CreateDescriptorHeap failed");
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -170,10 +184,12 @@ bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t he
         return false;
     }
 
+    pRenderer->SwapchainRTVFormat = DXGI_FORMAT_B8G8R8A8_UNORM;
+
     DXGI_SWAP_CHAIN_DESC1 desc = {};
     desc.Width                 = width;
     desc.Height                = height;
-    desc.Format                = DXGI_FORMAT_B8G8R8A8_UNORM;
+    desc.Format                = pRenderer->SwapchainRTVFormat;
     desc.Stereo                = FALSE;
     desc.SampleDesc            = {1, 0};
     desc.BufferUsage           = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_BACK_BUFFER | DXGI_USAGE_SHADER_INPUT;
@@ -203,12 +219,59 @@ bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t he
         return false;
     }
 
+    // Get buffer count from swapchain
+    {
+        DXGI_SWAP_CHAIN_DESC1 postCreateDesc = {};
+
+        hr = pRenderer->Swapchain->GetDesc1(&postCreateDesc);
+        if (FAILED(hr)) {
+            assert(false && "IDXGISwapChain1::GetDesc1 failed");
+            return false;
+        }
+
+        pRenderer->SwapchainBufferCount = postCreateDesc.BufferCount;
+    }
+
+    // Create swapchain RTVs
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+        desc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+        desc.NumDescriptors             = pRenderer->SwapchainBufferCount;
+        desc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+
+        hr = pRenderer->Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pRenderer->SwapchainRTVDescriptorHeap));
+        if (FAILED(hr)) {
+            assert(false && "ID3D12Device::CreateDescriptorHeap failed");
+            return false;
+        }
+
+        D3D12_CPU_DESCRIPTOR_HANDLE rtv = pRenderer->SwapchainRTVDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+        for (UINT i = 0; i < pRenderer->SwapchainBufferCount; ++i) {
+            ID3D12Resource* pSwapchainBuffer = nullptr;
+
+            hr = pRenderer->Swapchain->GetBuffer(i, IID_PPV_ARGS(&pSwapchainBuffer));
+            if (FAILED(hr)) {
+                assert(false && "IDXGISwapChain1::GetBuffer failed");
+                return false;
+            }
+
+            D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+            rtvDesc.Format                        = pRenderer->SwapchainRTVFormat;
+            rtvDesc.ViewDimension                 = D3D12_RTV_DIMENSION_TEXTURE2D;
+
+            pRenderer->Device->CreateRenderTargetView(pSwapchainBuffer, &rtvDesc, rtv);
+            pRenderer->SwapchainRTVDescriptorHandles.push_back(rtv);
+
+            rtv.ptr += pRenderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+        }
+    }
+
     hr = pRenderer->Device->CreateFence(
         pRenderer->SwapchainFenceValue,
         D3D12_FENCE_FLAG_NONE,
         IID_PPV_ARGS(&pRenderer->SwapchainFence));
     if (FAILED(hr)) {
-        assert(false && "ID3D12::CreateFence failed");
+        assert(false && "ID3D12Device::CreateFence failed");
         return false;
     }
 

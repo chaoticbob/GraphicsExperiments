@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.0)
 
 project(GraphicsExperiments)
 
+# ------------------------------------------------------------------------------
+# Options
+# ------------------------------------------------------------------------------
+option(GREX_ENABLE_D3D12  "Build DirectX 12 projects" ON)
+option(GREX_ENABLE_VULKAN "Build Vulkan projects" ON)
 
 # ------------------------------------------------------------------------------
 # Detect Linux
@@ -138,6 +143,36 @@ set(GLFW_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_DOCS     OFF CACHE BOOL "" FORCE)
 set(GLFW_VULKAN_STATIC  OFF CACHE BOOL "" FORCE)
 add_subdirectory(${GREX_THIRD_PARTY_DIR}/glfw)
+
+# ------------------------------------------------------------------------------
+# ImGui
+# ------------------------------------------------------------------------------
+list(APPEND IMGUI_D3D12_FILES
+    ${GREX_THIRD_PARTY_DIR}/imgui/imgui.h
+    ${GREX_THIRD_PARTY_DIR}/imgui/imgui.cpp
+    ${GREX_THIRD_PARTY_DIR}/imgui/imgui_draw.cpp
+    ${GREX_THIRD_PARTY_DIR}/imgui/imgui_tables.cpp
+    ${GREX_THIRD_PARTY_DIR}/imgui/imgui_widgets.cpp
+    ${GREX_THIRD_PARTY_DIR}/imgui/backends/imgui_impl_glfw.h
+    ${GREX_THIRD_PARTY_DIR}/imgui/backends/imgui_impl_glfw.h
+    ${GREX_THIRD_PARTY_DIR}/imgui/backends/imgui_impl_glfw.cpp
+    ${GREX_THIRD_PARTY_DIR}/imgui/backends/imgui_impl_dx12.h
+    ${GREX_THIRD_PARTY_DIR}/imgui/backends/imgui_impl_dx12.cpp
+)
+
+list(APPEND IMGUI_VULKAN_FILES
+    ${GREX_THIRD_PARTY_DIR}/imgui/imgui.h
+    ${GREX_THIRD_PARTY_DIR}/imgui/imgui.cpp
+    ${GREX_THIRD_PARTY_DIR}/imgui/imgui_draw.cpp
+    ${GREX_THIRD_PARTY_DIR}/imgui/imgui_tables.cpp
+    ${GREX_THIRD_PARTY_DIR}/imgui/imgui_widgets.cpp
+    ${GREX_THIRD_PARTY_DIR}/imgui/backends/imgui_impl_glfw.h
+    ${GREX_THIRD_PARTY_DIR}/imgui/backends/imgui_impl_glfw.cpp
+    ${GREX_THIRD_PARTY_DIR}/imgui/backends/imgui_impl_vulkan.h
+    ${GREX_THIRD_PARTY_DIR}/imgui/backends/imgui_impl_vulkan.cpp
+)
+
+set(IMGUI_INC_DIR ${GREX_THIRD_PARTY_DIR}/imgui)
 
 # ------------------------------------------------------------------------------
 # Graphics experiments
