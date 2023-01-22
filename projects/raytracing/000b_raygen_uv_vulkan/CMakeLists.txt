@@ -14,6 +14,8 @@ add_executable(
     ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/ResourceLimits.cpp
 )
 
+set_target_properties(000b_raygen_uv_vulkan PROPERTIES FOLDER "raytracing")
+
 target_include_directories(
     000b_raygen_uv_vulkan
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}

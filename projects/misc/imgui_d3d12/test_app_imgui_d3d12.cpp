@@ -211,7 +211,7 @@ int main(int argc, char** argv)
             {
                 commandList->OMSetRenderTargets(1, &renderer->SwapchainRTVDescriptorHandles[bufferIndex], false, nullptr);
 
-                float clearColor[4] = {0, 0, 0, 0};
+                float clearColor[4] = {0.23f, 0.23f, 0.31f, 0};
                 commandList->ClearRenderTargetView(renderer->SwapchainRTVDescriptorHandles[bufferIndex], clearColor, 0, nullptr);
 
                 window->ImGuiRenderDrawData(renderer.get(), commandList.Get());

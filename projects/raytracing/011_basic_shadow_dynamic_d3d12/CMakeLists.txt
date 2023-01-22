@@ -14,6 +14,8 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/window.cpp
 )
 
+set_target_properties(011_basic_shadow_dynamic_d3d12 PROPERTIES FOLDER "raytracing")
+
 target_include_directories(
     011_basic_shadow_dynamic_d3d12
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
