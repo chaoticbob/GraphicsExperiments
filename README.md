@@ -24,7 +24,8 @@ to simplify buffer and image creation and keeps the code significantly smaller.
 # Drivers
 At the time of this writing, January 2023, the ray tracing experiments have been tested 
 on the **public beta drivers** from AMD and NVIDIA. Sometimes things don't work correctly -
-that's just life using beta drivers. In time the features will move to regular drivers. 
+that's just life using beta drivers. Eventually the features in the beta driver will move to release.
+Until that happens, some experiments may not run correctly.
 
 For Vulkan, the drivers need to support 1.3 along with [VK_EXT_descriptor_buffer](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_EXT_descriptor_buffer.html) 
 and [VK_KHR_dynamic_rendering](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_dynamic_rendering.html). 
