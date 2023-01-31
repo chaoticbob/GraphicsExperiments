@@ -7,6 +7,9 @@
 #include <dxgi1_6.h>
 #include <dxcapi.h>
 
+#define GREX_DEFAULT_RTV_FORMAT DXGI_FORMAT_B8G8R8A8_UNORM
+#define GREX_DEFAULT_DSV_FORMAT DXGI_FORMAT_D32_FLOAT
+
 struct DxRenderer
 {
     bool                                     DebugEnabled                  = true;
@@ -20,11 +23,15 @@ struct DxRenderer
     ComPtr<IDXGISwapChain4>                  Swapchain                     = nullptr;
     UINT                                     SwapchainBufferCount          = 0;
     DXGI_FORMAT                              SwapchainRTVFormat            = DXGI_FORMAT_UNKNOWN;
+    DXGI_FORMAT                              SwapchainDSVFormat            = DXGI_FORMAT_UNKNOWN;
     ComPtr<ID3D12Fence>                      SwapchainFence                = nullptr;
     UINT64                                   SwapchainFenceValue           = 0;
     HANDLE                                   SwapchainWaitEventHandle      = nullptr;
     ComPtr<ID3D12DescriptorHeap>             SwapchainRTVDescriptorHeap    = nullptr;
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> SwapchainRTVDescriptorHandles = {};
+    std::vector<ComPtr<ID3D12Resource>>      SwapchainDSVBuffers           = {};
+    ComPtr<ID3D12DescriptorHeap>             SwapchainDSVDescriptorHeap    = nullptr;
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> SwapchainDSVDescriptorHandles = {};
     ComPtr<ID3D12DescriptorHeap>             ImGuiFontDescriptorHeap       = nullptr;
 
     DxRenderer();
@@ -32,7 +39,7 @@ struct DxRenderer
 };
 
 bool InitDx(DxRenderer* pRenderer, bool enableDebug);
-bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t height, uint32_t bufferCount = 2);
+bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t height, uint32_t bufferCount = 2, DXGI_FORMAT dsvFormat = DXGI_FORMAT_UNKNOWN);
 bool WaitForGpu(DxRenderer* pRenderer);
 bool SwapchainPresent(DxRenderer* pRenderer);
 
@@ -40,9 +47,60 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData
 HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData, size_t minAlignment, ID3D12Resource** ppResource);
 HRESULT CreateUAVBuffer(DxRenderer* pRenderer, size_t size, D3D12_RESOURCE_STATES initialResourceState, ID3D12Resource** ppResource);
 
+HRESULT CreateTexture(
+    DxRenderer*      pRenderer,
+    uint32_t         width,
+    uint32_t         height,
+    DXGI_FORMAT      format,
+    const void*      pSrcData,
+    ID3D12Resource** ppResource);
+
 D3D12_RESOURCE_BARRIER CreateTransition(
     ID3D12Resource*              pResource,
     D3D12_RESOURCE_STATES        StateBefore,
     D3D12_RESOURCE_STATES        StateAfter,
     UINT                         Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
     D3D12_RESOURCE_BARRIER_FLAGS Flags       = D3D12_RESOURCE_BARRIER_FLAG_NONE);
+
+HRESULT CreateDrawVertexColorPipeline(
+    DxRenderer*              pRenderer,
+    ID3D12RootSignature*     pRootSig,
+    const std::vector<char>& vsShaderBytecode,
+    const std::vector<char>& psShaderBytecode,
+    DXGI_FORMAT              rtvFormat,
+    DXGI_FORMAT              dsvFormat,
+    ID3D12PipelineState**    ppPipeline);
+
+HRESULT CreateDrawNormalPipeline(
+    DxRenderer*              pRenderer,
+    ID3D12RootSignature*     pRootSig,
+    const std::vector<char>& vsShaderBytecode,
+    const std::vector<char>& psShaderBytecode,
+    DXGI_FORMAT              rtvFormat,
+    DXGI_FORMAT              dsvFormat,
+    ID3D12PipelineState**    ppPipeline);
+
+HRESULT CreateDrawTexturePipeline(
+    DxRenderer*              pRenderer,
+    ID3D12RootSignature*     pRootSig,
+    const std::vector<char>& vsShaderBytecode,
+    const std::vector<char>& psShaderBytecode,
+    DXGI_FORMAT              rtvFormat,
+    DXGI_FORMAT              dsvFormat,
+    ID3D12PipelineState**    ppPipeline);
+
+HRESULT CreateDrawBasicPipeline(
+    DxRenderer*              pRenderer,
+    ID3D12RootSignature*     pRootSig,
+    const std::vector<char>& vsShaderBytecode,
+    const std::vector<char>& psShaderBytecode,
+    DXGI_FORMAT              rtvFormat,
+    DXGI_FORMAT              dsvFormat,
+    ID3D12PipelineState**    ppPipeline);
+
+HRESULT CompileHLSL(
+    const std::string& shaderSource,
+    const std::string& entryPoint,
+    const std::string& profile,
+    std::vector<char>* pDXIL,
+    std::string*       pErrorMsg);

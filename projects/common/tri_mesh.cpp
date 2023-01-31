@@ -9,8 +9,10 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/transform.hpp>
 
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <map>
 #include <sstream>
 
 //
@@ -49,18 +51,130 @@ static inline glm::vec3 SphericalTangent(float theta, float phi)
     );
 }
 
-void TriMesh::AddTriangle(const Triangle& tri)
+uint32_t TriMesh::AddTriangle(const TriMesh::Triangle& tri)
 {
     mTriangles.push_back(tri);
+    uint32_t newIndex = static_cast<uint32_t>(mTriangles.size() - 1);
+    return newIndex;
 }
 
-void TriMesh::AddTriangle(uint32_t vIdx0, uint32_t vIdx1, uint32_t vIdx2)
+uint32_t TriMesh::AddTriangle(uint32_t vIdx0, uint32_t vIdx1, uint32_t vIdx2)
 {
-    Triangle tri = {vIdx0, vIdx1, vIdx2};
-    AddTriangle(tri);
+    TriMesh::Triangle tri = {vIdx0, vIdx1, vIdx2};
+    return AddTriangle(tri);
 }
 
-void TriMesh::AddVertex(const TriangleVertex& vtx)
+uint32_t TriMesh::GetGroupIndex(const std::string& groupName) const
+{
+    auto it = std::find_if(
+        mGroups.begin(),
+        mGroups.end(),
+        [&groupName](const TriMesh::Group& elem) -> bool {
+            bool match = (elem.GetName() == groupName);
+            return match;
+        });
+    if (it == mGroups.end()) {
+        return UINT32_MAX;
+    }
+
+    return static_cast<uint32_t>(std::distance(mGroups.begin(), it));
+}
+
+uint32_t TriMesh::AddGroup(const TriMesh::Group& newGroup)
+{
+    if (newGroup.GetName().empty()) {
+        assert(false && "group name cannot be empty");
+        return UINT32_MAX;
+    }
+
+    auto it = std::find_if(
+        mGroups.begin(),
+        mGroups.end(),
+        [&newGroup](const TriMesh::Group& elem) -> bool {
+            bool match = (elem.GetName() == newGroup.GetName());
+            return match;
+        });
+    if (it != mGroups.end()) {
+        assert(false && "group name already exists");
+        return UINT32_MAX;
+    }
+
+    mGroups.push_back(newGroup);
+    uint32_t newIndex = static_cast<uint32_t>(mGroups.size() - 1);
+
+    // Calculate the AABB
+    auto& addedGroup = mGroups.back();
+    if (addedGroup.GetNumTriangleIndices() > 0) {
+        TriMesh::Aabb bounds = {};
+        // Set the min/max to the first vertex of the first tirangle
+        uint32_t    triIdx = addedGroup.GetTriangleIndices()[0];
+        const auto& tri    = mTriangles[triIdx];
+        bounds.min         = mPositions[tri.vIdx0];
+        bounds.max         = mPositions[tri.vIdx0];
+        // Iterate through triangles and min/max on each vertex index
+        for (const auto& triIdx : addedGroup.GetTriangleIndices()) {
+            const auto& tri = mTriangles[triIdx];
+            // vIdx0
+            bounds.min = glm::min(bounds.min, mPositions[tri.vIdx0]);
+            bounds.max = glm::max(bounds.max, mPositions[tri.vIdx0]);
+            // vIdx1
+            bounds.min = glm::min(bounds.min, mPositions[tri.vIdx1]);
+            bounds.max = glm::max(bounds.max, mPositions[tri.vIdx1]);
+            // vIdx2
+            bounds.min = glm::min(bounds.min, mPositions[tri.vIdx2]);
+            bounds.max = glm::max(bounds.max, mPositions[tri.vIdx2]);
+        }
+
+        addedGroup.SetBounds(bounds);
+    }
+
+    return newIndex;
+}
+
+std::vector<TriMesh::Triangle> TriMesh::GetGroupTriangles(uint32_t groupIndex) const
+{
+    std::vector<TriMesh::Triangle> triangles;
+    if (groupIndex < GetNumGroups()) {
+        for (auto& triangleIndex : mGroups[groupIndex].GetTriangleIndices()) {
+            const TriMesh::Triangle& tri = mTriangles[triangleIndex];
+            triangles.push_back(tri);
+        }
+    }
+    return triangles;
+}
+
+uint32_t TriMesh::AddMaterial(const TriMesh::Material& material)
+{
+    mMaterials.push_back(material);
+    uint32_t newIndex = static_cast<uint32_t>(mMaterials.size() - 1);
+    return newIndex;
+}
+
+std::vector<TriMesh::Triangle> TriMesh::GetTrianglesForMaterial(const int32_t materialIndex)
+{
+    std::vector<TriMesh::Triangle> triangles;
+    // Iterate groups...
+    const uint32_t numGroups = GetNumGroups();
+    for (uint32_t groupIndex = 0; groupIndex < numGroups; ++groupIndex) {
+        auto& group = GetGroup(groupIndex);
+        // Iterate triangles in group....
+        const uint32_t numTriangleIndices = group.GetNumTriangleIndices();
+        for (uint32_t i = 0; i < numTriangleIndices; ++i) {
+            // Look for material indices that match \b materialIndex...
+            const int32_t itMaterialIndex = group.GetMaterialIndices()[i];
+            if (materialIndex == itMaterialIndex) {
+                // ...add corresponding triangle if there's a match
+                const uint32_t itTriangleIndex = group.GetTriangleIndices()[i];
+                const auto&    tri             = GetTriangle(itTriangleIndex);
+                triangles.push_back(tri);
+            }
+        }
+    }
+
+    return triangles;
+}
+
+void TriMesh::AddVertex(const TriMesh::Vertex& vtx)
 {
     mPositions.push_back(vtx.position);
     if (mPositions.size() > 1) {
@@ -97,11 +211,137 @@ void TriMesh::AddVertex(
     const glm::vec3& tangent,
     const glm::vec3& bitangent)
 {
-    TriangleVertex vtx = {position, vertexColor, texCoord, normal, tangent, bitangent};
+    TriMesh::Vertex vtx = {position, vertexColor, texCoord, normal, tangent, bitangent};
     AddVertex(vtx);
 }
 
-TriMesh TriMesh::Cube(const glm::vec3& size, bool perFaceTexCoords, const Options& options)
+void TriMesh::Recenter(const glm::vec3& newCenter)
+{
+    glm::vec3 currentCenter = mBounds.Center();
+    glm::vec3 adjustment    = newCenter - currentCenter;
+
+    for (auto& position : mPositions) {
+        position += adjustment;
+    }
+}
+
+void TriMesh::SetVertexColors(const glm::vec3& vertexColor)
+{
+    for (auto& elem : mVertexColors) {
+        elem = vertexColor;
+    }
+}
+
+void TriMesh::AppendMesh(const TriMesh& srcMesh, const std::string& groupPrefix)
+{
+    // We need to offset newly added triangle vertex indices
+    // by number of existing vertices in *this* mesh.
+    //
+    const uint32_t vertexIndexOffset   = this->GetNumVertices();
+    const uint32_t triangleIndexOffset = this->GetNumTriangles();
+    const uint32_t materialIndexOffset = this->GetNumMaterials();
+
+    // Copy vertex data
+    const uint32_t srcNumVertices = srcMesh.GetNumVertices();
+    for (uint32_t i = 0; i < srcNumVertices; ++i) {
+        TriMesh::Vertex vtx = {};
+        vtx.position        = srcMesh.GetPositions()[i];
+
+        if (srcMesh.GetOptions().enableVertexColors) {
+            vtx.vertexColor = srcMesh.GetVertexColors()[i];
+        }
+        if (srcMesh.GetOptions().enableTexCoords) {
+            vtx.texCoord = srcMesh.GetTexCoords()[i];
+        }
+        if (srcMesh.GetOptions().enableNormals) {
+            vtx.normal = srcMesh.GetNormals()[i];
+        }
+        if (srcMesh.GetOptions().enableTangents) {
+            vtx.tangent = srcMesh.GetTangents()[i];
+        }
+        if (srcMesh.GetOptions().enableBitangents) {
+            vtx.bitangent = srcMesh.GetBitangents()[i];
+        }
+
+        this->AddVertex(vtx);
+    }
+
+    // Copy triangles
+    const uint32_t srcNumTriangles = srcMesh.GetNumTriangles();
+    for (uint32_t i = 0; i < srcNumTriangles; ++i) {
+        TriMesh::Triangle tri = srcMesh.GetTriangles()[i];
+
+        // Offset new indices
+        tri.vIdx0 += vertexIndexOffset;
+        tri.vIdx1 += vertexIndexOffset;
+        tri.vIdx2 += vertexIndexOffset;
+
+        this->AddTriangle(tri);
+    }
+
+    // Copy materials
+    const uint32_t srcNumMaterials = srcMesh.GetNumMaterials();
+    for (uint32_t i = 0; i < srcNumMaterials; ++i) {
+        auto& material = srcMesh.GetMaterials()[i];
+        this->AddMaterial(material);
+    }
+
+    // Copy or create groups
+    //
+    // If there are groups, then copy them...
+    const uint32_t srcNumGroups = srcMesh.GetNumGroups();
+    if (srcNumGroups > 0) {
+        for (uint32_t i = 0; i < srcNumGroups; ++i) {
+            auto&       srcGroup     = srcMesh.GetGroups()[i];
+            std::string newGroupName = srcGroup.GetName();
+            // Prefix the name with \b groupPrefix if supplied
+            if (!groupPrefix.empty()) {
+                newGroupName = groupPrefix + ":" + newGroupName;
+            }
+
+            // Create new group
+            auto newGroup = Group(newGroupName);
+
+            // Add triangle and material indices
+            const uint32_t numSrcTriangleIndices = srcGroup.GetNumTriangleIndices();
+            for (uint32_t j = 0; j < numSrcTriangleIndices; ++j) {
+                uint32_t triangleIndex = srcGroup.GetTriangleIndices()[j];
+                int32_t  materialIndex = srcGroup.GetMaterialIndices()[j];
+                triangleIndex += triangleIndexOffset;
+                if (materialIndex >= 0) {
+                    materialIndex += materialIndexOffset;
+                }
+                newGroup.AddTriangleIndex(triangleIndex, materialIndex);
+            }
+
+            // Add group
+            uint32_t res = this->AddGroup(newGroup);
+            assert((res != UINT32_MAX) && "AddGroup failed");
+        }
+    }
+    // ...otherwise create a group using \b groupPrefix for name
+    else {
+        if (!groupPrefix.empty()) {
+            // Group name
+            const std::string& newGroupName = groupPrefix;
+
+            // Create new group starting starting from \b triangleIndexOffset
+            // for however many triangles there are in \b srcMesh.
+            //
+            auto newGroup = Group(newGroupName, triangleIndexOffset, srcMesh.GetNumTriangles());
+
+            // Add group
+            uint32_t res = this->AddGroup(newGroup);
+            assert((res != UINT32_MAX) && "AddGroup failed");
+        }
+    }
+}
+
+TriMesh TriMesh::Box(
+    const glm::vec3&        size,
+    uint8_t                 actives,
+    bool                    perTexCoords,
+    const TriMesh::Options& options)
 {
     const float hx = size.x / 2.0f;
     const float hy = size.y / 2.0f;
@@ -150,7 +390,7 @@ TriMesh TriMesh::Cube(const glm::vec3& size, bool perFaceTexCoords, const Option
     float v1 = 1.0f / 2.0f;
     float v2 = 1.0f;
 
-    std::vector<float> perFaceTexCoordsData{
+    std::vector<float> perTexCoordsData{
         // texcoords 
          u2, v1,   //  0  -Z side
          u2, v2,   //  1
@@ -184,54 +424,143 @@ TriMesh TriMesh::Cube(const glm::vec3& size, bool perFaceTexCoords, const Option
     };
 
     std::vector<uint32_t> indexData = {
-        0,  1,  2, // -Z side
+        0,  1,  2, // -Z side (0)
         0,  2,  3,
 
-        4,  5,  6, // +Z side
+        4,  5,  6, // +Z side (2)
         4,  6,  7,
 
-        8,  9, 10, // -X side
+        8,  9, 10, // -X side (4)
         8, 10, 11,
 
-        12, 13, 14, // +X side
+        12, 13, 14, // +X side (6)
         12, 14, 15,
 
-        16, 17, 18, // -X side
+        16, 17, 18, // -Y side (8)
         16, 18, 19,
 
-        20, 21, 22, // +X side
+        20, 21, 22, // +Y side (10)
         20, 22, 23,
     };
     // clang-format on
 
     TriMesh mesh = TriMesh(options);
 
-    const TriangleVertex* pVertices         = reinterpret_cast<const TriangleVertex*>(vertexData.data());
-    const glm::vec2*      pPerfaceTexCoords = reinterpret_cast<const glm::vec2*>(perFaceTexCoordsData.data());
+    glm::mat4 transformMat = glm::mat4(1);
+    glm::mat4 rotationMat  = glm::mat4(1);
+    if (options.applyTransform) {
+        glm::mat4 T  = glm::translate(options.transformTranslate);
+        glm::mat4 Rx = glm::rotate(options.transformRotate.x, glm::vec3(1, 0, 0));
+        glm::mat4 Ry = glm::rotate(options.transformRotate.y, glm::vec3(0, 1, 0));
+        glm::mat4 Rz = glm::rotate(options.transformRotate.z, glm::vec3(0, 0, 1));
+        glm::mat4 S  = glm::scale(options.transformScale);
+        rotationMat  = Rx * Ry * Rz;
+        transformMat = T * rotationMat * S;
+    }
+
+    const TriMesh::Vertex* pVertices         = reinterpret_cast<const TriMesh::Vertex*>(vertexData.data());
+    const glm::vec2*       pPerfaceTexCoords = reinterpret_cast<const glm::vec2*>(perTexCoordsData.data());
     for (size_t i = 0; i < 24; ++i) {
-        TriangleVertex vtx = pVertices[i];
-        if (perFaceTexCoords) {
+        TriMesh::Vertex vtx = pVertices[i];
+
+        if (options.applyTransform) {
+            vtx.position = glm::vec3(transformMat * glm::vec4(vtx.position, 1));
+            vtx.normal   = glm::vec3(rotationMat * glm::vec4(vtx.normal, 0));
+        }
+
+        vtx.position += options.center;
+
+        if (options.faceInside) {
+            vtx.normal = -vtx.normal;
+        }
+
+        if (perTexCoords) {
             vtx.texCoord = pPerfaceTexCoords[i];
         }
+
         mesh.AddVertex(vtx);
     }
 
     const Triangle* pTriangles = reinterpret_cast<const Triangle*>(indexData.data());
-    for (size_t i = 0; i < 12; ++i) {
-        const Triangle& tri = pTriangles[i];
-        mesh.AddTriangle(tri);
+    if (actives & AXIS_POS_X) {
+        Triangle tri0 = pTriangles[6];
+        Triangle tri1 = pTriangles[7];
+        if (options.faceInside) {
+            std::swap(tri0.vIdx1, tri0.vIdx2);
+            std::swap(tri1.vIdx1, tri1.vIdx2);
+        }
+        mesh.AddTriangle(tri0);
+        mesh.AddTriangle(tri1);
+    }
+    if (actives & AXIS_NEG_X) {
+        Triangle tri0 = pTriangles[4];
+        Triangle tri1 = pTriangles[5];
+        if (options.faceInside) {
+            std::swap(tri0.vIdx1, tri0.vIdx2);
+            std::swap(tri1.vIdx1, tri1.vIdx2);
+        }
+        mesh.AddTriangle(tri0);
+        mesh.AddTriangle(tri1);
+    }
+    if (actives & AXIS_POS_Y) {
+        Triangle tri0 = pTriangles[10];
+        Triangle tri1 = pTriangles[11];
+        if (options.faceInside) {
+            std::swap(tri0.vIdx1, tri0.vIdx2);
+            std::swap(tri1.vIdx1, tri1.vIdx2);
+        }
+        mesh.AddTriangle(tri0);
+        mesh.AddTriangle(tri1);
+    }
+    if (actives & AXIS_NEG_Y) {
+        Triangle tri0 = pTriangles[8];
+        Triangle tri1 = pTriangles[9];
+        if (options.faceInside) {
+            std::swap(tri0.vIdx1, tri0.vIdx2);
+            std::swap(tri1.vIdx1, tri1.vIdx2);
+        }
+        mesh.AddTriangle(tri0);
+        mesh.AddTriangle(tri1);
+    }
+    if (actives & AXIS_POS_Z) {
+        Triangle tri0 = pTriangles[2];
+        Triangle tri1 = pTriangles[3];
+        if (options.faceInside) {
+            std::swap(tri0.vIdx1, tri0.vIdx2);
+            std::swap(tri1.vIdx1, tri1.vIdx2);
+        }
+        mesh.AddTriangle(tri0);
+        mesh.AddTriangle(tri1);
+    }
+    if (actives & AXIS_NEG_Z) {
+        Triangle tri0 = pTriangles[0];
+        Triangle tri1 = pTriangles[1];
+        if (options.faceInside) {
+            std::swap(tri0.vIdx1, tri0.vIdx2);
+            std::swap(tri1.vIdx1, tri1.vIdx2);
+        }
+        mesh.AddTriangle(tri0);
+        mesh.AddTriangle(tri1);
     }
 
     return mesh;
 }
 
+TriMesh TriMesh::Cube(
+    const glm::vec3&        size,
+    bool                    perTexCoords,
+    const TriMesh::Options& options)
+{
+    return TriMesh::Box(size, ALL_AXES, perTexCoords, options);
+}
+
 TriMesh TriMesh::Plane(
-    const glm::vec2& size,
-    uint32_t         usegs,
-    uint32_t         vsegs,
-    glm::vec3        normalToPlane,
-    bool             zAxisModeOpenGL,
-    const Options&   options)
+    const glm::vec2&        size,
+    uint32_t                usegs,
+    uint32_t                vsegs,
+    glm::vec3               normalToPlane,
+    bool                    zAxisModeOpenGL,
+    const TriMesh::Options& options)
 
 {
     float     zScale = zAxisModeOpenGL ? -1.0f : 1.0f;
@@ -270,6 +599,8 @@ TriMesh TriMesh::Plane(
             glm::vec3 tangent   = rotMat * glm::vec4(T, 0);
             glm::vec3 bitangent = rotMat * glm::vec4(B, 0);
 
+            position += options.center;
+
             mesh.AddVertex(
                 position,
                 color,
@@ -307,7 +638,11 @@ TriMesh TriMesh::Plane(
     return mesh;
 }
 
-TriMesh TriMesh::Sphere(float radius, uint32_t usegs, uint32_t vsegs, const Options& options)
+TriMesh TriMesh::Sphere(
+    float                   radius,
+    uint32_t                usegs,
+    uint32_t                vsegs,
+    const TriMesh::Options& options)
 {
     constexpr float kPi      = glm::pi<float>();
     constexpr float kTwoPi   = 2.0f * kPi;
@@ -334,6 +669,8 @@ TriMesh TriMesh::Sphere(float radius, uint32_t usegs, uint32_t vsegs, const Opti
             glm::vec3 normal    = normalize(position);
             glm::vec3 tangent   = -SphericalTangent(theta, phi);
             glm::vec3 bitangent = glm::cross(normal, tangent);
+
+            position += options.center;
 
             mesh.AddVertex(
                 position,
@@ -385,7 +722,228 @@ TriMesh TriMesh::Sphere(float radius, uint32_t usegs, uint32_t vsegs, const Opti
     return mesh;
 }
 
-bool TriMesh::LoadOBJ(const std::string& path, const Options& options, TriMesh* pMesh)
+TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
+{
+    TriMesh  mesh       = TriMesh(options);
+    uint32_t materialId = 0;
+
+    const float mainBoxWidth  = 5.5f;
+    const float mainBoxHeight = 5.5f;
+    const float mainBoxDepth  = 6.6f;
+
+    // Light
+    //  L = 1.3
+    //  W = 1.05
+    //
+    {
+        const float length = 1.3f;
+        const float width  = 1.05f;
+
+        // Light
+        {
+            const glm::vec3 albedo = glm::vec3(1, 1, 1);
+
+            TriMesh::Options thisOptions = options;
+            thisOptions.center           = glm::vec3(0, mainBoxHeight - 0.01f, -2.518f);
+            thisOptions.faceInside       = false;
+
+            TriMesh plane = TriMesh::Plane(
+                glm::vec2(length, width),
+                1,
+                1,
+                glm::vec3(0, -1, 0),
+                true,
+                thisOptions);
+            plane.SetVertexColors(albedo);
+
+            Material material = {};
+            material.name     = "white light";
+            material.id       = ++materialId;
+            material.albedo   = albedo;
+            plane.AddMaterial(material);
+            plane.AddGroup(TriMesh::Group("light", 0, plane.GetNumTriangles(), plane.GetNumMaterials() - 1));
+
+            mesh.AppendMesh(plane);
+        }
+    }
+
+    // Main box
+    //  W = 5.5
+    //  H = 5.5
+    //  D = 6.6
+    //
+    {
+        const float hw = mainBoxWidth / 2.0f;
+        const float hh = mainBoxHeight / 2.0f;
+        const float hd = mainBoxDepth / 2.0f;
+
+        // Left wall (red)
+        {
+            const glm::vec3 albedo = glm::vec3(1, 0, 0);
+
+            TriMesh::Options thisOptions = options;
+            thisOptions.center           = glm::vec3(-hw, hh, -hd);
+            thisOptions.faceInside       = false;
+
+            TriMesh plane = TriMesh::Plane(
+                glm::vec2(mainBoxHeight, mainBoxDepth),
+                1,
+                1,
+                glm::vec3(1, 0, 0),
+                true,
+                thisOptions);
+            plane.SetVertexColors(albedo);
+
+            Material material = {};
+            material.name     = "red surface";
+            material.id       = ++materialId;
+            material.albedo   = albedo;
+            plane.AddMaterial(material);
+            plane.AddGroup(TriMesh::Group("left wall", 0, plane.GetNumTriangles(), plane.GetNumMaterials() - 1));
+
+            mesh.AppendMesh(plane);
+        }
+
+        // Right wall (greeen)
+        {
+            const glm::vec3 albedo = glm::vec3(0, 1, 0);
+
+            TriMesh::Options thisOptions = options;
+            thisOptions.center           = glm::vec3(hw, hh, -hd);
+
+            TriMesh plane = TriMesh::Plane(
+                glm::vec2(mainBoxHeight, mainBoxDepth),
+                1,
+                1,
+                glm::vec3(-1, 0, 0),
+                true,
+                thisOptions);
+            plane.SetVertexColors(albedo);
+
+            Material material = {};
+            material.name     = "green surface";
+            material.id       = ++materialId;
+            material.albedo   = albedo;
+            plane.AddMaterial(material);
+            plane.AddGroup(TriMesh::Group("right wall", 0, plane.GetNumTriangles(), plane.GetNumMaterials() - 1));
+
+            mesh.AppendMesh(plane);
+        }
+
+        // Back wall, ceiling, and floor (white)
+        {
+            const glm::vec3 albedo = glm::vec3(1, 1, 1);
+
+            TriMesh::Options thisOptions = options;
+            thisOptions.center           = glm::vec3(0, hh, -hd);
+            thisOptions.faceInside       = true;
+
+            TriMesh box = TriMesh::Box(
+                glm::vec3(mainBoxWidth, mainBoxHeight, mainBoxDepth),
+                AXIS_POS_Y | AXIS_NEG_Y | AXIS_NEG_Z,
+                false,
+                thisOptions);
+            box.SetVertexColors(albedo);
+
+            Material material = {};
+            material.name     = "white surface";
+            material.id       = ++materialId;
+            material.albedo   = albedo;
+            box.AddMaterial(material);
+            box.AddGroup(TriMesh::Group("back wall, ceiling, and floor", 0, box.GetNumTriangles(), box.GetNumMaterials() - 1));
+
+            mesh.AppendMesh(box);
+        }
+    }
+
+    // Small box
+    //  W = 1.67
+    //  H = 1.67
+    //  D = 1.67
+    //
+    {
+        const float width  = 1.67f;
+        const float height = 1.67f;
+        const float depth  = 1.67f;
+
+        const float hw = width / 2.0f;
+        const float hh = height / 2.0f;
+        const float hd = depth / 2.0f;
+
+        // Back wall, ceiling, and floor (white)
+        {
+            const glm::vec3 albedo = glm::vec3(0.80f, 0.66f, 0.44f);
+
+            TriMesh::Options thisOptions = options;
+            thisOptions.center           = glm::vec3(0.9f, hh, -2);
+            thisOptions.faceInside       = false;
+            thisOptions.applyTransform   = true;
+            thisOptions.transformRotate  = glm::vec3(0, -0.4075f, 0);
+
+            TriMesh box = TriMesh::Box(
+                glm::vec3(width, height, depth),
+                ALL_AXES,
+                false,
+                thisOptions);
+            box.SetVertexColors(albedo);
+
+            Material material = {};
+            material.name     = "khaki surface";
+            material.id       = ++materialId;
+            material.albedo   = albedo;
+            box.AddMaterial(material);
+            box.AddGroup(TriMesh::Group("small box", 0, box.GetNumTriangles(), box.GetNumMaterials() - 1));
+
+            mesh.AppendMesh(box);
+        }
+    }
+
+    // Tall box
+    //  W = 1.67
+    //  H = 3.3
+    //  D = 1.67
+    //
+    {
+        const float width  = 1.67f;
+        const float height = 3.3f;
+        const float depth  = 1.67f;
+
+        const float hw = width / 2.0f;
+        const float hh = height / 2.0f;
+        const float hd = depth / 2.0f;
+
+        // Back wall, ceiling, and floor (white)
+        {
+            const glm::vec3 albedo = glm::vec3(0.80f, 0.66f, 0.44f);
+
+            TriMesh::Options thisOptions = options;
+            thisOptions.center           = glm::vec3(-0.92f, hh, -3.755f);
+            thisOptions.faceInside       = false;
+            thisOptions.applyTransform   = true;
+            thisOptions.transformRotate  = glm::vec3(0, 0.29718f, 0);
+
+            TriMesh box = TriMesh::Box(
+                glm::vec3(width, height, depth),
+                ALL_AXES,
+                false,
+                thisOptions);
+            box.SetVertexColors(albedo);
+
+            Material material = {};
+            material.name     = "khaki surface";
+            material.id       = ++materialId;
+            material.albedo   = albedo;
+            box.AddMaterial(material);
+            box.AddGroup(TriMesh::Group("tall box", 0, box.GetNumTriangles(), box.GetNumMaterials() - 1));
+
+            mesh.AppendMesh(box);
+        }
+    }
+
+    return mesh;
+}
+
+bool TriMesh::LoadOBJ(const std::string& path, const std::string& mtlBaseDir, const TriMesh::Options& options, TriMesh* pMesh)
 {
     if (pMesh == nullptr) {
         return false;
@@ -407,7 +965,7 @@ bool TriMesh::LoadOBJ(const std::string& path, const Options& options, TriMesh* 
 
     std::string warn;
     std::string err;
-    bool        loaded = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.c_str(), nullptr, true);
+    bool        loaded = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.c_str(), mtlBaseDir.c_str(), true);
 
     if (!loaded || !err.empty()) {
         return false;
@@ -418,10 +976,23 @@ bool TriMesh::LoadOBJ(const std::string& path, const Options& options, TriMesh* 
         return false;
     }
 
+    // Create mesh
+    *pMesh = TriMesh(options);
+
+    // Track which material ids are used - we do this
+    // because the OBJ file can haver materials that are
+    // never used. We don't want any gaps in our material
+    // indices because it'll lead to wasting GPU memory
+    // later on.
+    //
+    std::vector<int> activeMaterialIds;
+
     // Build geometry
     for (size_t shapeIdx = 0; shapeIdx < numShapes; ++shapeIdx) {
         const tinyobj::shape_t& shape     = shapes[shapeIdx];
         const tinyobj::mesh_t&  shapeMesh = shape.mesh;
+
+        TriMesh::Group newGroup(shape.name);
 
         size_t numTriangles = shapeMesh.indices.size() / 3;
         for (size_t triIdx = 0; triIdx < numTriangles; ++triIdx) {
@@ -435,9 +1006,9 @@ bool TriMesh::LoadOBJ(const std::string& path, const Options& options, TriMesh* 
             const tinyobj::index_t& dataIdx2 = shapeMesh.indices[triVtxIdx2];
 
             // Vertex data
-            TriangleVertex vtx0 = {};
-            TriangleVertex vtx1 = {};
-            TriangleVertex vtx2 = {};
+            TriMesh::Vertex vtx0 = {};
+            TriMesh::Vertex vtx1 = {};
+            TriMesh::Vertex vtx2 = {};
 
             // Pick a face color
             glm::vec3 faceColor = colors[triIdx % colors.size()];
@@ -518,8 +1089,50 @@ bool TriMesh::LoadOBJ(const std::string& path, const Options& options, TriMesh* 
             uint32_t vIdx1       = numVertices - 2;
             uint32_t vIdx2       = numVertices - 1;
 
-            pMesh->AddTriangle(vIdx0, vIdx1, vIdx2);
+            uint32_t triangleIndex = pMesh->AddTriangle(vIdx0, vIdx1, vIdx2);
+            int32_t  materialIndex = -1;
+
+            const int shapeMaterialId = shapeMesh.material_ids[triIdx];            
+            if (shapeMaterialId != -1) {
+                auto it = std::find(activeMaterialIds.begin(), activeMaterialIds.end(), shapeMaterialId);
+                if (it == activeMaterialIds.end()) {
+                    activeMaterialIds.push_back(shapeMaterialId);
+                    materialIndex = static_cast<int32_t>(activeMaterialIds.size() - 1);
+                }
+                else {
+                    materialIndex = static_cast<int32_t>(std::distance(activeMaterialIds.begin(), it));
+                }
+            }
+
+            newGroup.AddTriangleIndex(triangleIndex, materialIndex);
         }
+
+        uint32_t res = pMesh->AddGroup(newGroup);
+        assert((res != UINT32_MAX) && "AddGroup (LoadOBJ) failed");
+    }
+
+    // Materials
+    //
+    // Only copy the materials in \b activeMaterialIds.
+    //
+    const uint32_t numActiveMaterials = static_cast<uint32_t>(activeMaterialIds.size());
+    for (uint32_t i = 0; i < numActiveMaterials; ++i) {
+        const size_t materialId = activeMaterialIds[i];
+        auto& material = materials[materialId];
+
+        TriMesh::Material newMaterial = {};
+        newMaterial.name              = material.name;
+        newMaterial.id                = static_cast<uint32_t>(materialId);
+        newMaterial.F0                = 0.04f;
+        newMaterial.albedo            = glm::vec3(material.diffuse[0], material.diffuse[1], material.diffuse[2]);
+        newMaterial.roughness         = material.roughness;
+        newMaterial.metalness         = material.metallic;
+        newMaterial.albedoTexture     = material.diffuse_texname;
+        newMaterial.normalTexture     = material.normal_texname;
+        newMaterial.roughnessTexture  = material.roughness_texname;
+        newMaterial.metalnessTexture  = material.metallic_texname;
+
+        pMesh->AddMaterial(newMaterial);
     }
 
     return true;

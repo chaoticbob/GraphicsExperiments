@@ -466,13 +466,17 @@ uint32_t GetProcessId()
 
 std::vector<char> LoadFile(const fs::path& absPath)
 {
-    std::ifstream is(absPath.c_str(), std::ios::binary);
-    if (!is.is_open()) {
+    if (!fs::exists(absPath)) {
         return {};
     }
 
     size_t size = fs::file_size(absPath);
     if (size == 0) {
+        return {};
+    }
+
+    std::ifstream is(absPath.c_str(), std::ios::binary);
+    if (!is.is_open()) {
         return {};
     }
 
@@ -534,4 +538,27 @@ std::vector<char> LoadAsset(const fs::path& subPath)
 {
     fs::path absPath = GetAssetPath(subPath);
     return LoadFile(absPath);
+}
+
+std::string LoadString(const fs::path& subPath)
+{
+    fs::path absPath = GetAssetPath(subPath);
+    if (!fs::exists(absPath)) {
+        return {};
+    }
+
+    size_t size = fs::file_size(absPath);
+    if (size == 0) {
+        return {};
+    }
+
+    std::ifstream is(absPath.c_str(), std::ios::binary);
+    if (!is.is_open()) {
+        return {};
+    }
+
+    std::string str(size, 0);
+    is.read(str.data(), size);
+
+    return str;
 }

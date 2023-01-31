@@ -679,6 +679,7 @@ void CreateBLAS(DxRenderer* pRenderer, ID3D12Resource** ppBLAS)
     ComPtr<ID3D12Resource> vertexBuffer;
     ComPtr<ID3D12Resource> indexBuffer;
 
+
     CHECK_CALL(CreateBuffer(pRenderer, SizeInBytes(vertices), vertices.data(), &vertexBuffer));
     CHECK_CALL(CreateBuffer(pRenderer, SizeInBytes(indices), indices.data(), &indexBuffer));
 

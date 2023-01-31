@@ -5,7 +5,10 @@ cmake_minimum_required(VERSION 3.0)
 # ------------------------------------------------------------------------------
 set(GREX_PROJECTS_COMMON_DIR "${GREX_PROJECTS_DIR}/common")
 
+add_subdirectory(geometry)
 add_subdirectory(raytracing)
+#add_subdirectory(rendering)
+add_subdirectory(texture)
 
 if (GREX_ENABLE_D3D12)
     add_subdirectory(misc/imgui_d3d12)
