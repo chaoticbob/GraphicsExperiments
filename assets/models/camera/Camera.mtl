@@ -1,0 +1,20 @@
+newmtl CameraMaterial
+illum 4
+Kd 1.00 1.00 1.00
+Ka 0.00 0.00 0.00
+Tf 1.00 1.00 1.00
+map_Kd Camera_Base_color.png
+norm Camera_Normal_DirectX.png
+map_Pm Camera_Metallic.png
+map_Pr Camera_Roughness.png
+Ni 1.00
+newmtl LensMaterial
+illum 4
+Kd 1.00 0.00 1.00
+Ka 0.40 0.40 0.40
+Tf 1.00 1.00 1.00
+map_Pr Lens_Roughness.png
+Ni 1.00
+Ks 0.30 0.30 0.30
+Ns 18.00
+

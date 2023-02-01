@@ -5,8 +5,8 @@ The graphics API objects are not always properly cleaned up. Just keep that in
 mind if you make use of the code.
 
 #### What kinds of experiments are in here?
-Whatever comes to mind. Right now there are basic ray tracing experiments for 
-triangle and procedural AABB intersection.
+Graphics experiments for rendering, ray tracing, geometry generation, proceudral textures, etc.
+Pretty much anything that's graphically interesting.
 
 # Some Stuff
 1. The main idea behind these graphics experiments is to show how XYZ is done without a bunch of noise around it. 

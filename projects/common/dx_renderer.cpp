@@ -1023,6 +1023,118 @@ HRESULT CreateDrawBasicPipeline(
     return S_OK;
 }
 
+HRESULT CreateGraphicsPipeline1(
+    DxRenderer*              pRenderer,
+    ID3D12RootSignature*     pRootSig,
+    const std::vector<char>& vsShaderBytecode,
+    const std::vector<char>& psShaderBytecode,
+    DXGI_FORMAT              rtvFormat,
+    DXGI_FORMAT              dsvFormat,
+    ID3D12PipelineState**    ppPipeline)
+{
+    const uint32_t kNumInputElements = 5;
+
+    D3D12_INPUT_ELEMENT_DESC inputElementDesc[kNumInputElements] = {};
+    // Position
+    inputElementDesc[0].SemanticName         = "POSITION";
+    inputElementDesc[0].SemanticIndex        = 0;
+    inputElementDesc[0].Format               = DXGI_FORMAT_R32G32B32_FLOAT;
+    inputElementDesc[0].InputSlot            = 0;
+    inputElementDesc[0].AlignedByteOffset    = D3D12_APPEND_ALIGNED_ELEMENT;
+    inputElementDesc[0].InputSlotClass       = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+    inputElementDesc[0].InstanceDataStepRate = 0;
+    // TexCoord
+    inputElementDesc[1].SemanticName         = "TEXCOORD";
+    inputElementDesc[1].SemanticIndex        = 0;
+    inputElementDesc[1].Format               = DXGI_FORMAT_R32G32_FLOAT;
+    inputElementDesc[1].InputSlot            = 1;
+    inputElementDesc[1].AlignedByteOffset    = D3D12_APPEND_ALIGNED_ELEMENT;
+    inputElementDesc[1].InputSlotClass       = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+    inputElementDesc[1].InstanceDataStepRate = 0;
+    // Normal
+    inputElementDesc[2].SemanticName         = "NORMAL";
+    inputElementDesc[2].SemanticIndex        = 0;
+    inputElementDesc[2].Format               = DXGI_FORMAT_R32G32B32_FLOAT;
+    inputElementDesc[2].InputSlot            = 2;
+    inputElementDesc[2].AlignedByteOffset    = D3D12_APPEND_ALIGNED_ELEMENT;
+    inputElementDesc[2].InputSlotClass       = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+    inputElementDesc[2].InstanceDataStepRate = 0;
+    // Tangent
+    inputElementDesc[3].SemanticName         = "TANGENT";
+    inputElementDesc[3].SemanticIndex        = 0;
+    inputElementDesc[3].Format               = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    inputElementDesc[3].InputSlot            = 3;
+    inputElementDesc[3].AlignedByteOffset    = D3D12_APPEND_ALIGNED_ELEMENT;
+    inputElementDesc[3].InputSlotClass       = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+    inputElementDesc[3].InstanceDataStepRate = 0;
+    // Bitangent
+    inputElementDesc[4].SemanticName         = "BITANGENT";
+    inputElementDesc[4].SemanticIndex        = 0;
+    inputElementDesc[4].Format               = DXGI_FORMAT_R32G32B32_FLOAT;
+    inputElementDesc[4].InputSlot            = 4;
+    inputElementDesc[4].AlignedByteOffset    = D3D12_APPEND_ALIGNED_ELEMENT;
+    inputElementDesc[4].InputSlotClass       = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+    inputElementDesc[4].InstanceDataStepRate = 0;
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC desc               = {};
+    desc.pRootSignature                                   = pRootSig;
+    desc.VS                                               = {DataPtr(vsShaderBytecode), CountU32(vsShaderBytecode)};
+    desc.PS                                               = {DataPtr(psShaderBytecode), CountU32(psShaderBytecode)};
+    desc.BlendState.AlphaToCoverageEnable                 = FALSE;
+    desc.BlendState.IndependentBlendEnable                = FALSE;
+    desc.BlendState.RenderTarget[0].BlendEnable           = FALSE;
+    desc.BlendState.RenderTarget[0].LogicOpEnable         = FALSE;
+    desc.BlendState.RenderTarget[0].SrcBlend              = D3D12_BLEND_SRC_COLOR;
+    desc.BlendState.RenderTarget[0].DestBlend             = D3D12_BLEND_ZERO;
+    desc.BlendState.RenderTarget[0].BlendOp               = D3D12_BLEND_OP_ADD;
+    desc.BlendState.RenderTarget[0].SrcBlendAlpha         = D3D12_BLEND_SRC_ALPHA;
+    desc.BlendState.RenderTarget[0].DestBlendAlpha        = D3D12_BLEND_ZERO;
+    desc.BlendState.RenderTarget[0].BlendOpAlpha          = D3D12_BLEND_OP_ADD;
+    desc.BlendState.RenderTarget[0].LogicOp               = D3D12_LOGIC_OP_NOOP;
+    desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xF;
+    desc.SampleMask                                       = D3D12_DEFAULT_SAMPLE_MASK;
+    desc.RasterizerState.FillMode                         = D3D12_FILL_MODE_SOLID;
+    desc.RasterizerState.CullMode                         = D3D12_CULL_MODE_BACK;
+    desc.RasterizerState.FrontCounterClockwise            = TRUE;
+    desc.RasterizerState.DepthBias                        = D3D12_DEFAULT_DEPTH_BIAS;
+    desc.RasterizerState.DepthBiasClamp                   = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
+    desc.RasterizerState.SlopeScaledDepthBias             = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+    desc.RasterizerState.DepthClipEnable                  = FALSE;
+    desc.RasterizerState.MultisampleEnable                = FALSE;
+    desc.RasterizerState.AntialiasedLineEnable            = FALSE;
+    desc.RasterizerState.ForcedSampleCount                = 0;
+    desc.DepthStencilState.DepthEnable                    = (dsvFormat != DXGI_FORMAT_UNKNOWN);
+    desc.DepthStencilState.DepthWriteMask                 = D3D12_DEPTH_WRITE_MASK_ALL;
+    desc.DepthStencilState.DepthFunc                      = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    desc.DepthStencilState.StencilEnable                  = FALSE;
+    desc.DepthStencilState.StencilReadMask                = D3D12_DEFAULT_STENCIL_READ_MASK;
+    desc.DepthStencilState.StencilWriteMask               = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+    desc.DepthStencilState.FrontFace.StencilFailOp        = D3D12_STENCIL_OP_KEEP;
+    desc.DepthStencilState.FrontFace.StencilDepthFailOp   = D3D12_STENCIL_OP_KEEP;
+    desc.DepthStencilState.FrontFace.StencilPassOp        = D3D12_STENCIL_OP_KEEP;
+    desc.DepthStencilState.FrontFace.StencilFunc          = D3D12_COMPARISON_FUNC_NEVER;
+    desc.DepthStencilState.BackFace                       = desc.DepthStencilState.FrontFace;
+    desc.InputLayout.NumElements                          = kNumInputElements;
+    desc.InputLayout.pInputElementDescs                   = inputElementDesc;
+    desc.IBStripCutValue                                  = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF;
+    desc.PrimitiveTopologyType                            = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    desc.NumRenderTargets                                 = 1;
+    desc.RTVFormats[0]                                    = rtvFormat;
+    desc.DSVFormat                                        = dsvFormat;
+    desc.SampleDesc.Count                                 = 1;
+    desc.SampleDesc.Quality                               = 0;
+    desc.NodeMask                                         = 0;
+    desc.CachedPSO                                        = {};
+    desc.Flags                                            = D3D12_PIPELINE_STATE_FLAG_NONE;
+
+    HRESULT hr = pRenderer->Device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(ppPipeline));
+    if (FAILED(hr)) {
+        return hr;
+    }
+
+    return S_OK;
+}
+
 std::wstring AsciiToUTF16(const std::string& ascii)
 {
     std::wstring utf16;

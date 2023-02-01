@@ -7,7 +7,7 @@ set(GREX_PROJECTS_COMMON_DIR "${GREX_PROJECTS_DIR}/common")
 
 add_subdirectory(geometry)
 add_subdirectory(raytracing)
-#add_subdirectory(rendering)
+add_subdirectory(rendering)
 add_subdirectory(texture)
 
 if (GREX_ENABLE_D3D12)

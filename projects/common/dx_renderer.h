@@ -98,6 +98,15 @@ HRESULT CreateDrawBasicPipeline(
     DXGI_FORMAT              dsvFormat,
     ID3D12PipelineState**    ppPipeline);
 
+HRESULT CreateGraphicsPipeline1(
+    DxRenderer*              pRenderer,
+    ID3D12RootSignature*     pRootSig,
+    const std::vector<char>& vsShaderBytecode,
+    const std::vector<char>& psShaderBytecode,
+    DXGI_FORMAT              rtvFormat,
+    DXGI_FORMAT              dsvFormat,
+    ID3D12PipelineState**    ppPipeline);
+
 HRESULT CompileHLSL(
     const std::string& shaderSource,
     const std::string& entryPoint,

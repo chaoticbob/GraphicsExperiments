@@ -40,7 +40,6 @@ public:
         bool      enableTexCoords    = false;
         bool      enableNormals      = false;
         bool      enableTangents     = false;
-        bool      enableBitangents   = false;
         glm::vec3 center             = glm::vec3(0);
         glm::vec2 texCoordScale      = glm::vec2(1);
         bool      faceInside         = false;
@@ -60,7 +59,7 @@ public:
         glm::vec3 vertexColor = glm::vec3(0);
         glm::vec2 texCoord    = glm::vec2(0);
         glm::vec3 normal      = glm::vec3(0);
-        glm::vec3 tangent     = glm::vec3(0);
+        glm::vec4 tangent     = glm::vec4(0);
         glm::vec3 bitangent   = glm::vec3(0);
     };
 
@@ -192,7 +191,7 @@ public:
     const TriMesh::Material&              GetMaterial(uint32_t materialIndex) const { return mMaterials[materialIndex]; }
     const std::vector<TriMesh::Material>& GetMaterials() const { return mMaterials; }
     uint32_t                              AddMaterial(const TriMesh::Material& material);
-    std::vector<TriMesh::Triangle>        GetTrianglesForMaterial(const int32_t materialIndex);
+    std::vector<TriMesh::Triangle>        GetTrianglesForMaterial(const int32_t materialIndex) const;
 
     uint32_t                           GetNumGroups() const { return static_cast<uint32_t>(mGroups.size()); }
     const TriMesh::Group&              GetGroup(uint32_t groupIndex) const { return mGroups[groupIndex]; }
@@ -205,7 +204,7 @@ public:
     const std::vector<glm::vec3>& GetVertexColors() const { return mVertexColors; }
     const std::vector<glm::vec2>& GetTexCoords() const { return mTexCoords; }
     const std::vector<glm::vec3>& GetNormals() const { return mNormals; }
-    const std::vector<glm::vec3>& GetTangents() const { return mTangents; }
+    const std::vector<glm::vec4>& GetTangents() const { return mTangents; }
     const std::vector<glm::vec3>& GetBitangents() const { return mBitangents; }
     const TriMesh::Aabb&          GetBounds() const { return mBounds; }
 
@@ -217,7 +216,7 @@ public:
         const glm::vec3& vertexColor = glm::vec3(0),
         const glm::vec2& texCoord    = glm::vec2(0),
         const glm::vec3& normal      = glm::vec3(0),
-        const glm::vec3& tangent     = glm::vec3(0),
+        const glm::vec4& tangent     = glm::vec4(0),
         const glm::vec3& bitangent   = glm::vec3(0));
 
     void Recenter(const glm::vec3& newCenter = glm::vec3(0));
@@ -266,7 +265,11 @@ private:
     std::vector<glm::vec3>         mVertexColors;
     std::vector<glm::vec2>         mTexCoords;
     std::vector<glm::vec3>         mNormals;
-    std::vector<glm::vec3>         mTangents;
+    std::vector<glm::vec4>         mTangents;
     std::vector<glm::vec3>         mBitangents;
     TriMesh::Aabb                  mBounds = {};
+
+private:
+    friend struct CalculateTangents;
+    void SetTangents(uint32_t vIdx, const glm::vec4& tangent, const glm::vec3& bitangent);
 };
