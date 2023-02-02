@@ -14,4 +14,5 @@ render a camera model. Has 1 light - doesn't look super awesom.
 **Simple PBR shader with material parameters and textures and multiple lights**
 
 This experiment implements a basic PBR shader with material parameters and textures to
-render a camera model. Has 4 lights - looks slight better than **pbr_camera**.
+render a camera model. This experiment builds on **pbr_camera** and adds multiple lights support.
+4 lights are used to light the camera, looks slightly better than **pbr_camera**.
