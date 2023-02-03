@@ -388,7 +388,7 @@ int main(int argc, char** argv)
             // Tangent
             vbvs[3].BufferLocation = vertexBuffers.tangentBuffer->GetGPUVirtualAddress();
             vbvs[3].SizeInBytes    = static_cast<UINT>(vertexBuffers.tangentBuffer->GetDesc().Width);
-            vbvs[3].StrideInBytes  = 16;
+            vbvs[3].StrideInBytes  = 12;
             // Bitangent
             vbvs[4].BufferLocation = vertexBuffers.bitangentBuffer->GetGPUVirtualAddress();
             vbvs[4].SizeInBytes    = static_cast<UINT>(vertexBuffers.bitangentBuffer->GetDesc().Width);

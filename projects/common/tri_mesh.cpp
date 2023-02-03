@@ -1,3 +1,7 @@
+#if defined(WIN32)
+#    define NOMINMAX
+#endif
+
 #include "tri_mesh.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
@@ -7,17 +11,21 @@
 #    include "mikktspace.h"
 #endif
 
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/norm.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/transform.hpp>
+#include <glm/gtx/string_cast.hpp>
 
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <map>
 #include <sstream>
+
+#include "config.h"
 
 //
 // Converts spherical coordinate 'sc' to unit cartesian position.
@@ -79,7 +87,7 @@ struct CalculateTangents
         context.m_pInterface       = &callbacks;
         context.m_pUserData        = pMesh;
 
-        genTangSpaceDefault(&context);
+        genTangSpace(&context, 180.0f);
     }
 };
 
@@ -151,7 +159,7 @@ void CalculateTangents::setTSpaceBasic(const SMikkTSpaceContext* pContext, const
     uint32_t                 vIdx           = pVertexIndices[iVert];
     const glm::vec3&         normal         = pMesh->GetNormals()[vIdx];
 
-    glm::vec4 tangent   = glm::vec4(fvTangent[0], fvTangent[0], fvTangent[0], fSign);
+    glm::vec3 tangent   = glm::vec3(fvTangent[0], fvTangent[1], fvTangent[2]);
     glm::vec3 bitangent = fSign * glm::cross(normal, glm::vec3(tangent));
 
     pMesh->SetTangents(vIdx, tangent, bitangent);
@@ -317,7 +325,7 @@ void TriMesh::AddVertex(
     const glm::vec3& vertexColor,
     const glm::vec2& texCoord,
     const glm::vec3& normal,
-    const glm::vec4& tangent,
+    const glm::vec3& tangent,
     const glm::vec3& bitangent)
 {
     TriMesh::Vertex vtx = {position, vertexColor, texCoord, normal, tangent, bitangent};
@@ -341,7 +349,7 @@ void TriMesh::SetVertexColors(const glm::vec3& vertexColor)
     }
 }
 
-void TriMesh::SetTangents(uint32_t vIdx, const glm::vec4& tangent, const glm::vec3& bitangent)
+void TriMesh::SetTangents(uint32_t vIdx, const glm::vec3& tangent, const glm::vec3& bitangent)
 {
     if (!mOptions.enableTangents) {
         return;

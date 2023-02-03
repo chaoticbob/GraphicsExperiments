@@ -41,7 +41,7 @@ struct VSOutput {
     float4 PositionCS : SV_POSITION;
     float2 TexCoord   : TEXCOORD;
     float3 Normal     : NORMAL;
-    float4 Tangent    : TANGENT;
+    float3 Tangent    : TANGENT;
     float3 Bitangent  : BITANGENT;
 };
 
@@ -49,16 +49,16 @@ VSOutput vsmain(
     float3 PositionOS : POSITION, 
     float2 TexCoord   : TEXCOORD,
     float3 Normal     : NORMAL,
-    float4 Tangent    : TANGENT,
+    float3 Tangent    : TANGENT,
     float3 Bitangent  : BITANGENT)
 {
     VSOutput output = (VSOutput)0;
     output.PositionWS = mul(DrawParams.ModelMatrix, float4(PositionOS, 1)).xyz;
     output.PositionCS = mul(SceneParams.ViewProjectionMatrix, float4(output.PositionWS, 1));
     output.TexCoord = TexCoord;
-    output.Normal = normalize(mul(DrawParams.ModelMatrix, float4(Normal, 0)).xyz);
-    output.Tangent = float4(normalize(mul(DrawParams.ModelMatrix, float4(Tangent.xyz, 0)).xyz), Tangent.w);
-    output.Bitangent = normalize(mul(DrawParams.ModelMatrix, float4(Bitangent, 0)).xyz);
+    output.Normal = Normal;
+    output.Tangent = Tangent;
+    output.Bitangent = Bitangent;
     return output;
 }
 
@@ -137,18 +137,16 @@ float4 psmain(VSOutput input) : SV_TARGET
     float F0 = 0.04;
     F0 = lerp(F0, 1.0, metalness);
 
-    // TBN for tangent space transform
-    float3   nTS = input.Normal;
-    float3   tTS = input.Tangent.xyz;
-    float3   bTS = input.Bitangent;
-    float3x3 TBN = float3x3(tTS.x, bTS.x, nTS.x,
-                            tTS.y, bTS.y, nTS.y,
-                            tTS.z, bTS.z, nTS.z);                                
+    // Calculate normal
+    float3   vNt  = normal;
+    float3   vN   = mul(DrawParams.ModelMatrix, float4(input.Normal, 0)).xyz;
+    float3   vT   = mul(DrawParams.ModelMatrix, float4(input.Tangent.xyz, 0)).xyz;
+    float3   vB   = mul(DrawParams.ModelMatrix, float4(input.Bitangent.xyz, 0)).xyz;
+    float3 N = normalize(vNt.x * vT + vNt.y * vB + vNt.z * vN);                            
 
     // Scene and geometry variables - world space
     float3 P = input.PositionWS;                         // Position
     float3 V = normalize((SceneParams.EyePosition - P)); // View direction
-    float3 N = normalize(mul(TBN, normal));              // Normal
     if (MaterialParams[DrawParams.MaterialIndex].UseGeometricNormal) {
         N = input.Normal;
     }
