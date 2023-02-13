@@ -8,6 +8,8 @@
 Renders the typical sphere grid of metalness on X-axis and roughness on Y-axis. 
 Uses IBL lighting by default, point lights can be turned optionally turned on.
 
+Shaders are found in the [assets/projects/201_pbr_spheres_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/201_pbr_spheres_d3d12) directory.
+
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
 Notes:
@@ -27,6 +29,8 @@ IBL uses rectangular images and not cube maps. There are some artifacts and side
 pinch at the top and bottom of the diffuse indirect lighting. Haven't found a good way to solve
 this yet.
 
+Shaders are found in the [assets/projects/203_pbr_camera_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/203_pbr_camera_d3d12) directory.
+
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
 Notes:
@@ -41,6 +45,8 @@ Notes:
 
 Toy program to explore the various Distribution, Fresnel, and Geometry functions for implementing
 PBR. Knob is borrowed from [Google Filament](https://github.com/google/filament) and monkey is generated from [Blender](https://www.blender.org/).
+
+Shaders are found in the [assets/projects/299_pbr_explorer_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/299_pbr_explorer_d3d12) directory.
 
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
