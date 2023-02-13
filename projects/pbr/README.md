@@ -1,4 +1,4 @@
-# Ray Tracing
+# PBR (Physically Based Rendering)
 
 ## pbr_spheres
 ![alt text](../../images/screenshots/pbr/pbr_spheres.png?raw=true)
