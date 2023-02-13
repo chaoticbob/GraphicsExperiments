@@ -38,10 +38,10 @@ SamplerState                     Sampler0 : register(s2); // Sampler
 
 struct VSOutput {
     float4 PositionCS : SV_POSITION;
-    float2 TexCoord   : TEXCOOD;
+    float2 TexCoord   : TEXCOORD;
 };
 
-VSOutput vsmain(float3 PositionOS : POSITION, float2 TexCoord : TEXCOOD)
+VSOutput vsmain(float3 PositionOS : POSITION, float2 TexCoord : TEXCOORD)
 {
     VSOutput output = (VSOutput)0;
     output.PositionCS = mul(Cam.MVP, float4(PositionOS, 1));
@@ -373,6 +373,7 @@ void CreateTexture(DxRenderer* pRenderer, ID3D12Resource** ppTexture)
         bitmap.GetWidth(),
         bitmap.GetHeight(),
         DXGI_FORMAT_R8G8B8A8_UNORM,
+        bitmap.GetSizeInBytes(),
         bitmap.GetPixels(),
         ppTexture));
 }

@@ -124,4 +124,3 @@ void                         AddAssetDir(const fs::path& absPath);
 fs::path                     GetAssetPath(const fs::path& subPath);
 std::vector<char>            LoadAsset(const fs::path& subPath);
 std::string                  LoadString(const fs::path& subPath);
-BitmapRGBA8u                 LoadImage8u(const fs::path& subPath);

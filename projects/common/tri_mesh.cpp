@@ -143,7 +143,7 @@ void CalculateTangents::getTexCoord(const SMikkTSpaceContext* pContext, float fv
     const TriMesh::Triangle& tri            = pMesh->GetTriangles()[iFace];
     const uint32_t*          pVertexIndices = reinterpret_cast<const uint32_t*>(&tri);
     uint32_t                 vIdx           = pVertexIndices[iVert];
-    const glm::vec2&         texCoord       = pMesh->GetNormals()[vIdx];
+    const glm::vec2&         texCoord       = pMesh->GetTexCoords()[vIdx];
 
     fvTexcOut[0] = texCoord.x;
     fvTexcOut[1] = texCoord.y;
@@ -342,6 +342,16 @@ void TriMesh::Recenter(const glm::vec3& newCenter)
     }
 }
 
+void TriMesh::ScaleToUnit()
+{
+    float maxSpan = std::max(mBounds.max.x, std::max(mBounds.max.y, mBounds.max.z));
+    float scale   = 1.0f / maxSpan;
+    
+    for (auto& position : mPositions) {
+        position *= scale;
+    }
+}
+
 void TriMesh::SetVertexColors(const glm::vec3& vertexColor)
 {
     for (auto& elem : mVertexColors) {
@@ -477,36 +487,36 @@ TriMesh TriMesh::Box(
 
     // clang-format off
     std::vector<float> vertexData = {  
-        // position      // vertex colors    // texcoords  // normal           // tangents               // bitangents
-         hx,  hy, -hz,    1.0f, 0.0f, 0.0f,   0.0f, 0.0f,   0.0f, 0.0f,-1.0f,  -1.0f, 0.0f, 0.0f, 1.0f,   0.0f,-1.0f, 0.0f,  //  0  -Z side
-         hx, -hy, -hz,    1.0f, 0.0f, 0.0f,   0.0f, 1.0f,   0.0f, 0.0f,-1.0f,  -1.0f, 0.0f, 0.0f, 1.0f,   0.0f,-1.0f, 0.0f,  //  1
-        -hx, -hy, -hz,    1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   0.0f, 0.0f,-1.0f,  -1.0f, 0.0f, 0.0f, 1.0f,   0.0f,-1.0f, 0.0f,  //  2
-        -hx,  hy, -hz,    1.0f, 0.0f, 0.0f,   1.0f, 0.0f,   0.0f, 0.0f,-1.0f,  -1.0f, 0.0f, 0.0f, 1.0f,   0.0f,-1.0f, 0.0f,  //  3
-
-        -hx,  hy,  hz,    0.0f, 1.0f, 0.0f,   0.0f, 0.0f,   0.0f, 0.0f, 1.0f,   1.0f, 0.0f, 0.0f, 1.0f,   0.0f,-1.0f, 0.0f,  //  4  +Z side
-        -hx, -hy,  hz,    0.0f, 1.0f, 0.0f,   0.0f, 1.0f,   0.0f, 0.0f, 1.0f,   1.0f, 0.0f, 0.0f, 1.0f,   0.0f,-1.0f, 0.0f,  //  5
-         hx, -hy,  hz,    0.0f, 1.0f, 0.0f,   1.0f, 1.0f,   0.0f, 0.0f, 1.0f,   1.0f, 0.0f, 0.0f, 1.0f,   0.0f,-1.0f, 0.0f,  //  6
-         hx,  hy,  hz,    0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   0.0f, 0.0f, 1.0f,   1.0f, 0.0f, 0.0f, 1.0f,   0.0f,-1.0f, 0.0f,  //  7
-
-        -hx,  hy, -hz,   -0.0f, 0.0f, 1.0f,   0.0f, 0.0f,  -1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f, 1.0f,   0.0f,-1.0f, 0.0f,  //  8  -X side
-        -hx, -hy, -hz,   -0.0f, 0.0f, 1.0f,   0.0f, 1.0f,  -1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f, 1.0f,   0.0f,-1.0f, 0.0f,  //  9
-        -hx, -hy,  hz,   -0.0f, 0.0f, 1.0f,   1.0f, 1.0f,  -1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f, 1.0f,   0.0f,-1.0f, 0.0f,  // 10
-        -hx,  hy,  hz,   -0.0f, 0.0f, 1.0f,   1.0f, 0.0f,  -1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f, 1.0f,   0.0f,-1.0f, 0.0f,  // 11
-
-         hx,  hy,  hz,    1.0f, 1.0f, 0.0f,   0.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f, 1.0f,   0.0f,-1.0f, 0.0f,  // 12  +X side
-         hx, -hy,  hz,    1.0f, 1.0f, 0.0f,   0.0f, 1.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f, 1.0f,   0.0f,-1.0f, 0.0f,  // 13
-         hx, -hy, -hz,    1.0f, 1.0f, 0.0f,   1.0f, 1.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f, 1.0f,   0.0f,-1.0f, 0.0f,  // 14
-         hx,  hy, -hz,    1.0f, 1.0f, 0.0f,   1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f, 1.0f,   0.0f,-1.0f, 0.0f,  // 15
-
-        -hx, -hy,  hz,    1.0f, 0.0f, 1.0f,   0.0f, 0.0f,   0.0f,-1.0f, 0.0f,   1.0f, 0.0f, 0.0f, 1.0f,   0.0f, 0.0f,-1.0f,  // 16  -Y side
-        -hx, -hy, -hz,    1.0f, 0.0f, 1.0f,   0.0f, 1.0f,   0.0f,-1.0f, 0.0f,   1.0f, 0.0f, 0.0f, 1.0f,   0.0f, 0.0f,-1.0f,  // 17
-         hx, -hy, -hz,    1.0f, 0.0f, 1.0f,   1.0f, 1.0f,   0.0f,-1.0f, 0.0f,   1.0f, 0.0f, 0.0f, 1.0f,   0.0f, 0.0f,-1.0f,  // 18
-         hx, -hy,  hz,    1.0f, 0.0f, 1.0f,   1.0f, 0.0f,   0.0f,-1.0f, 0.0f,   1.0f, 0.0f, 0.0f, 1.0f,   0.0f, 0.0f,-1.0f,  // 19
-
-        -hx,  hy, -hz,    0.0f, 1.0f, 1.0f,   0.0f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f, 1.0f,   0.0f, 0.0f, 1.0f,  // 20  +Y side
-        -hx,  hy,  hz,    0.0f, 1.0f, 1.0f,   0.0f, 1.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f, 1.0f,   0.0f, 0.0f, 1.0f,  // 21
-         hx,  hy,  hz,    0.0f, 1.0f, 1.0f,   1.0f, 1.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f, 1.0f,   0.0f, 0.0f, 1.0f,  // 22
-         hx,  hy, -hz,    0.0f, 1.0f, 1.0f,   1.0f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f, 1.0f,   0.0f, 0.0f, 1.0f,  // 23
+        // position      // vertex colors    // texcoords  // normal           // tangents         // bitangents
+         hx,  hy, -hz,    1.0f, 0.0f, 0.0f,   0.0f, 0.0f,   0.0f, 0.0f,-1.0f,  -1.0f, 0.0f, 0.0f,   0.0f,-1.0f, 0.0f,  //  0  -Z side
+         hx, -hy, -hz,    1.0f, 0.0f, 0.0f,   0.0f, 1.0f,   0.0f, 0.0f,-1.0f,  -1.0f, 0.0f, 0.0f,   0.0f,-1.0f, 0.0f,  //  1
+        -hx, -hy, -hz,    1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   0.0f, 0.0f,-1.0f,  -1.0f, 0.0f, 0.0f,   0.0f,-1.0f, 0.0f,  //  2
+        -hx,  hy, -hz,    1.0f, 0.0f, 0.0f,   1.0f, 0.0f,   0.0f, 0.0f,-1.0f,  -1.0f, 0.0f, 0.0f,   0.0f,-1.0f, 0.0f,  //  3
+                                                                                                    
+        -hx,  hy,  hz,    0.0f, 1.0f, 0.0f,   0.0f, 0.0f,   0.0f, 0.0f, 1.0f,   1.0f, 0.0f, 0.0f,   0.0f,-1.0f, 0.0f,  //  4  +Z side
+        -hx, -hy,  hz,    0.0f, 1.0f, 0.0f,   0.0f, 1.0f,   0.0f, 0.0f, 1.0f,   1.0f, 0.0f, 0.0f,   0.0f,-1.0f, 0.0f,  //  5
+         hx, -hy,  hz,    0.0f, 1.0f, 0.0f,   1.0f, 1.0f,   0.0f, 0.0f, 1.0f,   1.0f, 0.0f, 0.0f,   0.0f,-1.0f, 0.0f,  //  6
+         hx,  hy,  hz,    0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   0.0f, 0.0f, 1.0f,   1.0f, 0.0f, 0.0f,   0.0f,-1.0f, 0.0f,  //  7
+                                                                                                    
+        -hx,  hy, -hz,   -0.0f, 0.0f, 1.0f,   0.0f, 0.0f,  -1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f,-1.0f, 0.0f,  //  8  -X side
+        -hx, -hy, -hz,   -0.0f, 0.0f, 1.0f,   0.0f, 1.0f,  -1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f,-1.0f, 0.0f,  //  9
+        -hx, -hy,  hz,   -0.0f, 0.0f, 1.0f,   1.0f, 1.0f,  -1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f,-1.0f, 0.0f,  // 10
+        -hx,  hy,  hz,   -0.0f, 0.0f, 1.0f,   1.0f, 0.0f,  -1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f,-1.0f, 0.0f,  // 11
+                                                                                                    
+         hx,  hy,  hz,    1.0f, 1.0f, 0.0f,   0.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f,   0.0f,-1.0f, 0.0f,  // 12  +X side
+         hx, -hy,  hz,    1.0f, 1.0f, 0.0f,   0.0f, 1.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f,   0.0f,-1.0f, 0.0f,  // 13
+         hx, -hy, -hz,    1.0f, 1.0f, 0.0f,   1.0f, 1.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f,   0.0f,-1.0f, 0.0f,  // 14
+         hx,  hy, -hz,    1.0f, 1.0f, 0.0f,   1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f,   0.0f,-1.0f, 0.0f,  // 15
+                                                                                                    
+        -hx, -hy,  hz,    1.0f, 0.0f, 1.0f,   0.0f, 0.0f,   0.0f,-1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f,  // 16  -Y side
+        -hx, -hy, -hz,    1.0f, 0.0f, 1.0f,   0.0f, 1.0f,   0.0f,-1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f,  // 17
+         hx, -hy, -hz,    1.0f, 0.0f, 1.0f,   1.0f, 1.0f,   0.0f,-1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f,  // 18
+         hx, -hy,  hz,    1.0f, 0.0f, 1.0f,   1.0f, 0.0f,   0.0f,-1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f,  // 19
+                                                                                                    
+        -hx,  hy, -hz,    0.0f, 1.0f, 1.0f,   0.0f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,  // 20  +Y side
+        -hx,  hy,  hz,    0.0f, 1.0f, 1.0f,   0.0f, 1.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,  // 21
+         hx,  hy,  hz,    0.0f, 1.0f, 1.0f,   1.0f, 1.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,  // 22
+         hx,  hy, -hz,    0.0f, 1.0f, 1.0f,   1.0f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,  // 23
     };
 
     float u0 = 0.0f;
@@ -724,7 +734,7 @@ TriMesh TriMesh::Plane(
             glm::vec3 color     = glm::vec3(u, v, 0);
             glm::vec2 texCoord  = glm::vec2(u, v);
             glm::vec3 normal    = rotMat * glm::vec4(N, 0);
-            glm::vec4 tangent   = glm::vec4(glm::vec3(rotMat * glm::vec4(T, 0)), 1);
+            glm::vec3 tangent   = rotMat * glm::vec4(T, 0);
             glm::vec3 bitangent = rotMat * glm::vec4(B, 0);
 
             position += options.center;
@@ -774,7 +784,7 @@ TriMesh TriMesh::Sphere(
 {
     constexpr float kPi      = glm::pi<float>();
     constexpr float kTwoPi   = 2.0f * kPi;
-    const float     kEpsilon = 0.00001f;
+    const float     kEpsilon = 0.0000001f;
 
     const uint32_t uverts = usegs + 1;
     const uint32_t vverts = vsegs + 1;
@@ -795,7 +805,7 @@ TriMesh TriMesh::Sphere(
             glm::vec3 color     = glm::vec3(u, v, 0);
             glm::vec2 texCoord  = glm::vec2(u, v);
             glm::vec3 normal    = normalize(position);
-            glm::vec4 tangent   = glm::vec4(-SphericalTangent(theta, phi), 1);
+            glm::vec3 tangent   = -SphericalTangent(theta, phi);
             glm::vec3 bitangent = glm::cross(normal, glm::vec3(tangent));
 
             position += options.center;
@@ -832,18 +842,12 @@ TriMesh TriMesh::Sphere(
             float dist0 = glm::distance2(P0, P1);
             float dist1 = glm::distance2(P0, P2);
             float dist2 = glm::distance2(P1, P2);
-            // Skip degenerate triangles
-            if ((dist0 > kEpsilon) && (dist1 > kEpsilon) && (dist2 > kEpsilon)) {
-                mesh.AddTriangle(v0, v1, v2);
-            }
+            mesh.AddTriangle(v0, v1, v2);
 
             dist0 = glm::distance2(P0, P2);
             dist1 = glm::distance2(P0, P3);
             dist2 = glm::distance2(P2, P3);
-            // Skip degenerate triangles
-            if ((dist0 > kEpsilon) && (dist1 > kEpsilon) && (dist2 > kEpsilon)) {
-                mesh.AddTriangle(v0, v2, v3);
-            }
+            mesh.AddTriangle(v0, v2, v3);
         }
     }
 
@@ -1108,12 +1112,25 @@ bool TriMesh::LoadOBJ(const std::string& path, const std::string& mtlBaseDir, co
     *pMesh = TriMesh(options);
 
     // Track which material ids are used - we do this
-    // because the OBJ file can haver materials that are
+    // because the OBJ file can have materials that are
     // never used. We don't want any gaps in our material
     // indices because it'll lead to wasting GPU memory
     // later on.
     //
     std::vector<int> activeMaterialIds;
+
+    // Transform options
+    glm::mat4 transformMat = glm::mat4(1);
+    glm::mat4 rotationMat  = glm::mat4(1);
+    if (options.applyTransform) {
+        glm::mat4 T  = glm::translate(options.transformTranslate);
+        glm::mat4 Rx = glm::rotate(options.transformRotate.x, glm::vec3(1, 0, 0));
+        glm::mat4 Ry = glm::rotate(options.transformRotate.y, glm::vec3(0, 1, 0));
+        glm::mat4 Rz = glm::rotate(options.transformRotate.z, glm::vec3(0, 0, 1));
+        glm::mat4 S  = glm::scale(options.transformScale);
+        rotationMat  = Rx * Ry * Rz;
+        transformMat = T * rotationMat * S;
+    }
 
     // Build geometry
     for (size_t shapeIdx = 0; shapeIdx < numShapes; ++shapeIdx) {
@@ -1206,6 +1223,15 @@ bool TriMesh::LoadOBJ(const std::string& path, const std::string& mtlBaseDir, co
                 vtx2.normal = glm::vec3(attrib.normals[i0], attrib.normals[i1], attrib.normals[i2]);
             }
 
+            if (options.applyTransform) {
+                vtx0.position = transformMat * glm::vec4(vtx0.position, 1);
+                vtx1.position = transformMat * glm::vec4(vtx1.position, 1);
+                vtx2.position = transformMat * glm::vec4(vtx2.position, 1);
+                vtx0.normal   = rotationMat * glm::vec4(vtx0.normal, 0);
+                vtx1.normal   = rotationMat * glm::vec4(vtx1.normal, 0);
+                vtx2.normal   = rotationMat * glm::vec4(vtx2.normal, 0);
+            }
+
             // Add vertices
             pMesh->AddVertex(vtx0);
             pMesh->AddVertex(vtx1);
@@ -1255,7 +1281,7 @@ bool TriMesh::LoadOBJ(const std::string& path, const std::string& mtlBaseDir, co
         TriMesh::Material newMaterial = {};
         newMaterial.name              = material.name;
         newMaterial.id                = static_cast<uint32_t>(materialId);
-        newMaterial.F0                = 0.04f;
+        newMaterial.F0                = glm::vec3(0.04f);
         newMaterial.albedo            = glm::vec3(material.diffuse[0], material.diffuse[1], material.diffuse[2]);
         newMaterial.roughness         = material.roughness;
         newMaterial.metalness         = material.metallic;

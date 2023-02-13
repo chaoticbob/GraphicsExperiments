@@ -1,14 +1,19 @@
-//
-// Simple PBR implementation based on:
-//    https://github.com/TheCherno/Sparky/blob/master/Sandbox/shaders/AdvancedLighting.hlsl
-// 
-//
 #define PI 3.1415292
+#define EPSILON 0.000001
+
+struct Light
+{
+    float3 Position;
+    float3 Color;
+    float  Intensity;
+};
 
 struct SceneParameters {
 	float4x4 ViewProjectionMatrix;
     float3   EyePosition;
-    float3   LightPosition;
+    uint     NumLights;
+    Light    Lights[8];
+    uint     IBLEnvironmentNumLevels;
 };
 
 struct DrawParameters {
@@ -17,12 +22,18 @@ struct DrawParameters {
 };
 
 struct MaterialParameters {
-    uint UseGeometricNormal;
+    float3 F0;
+    uint   UseGeometricNormal;
 };
 
-ConstantBuffer<SceneParameters>      SceneParams    : register(b0);
-ConstantBuffer<DrawParameters>       DrawParams     : register(b1);
-StructuredBuffer<MaterialParameters> MaterialParams : register(t2);
+ConstantBuffer<SceneParameters>      SceneParams           : register(b0);
+ConstantBuffer<DrawParameters>       DrawParams            : register(b1);
+StructuredBuffer<MaterialParameters> MaterialParams        : register(t2);
+Texture2D                            IBLIntegrationLUT     : register(t3);
+Texture2D                            IBLIrradianceMap      : register(t4);
+Texture2D                            IBLEnvironmentMap     : register(t5);
+SamplerState                         IBLIntegrationSampler : register(s6);
+SamplerState                         IBLMapSampler         : register(s7);
 
 // Material textures are in groups of 4:
 //   [t10 + (MaterialIndex * MaterialTextureStride) + 0] : Albedo
@@ -64,57 +75,126 @@ VSOutput vsmain(
 
 // =================================================================================================
 // Pixel Shader
+//
+// PBR adapted from https://www.shadertoy.com/view/3tlBW7
+//
 // =================================================================================================
-float FresnelSchlick(float F0, float Fd90, float cosTheta)
+
+float Distribution_GGX(float3 N, float3 H, float roughness)
 {
-	return F0 + (Fd90 - F0) * pow(max(1.0 - cosTheta, 0.1), 5.0);
+    float NoH    = saturate(dot(N, H));
+    float NoH2   = NoH * NoH;
+    float alpha2 = max(roughness * roughness, EPSILON);
+    float A      = NoH2 * (alpha2 - 1) + 1;
+	return alpha2 / (PI * A * A);
 }
 
-float Disney(float3 N, float3 L, float3 V, float roughness)
+float Geometry_SchlickBeckman(float NoV, float k)
 {
-	float3 H = normalize(L + V);
-
-	float NdotL = saturate(dot(N, L));
-	float LdotH = saturate(dot(L, H));
-	float NdotV = saturate(dot(N, V));
-
-	float energyBias = lerp(0.0f, 0.5, roughness);
-	float energyFactor = lerp(1.0, 1.0 / 1.51, roughness);
-	float Fd90 = energyBias + 2.0 * (LdotH * LdotH) * roughness;
-	float F0 = 1.0;
-
-	float lightScatter = FresnelSchlick(F0, Fd90, NdotL);
-	float viewScatter = FresnelSchlick(F0, Fd90, NdotV);
-
-	return lightScatter * viewScatter * energyFactor;
+	return NoV / (NoV * (1 - k) + k);
 }
 
-float3 GGX(float3 N, float3 L, float3 V, float roughness, float specular)
+float Geometry_Smiths(float3 N, float3 V, float3 L,  float roughness)
+{    
+    float k   = pow(roughness + 1, 2) / 8.0; 
+    float NoL = saturate(dot(N, L));
+    float NoV = saturate(dot(N, V));    
+    float G1  = Geometry_SchlickBeckman(NoV, k);
+    float G2  = Geometry_SchlickBeckman(NoL, k);
+    return G1 * G2;
+}
+
+float3 Fresnel_SchlickRoughness(float cosTheta, float3 F0, float roughness)
 {
-	float3 H = normalize(L + V);
-	float  NdotH = saturate(dot(N, H));
+    float3 r = (float3)(1 - roughness);
+    return F0 + (max(r, F0) - F0) * pow(1 - cosTheta, 5);
+}
 
-	float rough2 = max(roughness * roughness, 2.0e-3); // Capped so spec highlights don't disappear
-	float rough4 = rough2 * rough2;
+// circular atan2 - converts (x,y) on a unit circle to [0, 2pi]
+//
+#define catan2_epsilon 0.00001
+#define catan2_NAN     0.0 / 0.0 // No gaurantee this is correct
 
-	float d = (NdotH * rough4 - NdotH) * NdotH + 1.0;
-	float D = rough4 / (PI * (d * d));
+float catan2(float y, float x)
+{ 
+    float absx = abs(x);
+    float absy = abs(y);
+    if ((absx < catan2_epsilon) && (absy < catan2_epsilon)) {
+        return catan2_NAN;
+    }
+    else if ((absx > 0) && (absy == 0.0)) {
+        return 0.0;
+    }
+    float s = 1.5 * 3.141592;
+    if (y >= 0) {
+        s = 3.141592 / 2.0;
+    }
+    return s - atan(x / y);
+}
 
-	// Fresnel
-	float3 reflectivity = specular;
-	float  fresnel = 1.0;
-	float  NdotL = saturate(dot(N, L));
-	float  LdotH = saturate(dot(L, H));
-	float  NdotV = saturate(dot(N, V));
-	float3 F = reflectivity + (fresnel - fresnel * reflectivity) * exp2((-5.55473 * LdotH - 6.98316) * LdotH);
+// Converts cartesian unit position 'pos' to (theta, phi) in
+// spherical coodinates.
+//
+// theta is the azimuth angle between [0, 2pi].
+// phi is the polar angle between [0, pi].
+//
+// NOTE: (0, 0, 0) will result in nan
+//
+float2 CartesianToSphereical(float3 pos)
+{
+    float absX = abs(pos.x);
+    float absZ = abs(pos.z);
+    // Handle pos pointing straight up or straight down
+    if ((absX < 0.00001) && (absZ <= 0.00001)) {
+        // Pointing straight up
+        if (pos.y > 0) {
+            return float2(0, 0);
+        }
+        // Pointing straight down
+        else if (pos.y < 0) {
+            return float2(0, 3.141592);
+        }
+        // Something went terribly wrong
+        else {            
+            return float2(catan2_NAN, catan2_NAN);
+        }
+    }
+    float theta = catan2(pos.z, pos.x);
+    float phi   = acos(pos.y);
+    return float2(theta, phi);
+}
 
-	// Geometric / Visibility
-	float k = rough2 * 0.5;
-	float G_SmithL = NdotL * (1.0 - k) + k;
-	float G_SmithV = NdotV * (1.0 - k) + k;
-	float G = 0.25 / (G_SmithL * G_SmithV);
+float3 GetIBLIrradiance(float3 dir)
+{
+    float2 uv = CartesianToSphereical(normalize(dir));
+    uv.x = saturate(uv.x / (2.0 * PI));
+    uv.y = saturate(uv.y / PI);   
+    float3 color = IBLIrradianceMap.SampleLevel(IBLMapSampler, uv, 0).rgb;
+    return color;
+}
 
-	return G * D * F;
+float3 GetIBLEnvironment(float3 dir, float lod)
+{
+    float2 uv = CartesianToSphereical(normalize(dir));
+    uv.x = saturate(uv.x / (2.0 * PI));
+    uv.y = saturate(uv.y / PI);   
+    float3 color = IBLEnvironmentMap.SampleLevel(IBLMapSampler, uv, lod).rgb;
+    return color;
+}
+
+float2 GetBRDFIntegrationMap(float roughness, float NoV)
+{
+    float2 tc = float2(saturate(roughness), saturate(NoV));
+    float2 brdf = IBLIntegrationLUT.Sample(IBLIntegrationSampler, tc).xy;
+    return brdf;
+}
+
+//
+// https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
+//
+float3 ACESFilm(float3 x)
+{
+    return saturate((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14));
 }
 
 float4 psmain(VSOutput input) : SV_TARGET
@@ -124,19 +204,12 @@ float4 psmain(VSOutput input) : SV_TARGET
     uint roughnessIdx = 4 * DrawParams.MaterialIndex + 2;
     uint metalnessIdx = 4 * DrawParams.MaterialIndex + 3;
 
-    // Read values from textures
+    // Read material values from textures
     float3 albedo = MaterialTextures[albedoIdx].Sample(MaterialSampler, input.TexCoord).rgb;
     float3 normal = normalize((MaterialTextures[normalIdx].Sample(MaterialSampler, input.TexCoord).rgb * 2) - 1);
     float  roughness = MaterialTextures[roughnessIdx].Sample(MaterialSampler, input.TexCoord).r; 
     float  metalness = MaterialTextures[metalnessIdx].Sample(MaterialSampler, input.TexCoord).r; 
     
-    // F0 in metallic workflow:
-    //   - For plastics use 0.04
-    //   - For metals use values closer to 1
-    //
-    float F0 = 0.04;
-    F0 = lerp(F0, 1.0, metalness);
-
     // Calculate normal
     float3   vNt  = normal;
     float3   vN   = mul(DrawParams.ModelMatrix, float4(input.Normal, 0)).xyz;
@@ -145,22 +218,86 @@ float4 psmain(VSOutput input) : SV_TARGET
     float3 N = normalize(vNt.x * vT + vNt.y * vB + vNt.z * vN);                            
 
     // Scene and geometry variables - world space
-    float3 P = input.PositionWS;                         // Position
-    float3 V = normalize((SceneParams.EyePosition - P)); // View direction
     if (MaterialParams[DrawParams.MaterialIndex].UseGeometricNormal) {
         N = input.Normal;
     }
 
-    // Light variables - world space
-    float3 Lp = SceneParams.LightPosition; // Light position in world sapce
-    float3 L  = normalize(Lp - P);         // Light direction vector
-    float3 Lc = float3(0.98, 0.85, 0.71);  // Light color
-    float  Li = 1.8;                       // Light intensity
+    // Scene and geometry variables - world space
+    float3 P = input.PositionWS;                         // Position
+    float3 V = normalize((SceneParams.EyePosition - P)); // View direction
+    float3 R = reflect(-V, N);
+    float  NoV = saturate(dot(N, V));
 
-    float  NdotL    = saturate(dot(N, L));
-    float3 diffuse  = NdotL * Disney(N, L, V, roughness) * Lc * Li;
-    float3 specular = NdotL * GGX(N, L, V, roughness, F0) * Lc * Li;
+    float3 F0 = MaterialParams[DrawParams.MaterialIndex].F0;
 
-    float3 color = diffuse * albedo + specular;
-    return float4(color, 0);
+    // This is hack to override the F0 on the camera body
+    // it's mixed materials and there isn't a map to differential
+    // plastic F0 from metal F0.
+    //
+    if (DrawParams.MaterialIndex == 1) {
+        const float3 F0_MetalAluminum  = float3(1.022, 0.782, 0.344);
+        if (metalness > 0.1) {
+            F0 = F0_MetalAluminum;
+        }
+    }
+
+    // Use albedo as the tint color
+    F0 = lerp(F0, albedo, metalness);
+    
+    // Direct lighting
+    float3 directLighting = (float3)0;
+    for (uint i = 0; i < SceneParams.NumLights; ++i) {
+        // Light variables - world space
+        Light light = SceneParams.Lights[i];
+        float3 L  = normalize(light.Position - P);
+        float3 H  = normalize(L + V);
+        float3 Lc = light.Color;
+        float  Ls = light.Intensity;
+        float NoL = saturate(dot(N, L));
+
+        float3 diffuse = albedo / PI;
+        float3 radiance = Lc * Ls;
+
+        float  cosTheta = saturate(dot(H, V));
+        float  D = Distribution_GGX(N, H, roughness);
+        float3 F = Fresnel_SchlickRoughness(cosTheta, F0, roughness);
+        float  G = Geometry_Smiths(N, V, L, roughness);
+
+        // Specular reflectance
+        float3 specular = (D * F * G) / max(0.0001, (4.0 * NoV * NoL));
+    
+        // Combine diffuse and specular
+        float3 kD = (1.0 - F) * (1.0 - metalness);
+        float3 BRDF = kD  * diffuse + specular;
+
+        directLighting += BRDF * radiance * NoL;
+    }
+
+    // Indirect lighting
+    float3 indirectLighting = (float3)0;
+    {
+        float cosTheta = saturate(dot(N, V));
+
+        // Diffuse IBL component
+        float3 F = Fresnel_SchlickRoughness(cosTheta, F0, roughness);
+        float3 kD = (1.0 - F) * (1.0 - metalness);
+        float3 irradiance = GetIBLIrradiance(R);
+        float3 diffuse = irradiance * albedo / PI;
+        
+        // Specular IBL component
+        float lod = roughness * (SceneParams.IBLEnvironmentNumLevels - 1);
+        float3 prefilteredColor = GetIBLEnvironment(R, lod);
+        float2 envBRDF = GetBRDFIntegrationMap(roughness, NoV);
+        float3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
+
+        // Ambient
+        float3 ambient = kD * diffuse + specular;
+
+        indirectLighting = ambient;
+    }
+
+    float3 finalColor = directLighting + indirectLighting;
+      
+    finalColor = ACESFilm(finalColor);      
+    return float4(pow(finalColor, 1 / 2.2), 0);    
 }

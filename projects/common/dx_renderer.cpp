@@ -536,12 +536,14 @@ HRESULT CreateUAVBuffer(DxRenderer* pRenderer, size_t size, D3D12_RESOURCE_STATE
 }
 
 HRESULT CreateTexture(
-    DxRenderer*      pRenderer,
-    uint32_t         width,
-    uint32_t         height,
-    DXGI_FORMAT      format,
-    const void*      pSrcData,
-    ID3D12Resource** ppResource)
+    DxRenderer*                     pRenderer,
+    uint32_t                        width,
+    uint32_t                        height,
+    DXGI_FORMAT                     format,
+    const std::vector<DxMipOffset>& mipOffsets,
+    uint64_t                        srcSizeBytes,
+    const void*                     pSrcData,
+    ID3D12Resource**                ppResource)
 {
     if (IsNull(pRenderer)) {
         return E_UNEXPECTED;
@@ -552,18 +554,22 @@ HRESULT CreateTexture(
     if ((format == DXGI_FORMAT_UNKNOWN) || IsVideo(format)) {
         return E_INVALIDARG;
     }
+    if (mipOffsets.empty()) {
+        return E_INVALIDARG;
+    }
 
-    D3D12_RESOURCE_DESC desc = {};
-    desc.Dimension           = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    desc.Alignment           = 0;
-    desc.Width               = static_cast<UINT64>(width);
-    desc.Height              = static_cast<UINT>(height);
-    desc.DepthOrArraySize    = 1;
-    desc.MipLevels           = 1;
-    desc.Format              = format;
-    desc.SampleDesc          = {1, 0};
-    desc.Layout              = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    desc.Flags               = D3D12_RESOURCE_FLAG_NONE;
+    UINT                mipLevels = static_cast<UINT>(mipOffsets.size());
+    D3D12_RESOURCE_DESC desc      = {};
+    desc.Dimension                = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Alignment                = 0;
+    desc.Width                    = static_cast<UINT64>(width);
+    desc.Height                   = static_cast<UINT>(height);
+    desc.DepthOrArraySize         = 1;
+    desc.MipLevels                = mipLevels;
+    desc.Format                   = format;
+    desc.SampleDesc               = {1, 0};
+    desc.Layout                   = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    desc.Flags                    = D3D12_RESOURCE_FLAG_NONE;
 
     D3D12_HEAP_PROPERTIES heapProperties = {};
     heapProperties.Type                  = D3D12_HEAP_TYPE_DEFAULT;
@@ -580,11 +586,11 @@ HRESULT CreateTexture(
     }
 
     if (!IsNull(pSrcData)) {
-        const uint32_t pixelStride = PixelStride(format);
-        const uint32_t srcSize     = width * height * pixelStride;
+        //const uint32_t pixelStride = PixelStride(format);
+        //const uint32_t srcSize     = width * height * pixelStride;
 
         ComPtr<ID3D12Resource> stagingBuffer;
-        hr = CreateBuffer(pRenderer, srcSize, pSrcData, &stagingBuffer);
+        hr = CreateBuffer(pRenderer, srcSizeBytes, pSrcData, &stagingBuffer);
         if (FAILED(hr)) {
             assert(false && "create staging buffer failed");
             return hr;
@@ -616,34 +622,43 @@ HRESULT CreateTexture(
             return hr;
         }
 
-        // Build
+        // Build command buffer
         {
-            D3D12_TEXTURE_COPY_LOCATION dst = {};
-            dst.pResource                   = *ppResource;
-            dst.Type                        = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-            dst.SubresourceIndex            = 0;
+            uint32_t levelWidth  = width;
+            uint32_t levelHeight = height;
+            for (UINT level = 0; level < mipLevels; ++level) {
+                const auto& mipOffset = mipOffsets[level];
 
-            D3D12_TEXTURE_COPY_LOCATION src        = {};
-            src.pResource                          = stagingBuffer.Get();
-            src.Type                               = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-            src.PlacedFootprint.Offset             = 0;
-            src.PlacedFootprint.Footprint.Format   = format;
-            src.PlacedFootprint.Footprint.Width    = static_cast<UINT>(width);
-            src.PlacedFootprint.Footprint.Height   = static_cast<UINT>(height);
-            src.PlacedFootprint.Footprint.Depth    = 1;
-            src.PlacedFootprint.Footprint.RowPitch = static_cast<UINT>(width * pixelStride);
+                D3D12_TEXTURE_COPY_LOCATION dst = {};
+                dst.pResource                   = *ppResource;
+                dst.Type                        = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+                dst.SubresourceIndex            = level;
 
-            cmdList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+                D3D12_TEXTURE_COPY_LOCATION src        = {};
+                src.pResource                          = stagingBuffer.Get();
+                src.Type                               = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+                src.PlacedFootprint.Offset             = mipOffset.offset;
+                src.PlacedFootprint.Footprint.Format   = format;
+                src.PlacedFootprint.Footprint.Width    = static_cast<UINT>(levelWidth);
+                src.PlacedFootprint.Footprint.Height   = static_cast<UINT>(levelHeight);
+                src.PlacedFootprint.Footprint.Depth    = 1;
+                src.PlacedFootprint.Footprint.RowPitch = static_cast<UINT>(mipOffset.rowStride);
 
-            D3D12_RESOURCE_BARRIER barrier = {};
-            barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-            barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-            barrier.Transition.pResource   = *ppResource;
-            barrier.Transition.Subresource = 0;
-            barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-            barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+                cmdList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
 
-            cmdList->ResourceBarrier(1, &barrier);
+                D3D12_RESOURCE_BARRIER barrier = {};
+                barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+                barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+                barrier.Transition.pResource   = *ppResource;
+                barrier.Transition.Subresource = level;
+                barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+                barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+                cmdList->ResourceBarrier(1, &barrier);
+
+                levelWidth >>= 1;
+                levelHeight >>= 1;
+            }
         }
         hr = cmdList->Close();
         if (FAILED(hr)) {
@@ -661,6 +676,171 @@ HRESULT CreateTexture(
     }
 
     return S_OK;
+}
+
+HRESULT CreateTexture(
+    DxRenderer*      pRenderer,
+    uint32_t         width,
+    uint32_t         height,
+    DXGI_FORMAT      format,
+    uint64_t         srcSizeBytes,
+    const void*      pSrcData,
+    ID3D12Resource** ppResource)
+{
+    DxMipOffset mipOffset = {};
+    mipOffset.offset      = 0;
+    mipOffset.rowStride   = width * PixelStride(format);
+
+    return CreateTexture(
+        pRenderer,
+        width,
+        height,
+        format,
+        {mipOffset},
+        srcSizeBytes,
+        pSrcData,
+        ppResource);
+
+    /*
+        if (IsNull(pRenderer)) {
+            return E_UNEXPECTED;
+        }
+        if (IsNull(ppResource)) {
+            return E_UNEXPECTED;
+        }
+        if ((format == DXGI_FORMAT_UNKNOWN) || IsVideo(format)) {
+            return E_INVALIDARG;
+        }
+
+        D3D12_RESOURCE_DESC desc = {};
+        desc.Dimension           = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Alignment           = 0;
+        desc.Width               = static_cast<UINT64>(width);
+        desc.Height              = static_cast<UINT>(height);
+        desc.DepthOrArraySize    = 1;
+        desc.MipLevels           = 1;
+        desc.Format              = format;
+        desc.SampleDesc          = {1, 0};
+        desc.Layout              = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        desc.Flags               = D3D12_RESOURCE_FLAG_NONE;
+
+        D3D12_HEAP_PROPERTIES heapProperties = {};
+        heapProperties.Type                  = D3D12_HEAP_TYPE_DEFAULT;
+
+        HRESULT hr = pRenderer->Device->CreateCommittedResource(
+            &heapProperties,                // pHeapProperties
+            D3D12_HEAP_FLAG_NONE,           // HeapFlags
+            &desc,                          // pDesc
+            D3D12_RESOURCE_STATE_COPY_DEST, // InitialResourceState
+            nullptr,                        // pOptimizedClearValues
+            IID_PPV_ARGS(ppResource));      // riidResource, ppvResouce
+        if (FAILED(hr)) {
+            return hr;
+        }
+
+        if (!IsNull(pSrcData)) {
+            const uint32_t pixelStride = PixelStride(format);
+            const uint32_t srcSize     = width * height * pixelStride;
+
+            ComPtr<ID3D12Resource> stagingBuffer;
+            hr = CreateBuffer(pRenderer, srcSize, pSrcData, &stagingBuffer);
+            if (FAILED(hr)) {
+                assert(false && "create staging buffer failed");
+                return hr;
+            }
+
+            ComPtr<ID3D12CommandAllocator> cmdAllocator;
+            hr = pRenderer->Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAllocator));
+            if (FAILED(hr)) {
+                assert(false && "create staging command allocator failed");
+                return hr;
+            }
+
+            ComPtr<ID3D12GraphicsCommandList> cmdList;
+            hr = pRenderer->Device->CreateCommandList1(0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(&cmdList));
+            if (FAILED(hr)) {
+                assert(false && "create staging command list failed");
+                return hr;
+            }
+
+            hr = cmdAllocator->Reset();
+            if (FAILED(hr)) {
+                assert(false && "reset command allocator failed");
+                return hr;
+            }
+
+            hr = cmdList->Reset(cmdAllocator.Get(), nullptr);
+            if (FAILED(hr)) {
+                assert(false && "reset command list failed");
+                return hr;
+            }
+
+            // Build
+            {
+                D3D12_TEXTURE_COPY_LOCATION dst = {};
+                dst.pResource                   = *ppResource;
+                dst.Type                        = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+                dst.SubresourceIndex            = 0;
+
+                D3D12_TEXTURE_COPY_LOCATION src        = {};
+                src.pResource                          = stagingBuffer.Get();
+                src.Type                               = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+                src.PlacedFootprint.Offset             = 0;
+                src.PlacedFootprint.Footprint.Format   = format;
+                src.PlacedFootprint.Footprint.Width    = static_cast<UINT>(width);
+                src.PlacedFootprint.Footprint.Height   = static_cast<UINT>(height);
+                src.PlacedFootprint.Footprint.Depth    = 1;
+                src.PlacedFootprint.Footprint.RowPitch = static_cast<UINT>(width * pixelStride);
+
+                cmdList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+
+                D3D12_RESOURCE_BARRIER barrier = {};
+                barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+                barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+                barrier.Transition.pResource   = *ppResource;
+                barrier.Transition.Subresource = 0;
+                barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+                barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+                cmdList->ResourceBarrier(1, &barrier);
+            }
+            hr = cmdList->Close();
+            if (FAILED(hr)) {
+                assert(false && "close command list failed");
+                return hr;
+            }
+
+            ID3D12CommandList* pList = cmdList.Get();
+            pRenderer->Queue->ExecuteCommandLists(1, &pList);
+
+            if (!WaitForGpu(pRenderer)) {
+                assert(false && "WaitForGpu failed");
+                return false;
+            }
+        }
+
+        return S_OK;
+    */
+}
+
+void CreateDescriptorTexture2D(
+    DxRenderer*                 pRenderer,
+    ID3D12Resource*             pResource,
+    D3D12_CPU_DESCRIPTOR_HANDLE descriptor,
+    UINT                        MostDetailedMip,
+    UINT                        MipLevels,
+    UINT                        PlaneSlice)
+{
+    D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
+    desc.Format                          = pResource->GetDesc().Format;
+    desc.ViewDimension                   = D3D12_SRV_DIMENSION_TEXTURE2D;
+    desc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    desc.Texture2D.MostDetailedMip       = MostDetailedMip;
+    desc.Texture2D.MipLevels             = MipLevels;
+    desc.Texture2D.PlaneSlice            = PlaneSlice;
+    desc.Texture2D.ResourceMinLODClamp   = 0;
+
+    pRenderer->Device->CreateShaderResourceView(pResource, &desc, descriptor);
 }
 
 D3D12_RESOURCE_BARRIER CreateTransition(
@@ -687,7 +867,8 @@ HRESULT CreateDrawVertexColorPipeline(
     const std::vector<char>& psShaderBytecode,
     DXGI_FORMAT              rtvFormat,
     DXGI_FORMAT              dsvFormat,
-    ID3D12PipelineState**    ppPipeline)
+    ID3D12PipelineState**    ppPipeline,
+    D3D12_CULL_MODE          cullMode)
 {
     D3D12_INPUT_ELEMENT_DESC inputElementDesc[2] = {};
     inputElementDesc[0].SemanticName             = "POSITION";
@@ -723,7 +904,7 @@ HRESULT CreateDrawVertexColorPipeline(
     desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xF;
     desc.SampleMask                                       = D3D12_DEFAULT_SAMPLE_MASK;
     desc.RasterizerState.FillMode                         = D3D12_FILL_MODE_SOLID;
-    desc.RasterizerState.CullMode                         = D3D12_CULL_MODE_BACK;
+    desc.RasterizerState.CullMode                         = cullMode;
     desc.RasterizerState.FrontCounterClockwise            = TRUE;
     desc.RasterizerState.DepthBias                        = D3D12_DEFAULT_DEPTH_BIAS;
     desc.RasterizerState.DepthBiasClamp                   = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
@@ -771,7 +952,8 @@ HRESULT CreateDrawNormalPipeline(
     const std::vector<char>& psShaderBytecode,
     DXGI_FORMAT              rtvFormat,
     DXGI_FORMAT              dsvFormat,
-    ID3D12PipelineState**    ppPipeline)
+    ID3D12PipelineState**    ppPipeline,
+    D3D12_CULL_MODE          cullMode)
 {
     D3D12_INPUT_ELEMENT_DESC inputElementDesc[2] = {};
     inputElementDesc[0].SemanticName             = "POSITION";
@@ -807,7 +989,7 @@ HRESULT CreateDrawNormalPipeline(
     desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xF;
     desc.SampleMask                                       = D3D12_DEFAULT_SAMPLE_MASK;
     desc.RasterizerState.FillMode                         = D3D12_FILL_MODE_SOLID;
-    desc.RasterizerState.CullMode                         = D3D12_CULL_MODE_BACK;
+    desc.RasterizerState.CullMode                         = cullMode;
     desc.RasterizerState.FrontCounterClockwise            = TRUE;
     desc.RasterizerState.DepthBias                        = D3D12_DEFAULT_DEPTH_BIAS;
     desc.RasterizerState.DepthBiasClamp                   = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
@@ -855,7 +1037,8 @@ HRESULT CreateDrawTexturePipeline(
     const std::vector<char>& psShaderBytecode,
     DXGI_FORMAT              rtvFormat,
     DXGI_FORMAT              dsvFormat,
-    ID3D12PipelineState**    ppPipeline)
+    ID3D12PipelineState**    ppPipeline,
+    D3D12_CULL_MODE          cullMode)
 {
     D3D12_INPUT_ELEMENT_DESC inputElementDesc[2] = {};
     inputElementDesc[0].SemanticName             = "POSITION";
@@ -865,7 +1048,7 @@ HRESULT CreateDrawTexturePipeline(
     inputElementDesc[0].AlignedByteOffset        = D3D12_APPEND_ALIGNED_ELEMENT;
     inputElementDesc[0].InputSlotClass           = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
     inputElementDesc[0].InstanceDataStepRate     = 0;
-    inputElementDesc[1].SemanticName             = "TEXCOOD";
+    inputElementDesc[1].SemanticName             = "TEXCOORD";
     inputElementDesc[1].SemanticIndex            = 0;
     inputElementDesc[1].Format                   = DXGI_FORMAT_R32G32_FLOAT;
     inputElementDesc[1].InputSlot                = 1;
@@ -891,7 +1074,7 @@ HRESULT CreateDrawTexturePipeline(
     desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xF;
     desc.SampleMask                                       = D3D12_DEFAULT_SAMPLE_MASK;
     desc.RasterizerState.FillMode                         = D3D12_FILL_MODE_SOLID;
-    desc.RasterizerState.CullMode                         = D3D12_CULL_MODE_BACK;
+    desc.RasterizerState.CullMode                         = cullMode;
     desc.RasterizerState.FrontCounterClockwise            = TRUE;
     desc.RasterizerState.DepthBias                        = D3D12_DEFAULT_DEPTH_BIAS;
     desc.RasterizerState.DepthBiasClamp                   = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
@@ -939,7 +1122,8 @@ HRESULT CreateDrawBasicPipeline(
     const std::vector<char>& psShaderBytecode,
     DXGI_FORMAT              rtvFormat,
     DXGI_FORMAT              dsvFormat,
-    ID3D12PipelineState**    ppPipeline)
+    ID3D12PipelineState**    ppPipeline,
+    D3D12_CULL_MODE          cullMode)
 {
     D3D12_INPUT_ELEMENT_DESC inputElementDesc[3] = {};
     inputElementDesc[0].SemanticName             = "POSITION";
@@ -949,7 +1133,7 @@ HRESULT CreateDrawBasicPipeline(
     inputElementDesc[0].AlignedByteOffset        = D3D12_APPEND_ALIGNED_ELEMENT;
     inputElementDesc[0].InputSlotClass           = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
     inputElementDesc[0].InstanceDataStepRate     = 0;
-    inputElementDesc[1].SemanticName             = "TEXCOOD";
+    inputElementDesc[1].SemanticName             = "TEXCOORD";
     inputElementDesc[1].SemanticIndex            = 0;
     inputElementDesc[1].Format                   = DXGI_FORMAT_R32G32_FLOAT;
     inputElementDesc[1].InputSlot                = 1;
@@ -982,7 +1166,7 @@ HRESULT CreateDrawBasicPipeline(
     desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xF;
     desc.SampleMask                                       = D3D12_DEFAULT_SAMPLE_MASK;
     desc.RasterizerState.FillMode                         = D3D12_FILL_MODE_SOLID;
-    desc.RasterizerState.CullMode                         = D3D12_CULL_MODE_BACK;
+    desc.RasterizerState.CullMode                         = cullMode;
     desc.RasterizerState.FrontCounterClockwise            = TRUE;
     desc.RasterizerState.DepthBias                        = D3D12_DEFAULT_DEPTH_BIAS;
     desc.RasterizerState.DepthBiasClamp                   = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
@@ -1030,7 +1214,8 @@ HRESULT CreateGraphicsPipeline1(
     const std::vector<char>& psShaderBytecode,
     DXGI_FORMAT              rtvFormat,
     DXGI_FORMAT              dsvFormat,
-    ID3D12PipelineState**    ppPipeline)
+    ID3D12PipelineState**    ppPipeline,
+    D3D12_CULL_MODE          cullMode)
 {
     const uint32_t kNumInputElements = 5;
 
@@ -1062,7 +1247,7 @@ HRESULT CreateGraphicsPipeline1(
     // Tangent
     inputElementDesc[3].SemanticName         = "TANGENT";
     inputElementDesc[3].SemanticIndex        = 0;
-    inputElementDesc[3].Format               = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    inputElementDesc[3].Format               = DXGI_FORMAT_R32G32B32_FLOAT;
     inputElementDesc[3].InputSlot            = 3;
     inputElementDesc[3].AlignedByteOffset    = D3D12_APPEND_ALIGNED_ELEMENT;
     inputElementDesc[3].InputSlotClass       = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
@@ -1094,7 +1279,7 @@ HRESULT CreateGraphicsPipeline1(
     desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xF;
     desc.SampleMask                                       = D3D12_DEFAULT_SAMPLE_MASK;
     desc.RasterizerState.FillMode                         = D3D12_FILL_MODE_SOLID;
-    desc.RasterizerState.CullMode                         = D3D12_CULL_MODE_BACK;
+    desc.RasterizerState.CullMode                         = cullMode;
     desc.RasterizerState.FrontCounterClockwise            = TRUE;
     desc.RasterizerState.DepthBias                        = D3D12_DEFAULT_DEPTH_BIAS;
     desc.RasterizerState.DepthBiasClamp                   = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;

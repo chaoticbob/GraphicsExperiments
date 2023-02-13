@@ -258,6 +258,13 @@ void Window::WindowResizeEvent(int width, int height)
 
 void Window::MouseDownEvent(int x, int y, int buttons)
 {
+#if defined(ENABLE_IMGUI_D3D12)
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.WantCaptureMouse) {
+        return;
+    }
+#endif
+
     for (auto& callbackFn : mMouseDownCallbacks) {
         callbackFn(x, y, buttons);
     }
@@ -265,6 +272,13 @@ void Window::MouseDownEvent(int x, int y, int buttons)
 
 void Window::MouseUpEvent(int x, int y, int buttons)
 {
+#if defined(ENABLE_IMGUI_D3D12)
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.WantCaptureMouse) {
+        return;
+    }
+#endif
+
     for (auto& callbackFn : mMouseUpCallbacks) {
         callbackFn(x, y, buttons);
     }
@@ -272,6 +286,13 @@ void Window::MouseUpEvent(int x, int y, int buttons)
 
 void Window::MouseMoveEvent(int x, int y, int buttons)
 {
+#if defined(ENABLE_IMGUI_D3D12)
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.WantCaptureMouse) {
+        return;
+    }
+#endif
+
     for (auto& callbackFn : mMouseMoveCallbacks) {
         callbackFn(x, y, buttons);
     }
@@ -279,6 +300,13 @@ void Window::MouseMoveEvent(int x, int y, int buttons)
 
 void Window::MouseScrollEvent(float xoffset, float yoffset)
 {
+#if defined(ENABLE_IMGUI_D3D12)
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.WantCaptureMouse) {
+        return;
+    }
+#endif
+
     for (auto& callbackFn : mMouseScrollCallbacks) {
         callbackFn(xoffset, yoffset);
     }

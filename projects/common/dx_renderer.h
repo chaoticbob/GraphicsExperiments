@@ -10,6 +10,12 @@
 #define GREX_DEFAULT_RTV_FORMAT DXGI_FORMAT_B8G8R8A8_UNORM
 #define GREX_DEFAULT_DSV_FORMAT DXGI_FORMAT_D32_FLOAT
 
+struct DxMipOffset
+{
+    uint32_t offset    = 0;
+    uint32_t rowStride = 0;
+};
+
 struct DxRenderer
 {
     bool                                     DebugEnabled                  = true;
@@ -48,12 +54,31 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData
 HRESULT CreateUAVBuffer(DxRenderer* pRenderer, size_t size, D3D12_RESOURCE_STATES initialResourceState, ID3D12Resource** ppResource);
 
 HRESULT CreateTexture(
+    DxRenderer*                     pRenderer,
+    uint32_t                        width,
+    uint32_t                        height,
+    DXGI_FORMAT                     format,
+    const std::vector<DxMipOffset>& mipOffsets,
+    uint64_t                        srcSizeBytes,
+    const void*                     pSrcData,
+    ID3D12Resource**                ppResource);
+
+HRESULT CreateTexture(
     DxRenderer*      pRenderer,
     uint32_t         width,
     uint32_t         height,
     DXGI_FORMAT      format,
+    uint64_t         srcSizeBytes,
     const void*      pSrcData,
     ID3D12Resource** ppResource);
+
+void CreateDescriptorTexture2D(
+    DxRenderer*                 pRenderer,
+    ID3D12Resource*             pResource,
+    D3D12_CPU_DESCRIPTOR_HANDLE descriptor,
+    UINT                        MostDetailedMip = 0,
+    UINT                        MipLevels       = 1,
+    UINT                        PlaneSlice      = 0);
 
 D3D12_RESOURCE_BARRIER CreateTransition(
     ID3D12Resource*              pResource,
@@ -69,7 +94,8 @@ HRESULT CreateDrawVertexColorPipeline(
     const std::vector<char>& psShaderBytecode,
     DXGI_FORMAT              rtvFormat,
     DXGI_FORMAT              dsvFormat,
-    ID3D12PipelineState**    ppPipeline);
+    ID3D12PipelineState**    ppPipeline,
+    D3D12_CULL_MODE          cullMode = D3D12_CULL_MODE_BACK);
 
 HRESULT CreateDrawNormalPipeline(
     DxRenderer*              pRenderer,
@@ -78,7 +104,8 @@ HRESULT CreateDrawNormalPipeline(
     const std::vector<char>& psShaderBytecode,
     DXGI_FORMAT              rtvFormat,
     DXGI_FORMAT              dsvFormat,
-    ID3D12PipelineState**    ppPipeline);
+    ID3D12PipelineState**    ppPipeline,
+    D3D12_CULL_MODE          cullMode = D3D12_CULL_MODE_BACK);
 
 HRESULT CreateDrawTexturePipeline(
     DxRenderer*              pRenderer,
@@ -87,7 +114,8 @@ HRESULT CreateDrawTexturePipeline(
     const std::vector<char>& psShaderBytecode,
     DXGI_FORMAT              rtvFormat,
     DXGI_FORMAT              dsvFormat,
-    ID3D12PipelineState**    ppPipeline);
+    ID3D12PipelineState**    ppPipeline,
+    D3D12_CULL_MODE          cullMode = D3D12_CULL_MODE_BACK);
 
 HRESULT CreateDrawBasicPipeline(
     DxRenderer*              pRenderer,
@@ -96,7 +124,8 @@ HRESULT CreateDrawBasicPipeline(
     const std::vector<char>& psShaderBytecode,
     DXGI_FORMAT              rtvFormat,
     DXGI_FORMAT              dsvFormat,
-    ID3D12PipelineState**    ppPipeline);
+    ID3D12PipelineState**    ppPipeline,
+    D3D12_CULL_MODE          cullMode = D3D12_CULL_MODE_BACK);
 
 HRESULT CreateGraphicsPipeline1(
     DxRenderer*              pRenderer,
@@ -105,7 +134,8 @@ HRESULT CreateGraphicsPipeline1(
     const std::vector<char>& psShaderBytecode,
     DXGI_FORMAT              rtvFormat,
     DXGI_FORMAT              dsvFormat,
-    ID3D12PipelineState**    ppPipeline);
+    ID3D12PipelineState**    ppPipeline,
+    D3D12_CULL_MODE          cullMode = D3D12_CULL_MODE_BACK);
 
 HRESULT CompileHLSL(
     const std::string& shaderSource,

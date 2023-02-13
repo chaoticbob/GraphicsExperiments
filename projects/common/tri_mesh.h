@@ -6,6 +6,26 @@
 #include <memory>
 #include <vector>
 
+// F0 values
+const glm::vec3 F0_Generic         = glm::vec3(0.04f);
+const glm::vec3 F0_MetalTitanium   = glm::vec3(0.542f, 0.497f, 0.449f);
+const glm::vec3 F0_MetalChromium   = glm::vec3(0.549f, 0.556f, 0.554f);
+const glm::vec3 F0_MetalIron       = glm::vec3(0.562f, 0.565f, 0.578f);
+const glm::vec3 F0_MetalNickel     = glm::vec3(0.660f, 0.609f, 0.526f);
+const glm::vec3 F0_MetalPlatinum   = glm::vec3(0.673f, 0.637f, 0.585f);
+const glm::vec3 F0_MetalCopper     = glm::vec3(0.955f, 0.638f, 0.538f);
+const glm::vec3 F0_MetalPalladium  = glm::vec3(0.733f, 0.697f, 0.652f);
+const glm::vec3 F0_MetalZinc       = glm::vec3(0.664f, 0.824f, 0.850f);
+const glm::vec3 F0_MetalGold       = glm::vec3(1.022f, 0.782f, 0.344f);
+const glm::vec3 F0_MetalAluminum   = glm::vec3(0.913f, 0.922f, 0.924f);
+const glm::vec3 F0_MetalSilver     = glm::vec3(0.972f, 0.960f, 0.915f);
+const glm::vec3 F0_DiletricWater   = glm::vec3(0.020f);
+const glm::vec3 F0_DiletricPlastic = glm::vec3(0.040f);
+const glm::vec3 F0_DiletricGlass   = glm::vec3(0.045f);
+const glm::vec3 F0_DiletricCrystal = glm::vec3(0.050f);
+const glm::vec3 F0_DiletricGem     = glm::vec3(0.080f);
+const glm::vec3 F0_DiletricDiamond = glm::vec3(0.150f);
+
 //
 // This class is not optimal, there is a lot of excessive copying.
 //
@@ -78,16 +98,16 @@ public:
     // -------------------------------------------------------------------------
     struct Material
     {
-        std::string name             = "";           //
-        uint32_t    id               = 0;            // Material id from source
-        glm::vec3   albedo           = glm::vec3(1); // Default to white
-        float       F0               = 0.04f;        // Shiny plastic (F0 = 0.04, roughness = 0, metalness = 0)
-        float       roughness        = 0;            // Shiny plastic (F0 = 0.04, roughness = 0, metalness = 0)
-        float       metalness        = 0;            // Shiny plastic (F0 = 0.04, roughness = 0, metalness = 0)
-        std::string albedoTexture    = "";           //
-        std::string normalTexture    = "";           //
-        std::string roughnessTexture = "";           //
-        std::string metalnessTexture = "";           //
+        std::string name             = "";               //
+        uint32_t    id               = 0;                // Material id from source
+        glm::vec3   albedo           = glm::vec3(1);     // Default to white
+        glm::vec3   F0               = glm::vec3(0.04f); // Shiny plastic (F0 = 0.04, roughness = 0, metalness = 0)
+        float       roughness        = 0;                // Shiny plastic (F0 = 0.04, roughness = 0, metalness = 0)
+        float       metalness        = 0;                // Shiny plastic (F0 = 0.04, roughness = 0, metalness = 0)
+        std::string albedoTexture    = "";               //
+        std::string normalTexture    = "";               //
+        std::string roughnessTexture = "";               //
+        std::string metalnessTexture = "";               //
     };
 
     // -------------------------------------------------------------------------
@@ -220,6 +240,8 @@ public:
         const glm::vec3& bitangent   = glm::vec3(0));
 
     void Recenter(const glm::vec3& newCenter = glm::vec3(0));
+
+    void ScaleToUnit();
 
     // Sets *ALL* vertex colors to \b vertexColor
     void SetVertexColors(const glm::vec3& vertexColor);
