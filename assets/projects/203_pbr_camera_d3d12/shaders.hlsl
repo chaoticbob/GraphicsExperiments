@@ -296,10 +296,10 @@ float4 psmain(VSOutput input) : SV_TARGET
         // Ambient
         float3 ambient = kD * diffuse + specular;
 
-        indirectLighting = ambient;
+        indirectLighting = ambient * ao;
     }
 
-    float3 finalColor = (directLighting + indirectLighting) * ao;
+    float3 finalColor = directLighting + indirectLighting;
       
     finalColor = ACESFilm(finalColor);      
     return float4(pow(finalColor, 1 / 2.2), 0);    
