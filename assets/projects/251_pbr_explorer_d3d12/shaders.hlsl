@@ -20,6 +20,29 @@
 #define GEOMETRY_GGX2          7
 #define GEOMETRY_SCHLICK_GGX   8
 
+#define DIRECT_COMPONENT_MODE_ALL           0
+#define DIRECT_COMPONENT_MODE_DISTRIBUTION  1
+#define DIRECT_COMPONENT_MODE_FRESNEL       2
+#define DIRECT_COMPONENT_MODE_GEOMETRY      3
+#define DIRECT_COMPONENT_MODE_DIFFUSE       4
+#define DIRECT_COMPONENT_MODE_RADIANCE      5
+#define DIRECT_COMPONENT_MODE_KD            6
+#define DIRECT_COMPONENT_MODE_SPECULAR      7
+#define DIRECT_COMPONENT_MODE_BRDF          8
+
+#define INDIRECT_COMPONENT_MODE_ALL      0
+#define INDIRECT_COMPONENT_MODE_DIFFUSE  1
+#define INDIRECT_COMPONENT_MODE_SPECULAR 2
+
+#define INDIRECT_SPECULAR_MODE_LUT          0
+#define INDIRECT_SPECULAR_MODE_LAZAROV      1
+#define INDIRECT_SPECULAR_MODE_POLYNOMIAL   2
+#define INDIRECT_SPECULAR_MODE_KARIS        3
+
+#define DRAW_MODE_FULL      0
+#define DRAW_MODE_DIRECT    1
+#define DRAW_MODE_INDIRECT  2    
+
 struct Light
 {
     float3 Position;
@@ -44,13 +67,17 @@ struct DrawParameters {
 };
 
 struct MaterialParameters {
-    float3 albedo;
-    float  roughness;
-    float  metalness;
+    float3 Albedo;
+    float  Roughness;
+    float  Metalness;
     float3 F0;
+    uint   DirectComponentMode;
     uint   D_Func;
     uint   F_Func;
-    uint   G_Func;    
+    uint   G_Func;
+    uint   IndirectComponentMode;
+    uint   IndirectSpecularMode;
+    uint   DrawMode;
 };
 
 ConstantBuffer<SceneParameters>      SceneParams        : register(b0);
@@ -442,6 +469,61 @@ float2 GetBRDFIntegrationMap(float roughness, float NoV)
     return brdf;
 }
 
+float3 EnvDFGLazarov(float3 specularColor, float gloss, float NoV, float3 F)
+{
+    float4 p0 = float4( 0.5745, 1.548, -0.02397, 1.301 );
+    float4 p1 = float4( 0.5753, -0.2511, -0.02066, 0.4755 );
+ 
+    float4 t = gloss * p0 + p1;
+ 
+    float bias = saturate(t.x * min( t.y, exp2( -7.672 * NoV ) ) + t.z);
+    float delta = saturate(t.w);
+    float scale = delta - bias;
+ 
+    bias *= saturate(50.0 * specularColor.y);
+    //return specularColor * scale + bias;
+    return specularColor * (F * scale + bias);
+}
+
+float3 EnvDFGPolynomial(float3 specularColor, float gloss, float NoV, float3 F)
+{
+    float x = gloss;
+    float y = NoV;
+    
+    float b1 = -0.1688;
+    float b2 = 1.895;
+    float b3 = 0.9903;
+    float b4 = -4.853;
+    float b5 = 8.404;
+    float b6 = -5.069;
+    float bias = saturate( min( b1 * x + b2 * x * x, b3 + b4 * y + b5 * y * y + b6 * y * y * y ) );
+    
+    float d0 = 0.6045;
+    float d1 = 1.699;
+    float d2 = -0.5228;
+    float d3 = -3.603;
+    float d4 = 1.404;
+    float d5 = 0.1939;
+    float d6 = 2.661;
+    float delta = saturate( d0 + d1 * x + d2 * y + d3 * x * x + d4 * x * y + d5 * y * y + d6 * x * x * x );
+    float scale = delta - bias;
+    
+    bias *= saturate( 50.0 * specularColor.y );
+    //return specularColor * scale + bias;
+    return specularColor * (F * scale + bias);
+}
+
+float3 EnvBRDFApproxKaris(float3 specularColor, float roughness, float NoV, float3 F)
+{
+	const float4 c0 = {-1, -0.0275, -0.572, 0.022};
+	const float4 c1 = {1, 0.0425, 1.04, -0.04};
+	float4 r = roughness * c0 + c1;
+	float a004 = min(r.x * r.x, exp2(-9.28 * NoV)) * r.x + r.y;
+	float2 AB = float2(-1.04, 1.04) * a004 + r.zw;
+	//return specularColor * AB.x + AB.y;
+    return specularColor * (F * AB.x + AB.y);
+}
+
 //
 // https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
 //
@@ -460,9 +542,9 @@ float4 psmain(VSOutput input) : SV_TARGET
 
     // Material variables
     MaterialParameters material = MaterialParams[DrawParams.MaterialIndex];
-    float3 albedo = material.albedo;
-    float  roughness = material.roughness;
-    float  metalness = material.metalness;
+    float3 albedo = material.Albedo;
+    float  roughness = material.Roughness;
+    float  metalness = material.Metalness;
     float3 F0 = material.F0;
 
     // Use albedo as the tint color
@@ -502,13 +584,41 @@ float4 psmain(VSOutput input) : SV_TARGET
         float3 kD = (1.0 - F) * (1.0 - metalness);
         float3 BRDF = kD  * diffuse + specular;
 
-        directLighting += BRDF * radiance * NoL;
+        // Direct contribution        
+        float3 direct = BRDF * radiance * NoL;
+        if(material.DirectComponentMode == DIRECT_COMPONENT_MODE_DISTRIBUTION) {
+            direct = D;
+        }
+        else if(material.DirectComponentMode == DIRECT_COMPONENT_MODE_FRESNEL) {
+            direct = 1.0 - dot(H, V);
+        }
+        else if(material.DirectComponentMode == DIRECT_COMPONENT_MODE_GEOMETRY) {
+            direct = G;
+        }
+        else if(material.DirectComponentMode == DIRECT_COMPONENT_MODE_DIFFUSE) {
+            direct = diffuse;
+        }
+        else if(material.DirectComponentMode == DIRECT_COMPONENT_MODE_RADIANCE) {
+            direct = radiance;
+        }
+        else if(material.DirectComponentMode == DIRECT_COMPONENT_MODE_KD) {
+            direct = kD;
+        }
+        else if(material.DirectComponentMode == DIRECT_COMPONENT_MODE_SPECULAR) {
+            direct = specular;
+        }
+        else if(material.DirectComponentMode == DIRECT_COMPONENT_MODE_BRDF) {
+            direct = BRDF;
+        }
+
+        // Accumulate contribution
+        directLighting += direct;
     }
 
     // Indirect lighting
     float3 indirectLighting = (float3)0;
     {
-        float cosTheta = saturate(dot(N, V));
+        float cosTheta = NoV;
 
         // Diffuse IBL component
         float3 F = Fresnel(F_Func, cosTheta, F0, roughness);
@@ -521,67 +631,36 @@ float4 psmain(VSOutput input) : SV_TARGET
         float3 prefilteredColor = GetIBLEnvironment(R, lod);
         float2 envBRDF = GetBRDFIntegrationMap(roughness, NoV);
         float3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
+        if (material.IndirectSpecularMode == INDIRECT_SPECULAR_MODE_LAZAROV) {
+            specular = EnvDFGLazarov(prefilteredColor, 1 - roughness, NoV, F);
+        }
+        else if (material.IndirectSpecularMode == INDIRECT_SPECULAR_MODE_POLYNOMIAL) {
+            specular = EnvDFGPolynomial(prefilteredColor, 1 - roughness, NoV, F);
+        }
+        else if (material.IndirectSpecularMode == INDIRECT_SPECULAR_MODE_KARIS) {
+            specular = EnvBRDFApproxKaris(prefilteredColor, roughness, NoV, F);
+        }
 
         // Ambient
         float3 ambient = (SceneParams.IBLDiffuseStrength * kD * diffuse) + (SceneParams.IBLSpecularStrength * specular);
 
+        // Indirect contribution
         indirectLighting = ambient;
+        if (material.IndirectComponentMode == INDIRECT_COMPONENT_MODE_DIFFUSE) {
+            indirectLighting = SceneParams.IBLDiffuseStrength * kD * diffuse;
+        }
+        else if (material.IndirectComponentMode == INDIRECT_COMPONENT_MODE_SPECULAR) {
+            indirectLighting = SceneParams.IBLSpecularStrength * specular;
+        }
     }
     
-/*
-    // Direct lighting
-    float3 directLighting = (float3)0;
-    for (uint i = 0; i < SceneParams.NumLights; ++i) {
-        // Light variables - world space
-        Light light = SceneParams.Lights[i];
-        float3 L  = normalize(light.Position - P);
-        float3 H  = normalize(L + V);
-        float3 Lc = light.Color;
-        float NoL = saturate(dot(N, L));
-
-        float3 diffuse = albedo / PI;
-        float3 radiance = Lc;
-
-        float  cosTheta = saturate(dot(H, V));
-        float  D = Distribution_TrowbridgeReitz(N, H, roughness);
-        float3 F = Fresnel_SchlickRoughness(cosTheta, F0, roughness);
-        float  G = Geometry_Smiths(N, V, L, roughness);
-
-        // Specular reflectance
-        float3 specular = (D * F * G) / max(0.0001, (4.0 * NoV * NoL));
-    
-        // Combine diffuse and specular
-        float3 kD = (1.0 - F) * (1.0 - metalness);
-        float3 BRDF = kD  * diffuse + specular;
-
-        directLighting += BRDF * radiance * NoL;
-    }
-
-    // Indirect lighting
-    float3 indirectLighting = (float3)0;
-    {
-        float cosTheta = saturate(dot(N, V));
-
-        // Diffuse IBL component
-        float3 F = Fresnel_SchlickRoughness(cosTheta, F0, roughness);
-        float3 kD = (1.0 - F) * (1.0 - metalness);
-        float3 irradiance = GetIBLIrradiance(R);
-        float3 diffuse = irradiance * albedo / PI;
-        
-        // Specular IBL component
-        float lod = roughness * (SceneParams.IBLNumEnvLevels - 1);
-        float3 prefilteredColor = GetIBLEnvironment(R, lod);
-        float2 envBRDF = GetBRDFIntegrationMap(roughness, NoV);
-        float3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
-
-        // Ambient
-        float3 ambient = (SceneParams.IBLDiffuseStrength * kD * diffuse) + (SceneParams.IBLSpecularStrength * specular);
-
-        indirectLighting = ambient;
-    }
-*/
-
     float3 finalColor = directLighting + indirectLighting;
+    if (material.DrawMode == DRAW_MODE_DIRECT) {
+        finalColor = directLighting;
+    }
+    else if (material.DrawMode == DRAW_MODE_INDIRECT) {
+        finalColor = indirectLighting;        
+    }
       
     finalColor = ACESFilm(finalColor);      
     return float4(pow(finalColor, 1 / 2.2), 0);

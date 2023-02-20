@@ -40,9 +40,10 @@ SamplerState                         IBLMapSampler         : register(s7);
 //   [t10 + (MaterialIndex * MaterialTextureStride) + 1] : Normal
 //   [t10 + (MaterialIndex * MaterialTextureStride) + 2] : Roughness
 //   [t10 + (MaterialIndex * MaterialTextureStride) + 3] : Metalness
+//   [t10 + (MaterialIndex * MaterialTextureStride) + 4] : Ao
 //
-Texture2D    MaterialTextures[8] : register(t10);
-SamplerState MaterialSampler     : register(s9);
+Texture2D    MaterialTextures[10] : register(t10);
+SamplerState MaterialSampler      : register(s9);
 
 // =================================================================================================
 // Vertex Shader
@@ -199,23 +200,25 @@ float3 ACESFilm(float3 x)
 
 float4 psmain(VSOutput input) : SV_TARGET
 {
-    uint albedoIdx    = 4 * DrawParams.MaterialIndex + 0;
-    uint normalIdx    = 4 * DrawParams.MaterialIndex + 1;
-    uint roughnessIdx = 4 * DrawParams.MaterialIndex + 2;
-    uint metalnessIdx = 4 * DrawParams.MaterialIndex + 3;
+    uint albedoIdx    = 5 * DrawParams.MaterialIndex + 0;
+    uint normalIdx    = 5 * DrawParams.MaterialIndex + 1;
+    uint roughnessIdx = 5 * DrawParams.MaterialIndex + 2;
+    uint metalnessIdx = 5 * DrawParams.MaterialIndex + 3;
+    uint aoIdx        = 5 * DrawParams.MaterialIndex + 4;
 
     // Read material values from textures
-    float3 albedo = MaterialTextures[albedoIdx].Sample(MaterialSampler, input.TexCoord).rgb;
-    float3 normal = normalize((MaterialTextures[normalIdx].Sample(MaterialSampler, input.TexCoord).rgb * 2) - 1);
+    float3 albedo    = MaterialTextures[albedoIdx].Sample(MaterialSampler, input.TexCoord).rgb;
+    float3 normal    = normalize((MaterialTextures[normalIdx].Sample(MaterialSampler, input.TexCoord).rgb * 2) - 1);
     float  roughness = MaterialTextures[roughnessIdx].Sample(MaterialSampler, input.TexCoord).r; 
     float  metalness = MaterialTextures[metalnessIdx].Sample(MaterialSampler, input.TexCoord).r; 
+    float3 ao        = MaterialTextures[aoIdx].Sample(MaterialSampler, input.TexCoord).rgb;
     
     // Calculate normal
-    float3   vNt  = normal;
-    float3   vN   = mul(DrawParams.ModelMatrix, float4(input.Normal, 0)).xyz;
-    float3   vT   = mul(DrawParams.ModelMatrix, float4(input.Tangent.xyz, 0)).xyz;
-    float3   vB   = mul(DrawParams.ModelMatrix, float4(input.Bitangent.xyz, 0)).xyz;
-    float3 N = normalize(vNt.x * vT + vNt.y * vB + vNt.z * vN);                            
+    float3 vNt = normal;
+    float3 vN  = mul(DrawParams.ModelMatrix, float4(input.Normal, 0)).xyz;
+    float3 vT  = mul(DrawParams.ModelMatrix, float4(input.Tangent.xyz, 0)).xyz;
+    float3 vB  = mul(DrawParams.ModelMatrix, float4(input.Bitangent.xyz, 0)).xyz;
+    float3 N   = normalize(vNt.x * vT + vNt.y * vB + vNt.z * vN);
 
     // Scene and geometry variables - world space
     if (MaterialParams[DrawParams.MaterialIndex].UseGeometricNormal) {
@@ -296,7 +299,7 @@ float4 psmain(VSOutput input) : SV_TARGET
         indirectLighting = ambient;
     }
 
-    float3 finalColor = directLighting + indirectLighting;
+    float3 finalColor = (directLighting + indirectLighting) * ao;
       
     finalColor = ACESFilm(finalColor);      
     return float4(pow(finalColor, 1 / 2.2), 0);    

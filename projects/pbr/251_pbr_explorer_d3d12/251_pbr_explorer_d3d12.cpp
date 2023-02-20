@@ -70,9 +70,13 @@ struct MaterialParameters
     float    roughness;
     float    metalness;
     vec3     F0;
+    uint     directComponentMode;
     uint32_t D_Func;
     uint32_t F_Func;
     uint32_t G_Func;
+    uint32_t indirectComponentMode;
+    uint32_t indirectSpecularMode;
+    uint32_t drawMode;
 };
 
 struct GeometryBuffers
@@ -115,6 +119,36 @@ const std::vector<std::string> gGeometryNames = {
     "SchlickGGX",
 };
 
+const std::vector<std::string> gDirectComponentModeNames = {
+    "All",
+    "Distribution",
+    "Fresnel",
+    "Geometry",
+    "Diffuse",
+    "Radiance",
+    "kD",
+    "Specular",
+    "BRDF",
+};
+
+const std::vector<std::string> gIndirectComponentModeNames = {
+    "All",
+    "Diffuse",
+    "Specular"};
+
+const std::vector<std::string> gIndirectSpecularModeNames = {
+    "LUT",
+    "Approx Lazarov",
+    "Approx Polynomial",
+    "Approx Karis",
+};
+
+const std::vector<std::string> gDrawModeNames = {
+    "Full Lighting",
+    "Direct",
+    "Indirect",
+};
+
 const std::vector<std::string> gModelNames = {
     "Sphere",
     "Knob",
@@ -136,15 +170,15 @@ static float gAngle       = 0.0f;
 
 // clang-format off
 static std::vector<MaterialParameters> gMaterialParams = {
-    {F0_MetalCopper,         0.25f, 1.00f, F0_MetalCopper    , 0, 0, 0},
-    {F0_MetalGold,           0.05f, 1.00f, F0_MetalGold      , 0, 0, 0},
-    {F0_MetalSilver,         0.18f, 1.00f, F0_MetalSilver    , 0, 0, 0},
-    {F0_MetalZinc,           0.65f, 1.00f, F0_MetalZinc      , 0, 0, 0},
-    {F0_MetalTitanium,       0.11f, 1.00f, F0_MetalTitanium  , 0, 0, 0},
-    {vec3(0.6f, 0.0f, 0.0f), 0.00f, 0.00f, F0_DiletricPlastic, 0, 0, 0},
-    {vec3(0.0f, 0.6f, 0.0f), 0.25f, 0.00f, F0_DiletricPlastic, 0, 0, 0},
-    {vec3(0.0f, 0.0f, 0.6f), 0.50f, 0.00f, F0_DiletricPlastic, 0, 0, 0},
-    {vec3(0.7f, 0.7f, 0.2f), 0.92f, 0.15f, F0_DiletricPlastic, 0, 0, 0},
+    {F0_MetalCopper,         0.25f, 1.00f, F0_MetalCopper    , 0, 0, 0, 0},
+    {F0_MetalGold,           0.05f, 1.00f, F0_MetalGold      , 0, 0, 0, 0},
+    {F0_MetalSilver,         0.18f, 1.00f, F0_MetalSilver    , 0, 0, 0, 0},
+    {F0_MetalZinc,           0.65f, 1.00f, F0_MetalZinc      , 0, 0, 0, 0},
+    {F0_MetalTitanium,       0.11f, 1.00f, F0_MetalTitanium  , 0, 0, 0, 0},
+    {vec3(0.6f, 0.0f, 0.0f), 0.00f, 0.00f, F0_DiletricPlastic, 0, 0, 0, 0},
+    {vec3(0.0f, 0.6f, 0.0f), 0.25f, 0.00f, F0_DiletricPlastic, 0, 0, 0, 0},
+    {vec3(0.0f, 0.0f, 0.6f), 0.50f, 0.00f, F0_DiletricPlastic, 0, 0, 0, 0},
+    {vec3(0.7f, 0.7f, 0.2f), 0.92f, 0.15f, F0_DiletricPlastic, 0, 0, 0, 0},
 };
 // clang-format on
 
@@ -223,7 +257,7 @@ int main(int argc, char** argv)
     std::vector<char> dxilVS;
     std::vector<char> dxilPS;
     {
-        std::string shaderSource = LoadString("projects/299_pbr_explorer_d3d12/shaders.hlsl");
+        std::string shaderSource = LoadString("projects/251_pbr_explorer_d3d12/shaders.hlsl");
         if (shaderSource.empty()) {
             assert(false && "no shader source");
             return EXIT_FAILURE;
@@ -254,7 +288,7 @@ int main(int argc, char** argv)
     std::vector<char> drawTextureDxilVS;
     std::vector<char> drawTextureDxilPS;
     {
-        std::string shaderSource = LoadString("projects/299_pbr_explorer_d3d12/drawtexture.hlsl");
+        std::string shaderSource = LoadString("projects/251_pbr_explorer_d3d12/drawtexture.hlsl");
         if (shaderSource.empty()) {
             assert(false && "no shader source");
             return EXIT_FAILURE;
@@ -403,7 +437,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "299_pbr_explorer_d3d12");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "251_pbr_explorer_d3d12");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -503,19 +537,23 @@ int main(int argc, char** argv)
         ImGui::End();
 
         if (ImGui::Begin("Material Parameters")) {
+            static std::vector<const char*> currentDrawModeNames(gMaterialParams.size(), gDrawModeNames[0].c_str());
+            static std::vector<const char*> currentDirectComponentModeNames(gMaterialParams.size(), gDirectComponentModeNames[0].c_str());
             static std::vector<const char*> currentDistributionNames(gMaterialParams.size(), gDistributionNames[0].c_str());
             static std::vector<const char*> currentFresnelNames(gMaterialParams.size(), gFresnelNames[0].c_str());
             static std::vector<const char*> currentGeometryNames(gMaterialParams.size(), gGeometryNames[0].c_str());
+            static std::vector<const char*> currentIndirectComponentModeNames(gMaterialParams.size(), gIndirectComponentModeNames[0].c_str());
+            static std::vector<const char*> currentIndirectSpecularModeNames(gMaterialParams.size(), gIndirectSpecularModeNames[0].c_str());
 
             for (uint32_t matIdx = 0; matIdx < gMaterialNames.size(); ++matIdx) {
                 if (ImGui::TreeNodeEx(gMaterialNames[matIdx].c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-                    // Distribution
-                    if (ImGui::BeginCombo("Distribution", currentDistributionNames[matIdx])) {
-                        for (size_t i = 0; i < gDistributionNames.size(); ++i) {
-                            bool isSelected = (currentDistributionNames[matIdx] == gDistributionNames[i]);
-                            if (ImGui::Selectable(gDistributionNames[i].c_str(), isSelected)) {
-                                currentDistributionNames[matIdx] = gDistributionNames[i].c_str();
-                                pMaterialParams[matIdx].D_Func   = static_cast<uint32_t>(i);
+                    // DrawMode
+                    if (ImGui::BeginCombo("DrawMode", currentDrawModeNames[matIdx])) {
+                        for (size_t i = 0; i < gDrawModeNames.size(); ++i) {
+                            bool isSelected = (currentDrawModeNames[matIdx] == gDrawModeNames[i]);
+                            if (ImGui::Selectable(gDrawModeNames[i].c_str(), isSelected)) {
+                                currentDrawModeNames[matIdx]     = gDrawModeNames[i].c_str();
+                                pMaterialParams[matIdx].drawMode = static_cast<uint32_t>(i);
                             }
                             if (isSelected) {
                                 ImGui::SetItemDefaultFocus();
@@ -523,33 +561,99 @@ int main(int argc, char** argv)
                         }
                         ImGui::EndCombo();
                     }
-                    // Fresnel
-                    if (ImGui::BeginCombo("Fresnel", currentFresnelNames[matIdx])) {
-                        for (size_t i = 0; i < gFresnelNames.size(); ++i) {
-                            bool isSelected = (currentFresnelNames[matIdx] == gFresnelNames[i]);
-                            if (ImGui::Selectable(gFresnelNames[i].c_str(), isSelected)) {
-                                currentFresnelNames[matIdx]    = gFresnelNames[i].c_str();
-                                pMaterialParams[matIdx].F_Func = static_cast<uint32_t>(i);
+                    // Direct Light Params
+                    if (ImGui::TreeNodeEx("Direct Light Parames", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        // DirectComponentMode
+                        if (ImGui::BeginCombo("Direct Component Mode", currentDirectComponentModeNames[matIdx])) {
+                            for (size_t i = 0; i < gDirectComponentModeNames.size(); ++i) {
+                                bool isSelected = (currentDirectComponentModeNames[matIdx] == gDirectComponentModeNames[i]);
+                                if (ImGui::Selectable(gDirectComponentModeNames[i].c_str(), isSelected)) {
+                                    currentDirectComponentModeNames[matIdx]     = gDirectComponentModeNames[i].c_str();
+                                    pMaterialParams[matIdx].directComponentMode = static_cast<uint32_t>(i);
+                                }
+                                if (isSelected) {
+                                    ImGui::SetItemDefaultFocus();
+                                }
                             }
-                            if (isSelected) {
-                                ImGui::SetItemDefaultFocus();
-                            }
+                            ImGui::EndCombo();
                         }
-                        ImGui::EndCombo();
+                        // Distribution
+                        if (ImGui::BeginCombo("Distribution", currentDistributionNames[matIdx])) {
+                            for (size_t i = 0; i < gDistributionNames.size(); ++i) {
+                                bool isSelected = (currentDistributionNames[matIdx] == gDistributionNames[i]);
+                                if (ImGui::Selectable(gDistributionNames[i].c_str(), isSelected)) {
+                                    currentDistributionNames[matIdx] = gDistributionNames[i].c_str();
+                                    pMaterialParams[matIdx].D_Func   = static_cast<uint32_t>(i);
+                                }
+                                if (isSelected) {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                            }
+                            ImGui::EndCombo();
+                        }
+                        // Fresnel
+                        if (ImGui::BeginCombo("Fresnel", currentFresnelNames[matIdx])) {
+                            for (size_t i = 0; i < gFresnelNames.size(); ++i) {
+                                bool isSelected = (currentFresnelNames[matIdx] == gFresnelNames[i]);
+                                if (ImGui::Selectable(gFresnelNames[i].c_str(), isSelected)) {
+                                    currentFresnelNames[matIdx]    = gFresnelNames[i].c_str();
+                                    pMaterialParams[matIdx].F_Func = static_cast<uint32_t>(i);
+                                }
+                                if (isSelected) {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                            }
+                            ImGui::EndCombo();
+                        }
+                        // Geometry
+                        if (ImGui::BeginCombo("Geometry", currentGeometryNames[matIdx])) {
+                            for (size_t i = 0; i < gGeometryNames.size(); ++i) {
+                                bool isSelected = (currentGeometryNames[matIdx] == gGeometryNames[i]);
+                                if (ImGui::Selectable(gGeometryNames[i].c_str(), isSelected)) {
+                                    currentGeometryNames[matIdx]   = gGeometryNames[i].c_str();
+                                    pMaterialParams[matIdx].G_Func = static_cast<uint32_t>(i);
+                                }
+                                if (isSelected) {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                            }
+                            ImGui::EndCombo();
+                        }
+
+                        ImGui::TreePop();
                     }
-                    // Geometry
-                    if (ImGui::BeginCombo("Geometry", currentGeometryNames[matIdx])) {
-                        for (size_t i = 0; i < gGeometryNames.size(); ++i) {
-                            bool isSelected = (currentGeometryNames[matIdx] == gGeometryNames[i]);
-                            if (ImGui::Selectable(gGeometryNames[i].c_str(), isSelected)) {
-                                currentGeometryNames[matIdx]   = gGeometryNames[i].c_str();
-                                pMaterialParams[matIdx].G_Func = static_cast<uint32_t>(i);
+                    // Indirect Light Params
+                    if (ImGui::TreeNodeEx("Indirect Light Parames", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        // IndirectComponentMode
+                        if (ImGui::BeginCombo("Indirect Component Mode", currentIndirectComponentModeNames[matIdx])) {
+                            for (size_t i = 0; i < gIndirectComponentModeNames.size(); ++i) {
+                                bool isSelected = (currentIndirectComponentModeNames[matIdx] == gIndirectComponentModeNames[i]);
+                                if (ImGui::Selectable(gIndirectComponentModeNames[i].c_str(), isSelected)) {
+                                    currentIndirectComponentModeNames[matIdx]     = gIndirectComponentModeNames[i].c_str();
+                                    pMaterialParams[matIdx].indirectComponentMode = static_cast<uint32_t>(i);
+                                }
+                                if (isSelected) {
+                                    ImGui::SetItemDefaultFocus();
+                                }
                             }
-                            if (isSelected) {
-                                ImGui::SetItemDefaultFocus();
-                            }
+                            ImGui::EndCombo();
                         }
-                        ImGui::EndCombo();
+                        // Specular Mode
+                        if (ImGui::BeginCombo("Specular Mode", currentIndirectSpecularModeNames[matIdx])) {
+                            for (size_t i = 0; i < gIndirectSpecularModeNames.size(); ++i) {
+                                bool isSelected = (currentIndirectSpecularModeNames[matIdx] == gIndirectSpecularModeNames[i]);
+                                if (ImGui::Selectable(gIndirectSpecularModeNames[i].c_str(), isSelected)) {
+                                    currentIndirectSpecularModeNames[matIdx]     = gIndirectSpecularModeNames[i].c_str();
+                                    pMaterialParams[matIdx].indirectSpecularMode = static_cast<uint32_t>(i);
+                                }
+                                if (isSelected) {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                            }
+                            ImGui::EndCombo();
+                        }
+
+                        ImGui::TreePop();
                     }
 
                     ImGui::SliderFloat("Roughness", &(pMaterialParams[matIdx].roughness), 0.0f, 1.0f);
@@ -912,9 +1016,9 @@ void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     // UWrapSampler (s5)
     staticSamplers[1].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSamplers[1].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[1].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplers[1].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[1].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplers[1].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[1].MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
     staticSamplers[1].MaxAnisotropy    = 0;
     staticSamplers[1].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
@@ -1067,7 +1171,7 @@ void CreateMaterialModels(
         if (!TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh)) {
             return;
         }
-        mesh.ScaleToUnit();
+        mesh.ScaleToFit(1.0f);
 
         GeometryBuffers buffers = {};
 

@@ -105,6 +105,7 @@ HRESULT CreateDrawNormalPipeline(
     DXGI_FORMAT              rtvFormat,
     DXGI_FORMAT              dsvFormat,
     ID3D12PipelineState**    ppPipeline,
+    bool                     enableTangents = false,
     D3D12_CULL_MODE          cullMode = D3D12_CULL_MODE_BACK);
 
 HRESULT CreateDrawTexturePipeline(

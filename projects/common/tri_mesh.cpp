@@ -28,12 +28,12 @@
 #include "config.h"
 
 //
-// Converts spherical coordinate 'sc' to unit cartesian position.
+// Converts spherical coordinate (theta, phi) to unit cartesian position.
 //
 // theta is the azimuth angle between [0, 2pi].
 // phi is the polar angle between [0, pi].
 //
-// theta = 0, phi =[0, pi] sweeps the positive X axis:
+// theta = 0, phi =[0, pi] sweeps the positive X axis from Y = 1 to Y = -1:
 //    SphericalToCartesian(0, 0)    = (0,  1, 0)
 //    SphericalToCartesian(0, pi/2) = (1,  0, 0)
 //    SphericalToCartesian(0, pi)   = (0, -1, 0)
@@ -54,6 +54,24 @@ static inline glm::vec3 SphericalToCartesian(float theta, float phi)
     );
 }
 
+//
+// Returns tangent for spherical coordinate (theta, pi)
+//
+// theta is the azimuth angle between [0, 2pi].
+// phi is the polar angle between [0, pi].
+//
+// theta = 0, phi =[0, pi] sweeps the positive X axis from Y = 1 to Y = -1:
+//    SphericalTangent(0, 0)    = (0, 0, -1)
+//    SphericalTangent(0, pi/2) = (0, 0, -1)
+//    SphericalTangent(0, pi)   = (0, 0, -1)
+//
+// theta = [0, 2pi], phi = [pi/2] sweeps a circle:
+//    SphericalTangent(0,     pi/2) = ( 0, 0, -1)
+//    SphericalTangent(pi/2,  pi/2) = ( 1, 0,  0)
+//    SphericalTangent(pi  ,  pi/2) = ( 0, 0,  1)
+//    SphericalTangent(3pi/2, pi/2) = (-1, 0,  0)
+//    SphericalTangent(2pi,   pi/2) = ( 0, 0, -1)
+//
 static inline glm::vec3 SphericalTangent(float theta, float phi)
 {
     return glm::vec3(
@@ -342,13 +360,17 @@ void TriMesh::Recenter(const glm::vec3& newCenter)
     }
 }
 
-void TriMesh::ScaleToUnit()
+void TriMesh::ScaleToFit(float targetAxisSpan)
 {
     float maxSpan = std::max(mBounds.max.x, std::max(mBounds.max.y, mBounds.max.z));
-    float scale   = 1.0f / maxSpan;
-    
-    for (auto& position : mPositions) {
-        position *= scale;
+    float scale   = targetAxisSpan / maxSpan;
+
+    //for (auto& position : mPositions) {
+    //    position *= scale;
+    //}
+    for (size_t i = 0; i < mPositions.size(); ++i) {
+        mPositions[i] *= scale;
+        //mNormals[i] *= scale;
     }
 }
 
@@ -805,8 +827,8 @@ TriMesh TriMesh::Sphere(
             glm::vec3 color     = glm::vec3(u, v, 0);
             glm::vec2 texCoord  = glm::vec2(u, v);
             glm::vec3 normal    = normalize(position);
-            glm::vec3 tangent   = -SphericalTangent(theta, phi);
-            glm::vec3 bitangent = glm::cross(normal, glm::vec3(tangent));
+            glm::vec3 tangent   = glm::normalize(-SphericalTangent(theta, phi));
+            glm::vec3 bitangent = glm::normalize(glm::cross(normal, glm::vec3(tangent)));
 
             position += options.center;
 
@@ -1289,6 +1311,7 @@ bool TriMesh::LoadOBJ(const std::string& path, const std::string& mtlBaseDir, co
         newMaterial.normalTexture     = material.normal_texname;
         newMaterial.roughnessTexture  = material.roughness_texname;
         newMaterial.metalnessTexture  = material.metallic_texname;
+        newMaterial.aoTexture         = material.ambient_texname;
 
         pMesh->AddMaterial(newMaterial);
     }

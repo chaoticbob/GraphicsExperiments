@@ -586,8 +586,8 @@ HRESULT CreateTexture(
     }
 
     if (!IsNull(pSrcData)) {
-        //const uint32_t pixelStride = PixelStride(format);
-        //const uint32_t srcSize     = width * height * pixelStride;
+        // const uint32_t pixelStride = PixelStride(format);
+        // const uint32_t srcSize     = width * height * pixelStride;
 
         ComPtr<ID3D12Resource> stagingBuffer;
         hr = CreateBuffer(pRenderer, srcSizeBytes, pSrcData, &stagingBuffer);
@@ -953,9 +953,10 @@ HRESULT CreateDrawNormalPipeline(
     DXGI_FORMAT              rtvFormat,
     DXGI_FORMAT              dsvFormat,
     ID3D12PipelineState**    ppPipeline,
+    bool                     enableTangents,
     D3D12_CULL_MODE          cullMode)
 {
-    D3D12_INPUT_ELEMENT_DESC inputElementDesc[2] = {};
+    D3D12_INPUT_ELEMENT_DESC inputElementDesc[4] = {};
     inputElementDesc[0].SemanticName             = "POSITION";
     inputElementDesc[0].SemanticIndex            = 0;
     inputElementDesc[0].Format                   = DXGI_FORMAT_R32G32B32_FLOAT;
@@ -970,6 +971,22 @@ HRESULT CreateDrawNormalPipeline(
     inputElementDesc[1].AlignedByteOffset        = D3D12_APPEND_ALIGNED_ELEMENT;
     inputElementDesc[1].InputSlotClass           = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
     inputElementDesc[1].InstanceDataStepRate     = 0;
+    if (enableTangents) {
+        inputElementDesc[2].SemanticName         = "TANGENT";
+        inputElementDesc[2].SemanticIndex        = 0;
+        inputElementDesc[2].Format               = DXGI_FORMAT_R32G32B32_FLOAT;
+        inputElementDesc[2].InputSlot            = 2;
+        inputElementDesc[2].AlignedByteOffset    = D3D12_APPEND_ALIGNED_ELEMENT;
+        inputElementDesc[2].InputSlotClass       = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+        inputElementDesc[2].InstanceDataStepRate = 0;
+        inputElementDesc[3].SemanticName         = "BITANGENT";
+        inputElementDesc[3].SemanticIndex        = 0;
+        inputElementDesc[3].Format               = DXGI_FORMAT_R32G32B32_FLOAT;
+        inputElementDesc[3].InputSlot            = 3;
+        inputElementDesc[3].AlignedByteOffset    = D3D12_APPEND_ALIGNED_ELEMENT;
+        inputElementDesc[3].InputSlotClass       = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+        inputElementDesc[3].InstanceDataStepRate = 0;
+    }
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc               = {};
     desc.pRootSignature                                   = pRootSig;
@@ -1009,7 +1026,7 @@ HRESULT CreateDrawNormalPipeline(
     desc.DepthStencilState.FrontFace.StencilPassOp        = D3D12_STENCIL_OP_KEEP;
     desc.DepthStencilState.FrontFace.StencilFunc          = D3D12_COMPARISON_FUNC_NEVER;
     desc.DepthStencilState.BackFace                       = desc.DepthStencilState.FrontFace;
-    desc.InputLayout.NumElements                          = 2;
+    desc.InputLayout.NumElements                          = enableTangents ? 4 : 2;
     desc.InputLayout.pInputElementDescs                   = inputElementDesc;
     desc.IBStripCutValue                                  = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF;
     desc.PrimitiveTopologyType                            = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;

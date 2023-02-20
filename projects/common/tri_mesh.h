@@ -108,6 +108,7 @@ public:
         std::string normalTexture    = "";               //
         std::string roughnessTexture = "";               //
         std::string metalnessTexture = "";               //
+        std::string aoTexture        = "";               //
     };
 
     // -------------------------------------------------------------------------
@@ -241,7 +242,7 @@ public:
 
     void Recenter(const glm::vec3& newCenter = glm::vec3(0));
 
-    void ScaleToUnit();
+    void ScaleToFit(float targetAxisSpan = 1.0f);
 
     // Sets *ALL* vertex colors to \b vertexColor
     void SetVertexColors(const glm::vec3& vertexColor);

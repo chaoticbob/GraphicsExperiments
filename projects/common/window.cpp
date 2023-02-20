@@ -520,13 +520,26 @@ static void InitAssetDirs()
         return;
     }
 
-    auto dir  = GetExecutablePath().parent_path();
-    auto root = dir.root_path();
+    auto       dir  = GetExecutablePath().parent_path();
+    const auto root = dir.root_path();
 
     while (true) {
         auto assetDir = dir / "assets";
         sAssetDirs.push_back(assetDir);
         GREX_LOG_INFO("Adding asset directory: " << assetDir);
+        if (dir == root) {
+            break;
+        }
+        dir = dir.parent_path();
+    }
+
+    dir = GetExecutablePath().parent_path();
+    while (true) {
+        auto assetDir = dir / "__local_assets__";
+        if (fs::exists(assetDir)) {
+            sAssetDirs.push_back(assetDir);
+            GREX_LOG_INFO("Adding asset directory: " << assetDir);
+        }
         if (dir == root) {
             break;
         }
