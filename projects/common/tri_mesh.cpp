@@ -365,12 +365,12 @@ void TriMesh::ScaleToFit(float targetAxisSpan)
     float maxSpan = std::max(mBounds.max.x, std::max(mBounds.max.y, mBounds.max.z));
     float scale   = targetAxisSpan / maxSpan;
 
-    //for (auto& position : mPositions) {
-    //    position *= scale;
-    //}
+    // for (auto& position : mPositions) {
+    //     position *= scale;
+    // }
     for (size_t i = 0; i < mPositions.size(); ++i) {
         mPositions[i] *= scale;
-        //mNormals[i] *= scale;
+        // mNormals[i] *= scale;
     }
 }
 
@@ -895,7 +895,7 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
 
         // Light
         {
-            const glm::vec3 albedo = glm::vec3(1, 1, 1);
+            const glm::vec3 baseColor = glm::vec3(1, 1, 1);
 
             TriMesh::Options thisOptions = options;
             thisOptions.center           = glm::vec3(0, mainBoxHeight - 0.01f, -2.518f);
@@ -908,12 +908,12 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
                 glm::vec3(0, -1, 0),
                 true,
                 thisOptions);
-            plane.SetVertexColors(albedo);
+            plane.SetVertexColors(baseColor);
 
-            Material material = {};
-            material.name     = "white light";
-            material.id       = ++materialId;
-            material.albedo   = albedo;
+            Material material  = {};
+            material.name      = "white light";
+            material.id        = ++materialId;
+            material.baseColor = baseColor;
             plane.AddMaterial(material);
             plane.AddGroup(TriMesh::Group("light", 0, plane.GetNumTriangles(), plane.GetNumMaterials() - 1));
 
@@ -933,7 +933,7 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
 
         // Left wall (red)
         {
-            const glm::vec3 albedo = glm::vec3(1, 0, 0);
+            const glm::vec3 baseColor = glm::vec3(1, 0, 0);
 
             TriMesh::Options thisOptions = options;
             thisOptions.center           = glm::vec3(-hw, hh, -hd);
@@ -946,12 +946,12 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
                 glm::vec3(1, 0, 0),
                 true,
                 thisOptions);
-            plane.SetVertexColors(albedo);
+            plane.SetVertexColors(baseColor);
 
-            Material material = {};
-            material.name     = "red surface";
-            material.id       = ++materialId;
-            material.albedo   = albedo;
+            Material material  = {};
+            material.name      = "red surface";
+            material.id        = ++materialId;
+            material.baseColor = baseColor;
             plane.AddMaterial(material);
             plane.AddGroup(TriMesh::Group("left wall", 0, plane.GetNumTriangles(), plane.GetNumMaterials() - 1));
 
@@ -960,7 +960,7 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
 
         // Right wall (greeen)
         {
-            const glm::vec3 albedo = glm::vec3(0, 1, 0);
+            const glm::vec3 baseColor = glm::vec3(0, 1, 0);
 
             TriMesh::Options thisOptions = options;
             thisOptions.center           = glm::vec3(hw, hh, -hd);
@@ -972,12 +972,12 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
                 glm::vec3(-1, 0, 0),
                 true,
                 thisOptions);
-            plane.SetVertexColors(albedo);
+            plane.SetVertexColors(baseColor);
 
-            Material material = {};
-            material.name     = "green surface";
-            material.id       = ++materialId;
-            material.albedo   = albedo;
+            Material material  = {};
+            material.name      = "green surface";
+            material.id        = ++materialId;
+            material.baseColor = baseColor;
             plane.AddMaterial(material);
             plane.AddGroup(TriMesh::Group("right wall", 0, plane.GetNumTriangles(), plane.GetNumMaterials() - 1));
 
@@ -986,7 +986,7 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
 
         // Back wall, ceiling, and floor (white)
         {
-            const glm::vec3 albedo = glm::vec3(1, 1, 1);
+            const glm::vec3 baseColor = glm::vec3(1, 1, 1);
 
             TriMesh::Options thisOptions = options;
             thisOptions.center           = glm::vec3(0, hh, -hd);
@@ -997,12 +997,12 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
                 AXIS_POS_Y | AXIS_NEG_Y | AXIS_NEG_Z,
                 false,
                 thisOptions);
-            box.SetVertexColors(albedo);
+            box.SetVertexColors(baseColor);
 
-            Material material = {};
-            material.name     = "white surface";
-            material.id       = ++materialId;
-            material.albedo   = albedo;
+            Material material  = {};
+            material.name      = "white surface";
+            material.id        = ++materialId;
+            material.baseColor = baseColor;
             box.AddMaterial(material);
             box.AddGroup(TriMesh::Group("back wall, ceiling, and floor", 0, box.GetNumTriangles(), box.GetNumMaterials() - 1));
 
@@ -1026,7 +1026,7 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
 
         // Back wall, ceiling, and floor (white)
         {
-            const glm::vec3 albedo = glm::vec3(0.80f, 0.66f, 0.44f);
+            const glm::vec3 baseColor = glm::vec3(0.80f, 0.66f, 0.44f);
 
             TriMesh::Options thisOptions = options;
             thisOptions.center           = glm::vec3(0.9f, hh, -2);
@@ -1039,12 +1039,12 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
                 ALL_AXES,
                 false,
                 thisOptions);
-            box.SetVertexColors(albedo);
+            box.SetVertexColors(baseColor);
 
-            Material material = {};
-            material.name     = "khaki surface";
-            material.id       = ++materialId;
-            material.albedo   = albedo;
+            Material material  = {};
+            material.name      = "khaki surface";
+            material.id        = ++materialId;
+            material.baseColor = baseColor;
             box.AddMaterial(material);
             box.AddGroup(TriMesh::Group("small box", 0, box.GetNumTriangles(), box.GetNumMaterials() - 1));
 
@@ -1068,7 +1068,7 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
 
         // Back wall, ceiling, and floor (white)
         {
-            const glm::vec3 albedo = glm::vec3(0.80f, 0.66f, 0.44f);
+            const glm::vec3 baseColor = glm::vec3(0.80f, 0.66f, 0.44f);
 
             TriMesh::Options thisOptions = options;
             thisOptions.center           = glm::vec3(-0.92f, hh, -3.755f);
@@ -1081,12 +1081,12 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
                 ALL_AXES,
                 false,
                 thisOptions);
-            box.SetVertexColors(albedo);
+            box.SetVertexColors(baseColor);
 
-            Material material = {};
-            material.name     = "khaki surface";
-            material.id       = ++materialId;
-            material.albedo   = albedo;
+            Material material  = {};
+            material.name      = "khaki surface";
+            material.id        = ++materialId;
+            material.baseColor = baseColor;
             box.AddMaterial(material);
             box.AddGroup(TriMesh::Group("tall box", 0, box.GetNumTriangles(), box.GetNumMaterials() - 1));
 
@@ -1304,7 +1304,7 @@ bool TriMesh::LoadOBJ(const std::string& path, const std::string& mtlBaseDir, co
         newMaterial.name              = material.name;
         newMaterial.id                = static_cast<uint32_t>(materialId);
         newMaterial.F0                = glm::vec3(0.04f);
-        newMaterial.albedo            = glm::vec3(material.diffuse[0], material.diffuse[1], material.diffuse[2]);
+        newMaterial.baseColor         = glm::vec3(material.diffuse[0], material.diffuse[1], material.diffuse[2]);
         newMaterial.roughness         = material.roughness;
         newMaterial.metalness         = material.metallic;
         newMaterial.albedoTexture     = material.diffuse_texname;

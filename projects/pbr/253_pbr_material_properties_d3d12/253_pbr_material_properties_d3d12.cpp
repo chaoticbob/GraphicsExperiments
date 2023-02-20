@@ -51,7 +51,7 @@ struct SceneParameters
 
 struct MaterialParameters
 {
-    vec3  albedo;
+    vec3  baseColor;
     float roughness;
     float metalness;
     float reflectance;
@@ -544,7 +544,7 @@ int main(int argc, char** argv)
                     // Draw material sphere
                     // ---------------------------------------------------------
                     MaterialParameters materialParams = {};
-                    materialParams.albedo             = vec3(1.0f, 1.0f, 1.0f);
+                    materialParams.baseColor          = vec3(1.0f, 1.0f, 1.0f);
                     materialParams.roughness          = 0;
                     materialParams.metalness          = 0;
                     materialParams.reflectance        = 0.5;
@@ -554,38 +554,38 @@ int main(int argc, char** argv)
                     switch (yi) {
                         default: break;
                         case ROW_METALLIC: {
-                            materialParams.albedo    = F0_MetalChromium;
+                            materialParams.baseColor = F0_MetalChromium;
                             materialParams.metalness = t;
                             materialParams.roughness = 0;
                         } break;
 
                         case ROW_ROUGHNESS_NON_METALLIC: {
-                            materialParams.albedo    = vec3(0, 0, 0.75f);
+                            materialParams.baseColor = vec3(0, 0, 0.75f);
                             materialParams.roughness = std::max(0.045f, t);
                         } break;
 
                         case ROW_ROUGHNESS_METALLIC: {
-                            materialParams.albedo    = F0_MetalGold;
+                            materialParams.baseColor = F0_MetalGold;
                             materialParams.roughness = std::max(0.045f, t);
                             materialParams.metalness = 1.0;
                         } break;
 
                         case ROW_REFLECTANCE: {
-                            materialParams.albedo      = vec3(0.75f, 0, 0);
+                            materialParams.baseColor   = vec3(0.75f, 0, 0);
                             materialParams.roughness   = 0.2f;
                             materialParams.metalness   = 0;
                             materialParams.reflectance = t;
                         } break;
 
                         case ROW_CLEAR_COAT: {
-                            materialParams.albedo    = vec3(0.75f, 0, 0);
+                            materialParams.baseColor = vec3(0.75f, 0, 0);
                             materialParams.roughness = 0.8f;
                             materialParams.metalness = 1.0f;
                             materialParams.clearCoat = t;
                         } break;
 
                         case ROW_CLEAR_COAT_ROUGHNESS: {
-                            materialParams.albedo             = vec3(0.75f, 0, 0);
+                            materialParams.baseColor          = vec3(0.75f, 0, 0);
                             materialParams.roughness          = 0.8f;
                             materialParams.metalness          = 1.0f;
                             materialParams.clearCoat          = 1;
@@ -593,7 +593,7 @@ int main(int argc, char** argv)
                         } break;
 
                         case ROW_ANISOTROPY: {
-                            materialParams.albedo     = F0_MetalIron;
+                            materialParams.baseColor  = F0_MetalIron;
                             materialParams.roughness  = 0.50f;
                             materialParams.metalness  = 1.0f;
                             materialParams.anisotropy = t;
@@ -617,159 +617,6 @@ int main(int argc, char** argv)
                 }
                 cellY += gCellStrideY;
             }
-
-            //// Clear RTV and DSV
-            // float clearColor[4] = {0.23f, 0.23f, 0.31f, 0};
-            // commandList->ClearRenderTargetView(renderer->SwapchainRTVDescriptorHandles[bufferIndex], clearColor, 0, nullptr);
-            // commandList->ClearDepthStencilView(renderer->SwapchainDSVDescriptorHandles[bufferIndex], D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0xFF, 0, nullptr);
-
-            /*
-            // Viewport and scissor
-            D3D12_VIEWPORT viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
-            commandList->RSSetViewports(1, &viewport);
-            D3D12_RECT scissor = {0, 0, static_cast<long>(gWindowWidth), static_cast<long>(gWindowHeight)};
-            commandList->RSSetScissorRects(1, &scissor);
-
-
-            // Smooth out the rotation on Y
-            gAngle += (gTargetAngle - gAngle) * 0.1f;
-
-            // Camera matrices
-            vec3 eyePosition = vec3(0, 0, 9);
-            mat4 viewMat     = glm::lookAt(eyePosition, vec3(0, 0, 0), vec3(0, 1, 0));
-            mat4 projMat     = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
-            mat4 rotMat      = glm::rotate(glm::radians(gAngle), vec3(0, 1, 0));
-
-            // Set constant buffer values
-            pSceneParams->viewProjectionMatrix    = projMat * viewMat;
-            pSceneParams->eyePosition             = eyePosition;
-            pSceneParams->numLights               = gNumLights;
-            pSceneParams->lights[0].position      = vec3(5, 7, 32);
-            pSceneParams->lights[0].color         = vec3(0.98f, 0.85f, 0.71f);
-            pSceneParams->lights[0].intensity     = 0.5f;
-            pSceneParams->lights[1].position      = vec3(-8, 1, 4);
-            pSceneParams->lights[1].color         = vec3(1.00f, 0.00f, 0.00f);
-            pSceneParams->lights[1].intensity     = 0.5f;
-            pSceneParams->lights[2].position      = vec3(0, 8, -8);
-            pSceneParams->lights[2].color         = vec3(0.00f, 1.00f, 0.00f);
-            pSceneParams->lights[2].intensity     = 0.5f;
-            pSceneParams->lights[3].position      = vec3(15, 8, 0);
-            pSceneParams->lights[3].color         = vec3(0.00f, 0.00f, 1.00f);
-            pSceneParams->lights[3].intensity     = 0.5f;
-            pSceneParams->iblEnvironmentNumLevels = envNumLevels;
-
-            // Draw environment
-            {
-                commandList->SetGraphicsRootSignature(envRootSig.Get());
-                commandList->SetPipelineState(envPipelineState.Get());
-
-                glm::mat4 moveUp = glm::translate(vec3(0, 0, 0));
-
-                // SceneParmas (b0)
-                mat4 mvp = projMat * viewMat * moveUp;
-                commandList->SetGraphicsRoot32BitConstants(0, 16, &mvp, 0);
-                // Textures (32)
-                D3D12_GPU_DESCRIPTOR_HANDLE tableStart = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
-                tableStart.ptr += 2 * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-                commandList->SetGraphicsRootDescriptorTable(1, tableStart);
-
-                // Index buffer
-                D3D12_INDEX_BUFFER_VIEW ibv = {};
-                ibv.BufferLocation          = envIndexBuffer->GetGPUVirtualAddress();
-                ibv.SizeInBytes             = static_cast<UINT>(envIndexBuffer->GetDesc().Width);
-                ibv.Format                  = DXGI_FORMAT_R32_UINT;
-                commandList->IASetIndexBuffer(&ibv);
-
-                // Vertex buffers
-                D3D12_VERTEX_BUFFER_VIEW vbvs[2] = {};
-                // Position
-                vbvs[0].BufferLocation = envPositionBuffer->GetGPUVirtualAddress();
-                vbvs[0].SizeInBytes    = static_cast<UINT>(envPositionBuffer->GetDesc().Width);
-                vbvs[0].StrideInBytes  = 12;
-                // Tex coord
-                vbvs[1].BufferLocation = envTexCoordBuffer->GetGPUVirtualAddress();
-                vbvs[1].SizeInBytes    = static_cast<UINT>(envTexCoordBuffer->GetDesc().Width);
-                vbvs[1].StrideInBytes  = 8;
-
-                commandList->IASetVertexBuffers(0, 2, vbvs);
-                commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-                commandList->DrawIndexedInstanced(envNumIndices, 1, 0, 0, 0);
-            }
-
-            // Draw material sphere
-            {
-                commandList->SetGraphicsRootSignature(pbrRootSig.Get());
-                // SceneParams (b0)
-                commandList->SetGraphicsRootConstantBufferView(0, constantBuffer->GetGPUVirtualAddress());
-                // IBL textures (t3, t4, t5)
-                commandList->SetGraphicsRootDescriptorTable(3, descriptorHeap->GetGPUDescriptorHandleForHeapStart());
-
-                // Index buffer
-                D3D12_INDEX_BUFFER_VIEW ibv = {};
-                ibv.BufferLocation          = materialSphereIndexBuffer->GetGPUVirtualAddress();
-                ibv.SizeInBytes             = static_cast<UINT>(materialSphereIndexBuffer->GetDesc().Width);
-                ibv.Format                  = DXGI_FORMAT_R32_UINT;
-                commandList->IASetIndexBuffer(&ibv);
-
-                // Vertex buffers
-                D3D12_VERTEX_BUFFER_VIEW vbvs[2] = {};
-                // Position
-                vbvs[0].BufferLocation = materialSpherePositionBuffer->GetGPUVirtualAddress();
-                vbvs[0].SizeInBytes    = static_cast<UINT>(materialSpherePositionBuffer->GetDesc().Width);
-                vbvs[0].StrideInBytes  = 12;
-                // Normal
-                vbvs[1].BufferLocation = materialSphereNormalBuffer->GetGPUVirtualAddress();
-                vbvs[1].SizeInBytes    = static_cast<UINT>(materialSphereNormalBuffer->GetDesc().Width);
-                vbvs[1].StrideInBytes  = 12;
-
-                commandList->IASetVertexBuffers(0, 2, vbvs);
-                commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-                // Pipeline state
-                commandList->SetPipelineState(pbrPipelineState.Get());
-
-                MaterialParameters materialParams = {};
-                materialParams.albedo             = vec3(0.8f, 0.8f, 0.9f);
-                materialParams.roughness          = 0;
-                materialParams.metalness          = 0;
-                materialParams.F0                 = F0_Generic;
-
-                uint32_t numSlotsX     = 10;
-                uint32_t numSlotsY     = 10;
-                float    slotSize      = 0.9f;
-                float    spanX         = numSlotsX * slotSize;
-                float    spanY         = numSlotsY * slotSize;
-                float    halfSpanX     = spanX / 2.0f;
-                float    halfSpanY     = spanY / 2.0f;
-                float    roughnessStep = 1.0f / (numSlotsX - 1);
-                float    metalnessStep = 1.0f / (numSlotsY - 1);
-
-                for (uint32_t i = 0; i < numSlotsY; ++i) {
-                    materialParams.metalness = 0;
-
-                    for (uint32_t j = 0; j < numSlotsX; ++j) {
-                        float x = -halfSpanX + j * slotSize;
-                        float y = -halfSpanY + i * slotSize;
-                        float z = 0;
-                        // Readjust center
-                        x += slotSize / 2.0f;
-                        y += slotSize / 2.0f;
-
-                        glm::mat4 modelMat = rotMat * glm::translate(vec3(x, y, z));
-                        // DrawParams (b1)
-                        commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
-                        // MaterialParams (b2)
-                        commandList->SetGraphicsRoot32BitConstants(2, 8, &materialParams, 0);
-
-                        commandList->DrawIndexedInstanced(materialSphereNumIndices, 1, 0, 0, 0);
-
-                        materialParams.metalness += roughnessStep;
-                    }
-                    materialParams.roughness += metalnessStep;
-                }
-            }
-            */
 
             // Draw ImGui
             window->ImGuiRenderDrawData(renderer.get(), commandList.Get());

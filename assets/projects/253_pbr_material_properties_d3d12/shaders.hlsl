@@ -21,13 +21,13 @@ struct DrawParameters {
 };
 
 struct MaterialParameters {
-    float3 albedo;
-    float  roughness;
-    float  metalness;
-    float  reflectance;
-    float  clearCoat;
-    float  clearCoatRoughness;
-    float  anisotropy;
+    float3 BaseColor;
+    float  Roughness;
+    float  Metalness;
+    float  Reflectance;
+    float  ClearCoat;
+    float  ClearCoatRoughness;
+    float  Anisotropy;
 };
 
 ConstantBuffer<SceneParameters>    SceneParams           : register(b0);
@@ -252,17 +252,17 @@ float4 psmain(VSOutput input) : SV_TARGET
     float  NoV = saturate(dot(N, V));    
 
     // Material variables
-    float3 albedo = MaterialParams.albedo;
-    float  roughness = MaterialParams.roughness * MaterialParams.roughness;
-    float  metalness = MaterialParams.metalness;
-    float  reflectance = MaterialParams.reflectance;
-    float  clearCoat = MaterialParams.clearCoat;
-    float  clearCoatRoughness = MaterialParams.clearCoatRoughness * MaterialParams.clearCoatRoughness;
-    float  anisotropy = MaterialParams.anisotropy;
+    float3 baseColor = MaterialParams.BaseColor;
+    float  roughness = MaterialParams.Roughness * MaterialParams.Roughness;
+    float  metalness = MaterialParams.Metalness;
+    float  reflectance = MaterialParams.Reflectance;
+    float  clearCoat = MaterialParams.ClearCoat;
+    float  clearCoatRoughness = MaterialParams.ClearCoatRoughness * MaterialParams.ClearCoatRoughness;
+    float  anisotropy = MaterialParams.Anisotropy;
 
     // Use albedo as the tint color
     //F0 = lerp(F0, albedo, metalness);
-    float3 F0 = 0.16 * reflectance * reflectance * (1 - metalness) + albedo * metalness;
+    float3 F0 = 0.16 * reflectance * reflectance * (1 - metalness) + baseColor * metalness;
    
     // Direct lighting
     float3 directLighting = (float3)0;
@@ -275,7 +275,7 @@ float4 psmain(VSOutput input) : SV_TARGET
         float  Ls = light.Intensity;
         float NoL = saturate(dot(N, L));
 
-        float3 diffuse = albedo / PI;
+        float3 diffuse = baseColor / PI;
         float3 radiance = Lc * Ls;
 
         float  cosTheta = saturate(dot(H, V));
@@ -291,8 +291,8 @@ float4 psmain(VSOutput input) : SV_TARGET
             Vis = G / max(0.0001, (4.0 * NoV * NoL));
         }
         else {
-            float at = max(roughness * (1.0 + MaterialParams.anisotropy), 0.001);
-            float ab = max(roughness * (1.0 - MaterialParams.anisotropy), 0.001);
+            float at = max(roughness * (1.0 + anisotropy), 0.001);
+            float ab = max(roughness * (1.0 - anisotropy), 0.001);
             
             D = DistributionAnisotropic_GGX(
                 saturate(dot(N, H)), // NoH
@@ -349,7 +349,7 @@ float4 psmain(VSOutput input) : SV_TARGET
 
         // Diffuse IBL component
         float3 irradiance = GetIBLIrradiance(Rr);
-        float3 diffuse = irradiance * albedo / PI;
+        float3 diffuse = irradiance * baseColor / PI;
         
         // Specular IBL component
         float lod = roughness * (SceneParams.IBLEnvironmentNumLevels - 1);

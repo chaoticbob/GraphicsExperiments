@@ -100,7 +100,7 @@ public:
     {
         std::string name             = "";               //
         uint32_t    id               = 0;                // Material id from source
-        glm::vec3   albedo           = glm::vec3(1);     // Default to white
+        glm::vec3   baseColor        = glm::vec3(1);     // Default to white
         glm::vec3   F0               = glm::vec3(0.04f); // Shiny plastic (F0 = 0.04, roughness = 0, metalness = 0)
         float       roughness        = 0;                // Shiny plastic (F0 = 0.04, roughness = 0, metalness = 0)
         float       metalness        = 0;                // Shiny plastic (F0 = 0.04, roughness = 0, metalness = 0)
