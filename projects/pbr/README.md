@@ -40,7 +40,9 @@ Notes:
 **Exploring the parameters of PBR**
 
 Toy program to explore the various Distribution, Fresnel, and Geometry functions for implementing
-PBR. Knob is borrowed from [Google Filament](https://github.com/google/filament) and monkey is generated from [Blender](https://www.blender.org/).
+PBR. 
+
+Knob is borrowed from [Google Filament](https://github.com/google/filament) and monkey is generated from [Blender](https://www.blender.org/).
 
 Shaders are found in the [assets/projects/299_pbr_explorer_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/299_pbr_explorer_d3d12) directory.
 
@@ -51,3 +53,20 @@ Notes:
 * Lighting is done in world space.
 * IBL uses rectangular images and not cube maps. There are some artifacts and side effects, such as the pinch at the top and bottom of the diffuse indirect lighting. Haven't found a good way to solve this yet.
 
+## pbr_material_properties
+![alt text](../../images/screenshots/pbr/pbr_material_properties.png?raw=true)
+
+**Exploring PBR material properties**
+
+First pass implementation of the [Google Filament](https://github.com/google/filament) standard model with the base set of parameters.
+
+Knob is borrowed from [Google Filament](https://github.com/google/filament) and monkey is generated from [Blender](https://www.blender.org/).
+
+Shaders are found in the [assets/projects/299_pbr_explorer_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/299_pbr_explorer_d3d12) directory.
+
+HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
+
+Notes:
+* The view camera can spin around the scene.
+* Lighting is done in world space.
+* IBL uses rectangular images and not cube maps. There are some artifacts and side effects, such as the pinch at the top and bottom of the diffuse indirect lighting. Haven't found a good way to solve this yet.

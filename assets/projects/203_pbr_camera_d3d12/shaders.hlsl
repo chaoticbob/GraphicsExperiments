@@ -293,10 +293,7 @@ float4 psmain(VSOutput input) : SV_TARGET
         float2 envBRDF = GetBRDFIntegrationMap(roughness, NoV);
         float3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
 
-        // Ambient
-        float3 ambient = kD * diffuse + specular;
-
-        indirectLighting = ambient * ao;
+        indirectLighting = kD * diffuse * ao + specular;
     }
 
     float3 finalColor = directLighting + indirectLighting;

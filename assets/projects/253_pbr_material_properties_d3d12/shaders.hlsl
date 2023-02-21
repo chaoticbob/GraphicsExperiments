@@ -14,6 +14,8 @@ struct SceneParameters {
     uint     NumLights;
     Light    Lights[8];
     uint     IBLEnvironmentNumLevels;
+    uint     Multiscatter;
+    uint     Furnace;
 };
 
 struct DrawParameters {
@@ -30,14 +32,15 @@ struct MaterialParameters {
     float  Anisotropy;
 };
 
-ConstantBuffer<SceneParameters>    SceneParams           : register(b0);
-ConstantBuffer<DrawParameters>     DrawParams            : register(b1);
-ConstantBuffer<MaterialParameters> MaterialParams        : register(b2);
-Texture2D                          IBLIntegrationLUT     : register(t3);
-Texture2D                          IBLIrradianceMap      : register(t4);
-Texture2D                          IBLEnvironmentMap     : register(t5);
-SamplerState                       IBLIntegrationSampler : register(s6);
-SamplerState                       IBLMapSampler         : register(s7);
+ConstantBuffer<SceneParameters>    SceneParams                   : register(b0);
+ConstantBuffer<DrawParameters>     DrawParams                    : register(b1);
+ConstantBuffer<MaterialParameters> MaterialParams                : register(b2);
+Texture2D                          IBLIntegrationLUT             : register(t3);
+Texture2D                          IBLIntegrationMultiscatterLUT : register(t4);
+Texture2D                          IBLIrradianceMap              : register(t5);
+Texture2D                          IBLEnvironmentMap             : register(t6);
+SamplerState                       IBLIntegrationSampler         : register(s32);
+SamplerState                       IBLMapSampler                 : register(s33);
 
 // =================================================================================================
 // Vertex Shader
@@ -137,8 +140,21 @@ float3 Fresnel_Schlick(float cosTheta, float3 F0)
     return F0 + (1 - F0) * pow(1 - cosTheta, 5);
 }
 
-float V_Kelemen(float LoH) {
-    return 0.25 / (LoH * LoH);
+float F_Schlick90(float cosTheta, float F0, float F90) {
+    return F0 + (F90 - F0) * pow(1.0 - cosTheta, 5.0);
+}
+
+float Fd_Lambert() 
+{
+    return 1.0 / PI;
+}
+
+float Fd_Burley(float NoV, float NoL, float LoH, float roughness) 
+{
+    float f90 = 0.5 + 2.0 * roughness * LoH * LoH;
+    float lightScatter = F_Schlick90(NoL, 1.0, f90);
+    float viewScatter = F_Schlick90(NoV, 1.0, f90);
+    return lightScatter * viewScatter * (1.0 / PI);
 }
 
 //
@@ -222,13 +238,24 @@ float3 GetIBLEnvironment(float3 dir, float lod)
     uv.x = saturate(uv.x / (2.0 * PI));
     uv.y = saturate(uv.y / PI);
     float3 color = IBLEnvironmentMap.SampleLevel(IBLMapSampler, uv, lod).rgb;
-    return pow(color, 1 / 1.5);
+    if (!SceneParams.Furnace) {
+        // Gammma down the environment so it doesn't look so overblown
+        color = pow(color, 1 / 1.5);
+    }
+    return color;
 }
 
 float2 GetBRDFIntegrationMap(float roughness, float NoV)
 {
     float2 tc = float2(saturate(roughness), saturate(NoV));
     float2 brdf = IBLIntegrationLUT.Sample(IBLIntegrationSampler, tc).rg;
+    return brdf;
+}
+
+float2 GetBRDFIntegrationMultiscatterMap(float roughness, float NoV)
+{
+    float2 tc = float2(saturate(roughness), saturate(NoV));
+    float2 brdf = IBLIntegrationMultiscatterLUT.Sample(IBLIntegrationSampler, tc).rg;
     return brdf;
 }
 
@@ -253,16 +280,20 @@ float4 psmain(VSOutput input) : SV_TARGET
 
     // Material variables
     float3 baseColor = MaterialParams.BaseColor;
-    float  roughness = MaterialParams.Roughness * MaterialParams.Roughness;
+    float  roughness = MaterialParams.Roughness;
     float  metalness = MaterialParams.Metalness;
     float  reflectance = MaterialParams.Reflectance;
     float  clearCoat = MaterialParams.ClearCoat;
-    float  clearCoatRoughness = MaterialParams.ClearCoatRoughness * MaterialParams.ClearCoatRoughness;
+    float  clearCoatRoughness = MaterialParams.ClearCoatRoughness;
     float  anisotropy = MaterialParams.Anisotropy;
 
-    // Use albedo as the tint color
-    //F0 = lerp(F0, albedo, metalness);
+    // Calculate F0
     float3 F0 = 0.16 * reflectance * reflectance * (1 - metalness) + baseColor * metalness;
+
+    // Remap
+    float3 diffuseColor = (1.0 - metalness) * baseColor;
+    roughness = roughness * roughness;
+    clearCoatRoughness = clearCoatRoughness * clearCoatRoughness;
    
     // Direct lighting
     float3 directLighting = (float3)0;
@@ -275,7 +306,7 @@ float4 psmain(VSOutput input) : SV_TARGET
         float  Ls = light.Intensity;
         float NoL = saturate(dot(N, L));
 
-        float3 diffuse = baseColor / PI;
+        float3 diffuse = diffuseColor * Fd_Lambert();
         float3 radiance = Lc * Ls;
 
         float  cosTheta = saturate(dot(H, V));
@@ -313,10 +344,15 @@ float4 psmain(VSOutput input) : SV_TARGET
                 NoL);                // dot_c(n, lightDir));
 
         }
-
         
         // Specular reflectance
-        float3 specular = (D * F * Vis); // / max(0.0001, (4.0 * NoV * NoL));
+        float3 specular = (D * F * Vis); 
+
+        if (SceneParams.Multiscatter) {
+            float2 envBRDF = GetBRDFIntegrationMultiscatterMap(saturate(dot(N, H)), roughness);
+            float3 energyCompensation = 1.0 + F0 * (1.0 / envBRDF.y - 1.0);
+            specular *= energyCompensation;
+        }        
     
         // Combine diffuse and specular
         float3 kD = (1.0 - F) * (1.0 - metalness);
@@ -349,13 +385,24 @@ float4 psmain(VSOutput input) : SV_TARGET
 
         // Diffuse IBL component
         float3 irradiance = GetIBLIrradiance(Rr);
-        float3 diffuse = irradiance * baseColor / PI;
+        float3 diffuse = irradiance * diffuseColor * Fd_Lambert();
         
         // Specular IBL component
         float lod = roughness * (SceneParams.IBLEnvironmentNumLevels - 1);
         float3 prefilteredColor = GetIBLEnvironment(Rr, lod);
-        float2 envBRDF = GetBRDFIntegrationMap(NoV, roughness);
-        float3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
+        float2 envBRDF = (float2)0;
+        float3 specular = (float3)0;
+        if (SceneParams.Multiscatter) {
+            envBRDF = GetBRDFIntegrationMultiscatterMap(NoV, roughness);
+            specular = prefilteredColor * lerp(envBRDF.xxx, envBRDF.yyy, F0);
+
+            float3 energyCompensation = 1.0 + F0 * (1.0 / envBRDF.y - 1.0);
+            specular *= energyCompensation;
+        }
+        else {
+            envBRDF = GetBRDFIntegrationMap(NoV, roughness);
+            specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
+        }        
 
         indirectLighting = kD * diffuse + ((reflectance * (1.0 - metalness)) * specular + metalness * specular);
 
@@ -364,16 +411,15 @@ float4 psmain(VSOutput input) : SV_TARGET
         lod = clearCoatRoughness * (SceneParams.IBLEnvironmentNumLevels - 1);
         prefilteredColor = GetIBLEnvironment(R, lod);        
         envBRDF = GetBRDFIntegrationMap(NoV, clearCoatRoughness);
-        float3 clearCoatSpecular = prefilteredColor * (clearCoatFresnel * envBRDF.x + envBRDF.y);
+        float3 clearCoatSpecular = clearCoatSpecular = prefilteredColor * (clearCoatFresnel * envBRDF.x + envBRDF.y);
 
         indirectLighting = indirectLighting * (1.0 - clearCoat * clearCoatFresnel) + (clearCoat * clearCoatSpecular);
     }
 
-    float3 finalColor = directLighting + indirectLighting;
-    //float3 finalColor = indirectLighting;
+    float3 finalColor = directLighting + indirectLighting;    
 
-    finalColor = ACESFilm(finalColor);
+    if (!SceneParams.Furnace) {
+        finalColor = ACESFilm(finalColor);
+    }
     return float4(finalColor, 0);  
-    //finalColor = ACESFilm(finalColor);      
-    //return float4(pow(finalColor, 1 / 2.2), 0);
 }

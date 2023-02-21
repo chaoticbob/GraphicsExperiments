@@ -69,7 +69,7 @@ struct MaterialParameters
     vec3     albedo;
     float    roughness;
     float    metalness;
-    vec3     F0;
+    float    specular;
     uint     directComponentMode;
     uint32_t D_Func;
     uint32_t F_Func;
@@ -170,15 +170,15 @@ static float gAngle       = 0.0f;
 
 // clang-format off
 static std::vector<MaterialParameters> gMaterialParams = {
-    {F0_MetalCopper,         0.25f, 1.00f, F0_MetalCopper    , 0, 0, 0, 0},
-    {F0_MetalGold,           0.05f, 1.00f, F0_MetalGold      , 0, 0, 0, 0},
-    {F0_MetalSilver,         0.18f, 1.00f, F0_MetalSilver    , 0, 0, 0, 0},
-    {F0_MetalZinc,           0.65f, 1.00f, F0_MetalZinc      , 0, 0, 0, 0},
-    {F0_MetalTitanium,       0.11f, 1.00f, F0_MetalTitanium  , 0, 0, 0, 0},
-    {vec3(0.6f, 0.0f, 0.0f), 0.00f, 0.00f, F0_DiletricPlastic, 0, 0, 0, 0},
-    {vec3(0.0f, 0.6f, 0.0f), 0.25f, 0.00f, F0_DiletricPlastic, 0, 0, 0, 0},
-    {vec3(0.0f, 0.0f, 0.6f), 0.50f, 0.00f, F0_DiletricPlastic, 0, 0, 0, 0},
-    {vec3(0.7f, 0.7f, 0.2f), 0.92f, 0.15f, F0_DiletricPlastic, 0, 0, 0, 0},
+    {F0_MetalCopper,         0.25f, 1.00f, 0.5f, 0, 0, 0, 0},
+    {F0_MetalGold,           0.05f, 1.00f, 0.5f, 0, 0, 0, 0},
+    {F0_MetalSilver,         0.18f, 1.00f, 0.5f, 0, 0, 0, 0},
+    {F0_MetalZinc,           0.65f, 1.00f, 0.5f, 0, 0, 0, 0},
+    {F0_MetalTitanium,       0.11f, 1.00f, 0.5f, 0, 0, 0, 0},
+    {vec3(0.6f, 0.0f, 0.0f), 0.00f, 0.00f, 0.5f, 0, 0, 0, 0},
+    {vec3(0.0f, 0.6f, 0.0f), 0.25f, 0.00f, 0.5f, 0, 0, 0, 0},
+    {vec3(0.0f, 0.0f, 0.6f), 0.50f, 0.00f, 0.5f, 0, 0, 0, 0},
+    {vec3(0.7f, 0.7f, 0.2f), 0.92f, 0.15f, 0.5f, 0, 0, 0, 0},
 };
 // clang-format on
 
@@ -658,6 +658,7 @@ int main(int argc, char** argv)
 
                     ImGui::SliderFloat("Roughness", &(pMaterialParams[matIdx].roughness), 0.0f, 1.0f);
                     ImGui::SliderFloat("Metalness", &(pMaterialParams[matIdx].metalness), 0.0f, 1.0f);
+                    ImGui::SliderFloat("Specular", &(pMaterialParams[matIdx].specular), 0.0f, 1.0f);
                     ImGui::ColorPicker3("Albedo", reinterpret_cast<float*>(&(pMaterialParams[matIdx].albedo)), ImGuiColorEditFlags_NoInputs);
 
                     ImGui::TreePop();

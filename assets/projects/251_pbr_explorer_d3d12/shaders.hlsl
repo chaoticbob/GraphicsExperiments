@@ -70,7 +70,7 @@ struct MaterialParameters {
     float3 Albedo;
     float  Roughness;
     float  Metalness;
-    float3 F0;
+    float  Specular;
     uint   DirectComponentMode;
     uint   D_Func;
     uint   F_Func;
@@ -545,7 +545,14 @@ float4 psmain(VSOutput input) : SV_TARGET
     float3 albedo = material.Albedo;
     float  roughness = material.Roughness;
     float  metalness = material.Metalness;
-    float3 F0 = material.F0;
+    float  specular = material.Specular;
+
+    // Calculate F0
+    float3 F0 = 0.16 * specular * specular * (1 - metalness) + albedo * metalness;
+
+    // Remap
+    float3 diffuseColor = (1.0 - metalness) * albedo;
+    roughness = roughness * roughness;
 
     // Use albedo as the tint color
     F0 = lerp(F0, albedo, metalness);
@@ -554,7 +561,6 @@ float4 psmain(VSOutput input) : SV_TARGET
     uint D_Func = material.D_Func;
     uint F_Func = material.F_Func;
     uint G_Func = material.G_Func;
-
 
     // Direct lighting
     float3 directLighting = (float3)0;

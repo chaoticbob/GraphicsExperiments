@@ -305,6 +305,13 @@ public:
         mPixels[index] = value;
     }
 
+    void Fill(const PixelT& value)
+    {
+        for (auto& pixel : mPixels) {
+            pixel = value;
+        }
+    }
+
     size_t GetSizeInBytes() const
     {
         size_t nbytes = mPixels.size() * sizeof(PixelT);
@@ -654,12 +661,12 @@ inline std::vector<float> GaussianKernel(uint32_t kernelSize, float sigma = 0)
 
     float mean  = kernelSize / 2.0f;
     float delta = kernelSize / static_cast<float>(kernelSize - 1);
-    float sum = 0.0f;
+    float sum   = 0.0f;
     for (uint32_t i = 0; i < kernelSize; i++) {
         for (uint32_t j = 0; j < kernelSize; j++) {
             uint32_t index    = (i * kernelSize) + j;
-            float    x        = -mean + j*delta;
-            float    y        = -mean + i*delta;
+            float    x        = -mean + j * delta;
+            float    y        = -mean + i * delta;
             float    expNumer = (x * x + y * y);
             float    expDenom = (2.0f * sigma * sigma);
             float    denom    = (2.0f * kPi * sigma * sigma);

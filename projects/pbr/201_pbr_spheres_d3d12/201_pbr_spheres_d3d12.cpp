@@ -657,14 +657,14 @@ void CreateEnvironmentRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRoo
     D3D12_STATIC_SAMPLER_DESC staticSampler = {};
     // IBLMapSampler (s1)
     staticSampler.Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSampler.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSampler.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSampler.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSampler.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSampler.MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
     staticSampler.MaxAnisotropy    = 0;
-    staticSampler.ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    staticSampler.ComparisonFunc   = D3D12_COMPARISON_FUNC_NEVER   ;
     staticSampler.MinLOD           = 0;
-    staticSampler.MaxLOD           = 1;
+    staticSampler.MaxLOD           = D3D12_FLOAT32_MAX;
     staticSampler.ShaderRegister   = 1;
     staticSampler.RegisterSpace    = 0;
     staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
@@ -773,7 +773,7 @@ void CreateIBLTextures(
     }
 
     // IBL file
-    auto iblFile = GetAssetPath("IBL/shanghai_riverside_4k.ibl");
+    auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
 
     IBLMaps ibl = {};
     if (!LoadIBLMaps32f(iblFile, &ibl)) {

@@ -165,6 +165,38 @@ float2 IntegrateBRDF(float Roughness, float NoV)
     return res;
 }
 
+float2 IntegrateBRDF_Multiscatter(float Roughness, float NoV)
+{
+    float3 V = float3(0);
+    V.x      = sqrt(1.0f - NoV * NoV); // sin
+    V.y      = 0;
+    V.z      = NoV; // cos
+    float A  = 0;
+    float B  = 0;
+
+    float3 N = float3(0, 0, 1);
+
+    const uint NumSamples = 1024;
+    for (uint i = 0; i < NumSamples; i++) {
+        float2 Xi  = Hammersley(i, NumSamples);
+        float3 H   = ImportanceSampleGGX(Xi, Roughness, N);
+        float3 L   = 2 * dot(V, H) * H - V;
+        float  NoL = saturate(L.z);
+        float  NoH = saturate(H.z);
+        float  VoH = saturate(dot(V, H));
+        if (NoL > 0) {
+            float G     = Geometry_Smiths(NoV, NoL, Roughness);
+            float G_Vis = G * VoH / (NoH * NoV);
+            float Fc    = glm::pow(1 - VoH, 5.0f);
+            A += G_Vis * Fc;
+            B += G_Vis;
+        }
+    }
+
+    float2 res = float2(A, B) / float2(NumSamples);
+    return res;
+}
+
 // =============================================================================
 // Adapted from Krzysztof Narkowicz:
 //   https://github.com/knarkowicz/IntegrateDFG/blob/master/main.cpp
@@ -253,6 +285,7 @@ int                 gResY       = 0;
 std::vector<int>    gScanlines;
 std::mutex          gScanlineMutex;
 std::vector<float3> gPixels;
+bool                gMultiscatter = false;
 
 int GetNextScanline()
 {
@@ -283,8 +316,14 @@ void ProcessScaline()
         for (int x = 0; x < gResX; ++x) {
             float  roughness = (static_cast<float>(x) + 0.5f) / static_cast<float>(gResX);
             float  NoV       = (static_cast<float>(y) + 0.5f) / static_cast<float>(gResY);
-            float2 brdf      = IntegrateBRDF(roughness, NoV);
-            *pPixels         = float3(brdf, 0);
+            float2 brdf      = float2(0, 0);
+            if (gMultiscatter) {
+                brdf = IntegrateBRDF_Multiscatter(roughness, NoV);
+            }
+            else {
+                brdf = IntegrateBRDF(roughness, NoV);
+            }
+            *pPixels = float3(brdf, 0);
             ++pPixels;
         }
 
@@ -307,39 +346,71 @@ void ProcessScaline()
 
 int main(int argc, char** argv)
 {
-    if (argc < 2) {
-        std::cout << "error: missing arguments" << std::endl;
-        std::cout << "   "
-                  << "ibl_brdf_lut <output file> <optional:width> <optional:height>" << std::endl;
-        std::cout << "\nEx:\n";
-        std::cout << "   "
-                  << "ibl_brdf_lut brdf_lut.hdr" << std::endl;
-        return EXIT_FAILURE;
-    }
-
-    std::filesystem::path outputPath = argv[1];
-
     const uint32_t kMaxWidth  = 8192;
     const uint32_t kMaxHeight = 8192;
 
-    uint32_t width = 1024;
-    if (argc >= 3) {
-        width = static_cast<uint32_t>(atoi(argv[2]));
-        if (width > kMaxWidth) {
-            std::cout << "error: width is too big" << std::endl;
-            std::cout << "max width is " << kMaxWidth << std::endl;
+    if (argc < 2) {
+        std::cout << "error: missing arguments" << std::endl;
+        std::cout << "   "
+                  << "ibl_brdf_lut <output file> [optional:flags/options]" << std::endl;
+        std::cout << "\nEx:\n";
+        std::cout << "   "
+                  << "ibl_brdf_lut brdf_lut.hdr" << std::endl;
+        std::cout << "\n\n";
+        std::cout << "Flags and options:\n";
+        std::cout << "   -w <value>   LUT width\n";
+        std::cout << "   -h <value>   LUT height\n";
+        std::cout << "   -ms          Multiscatter\n";
+        std::cout << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    std::filesystem::path outputFile = argv[1];
+    uint32_t              width      = 1024;
+    uint32_t              height     = 1024;
+
+    std::string badOption = "";
+    for (int i = 2; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "-w") {
+            ++i;
+            if (i >= argc) {
+                badOption = arg;
+                break;
+            }
+            width = static_cast<uint32_t>(atoi(argv[i]));
+        }
+        else if (arg == "-h") {
+            ++i;
+            if (i >= argc) {
+                badOption = arg;
+                break;
+            }
+            height = static_cast<uint32_t>(atoi(argv[i]));
+        }
+        else if (arg == "-ms") {
+            gMultiscatter = true;
+        }
+        else {
+            std::cout << "error: unrecognized arg " << arg << std::endl;
             return EXIT_FAILURE;
         }
     }
+    if (!badOption.empty()) {
+        std::cout << "error: missing arg for option " << badOption << std::endl;
+        return EXIT_FAILURE;
+    }
 
-    uint32_t height = 1024;
-    if (argc >= 4) {
-        height = static_cast<uint32_t>(atoi(argv[3]));
-        if (height > kMaxHeight) {
-            std::cout << "error: height is too big" << std::endl;
-            std::cout << "max height is " << kMaxHeight << std::endl;
-            return EXIT_FAILURE;
-        }
+    if (width > kMaxWidth) {
+        std::cout << "error: width is too big" << std::endl;
+        std::cout << "max width is " << kMaxWidth << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    if (height > kMaxHeight) {
+        std::cout << "error: height is too big" << std::endl;
+        std::cout << "max height is " << kMaxHeight << std::endl;
+        return EXIT_FAILURE;
     }
 
     gResX = width;
@@ -362,15 +433,13 @@ int main(int argc, char** argv)
     }
 
     if (!gPixels.empty()) {
-        std::filesystem::path filePath = "brdf_lut.hdr";
-
-        int res = stbi_write_hdr(filePath.string().c_str(), gResX, gResY, 3, reinterpret_cast<const float*>(gPixels.data()));
+        int res = stbi_write_hdr(outputFile.string().c_str(), gResX, gResY, 3, reinterpret_cast<const float*>(gPixels.data()));
         if (res == 0) {
-            std::cout << "ERROR: failed to write " << filePath << std::endl;
+            std::cout << "ERROR: failed to write " << outputFile << std::endl;
             return EXIT_FAILURE;
         }
 
-        std::cout << "Successfully wrote " << gResX << "x" << gResY << " BRDF LUT to " << filePath << std::endl;
+        std::cout << "Successfully wrote " << gResX << "x" << gResY <<  (gMultiscatter ? " multiscatter" : "") << " BRDF LUT to " << outputFile << std::endl;
     }
 
     return EXIT_SUCCESS;

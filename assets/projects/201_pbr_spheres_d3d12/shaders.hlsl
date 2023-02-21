@@ -196,6 +196,9 @@ float4 psmain(VSOutput input) : SV_TARGET
     float  metalness = MaterialParams.metalness;
     float3 F0 = MaterialParams.F0;
 
+    // Remap
+    roughness = roughness * roughness;
+
     // Use albedo as the tint color
     F0 = lerp(F0, albedo, metalness);
     
@@ -245,10 +248,7 @@ float4 psmain(VSOutput input) : SV_TARGET
         float2 envBRDF = GetBRDFIntegrationMap(roughness, NoV);
         float3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
 
-        // Ambient
-        float3 ambient = kD * diffuse + specular;
-
-        indirectLighting = ambient;
+        indirectLighting = kD * diffuse + specular;
     }
 
     float3 finalColor = directLighting + indirectLighting;

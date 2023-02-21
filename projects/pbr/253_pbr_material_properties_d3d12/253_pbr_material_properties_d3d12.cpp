@@ -47,6 +47,8 @@ struct SceneParameters
     uint32_t numLights;
     Light    lights[8];
     uint     iblEnvironmentNumLevels;
+    uint     multiscatter;
+    uint     furnace;
 };
 
 struct MaterialParameters
@@ -111,9 +113,11 @@ void CreateEnvironmentVertexBuffers(
 void CreateIBLTextures(
     DxRenderer*      pRenderer,
     ID3D12Resource** ppBRDFLUT,
+    ID3D12Resource** ppMultiscatterBRDFLUT,
     ID3D12Resource** ppIrradianceTexture,
     ID3D12Resource** ppEnvironmentTexture,
-    uint32_t*        pEnvNumLevels);
+    uint32_t*        pEnvNumLevels,
+    ID3D12Resource** ppFurnaceTexture);
 void CreateDescriptorHeap(
     DxRenderer*            pRenderer,
     ID3D12DescriptorHeap** ppHeap);
@@ -293,10 +297,19 @@ int main(int argc, char** argv)
     // IBL texture
     // *************************************************************************
     ComPtr<ID3D12Resource> brdfLUT;
+    ComPtr<ID3D12Resource> multiscatterBRDFLUT;
     ComPtr<ID3D12Resource> irrTexture;
     ComPtr<ID3D12Resource> envTexture;
+    ComPtr<ID3D12Resource> furnaceTexture;
     uint32_t               envNumLevels = 0;
-    CreateIBLTextures(renderer.get(), &brdfLUT, &irrTexture, &envTexture, &envNumLevels);
+    CreateIBLTextures(
+        renderer.get(),
+        &brdfLUT,
+        &multiscatterBRDFLUT,
+        &irrTexture,
+        &envTexture,
+        &envNumLevels,
+        &furnaceTexture);
 
     // *************************************************************************
     // Descriptor heaps
@@ -308,6 +321,10 @@ int main(int argc, char** argv)
 
         // LUT
         CreateDescriptorTexture2D(renderer.get(), brdfLUT.Get(), descriptor);
+        descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+        // Multiscatter LUT
+        CreateDescriptorTexture2D(renderer.get(), multiscatterBRDFLUT.Get(), descriptor);
         descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
         // Irradiance
@@ -395,9 +412,34 @@ int main(int argc, char** argv)
         window->ImGuiNewFrameD3D12();
 
         if (ImGui::Begin("Scene")) {
-            ImGui::SliderInt("Number of Lights", reinterpret_cast<int*>(&gNumLights), 0, 4);
+            ImGui::Checkbox("Mutilscatter", reinterpret_cast<bool*>(&pSceneParams->multiscatter));
+            ImGui::Checkbox("Furnace", reinterpret_cast<bool*>(&pSceneParams->furnace));
         }
         ImGui::End();
+
+        // ---------------------------------------------------------------------
+
+        {
+            D3D12_CPU_DESCRIPTOR_HANDLE descriptor = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+            descriptor.ptr += 2 * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+            if (pSceneParams->furnace) {
+                CreateDescriptorTexture2D(renderer.get(), furnaceTexture.Get(), descriptor);
+                descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+                CreateDescriptorTexture2D(renderer.get(), furnaceTexture.Get(), descriptor);
+
+                pSceneParams->iblEnvironmentNumLevels = 1;
+            }
+            else {
+                CreateDescriptorTexture2D(renderer.get(), irrTexture.Get(), descriptor);
+                descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+                CreateDescriptorTexture2D(renderer.get(), envTexture.Get(), descriptor, 0, envNumLevels);
+
+                pSceneParams->iblEnvironmentNumLevels = envNumLevels;
+            }
+        }
 
         // ---------------------------------------------------------------------
 
@@ -511,7 +553,7 @@ int main(int argc, char** argv)
             // -----------------------------------------------------------------
             // Draw material spheres
             // -----------------------------------------------------------------
-            const float clearColor[4] = {0.23f, 0.23f, 0.31f, 0};
+            const float clearColor[4] = {1, 1, 1, 1};
             uint32_t    cellY         = gCellRenderStartY;
             float       dt            = 1.0f / 10;
             for (uint32_t yi = 0; yi < 7; ++yi) {
@@ -524,7 +566,9 @@ int main(int argc, char** argv)
                     cellRect.right      = (cellX + gCellRenderResX);
                     cellRect.bottom     = (cellY + gCellRenderResY);
 
-                    // commandList->ClearRenderTargetView(renderer->SwapchainRTVDescriptorHandles[bufferIndex], clearColor, 1, &cellRect);
+                    if (pSceneParams->furnace) {
+                        commandList->ClearRenderTargetView(renderer->SwapchainRTVDescriptorHandles[bufferIndex], clearColor, 1, &cellRect);
+                    }
                     commandList->ClearDepthStencilView(renderer->SwapchainDSVDescriptorHandles[bufferIndex], D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0xFF, 1, &cellRect);
 
                     // ---------------------------------------------------------
@@ -565,7 +609,7 @@ int main(int argc, char** argv)
                         } break;
 
                         case ROW_ROUGHNESS_METALLIC: {
-                            materialParams.baseColor = F0_MetalGold;
+                            materialParams.baseColor = pSceneParams->furnace ? vec3(1) : F0_MetalGold;
                             materialParams.roughness = std::max(0.045f, t);
                             materialParams.metalness = 1.0;
                         } break;
@@ -593,8 +637,8 @@ int main(int argc, char** argv)
                         } break;
 
                         case ROW_ANISOTROPY: {
-                            materialParams.baseColor  = F0_MetalIron;
-                            materialParams.roughness  = 0.50f;
+                            materialParams.baseColor  = F0_MetalZinc;
+                            materialParams.roughness  = 0.45f;
                             materialParams.metalness  = 1.0f;
                             materialParams.anisotropy = t;
                         } break;
@@ -646,10 +690,10 @@ int main(int argc, char** argv)
 
 void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 {
-    // IBL textures (t3, t4, t5)
+    // IBL textures (t3, t4, t5, t6)
     D3D12_DESCRIPTOR_RANGE range            = {};
     range.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    range.NumDescriptors                    = 3;
+    range.NumDescriptors                    = 4;
     range.BaseShaderRegister                = 3;
     range.RegisterSpace                     = 0;
     range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
@@ -672,14 +716,14 @@ void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     rootParameters[2].Constants.ShaderRegister = 2;
     rootParameters[2].Constants.RegisterSpace  = 0;
     rootParameters[2].ShaderVisibility         = D3D12_SHADER_VISIBILITY_ALL;
-    // IBL textures (t3, t4, t5)
+    // IBL textures (t3, t4, t5, t6)
     rootParameters[3].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[3].DescriptorTable.NumDescriptorRanges = 1;
     rootParameters[3].DescriptorTable.pDescriptorRanges   = &range;
     rootParameters[3].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
 
     D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {};
-    // ClampedSampler (s6)
+    // IBLIntegrationSampler (s32)
     staticSamplers[0].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
     staticSamplers[0].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[0].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -689,10 +733,10 @@ void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     staticSamplers[0].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     staticSamplers[0].MinLOD           = 0;
     staticSamplers[0].MaxLOD           = 1;
-    staticSamplers[0].ShaderRegister   = 6;
+    staticSamplers[0].ShaderRegister   = 32;
     staticSamplers[0].RegisterSpace    = 0;
     staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    // UWrapSampler (s7)
+    // IBLMapSampler (s33)
     staticSamplers[1].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
     staticSamplers[1].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[1].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -702,7 +746,7 @@ void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     staticSamplers[1].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     staticSamplers[1].MinLOD           = 0;
     staticSamplers[1].MaxLOD           = D3D12_FLOAT32_MAX;
-    staticSamplers[1].ShaderRegister   = 7;
+    staticSamplers[1].ShaderRegister   = 33;
     staticSamplers[1].RegisterSpace    = 0;
     staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
@@ -855,9 +899,11 @@ void CreateEnvironmentVertexBuffers(
 void CreateIBLTextures(
     DxRenderer*      pRenderer,
     ID3D12Resource** ppBRDFLUT,
+    ID3D12Resource** ppMultiscatterBRDFLUT,
     ID3D12Resource** ppIrradianceTexture,
     ID3D12Resource** ppEnvironmentTexture,
-    uint32_t*        pEnvNumLevels)
+    uint32_t*        pEnvNumLevels,
+    ID3D12Resource** ppFurnaceTexture)
 {
     // BRDF LUT
     {
@@ -876,6 +922,25 @@ void CreateIBLTextures(
             bitmap.GetSizeInBytes(),
             bitmap.GetPixels(),
             ppBRDFLUT));
+    }
+
+    // Multiscatter BRDF LUT
+    {
+        auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut_ms.hdr"));
+        if (bitmap.Empty()) {
+            assert(false && "Load image failed");
+            return;
+        }
+
+        ComPtr<ID3D12Resource> texture;
+        CHECK_CALL(CreateTexture(
+            pRenderer,
+            bitmap.GetWidth(),
+            bitmap.GetHeight(),
+            DXGI_FORMAT_R32G32B32A32_FLOAT,
+            bitmap.GetSizeInBytes(),
+            bitmap.GetPixels(),
+            ppMultiscatterBRDFLUT));
     }
 
     // IBL file
@@ -934,6 +999,21 @@ void CreateIBLTextures(
     }
 
     GREX_LOG_INFO("Loaded " << iblFile);
+
+    // Furnace
+    {
+        BitmapRGBA32f bitmap(32, 16);
+        bitmap.Fill(PixelRGBA32f{1, 1, 1, 1});
+
+        CHECK_CALL(CreateTexture(
+            pRenderer,
+            bitmap.GetWidth(),
+            bitmap.GetHeight(),
+            DXGI_FORMAT_R32G32B32A32_FLOAT,
+            bitmap.GetSizeInBytes(),
+            bitmap.GetPixels(),
+            ppFurnaceTexture));
+    }
 }
 
 void CreateDescriptorHeap(
