@@ -67,6 +67,5 @@ Shaders are found in the [assets/projects/299_pbr_explorer_d3d12](https://github
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
 Notes:
-* The view camera can spin around the scene.
 * Lighting is done in world space.
 * IBL uses rectangular images and not cube maps. There are some artifacts and side effects, such as the pinch at the top and bottom of the diffuse indirect lighting. Haven't found a good way to solve this yet.
