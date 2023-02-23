@@ -15,6 +15,8 @@ using namespace glm;
 
 #include "bitmap.h"
 
+#include "pcg32.h"
+
 #define PI 3.1415926535897932384626433832795f
 
 using float2 = glm::vec2;
@@ -23,6 +25,7 @@ using float4 = glm::vec4;
 
 BitmapRGBA32f      gEnvironmentMap;
 std::vector<float> gGaussianKernel;
+std::vector<pcg32> gRandoms;
 
 // circular atan2 - converts (x,y) on a unit circle to [0, 2pi]
 //
@@ -152,9 +155,9 @@ float3 PrefilterEnvMap(float Roughness, float3 R)
             // Original HLSL code:
             //    PrefilteredColor += EnvMap.SampleLevel(EnvMapSampler, L, 0).rgb * NoL;
             //
-            float2 uv  = CartesianToSpherical(glm::normalize(L));
-            uv.x       = saturate(uv.x / (2.0f * PI));
-            uv.y       = saturate(uv.y / PI);
+            float2 uv = CartesianToSpherical(glm::normalize(L));
+            uv.x      = saturate(uv.x / (2.0f * PI));
+            uv.y      = saturate(uv.y / PI);
             //
             // Altenative Gaussian sampler:
             // auto pixel = gEnvMap.GetGaussianSampleUV(uv.x, uv.y, gGaussianKernel, BITMAP_SAMPLE_MODE_WRAP, BITMAP_SAMPLE_MODE_BORDER);
@@ -227,19 +230,63 @@ void ProcessScanlineEnvironmentMap()
     }
 }
 
+static std::atomic_uint32_t sThreadCounter;
+
 void ProcessScanlineIrradiance()
 {
+    const uint32_t kNumSamples = 5120;
+
+    uint32_t threadIndex = sThreadCounter++;
+    pcg32*   pRandom     = &gRandoms[threadIndex];
+
     int y = GetNextScanline();
     while (y != -1) {
         float4* pPixels = reinterpret_cast<float4*>(gTarget->GetPixels(0, y + gTargetYOffset));
 
         for (int x = 0; x < gResX; ++x) {
-            auto pixel = gIrradianceSource->GetGaussianSample(
-                static_cast<float>(x),
-                static_cast<float>(y),
-                gGaussianKernel,
-                BITMAP_SAMPLE_MODE_WRAP,
-                BITMAP_SAMPLE_MODE_CLAMP);
+            // Get normal direction at (x, y)
+            float  u     = saturate((x + 0.5f) / static_cast<float>(gResX));
+            float  v     = saturate((y + 0.5f) / static_cast<float>(gResY));
+            float  theta = u * 2 * PI;
+            float  phi   = v * PI;
+            float3 N     = glm::normalize(SphericalToCartesian(theta, phi));
+
+            float4   pixel        = float4(0);
+            uint32_t totalSamples = 0;
+            for (uint32_t i = 0; i < kNumSamples; ++i) {
+                // Generate random point on sphere
+                u          = pRandom->nextFloat();
+                v          = pRandom->nextFloat();
+                theta      = u * 2 * PI;
+                phi        = v * PI;
+                float3 L   = ImportanceSampleGGX(float2(u, v), 0.99f, N);
+                float  NoL = saturate(dot(N, L));
+
+                // Get the spherical coorinate of of the sample vector
+                float2 uv = CartesianToSpherical(L);
+                u         = saturate(uv.x / (2.0f * PI));
+                v         = saturate(uv.y / PI);
+
+                // Use Gaussian sampling since bilinear produces too much noise
+                auto value = gIrradianceSource->GetGaussianSampleUV(u, v, gGaussianKernel, BITMAP_SAMPLE_MODE_WRAP, BITMAP_SAMPLE_MODE_CLAMP);
+                //
+                // This may be incorrect logic...but scale the contribution
+                // based on Lambert. This produces a much nicer result than
+                // without it.
+                //
+                value *= NoL;
+
+                // Accumulate!
+                pixel.r += value.r;
+                pixel.g += value.g;
+                pixel.b += value.b;
+                pixel.a += value.a;
+
+                ++totalSamples;
+            }
+            // Compute average
+            pixel = pixel / static_cast<float>(totalSamples);
+
             pPixels->r = pixel.r;
             pPixels->g = pixel.g;
             pPixels->b = pixel.b;
@@ -277,15 +324,20 @@ int main(int argc, char** argv)
     // Copy source image to start environment map
     gEnvironmentMap = sourceImage;
 
-    // Wide kernel first for irridiance map
-    uint32_t radius     = 128;
-    uint32_t kernelSize = 2 * radius + 1;
-    gGaussianKernel     = GaussianKernel(kernelSize);
-
     // =========================================================================
     // Irradiance map
     // =========================================================================
     {
+        // Kernel for irridiance map sampling
+        uint32_t radius     = 3; // 128;
+        uint32_t kernelSize = 2 * radius + 1;
+        gGaussianKernel     = GaussianKernel(kernelSize);
+
+        gRandoms.resize(gNumThreads);
+        for (int i = 0; i < gNumThreads; ++i) {
+            gRandoms[i].seed(0xDEADBEEF + i);
+        }
+
         uint32_t      width  = 360;
         uint32_t      height = static_cast<uint32_t>(width / (sourceImage.GetWidth() / static_cast<float>(sourceImage.GetHeight())));
         BitmapRGBA32f target = BitmapRGBA32f(width, height);
@@ -317,7 +369,23 @@ int main(int argc, char** argv)
         }
 
         if (!target.Empty()) {
-            if (!BitmapRGBA32f::Save(irradianceMapFilePath, &target)) {
+            BitmapRGBA32f blurred = BitmapRGBA32f(target.GetWidth(), target.GetHeight());
+
+            // Kernel for image convolution sampling to smooth out the noise
+            radius          = 7;
+            kernelSize      = 2 * radius + 1;
+            gGaussianKernel = GaussianKernel(kernelSize);
+
+            for (uint32_t i = 0; i < blurred.GetHeight(); ++i) {
+                for (uint32_t j = 0; j < blurred.GetWidth(); ++j) {
+                    float x     = (j + 0.5f);
+                    float y     = (i + 0.5f);
+                    auto  pixel = target.GetGaussianSample(x, y, gGaussianKernel, BITMAP_SAMPLE_MODE_WRAP, BITMAP_SAMPLE_MODE_CLAMP);
+                    blurred.SetPixel(j, i, pixel);
+                }
+            }
+
+            if (!BitmapRGBA32f::Save(irradianceMapFilePath, &blurred)) {
                 std::cout << "error: failed to write " << irradianceMapFilePath << std::endl;
             }
 
@@ -325,14 +393,15 @@ int main(int argc, char** argv)
         }
     }
 
-    // Smaller kernel for environment map
-    radius          = 3;
-    kernelSize      = 2 * radius + 1;
-    gGaussianKernel = GaussianKernel(kernelSize);
-
     // =========================================================================
     // Environemnt map
     // =========================================================================
+
+    // Smaller kernel for environment map
+    uint32_t radius     = 3;
+    uint32_t kernelSize = 2 * radius + 1;
+    gGaussianKernel     = GaussianKernel(kernelSize);
+
     gNumLevels = 0;
     {
         // Calculate the number of mip levels and output height

@@ -12,7 +12,7 @@
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
 [submodule "third_party/tinyobjloader"]
 	path = third_party/tinyobjloader
-	url = https://github.com/chaoticbob/tinyobjloader.git
+	url = https://github.com/tinyobjloader/tinyobjloader.git
 [submodule "third_party/imgui"]
 	path = third_party/imgui
 	url = https://github.com/ocornut/imgui.git
@@ -25,3 +25,6 @@
 [submodule "third_party/MikkTSpace"]
 	path = third_party/MikkTSpace
 	url = https://github.com/mmikk/MikkTSpace.git
+[submodule "third_party/pcg32"]
+	path = third_party/pcg32
+	url = https://github.com/wjakob/pcg32.git

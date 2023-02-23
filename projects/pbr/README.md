@@ -15,7 +15,7 @@ HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which ar
 Notes:
 * Spheres can spin.
 * Lighting is done in world space.
-* IBL uses rectangular images and not cube maps. There are some artifacts and side effects, such as the pinch at the top and bottom of the diffuse indirect lighting. Haven't found a good way to solve this yet.
+* IBL uses rectangular images and not cube maps.
 
 ## pbr_camera
 ![alt text](../../images/screenshots/pbr/pbr_camera.png?raw=true)
@@ -32,7 +32,7 @@ HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which ar
 Notes:
 * Model can be spin.
 * Lighting is done in world space.
-* IBL uses rectangular images and not cube maps. There are some artifacts and side effects, such as the pinch at the top and bottom of the diffuse indirect lighting. Haven't found a good way to solve this yet.
+* IBL uses rectangular images and not cube maps.
 
 ## pbr_explorer
 ![alt text](../../images/screenshots/pbr/pbr_explorer.png?raw=true)
@@ -51,7 +51,7 @@ HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which ar
 Notes:
 * The view camera can spin around the scene.
 * Lighting is done in world space.
-* IBL uses rectangular images and not cube maps. There are some artifacts and side effects, such as the pinch at the top and bottom of the diffuse indirect lighting. Haven't found a good way to solve this yet.
+* IBL uses rectangular images and not cube maps.
 
 ## pbr_material_properties
 ![alt text](../../images/screenshots/pbr/pbr_material_properties.png?raw=true)
@@ -68,4 +68,4 @@ HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which ar
 
 Notes:
 * Lighting is done in world space.
-* IBL uses rectangular images and not cube maps. There are some artifacts and side effects, such as the pinch at the top and bottom of the diffuse indirect lighting. Haven't found a good way to solve this yet.
+* IBL uses rectangular images and not cube maps.

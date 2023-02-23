@@ -18,6 +18,7 @@ target_include_directories(
            ${GREX_THIRD_PARTY_DIR}/glm
            ${GREX_THIRD_PARTY_DIR}/stb
            ${GREX_THIRD_PARTY_DIR}/glfw/include
+           ${GREX_THIRD_PARTY_DIR}/pcg32
 )
 
 target_link_libraries(
