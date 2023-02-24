@@ -35,7 +35,7 @@ Texture2D                            IBLEnvironmentMap     : register(t5);
 SamplerState                         IBLIntegrationSampler : register(s6);
 SamplerState                         IBLMapSampler         : register(s7);
 
-// Material textures are in groups of 4:
+// Material textures are in groups of 5:
 //   [t10 + (MaterialIndex * MaterialTextureStride) + 0] : Albedo
 //   [t10 + (MaterialIndex * MaterialTextureStride) + 1] : Normal
 //   [t10 + (MaterialIndex * MaterialTextureStride) + 2] : Roughness
