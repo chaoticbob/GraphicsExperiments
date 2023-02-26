@@ -12,6 +12,16 @@
 
 #include <fstream>
 
+std::string ToLowerCaseCopy(std::string s)
+{
+    std::transform(
+        s.begin(),
+        s.end(),
+        s.begin(),
+        [](std::string::value_type c) { return std::tolower(c); });
+    return s;
+}
+
 template <typename ChannelT>
 struct ImageOps
 {
@@ -37,50 +47,35 @@ void BitmapT<PixelT>::ScaleTo(
         return;
     }
 
-    /*
-    int        num_channels         = static_cast<int>(target.GetNumChannels());
-    int        alpha_channel        = 3; // index of alpha channel
-    stbir_edge edge_mode_horizontal = ToStb(modeU);
-    stbir_edge edge_mode_vertical   = ToStb(modeV);
+    float dx             = mWidth / static_cast<float>(target.GetWidth());
+    float dy             = mHeight / static_cast<float>(target.GetHeight());
+    auto  gaussianKernel = GaussianKernel(3);
 
-    int res = stbir_resize(
-        reinterpret_cast<const float*>(this->GetPixels()), // input_pixels
-        static_cast<int>(this->GetWidth()),                // input_w
-        static_cast<int>(this->GetHeight()),               // input_h
-        static_cast<int>(this->GetRowStride()),            // input_stride_in_bytes
-        reinterpret_cast<float*>(target.GetPixels()),      // output_pixels
-        static_cast<int>(target.GetWidth()),               // output_w
-        static_cast<int>(target.GetHeight()),              // output_h
-        static_cast<int>(target.GetRowStride()),           // output_stride_in_bytes
-        STBIR_TYPE_FLOAT,                                  // datatype
-        num_channels,                                      // num_channels
-        alpha_channel,                                     // alpha_channel
-        0,                                                 // flags
-        edge_mode_horizontal,                              // edge_mode_horizontal
-        edge_mode_vertical,                                // edge_mode_vertical
-        STBIR_FILTER_CATMULLROM,                           // filter_horizontal
-        STBIR_FILTER_CATMULLROM,                           // filter_vertical
-        STBIR_COLORSPACE_SRGB,                             // space
-        nullptr);                                          // alloc_context
-    */
+    char* pTargetRow = reinterpret_cast<char*>(target.GetPixels());
+    for (uint32_t row = 0; row < target.GetHeight(); ++row) {
+        PixelT* pPixel = reinterpret_cast<PixelT*>(pTargetRow);
+        for (uint32_t col = 0; col < target.GetWidth(); ++col) {
+            float x = col * dx;
+            float y = row * dy;
 
-    float dx = mWidth / static_cast<float>(target.GetWidth());
-    float dy = mHeight / static_cast<float>(target.GetHeight());
+            // PixelT sample = GetBilinearSample(x, y);
+            PixelT sample = GetGaussianSample(x, y, gaussianKernel);
 
-    PixelT* pPixel = target.GetPixels();
-    for (uint32_t y = 0; y < target.GetHeight(); ++y) {
-        for (uint32_t x = 0; x < target.GetWidth(); ++x) {
-            float  fx     = x * dx;
-            float  fy     = y * dy;
-            PixelT sample = GetBilinearSample(fx, fy);
-            *pPixel       = sample;
+            *pPixel = sample;
+
             ++pPixel;
         }
+        pTargetRow += target.GetRowStride();
     }
 }
 
 template <typename PixelT>
-void BitmapT<PixelT>::CopyTo(uint32_t x0, uint32_t y0, uint32_t width, uint32_t height, BitmapT& target) const
+void BitmapT<PixelT>::CopyTo(
+    uint32_t x0,
+    uint32_t y0,
+    uint32_t width,
+    uint32_t height,
+    BitmapT& target) const
 {
     if ((target.GetWidth() != width) && (target.GetHeight() != GetHeight())) {
         assert(false && "source region dimension doesn't match target dimension");
@@ -104,6 +99,8 @@ void BitmapT<PixelT>::CopyTo(uint32_t x0, uint32_t y0, uint32_t width, uint32_t 
     }
 }
 
+// Explicit instantiation
+template class BitmapT<PixelRGBA8u>;
 template class BitmapT<PixelRGBA32f>;
 
 // =================================================================================================
@@ -206,7 +203,8 @@ bool BitmapRGBA8u::Load(const std::filesystem::path& absPath, BitmapRGBA8u* pBit
     size_t sizeInBytes = pBitmap->GetSizeInBytes();
     assert((nbytesLoaded == sizeInBytes) && "size mismatch");
 
-    memcpy(pBitmap->GetPixels(), pData, sizeInBytes);
+    auto* pDstPixels = pBitmap->GetPixels();
+    memcpy(pDstPixels, pData, sizeInBytes);
 
     stbi_image_free(pData);
 
@@ -215,6 +213,31 @@ bool BitmapRGBA8u::Load(const std::filesystem::path& absPath, BitmapRGBA8u* pBit
 
 bool BitmapRGBA8u::Save(const std::filesystem::path& absPath, const BitmapRGBA8u* pBitmap)
 {
+    std::string ext = ToLowerCaseCopy(absPath.extension().string());
+    if (ext == ".jpg") {
+        int res = stbi_write_png(
+            absPath.string().c_str(),
+            pBitmap->GetWidth(),
+            pBitmap->GetHeight(),
+            pBitmap->GetNumChannels(),
+            reinterpret_cast<const float*>(pBitmap->GetPixels()),
+            pBitmap->GetRowStride());
+        if (res == 0) {
+            return false;
+        }
+    }
+    else if (ext == ".png") {
+        int res = stbi_write_png(
+            absPath.string().c_str(),
+            pBitmap->GetWidth(),
+            pBitmap->GetHeight(),
+            pBitmap->GetNumChannels(),
+            reinterpret_cast<const float*>(pBitmap->GetPixels()),
+            pBitmap->GetRowStride());
+        if (res == 0) {
+            return false;
+        }
+    }
     return false;
 }
 
@@ -290,9 +313,7 @@ BitmapRGBA8u LoadImage8u(const std::filesystem::path& subPath)
 
     BitmapRGBA8u bitmap = {};
     bool         res    = BitmapRGBA8u::Load(absPath, &bitmap);
-    if (!res) {
-        return res;
-    }
+    assert(res && "Failed to load image");
 
     return bitmap;
 }
@@ -306,9 +327,7 @@ BitmapRGBA32f LoadImage32f(const std::filesystem::path& subPath)
 
     BitmapRGBA32f bitmap = {};
     bool          res    = BitmapRGBA32f::Load(absPath, &bitmap);
-    if (!res) {
-        return res;
-    }
+    assert(res && "Failed to load image");
 
     return bitmap;
 }

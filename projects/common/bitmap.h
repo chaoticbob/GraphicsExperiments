@@ -25,6 +25,13 @@ struct ChannelOp<uint8_t>
     {
         return UINT8_MAX;
     }
+
+    static uint8_t Multiply(uint8_t value, float s)
+    {
+        float fvalue = value * s;
+        fvalue       = std::max<float>(fvalue, MaxValue());
+        return static_cast<uint8_t>(fvalue);
+    }
 };
 
 template <>
@@ -33,6 +40,11 @@ struct ChannelOp<float>
     static float MaxValue()
     {
         return FLT_MAX;
+    }
+
+    static float Multiply(float value, float s)
+    {
+        return value * s;
     }
 };
 
@@ -59,19 +71,19 @@ struct Pixel3T
 
     Pixel3T operator*=(float rhs)
     {
-        this->r *= rhs;
-        this->g *= rhs;
-        this->b *= rhs;
+        this->r = ChannelOp<ChannelT>::Multiply(this->r, rhs);
+        this->g = ChannelOp<ChannelT>::Multiply(this->g, rhs);
+        this->b = ChannelOp<ChannelT>::Multiply(this->b, rhs);
         return *this;
     }
 
     Pixel3T operator*(float rhs) const
     {
         Pixel3T result = {};
-        result.r       = this->r * rhs;
-        result.g       = this->g * rhs;
-        result.b       = this->b * rhs;
-        return *this;
+        result.r       = ChannelOp<ChannelT>::Multiply(this->r, rhs);
+        result.g       = ChannelOp<ChannelT>::Multiply(this->g, rhs);
+        result.b       = ChannelOp<ChannelT>::Multiply(this->b, rhs);
+        return result;
     }
 
     static Pixel3T Black()
@@ -132,20 +144,20 @@ struct Pixel4T
 
     Pixel4T operator*=(float rhs)
     {
-        this->r *= rhs;
-        this->g *= rhs;
-        this->b *= rhs;
-        this->a *= rhs;
+        this->r = ChannelOp<ChannelT>::Multiply(this->r, rhs);
+        this->g = ChannelOp<ChannelT>::Multiply(this->g, rhs);
+        this->b = ChannelOp<ChannelT>::Multiply(this->b, rhs);
+        this->a = ChannelOp<ChannelT>::Multiply(this->a, rhs);
         return *this;
     }
 
     Pixel4T operator*(float rhs) const
     {
         Pixel4T result = {};
-        result.r       = this->r * rhs;
-        result.g       = this->g * rhs;
-        result.b       = this->b * rhs;
-        result.a       = this->a * rhs;
+        result.r       = ChannelOp<ChannelT>::Multiply(this->r, rhs);
+        result.g       = ChannelOp<ChannelT>::Multiply(this->g, rhs);
+        result.b       = ChannelOp<ChannelT>::Multiply(this->b, rhs);
+        result.a       = ChannelOp<ChannelT>::Multiply(this->a, rhs);
         return result;
     }
 
@@ -218,16 +230,27 @@ template <typename PixelT>
 class BitmapT
 {
 public:
-    BitmapT(uint32_t width = 0, uint32_t height = 0)
+    BitmapT() {}
+
+    BitmapT(uint32_t width, uint32_t height)
     {
         Resize(width, height);
+    }
+
+    BitmapT(uint32_t width, uint32_t height, uint32_t rowStride, void* pExternalStorage)
+        : mWidth(width),
+          mHeight(height),
+          mRowStride(rowStride),
+          mExternalStorage(static_cast<PixelT*>(pExternalStorage))
+    {
     }
 
     ~BitmapT() {}
 
     bool Empty() const
     {
-        return mPixels.empty();
+        bool res = (GetPixels() == nullptr);
+        return res;
     }
 
     uint32_t GetWidth() const
@@ -262,9 +285,9 @@ public:
 
     PixelT* GetPixels(uint32_t x = 0, uint32_t y = 0)
     {
-        PixelT* pPixels = nullptr;
-        if (!mPixels.empty()) {
-            char* pAddress = reinterpret_cast<char*>(mPixels.data());
+        PixelT* pPixels = (mExternalStorage != nullptr) ? mExternalStorage : mStorage.data();
+        if (pPixels != nullptr) {
+            char* pAddress = reinterpret_cast<char*>(pPixels);
 
             size_t pixelStride = GetPixelStride();
             size_t offset      = (y * mRowStride) + (x * pixelStride);
@@ -277,9 +300,9 @@ public:
 
     const PixelT* GetPixels(uint32_t x = 0, uint32_t y = 0) const
     {
-        const PixelT* pPixels = nullptr;
-        if (!mPixels.empty()) {
-            const char* pAddress = reinterpret_cast<const char*>(mPixels.data());
+        const PixelT* pPixels = (mExternalStorage != nullptr) ? mExternalStorage : mStorage.data();
+        if (pPixels != nullptr) {
+            const char* pAddress = reinterpret_cast<const char*>(pPixels);
 
             size_t pixelStride = GetPixelStride();
             size_t offset      = (y * mRowStride) + (x * pixelStride);
@@ -290,42 +313,58 @@ public:
         return pPixels;
     }
 
-    const PixelT& GetPixel(uint32_t x, uint32_t y) const
+    PixelT GetPixel(uint32_t x, uint32_t y) const
     {
-        return mPixels[(y * mWidth) + x];
+        auto pPixels = GetPixels(x, y);
+        assert((pPixels != nullptr) && "image is empty");
+        return *pPixels;
     }
 
     void SetPixel(uint32_t x, uint32_t y, const PixelT& value)
     {
-        if (mPixels.empty()) {
+        auto pPixel = GetPixels(x, y);
+        if (pPixel == nullptr) {
             return;
         }
 
-        uint32_t index = (y * mWidth) + x;
-        mPixels[index] = value;
+        assert((x < mWidth) && (y < mHeight) && "out of bounds");
+
+        *pPixel = value;
     }
 
     void Fill(const PixelT& value)
     {
-        for (auto& pixel : mPixels) {
-            pixel = value;
+        char* pPtr = reinterpret_cast<char*>(GetPixels());
+        for (uint32_t row = 0; row < mHeight; ++row) {
+            PixelT* pPixel = reinterpret_cast<PixelT*>(pPtr);
+            for (uint32_t col = 0; col < mWidth; ++col) {
+                *pPixel = value;
+                ++pPixel;
+            }
+            pPtr += mRowStride;
         }
     }
 
     size_t GetSizeInBytes() const
     {
-        size_t nbytes = mPixels.size() * sizeof(PixelT);
+        size_t nbytes = mWidth * mHeight * sizeof(PixelT);
         return nbytes;
     }
 
     void Resize(uint32_t width, uint32_t height)
     {
+        if (mExternalStorage != nullptr) {
+            return;
+        }
+
         mWidth     = width;
         mHeight    = height;
         mRowStride = mWidth * PixelT::PixelStride;
 
         size_t n = mWidth * mHeight;
-        mPixels.resize(n);
+        if (n > 0) {
+            mStorage.resize(n);
+        }
     }
 
     static int32_t CalcSampleCoordinate(int32_t x, int32_t res, BitmapSampleMode mode)
@@ -469,61 +508,20 @@ protected:
         BitmapSampleMode modeU,
         BitmapSampleMode modeV,
         BitmapT&         target) const;
-    /*
-    void ScaleTo(BitmapT& target) const
-    {
-        if (target.Empty()) {
-            return;
-        }
 
-        float dx = mWidth / static_cast<float>(target.GetWidth());
-        float dy = mHeight / static_cast<float>(target.GetHeight());
-
-        PixelT* pPixel = target.GetPixels();
-        for (uint32_t y = 0; y < target.GetHeight(); ++y) {
-            for (uint32_t x = 0; x < target.GetWidth(); ++x) {
-                float  fx     = x * dx;
-                float  fy     = y * dy;
-                PixelT sample = GetBilinearSample(fx, fy);
-                *pPixel       = sample;
-                ++pPixel;
-            }
-        }
-    }
-    */
-
-    void CopyTo(uint32_t x0, uint32_t y0, uint32_t width, uint32_t height, BitmapT& target) const;
-    /*
-    void CopyTo(uint32_t x0, uint32_t y0, uint32_t width, uint32_t height, BitmapT& target) const
-    {
-        if ((target.GetWidth() != width) && (target.GetHeight() != GetHeight())) {
-            assert(false && "source region dimension doesn't match target dimension");
-            return;
-        }
-
-        uint32_t x1 = x0 + width;
-        uint32_t y1 = y0 + height;
-        if ((x1 > mWidth) || (y1 > mHeight)) {
-            assert(false && "region is out of bounds");
-            return;
-        }
-
-        const char* pSrc   = reinterpret_cast<const char*>(this->GetPixels(x0, y0));
-        char*       pDst   = reinterpret_cast<char*>(target.GetPixels(0, 0));
-        uint32_t    nbytes = target.GetRowStride();
-        for (uint32_t y = 0; y < height; ++y) {
-            memcpy(pDst, pSrc, nbytes);
-            pSrc += this->GetRowStride();
-            pDst += target.GetRowStride();
-        }
-    }
-    */
+    void CopyTo(
+        uint32_t x0,
+        uint32_t y0,
+        uint32_t width,
+        uint32_t height,
+        BitmapT& target) const;
 
 protected:
-    uint32_t            mWidth     = 0;
-    uint32_t            mHeight    = 0;
-    uint32_t            mRowStride = 0;
-    std::vector<PixelT> mPixels;
+    uint32_t            mWidth           = 0;
+    uint32_t            mHeight          = 0;
+    uint32_t            mRowStride       = 0;
+    PixelT*             mExternalStorage = nullptr;
+    std::vector<PixelT> mStorage;
 };
 
 using PixelRGB8u   = Pixel3T<unsigned char>;
@@ -537,8 +535,16 @@ using PixelRGBA32f = Pixel4T<float>;
 class BitmapRGB8u : public BitmapT<PixelRGB8u>
 {
 public:
-    BitmapRGB8u(uint32_t width = 0, uint32_t height = 0)
+    using PixelT = PixelRGB8u;
+
+    BitmapRGB8u()
+        : BitmapT<PixelRGB8u>() {}
+
+    BitmapRGB8u(uint32_t width, uint32_t height)
         : BitmapT<PixelRGB8u>(width, height) {}
+
+    BitmapRGB8u(uint32_t width, uint32_t height, uint32_t rowStride, void* pExternalStorage)
+        : BitmapT<PixelRGB8u>(width, height, rowStride, pExternalStorage) {}
 
     ~BitmapRGB8u() {}
 
@@ -552,8 +558,16 @@ public:
 class BitmapRGB32f : public BitmapT<PixelRGB32f>
 {
 public:
-    BitmapRGB32f(uint32_t width = 0, uint32_t height = 0)
+    using PixelT = PixelRGB32f;
+
+    BitmapRGB32f()
+        : BitmapT<PixelRGB32f>() {}
+
+    BitmapRGB32f(uint32_t width, uint32_t height)
         : BitmapT<PixelRGB32f>(width, height) {}
+
+    BitmapRGB32f(uint32_t width, uint32_t height, uint32_t rowStride, void* pExternalStorage)
+        : BitmapT<PixelRGB32f>(width, height, rowStride, pExternalStorage) {}
 
     ~BitmapRGB32f() {}
 
@@ -567,10 +581,54 @@ public:
 class BitmapRGBA8u : public BitmapT<PixelRGBA8u>
 {
 public:
-    BitmapRGBA8u(uint32_t width = 0, uint32_t height = 0)
+    using PixelT = PixelRGBA8u;
+
+    BitmapRGBA8u()
+        : BitmapT<PixelRGBA8u>() {}
+
+    BitmapRGBA8u(uint32_t width, uint32_t height)
         : BitmapT<PixelRGBA8u>(width, height) {}
 
+    BitmapRGBA8u(uint32_t width, uint32_t height, uint32_t rowStride, void* pExternalStorage)
+        : BitmapT<PixelRGBA8u>(width, height, rowStride, pExternalStorage) {}
+
     ~BitmapRGBA8u() {}
+
+    BitmapRGBA8u Scale(
+        float            xScale,
+        float            yScale,
+        BitmapSampleMode modeU = BITMAP_SAMPLE_MODE_BORDER,
+        BitmapSampleMode modeV = BITMAP_SAMPLE_MODE_BORDER) const
+    {
+        uint32_t newWidth  = static_cast<uint32_t>((mWidth * std::max<float>(0, xScale)));
+        uint32_t newHeight = static_cast<uint32_t>((mHeight * std::max<float>(0, yScale)));
+        if ((newWidth == 0) || (newHeight == 0)) {
+            return {};
+        }
+
+        BitmapRGBA8u newBitmap = BitmapRGBA8u(newWidth, newHeight);
+        ScaleTo(modeU, modeV, newBitmap);
+
+        return newBitmap;
+    }
+
+    void ScaleTo(
+        BitmapSampleMode modeU,
+        BitmapSampleMode modeV,
+        BitmapRGBA8u&    target) const
+    {
+        BitmapT<PixelRGBA8u>::ScaleTo(modeU, modeV, target);
+    }
+
+    void CopyTo(
+        uint32_t      x0,
+        uint32_t      y0,
+        uint32_t      width,
+        uint32_t      height,
+        BitmapRGBA8u& target) const
+    {
+        BitmapT<PixelRGBA8u>::CopyTo(x0, y0, width, height, target);
+    }
 
     static bool Load(const std::filesystem::path& absPath, BitmapRGBA8u* pBitmap);
     static bool Save(const std::filesystem::path& absPath, const BitmapRGBA8u* pBitmap);
@@ -582,8 +640,16 @@ public:
 class BitmapRGBA32f : public BitmapT<PixelRGBA32f>
 {
 public:
-    BitmapRGBA32f(uint32_t width = 0, uint32_t height = 0)
+    using PixelT = PixelRGBA32f;
+
+    BitmapRGBA32f()
+        : BitmapT<PixelRGBA32f>() {}
+
+    BitmapRGBA32f(uint32_t width, uint32_t height)
         : BitmapT<PixelRGBA32f>(width, height) {}
+
+    BitmapRGBA32f(uint32_t width, uint32_t height, uint32_t rowStride, void* pExternalStorage)
+        : BitmapT<PixelRGBA32f>(width, height, rowStride, pExternalStorage) {}
 
     ~BitmapRGBA32f() {}
 
@@ -682,3 +748,163 @@ inline std::vector<float> GaussianKernel(uint32_t kernelSize, float sigma = 0)
 
     return kernel;
 }
+
+// =================================================================================================
+// Mipmap
+// =================================================================================================
+#define MAX_MIP_LEVELS 16
+
+struct MipmapAreaInfo
+{
+    uint32_t baseWidth;
+    uint32_t baseHeight;
+    uint32_t numLevels;
+    uint32_t fullHeight;
+};
+
+inline MipmapAreaInfo CalculateMipmapInfo(uint32_t width, uint32_t height, uint32_t maxNumLevels = 0)
+{
+    MipmapAreaInfo info = {width, height, 1, height};
+
+    // No mips with dimension less than 4
+    width >>= 1;
+    height >>= 1;
+    while ((width > 4) && (height > 0)) {
+        ++info.numLevels;
+        info.fullHeight += height;
+        if ((maxNumLevels > 0) && (info.numLevels >= maxNumLevels)) {
+            break;
+        }
+        width >>= 1;
+        height >>= 1;
+    }
+
+    return info;
+}
+
+template <typename MipBitmapT>
+class MipmapT
+{
+public:
+    using PixelT = MipBitmapT::PixelT;
+
+    MipmapT() {}
+
+    MipmapT(const MipBitmapT& mip0)
+    {
+        BuildMipmap(mip0);
+    }
+
+    void BuildMipmap(const MipBitmapT& mip0)
+    {
+        if (mip0.Empty()) {
+            return;
+        }
+
+        // Calculate storage size for all mip maps
+        MipmapAreaInfo areaInfo = CalculateMipmapInfo(mip0.GetWidth(), mip0.GetHeight());
+
+        // Allocate storage
+        mStorage = MipBitmapT(areaInfo.baseWidth, areaInfo.fullHeight);
+
+        // Create entries for mips
+        {
+            uint32_t width     = areaInfo.baseWidth;
+            uint32_t height    = areaInfo.baseHeight;
+            uint32_t rowStride = mStorage.GetRowStride();
+            char*    pStorage  = reinterpret_cast<char*>(mStorage.GetPixels());
+            uint32_t offset    = 0;
+            for (uint32_t level = 0; level < areaInfo.numLevels; ++level) {
+                // Create current mip
+                MipBitmapT mip = MipBitmapT(width, height, rowStride, pStorage + offset);
+                mMips.push_back(mip);
+                mOffsets.push_back(offset);
+
+                // Advance storage pointer to next mip
+                offset += (height * rowStride);
+
+                // Next mip dimensions
+                width >>= 1;
+                height >>= 1;
+            }
+        }
+
+        // Copy mip0
+        mip0.CopyTo(0, 0, mip0.GetWidth(), mip0.GetHeight(), mMips[0]);
+
+        // Build mips
+        for (uint32_t level = 1; level < areaInfo.numLevels; ++level) {
+            uint32_t prevLevel = level - 1;
+            mMips[prevLevel].ScaleTo(
+                BITMAP_SAMPLE_MODE_BORDER,
+                BITMAP_SAMPLE_MODE_BORDER,
+                mMips[level]);
+        }
+    }
+
+    uint32_t GetNumLevels() const
+    {
+        return static_cast<uint32_t>(mMips.size());
+    }
+
+    const MipBitmapT& GetMip(uint32_t level) const
+    {
+        if (level >= mMips.size()) {
+            assert(false && "level exceeds available mips");
+        }
+        return mMips[level];
+    }
+
+    uint32_t GetWidth(uint32_t level) const
+    {
+        if (level >= mMips.size()) {
+            assert(false && "level exceeds available mips");
+        }
+        return mMips[level].GetWidth();
+    }
+
+    uint32_t GetHeight(uint32_t level) const
+    {
+        if (level >= mMips.size()) {
+            assert(false && "level exceeds available mips");
+        }
+        return mMips[level].GetWidth();
+    }
+
+    uint32_t GetRowStride() const {
+        return mStorage.GetRowStride();
+    }
+
+    const PixelT* GetPixels() const
+    {
+        return mStorage.GetPixels();
+    }
+
+    size_t GetSizeInBytes() const
+    {
+        return mStorage.GetSizeInBytes();
+    }
+
+    const std::vector<uint32_t>& GetOffsets() const
+    {
+        return mOffsets;
+    }
+
+    static bool Load(const std::filesystem::path& absPath, MipmapT* pMipmap)
+    {
+        return false;
+    }
+
+    static bool Save(const std::filesystem::path& absPath, const MipmapT* pMipmap)
+    {
+        return MipBitmapT::Save(absPath, &pMipmap->mStorage);
+    }
+
+private:
+    MipBitmapT              mStorage;
+    std::vector<MipBitmapT> mMips;
+    std::vector<uint32_t>   mOffsets;
+};
+
+using MipmapRGBA8u  = MipmapT<BitmapRGBA8u>;
+using MipmapRGBA32f = MipmapT<BitmapRGBA32f>;
