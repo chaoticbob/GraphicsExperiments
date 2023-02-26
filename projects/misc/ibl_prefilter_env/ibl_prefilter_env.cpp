@@ -23,9 +23,10 @@ using float2 = glm::vec2;
 using float3 = glm::vec3;
 using float4 = glm::vec4;
 
-BitmapRGBA32f      gEnvironmentMap;
-std::vector<float> gGaussianKernel;
-std::vector<pcg32> gRandoms;
+BitmapRGBA32f               gEnvironmentMap;
+std::vector<float>          gGaussianKernel;
+std::vector<pcg32>          gRandoms;
+static std::atomic_uint32_t sThreadCounter;
 
 // circular atan2 - converts (x,y) on a unit circle to [0, 2pi]
 //
@@ -114,7 +115,7 @@ float3 ImportanceSampleGGX(float2 Xi, float Roughness, float3 N)
     H.x             = SinTheta * cos(Phi);
     H.y             = SinTheta * sin(Phi);
     H.z             = CosTheta;
-    float3 UpVector = abs(N.z) < 0.999 ? float3(0, 0, 1) : float3(1, 0, 0);
+    float3 UpVector = abs(N.z) < 0.999f ? float3(0, 0, 1) : float3(1, 0, 0);
     float3 TangentX = normalize(cross(UpVector, N));
     float3 TangentY = cross(N, TangentX);
 
@@ -137,16 +138,19 @@ float2 Hammersley(uint i, uint N)
     return float2(float(i) / float(N), rdi);
 }
 
-float3 PrefilterEnvMap(float Roughness, float3 R)
+float3 PrefilterEnvMap(float Roughness, float3 R, pcg32* pRandom)
 {
     float3 N                = R;
     float3 V                = R;
     float3 PrefilteredColor = float3(0);
     float  TotalWeight      = 0;
 
-    const uint NumSamples = 1024;
+    const uint NumSamples = 2048;
     for (uint i = 0; i < NumSamples; i++) {
-        float2 Xi  = Hammersley(i, NumSamples);
+        float  u  = pRandom->nextFloat();
+        float  v  = pRandom->nextFloat();
+        float2 Xi = float2(u, v);
+        // float2 Xi  = Hammersley(i, NumSamples);
         float3 H   = ImportanceSampleGGX(Xi, Roughness, N);
         float3 L   = 2 * dot(V, H) * H - V;
         float  NoL = saturate(dot(N, L));
@@ -171,6 +175,36 @@ float3 PrefilterEnvMap(float Roughness, float3 R)
         }
     }
     return PrefilteredColor / TotalWeight;
+
+    /*
+        const uint NumSamples = 1024;
+        for (uint i = 0; i < NumSamples; i++) {
+            float2 Xi  = Hammersley(i, NumSamples);
+            float3 H   = ImportanceSampleGGX(Xi, Roughness, N);
+            float3 L   = 2 * dot(V, H) * H - V;
+            float  NoL = saturate(dot(N, L));
+            if (NoL > 0) {
+                //
+                // Original HLSL code:
+                //    PrefilteredColor += EnvMap.SampleLevel(EnvMapSampler, L, 0).rgb * NoL;
+                //
+                float2 uv = CartesianToSpherical(glm::normalize(L));
+                uv.x      = saturate(uv.x / (2.0f * PI));
+                uv.y      = saturate(uv.y / PI);
+                //
+                // Altenative Gaussian sampler:
+                // auto pixel = gEnvMap.GetGaussianSampleUV(uv.x, uv.y, gGaussianKernel, BITMAP_SAMPLE_MODE_WRAP, BITMAP_SAMPLE_MODE_BORDER);
+                //
+                auto pixel = gEnvironmentMap.GetBilinearSampleUV(uv.x, uv.y, BITMAP_SAMPLE_MODE_WRAP, BITMAP_SAMPLE_MODE_BORDER);
+                PrefilteredColor.r += pixel.r;
+                PrefilteredColor.g += pixel.g;
+                PrefilteredColor.b += pixel.b;
+
+                TotalWeight += NoL;
+            }
+        }
+        return PrefilteredColor / TotalWeight;
+    */
 }
 
 // =============================================================================
@@ -213,6 +247,9 @@ int GetNextScanline()
 
 void ProcessScanlineEnvironmentMap()
 {
+    uint32_t threadIndex = sThreadCounter++;
+    pcg32*   pRandom     = &gRandoms[threadIndex];
+
     int y = GetNextScanline();
     while (y != -1) {
         float4* pPixels = reinterpret_cast<float4*>(gTarget->GetPixels(0, y + gTargetYOffset));
@@ -221,7 +258,7 @@ void ProcessScanlineEnvironmentMap()
             float  theta  = (x * gDu) * 2 * PI;
             float  phi    = (y * gDv) * PI * 0.99999f;
             float3 R      = glm::normalize(SphericalToCartesian(theta, phi));
-            float3 sample = PrefilterEnvMap(gRoughness, R);
+            float3 sample = PrefilterEnvMap(gRoughness, R, pRandom);
             *pPixels      = float4(sample, 1);
             ++pPixels;
         }
@@ -229,8 +266,6 @@ void ProcessScanlineEnvironmentMap()
         y = GetNextScanline();
     }
 }
-
-static std::atomic_uint32_t sThreadCounter;
 
 void ProcessScanlineIrradiance()
 {
@@ -251,15 +286,13 @@ void ProcessScanlineIrradiance()
             float  phi   = v * PI;
             float3 N     = glm::normalize(SphericalToCartesian(theta, phi));
 
-            float4   pixel        = float4(0);
-            uint32_t totalSamples = 0;
+            float4 pixel        = float4(0);
+            float  totalSamples = 0;
             for (uint32_t i = 0; i < kNumSamples; ++i) {
-                // Generate random point on sphere
+                // Random point on sphere
                 u          = pRandom->nextFloat();
                 v          = pRandom->nextFloat();
-                theta      = u * 2 * PI;
-                phi        = v * PI;
-                float3 L   = ImportanceSampleGGX(float2(u, v), 0.99f, N);
+                float3 L   = ImportanceSampleGGX(float2(u, v), 0.79f, N);
                 float  NoL = saturate(dot(N, L));
 
                 // Get the spherical coorinate of of the sample vector
@@ -282,7 +315,7 @@ void ProcessScanlineIrradiance()
                 pixel.b += value.b;
                 pixel.a += value.a;
 
-                ++totalSamples;
+                totalSamples += NoL;
             }
             // Compute average
             pixel = pixel / static_cast<float>(totalSamples);
@@ -457,6 +490,9 @@ int main(int argc, char** argv)
                 gScanlines.push_back(i);
             }
 
+            // Reset thread counter
+            sThreadCounter = 0;
+
             // Launch threads to process scanlines
             std::vector<std::unique_ptr<std::thread>> threads;
             for (int i = 0; i < gNumThreads; ++i) {
@@ -469,6 +505,20 @@ int main(int argc, char** argv)
             }
 
             gEnvironmentMap = gTarget->CopyFrom(0, gTargetYOffset, gResX, gResY);
+
+            //// Kernel for image convolution sampling to smooth out the noise
+            //radius          = 7;
+            //kernelSize      = 2 * radius + 1;
+            //gGaussianKernel = GaussianKernel(kernelSize);
+            //
+            //for (int row = 0; row < gResY; ++row) {
+            //    for (int col = 0; col < gResX; ++col) {
+            //        float x     = (col + 0.5f);
+            //        float y     = (row + 0.5f);
+            //        auto  pixel = gEnvironmentMap.GetGaussianSample(x, y, gGaussianKernel, BITMAP_SAMPLE_MODE_WRAP, BITMAP_SAMPLE_MODE_CLAMP);
+            //        gTarget->SetPixel(col, row + gTargetYOffset, pixel);
+            //    }
+            //}
 
             gTargetYOffset += gResY;
 
