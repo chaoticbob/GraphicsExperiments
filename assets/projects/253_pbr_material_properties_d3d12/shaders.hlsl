@@ -239,7 +239,6 @@ float3 GetIBLEnvironment(float3 dir, float lod)
     uv.y = saturate(uv.y / PI);
     float3 color = IBLEnvironmentMap.SampleLevel(IBLMapSampler, uv, lod).rgb;
     if (!SceneParams.Furnace) {
-        // Gammma down the environment so it doesn't look so overblown
         color = pow(color, 1 / 1.5);
     }
     return color;
