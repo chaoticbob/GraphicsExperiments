@@ -1027,7 +1027,7 @@ void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     rootParameters[6].DescriptorTable.pDescriptorRanges   = &materialRange;
     rootParameters[6].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
 
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[3] = {};
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[4] = {};
     // IBLIntegrationSampler (s32)
     staticSamplers[0].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
     staticSamplers[0].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -1055,11 +1055,11 @@ void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     staticSamplers[1].RegisterSpace    = 0;
     staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     // MaterialSampler (s34)
-    staticSamplers[2].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    staticSamplers[2].Filter           = D3D12_FILTER_MAXIMUM_MIN_MAG_MIP_LINEAR;
     staticSamplers[2].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[2].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[2].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[2].MipLODBias       = 0.25f;
+    staticSamplers[2].MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
     staticSamplers[2].MaxAnisotropy    = 0;
     staticSamplers[2].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     staticSamplers[2].MinLOD           = 0;
@@ -1067,11 +1067,24 @@ void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     staticSamplers[2].ShaderRegister   = 34;
     staticSamplers[2].RegisterSpace    = 0;
     staticSamplers[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    // MaterialSampler (s35)
+    staticSamplers[3].Filter           = D3D12_FILTER_MAXIMUM_MIN_MAG_LINEAR_MIP_POINT;
+    staticSamplers[3].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplers[3].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplers[3].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[3].MipLODBias       = 0.5f;
+    staticSamplers[3].MaxAnisotropy    = 0;
+    staticSamplers[3].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    staticSamplers[3].MinLOD           = 1;
+    staticSamplers[3].MaxLOD           = D3D12_FLOAT32_MAX;
+    staticSamplers[3].ShaderRegister   = 35;
+    staticSamplers[3].RegisterSpace    = 0;
+    staticSamplers[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
     rootSigDesc.NumParameters             = 7;
     rootSigDesc.pParameters               = rootParameters;
-    rootSigDesc.NumStaticSamplers         = 3;
+    rootSigDesc.NumStaticSamplers         = 4;
     rootSigDesc.pStaticSamplers           = staticSamplers;
     rootSigDesc.Flags                     = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
@@ -1591,7 +1604,7 @@ void CreateMaterials(
                     bitmap,
                     BITMAP_SAMPLE_MODE_WRAP,
                     BITMAP_SAMPLE_MODE_WRAP,
-                    BITMAP_FILTER_MODE_LINEAR);
+                    BITMAP_FILTER_MODE_NEAREST);
 
                 std::vector<DxMipOffset> mipOffsets;
                 for (auto& srcOffset : mipmap.GetOffsets()) {

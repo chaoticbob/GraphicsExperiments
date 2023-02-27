@@ -59,6 +59,7 @@ SamplerState                         IBLMapSampler                 : register(s3
 //
 Texture2D    MaterialTextures[TOTAL_MATERIAL_TEXTURES] : register(t100);
 SamplerState MaterialSampler                           : register(s34);
+SamplerState MaterialNormalMapSampler                  : register(s35);
 
 
 // =================================================================================================
@@ -301,7 +302,7 @@ float4 psmain(VSOutput input) : SV_TARGET
     float  specularReflectance = MaterialParams[DrawParams.MaterialIndex].Specular;
     float2 texCoord            = input.TexCoord;
     float3 baseColor           = MaterialTextures[baseColorTexIdx].Sample(MaterialSampler, texCoord).rgb;
-    float3 normal              = MaterialTextures[normalTexIdx].Sample(MaterialSampler, texCoord).rgb;
+    float3 normal              = MaterialTextures[normalTexIdx].Sample(MaterialNormalMapSampler, texCoord).rgb;
     float  roughness           = MaterialTextures[roughnessTexIdx].Sample(MaterialSampler, texCoord).r;
     float  metallic            = MaterialTextures[metallicTexIdx].Sample(MaterialSampler, texCoord).r;
     float  clearCoat           = 0;
