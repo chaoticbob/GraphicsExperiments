@@ -79,7 +79,7 @@ More advanced PBR material with textures sets and different lighting environment
 
 Knob is borrowed from [Google Filament](https://github.com/google/filament) and monkey is generated from [Blender](https://www.blender.org/).
 
-Shaders are found in the [assets/projects/253_pbr_material_properties_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/253_pbr_material_textures_d3d12) directory.
+Shaders are found in the [assets/projects/255_pbr_material_textures_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/255_pbr_material_textures_d3d12) directory.
 
 Textures and HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
