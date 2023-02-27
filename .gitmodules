@@ -28,3 +28,6 @@
 [submodule "third_party/pcg32"]
 	path = third_party/pcg32
 	url = https://github.com/wjakob/pcg32.git
+[submodule "third_party/tinyexr"]
+	path = third_party/tinyexr
+	url = https://github.com/syoyo/tinyexr.git

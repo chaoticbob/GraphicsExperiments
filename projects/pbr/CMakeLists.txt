@@ -10,6 +10,7 @@ if (GREX_ENABLE_D3D12)
     add_subdirectory(203_pbr_camera_d3d12)
     add_subdirectory(251_pbr_explorer_d3d12)
     add_subdirectory(253_pbr_material_properties_d3d12)
+    add_subdirectory(255_pbr_material_textures_d3d12)
 endif()
 
 

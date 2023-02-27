@@ -1,3 +1,7 @@
+#if defined(WIN32)
+#    define NOMINMAX
+#endif
+
 #include "bitmap.h"
 #include "window.h"
 
@@ -9,6 +13,11 @@
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "stb_image_resize.h"
+
+#if defined(GREX_ENABLE_EXR)
+#    define TINYEXR_IMPLEMENTATION
+#    include "tinyexr.h"
+#endif
 
 #include <fstream>
 
@@ -41,6 +50,7 @@ template <typename PixelT>
 void BitmapT<PixelT>::ScaleTo(
     BitmapSampleMode modeU,
     BitmapSampleMode modeV,
+    BitmapFilterMode filterMode,
     BitmapT&         target) const
 {
     if (target.Empty()) {
@@ -55,11 +65,36 @@ void BitmapT<PixelT>::ScaleTo(
     for (uint32_t row = 0; row < target.GetHeight(); ++row) {
         PixelT* pPixel = reinterpret_cast<PixelT*>(pTargetRow);
         for (uint32_t col = 0; col < target.GetWidth(); ++col) {
-            float x = col * dx;
-            float y = row * dy;
+            float x = (col * dx) + 0.5f;
+            float y = (row * dy) + 0.5f;
 
-            // PixelT sample = GetBilinearSample(x, y);
-            PixelT sample = GetGaussianSample(x, y, gaussianKernel);
+            PixelT sample = PixelT::Black();
+            switch (filterMode) {
+                default: {
+                    sample = GetSample(
+                        static_cast<int32_t>(floor(x)),
+                        static_cast<int32_t>(floor(y)),
+                        modeU,
+                        modeV);
+                } break;
+
+                case BITMAP_FILTER_MODE_LINEAR: {
+                    sample = GetBilinearSample(
+                        x,
+                        y,
+                        modeU,
+                        modeV);
+                } break;
+
+                case BITMAP_FILTER_MODE_GAUSSIAN: {
+                    sample = GetGaussianSample(
+                        x,
+                        y,
+                        gaussianKernel,
+                        modeU,
+                        modeV);
+                } break;
+            }
 
             *pPixel = sample;
 
@@ -213,7 +248,8 @@ bool BitmapRGBA8u::Load(const std::filesystem::path& absPath, BitmapRGBA8u* pBit
 
 bool BitmapRGBA8u::Save(const std::filesystem::path& absPath, const BitmapRGBA8u* pBitmap)
 {
-    std::string ext = ToLowerCaseCopy(absPath.extension().string());
+    bool        success = false;
+    std::string ext    = ToLowerCaseCopy(absPath.extension().string());
     if (ext == ".jpg") {
         int res = stbi_write_png(
             absPath.string().c_str(),
@@ -222,9 +258,7 @@ bool BitmapRGBA8u::Save(const std::filesystem::path& absPath, const BitmapRGBA8u
             pBitmap->GetNumChannels(),
             reinterpret_cast<const float*>(pBitmap->GetPixels()),
             pBitmap->GetRowStride());
-        if (res == 0) {
-            return false;
-        }
+        success = (res == 1);
     }
     else if (ext == ".png") {
         int res = stbi_write_png(
@@ -234,11 +268,9 @@ bool BitmapRGBA8u::Save(const std::filesystem::path& absPath, const BitmapRGBA8u
             pBitmap->GetNumChannels(),
             reinterpret_cast<const float*>(pBitmap->GetPixels()),
             pBitmap->GetRowStride());
-        if (res == 0) {
-            return false;
-        }
+        success = (res == 1);
     }
-    return false;
+    return success;
 }
 
 // =================================================================================================
@@ -250,28 +282,71 @@ bool BitmapRGBA32f::Load(const std::filesystem::path& absPath, BitmapRGBA32f* pB
         return false;
     }
 
+    std::string ext = ToLowerCaseCopy(absPath.extension().string());
+#if defined(GREX_ENABLE_EXR)
+    if ((ext != ".exr") && (ext != ".hdr")) {
+        assert(false && "input file is not of 32-bit float format");
+        return false;
+    }
+#else
+    if (ext != ".hdr") {
+        assert(false && "input file is not of 32-bit float format");
+        return false;
+    }
+#endif
+
     if (pBitmap == nullptr) {
         return false;
     }
 
-    int width   = 0;
-    int height  = 0;
-    int comp    = 0;
-    int reqComp = 4;
+    if (ext == ".hdr") {
+        int width   = 0;
+        int height  = 0;
+        int comp    = 0;
+        int reqComp = 4;
 
-    float* pData = stbi_loadf(absPath.string().c_str(), &width, &height, &comp, reqComp);
-    if (pData == nullptr) {
+        float* pData = stbi_loadf(absPath.string().c_str(), &width, &height, &comp, reqComp);
+        if (pData == nullptr) {
+            return false;
+        }
+        size_t nbytesLoaded = static_cast<size_t>(width * height * reqComp * sizeof(float));
+
+        *pBitmap           = BitmapRGBA32f(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+        size_t sizeInBytes = pBitmap->GetSizeInBytes();
+        assert((nbytesLoaded == sizeInBytes) && "size mismatch");
+
+        memcpy(pBitmap->GetPixels(), pData, sizeInBytes);
+
+        stbi_image_free(pData);
+    }
+#if defined(GREX_ENABLE_EXR)
+    else if (ext == ".exr") {
+        float*      pData  = nullptr; // width * height * RGBA
+        int         width  = 0;
+        int         height = 0;
+        const char* err    = nullptr;
+
+        int ret = LoadEXR(&pData, &width, &height, absPath.string().c_str(), &err);
+        if (ret != TINYEXR_SUCCESS) {
+            if (err) {
+                // fprintf(stderr, "ERR : %s\n", err);
+                std::string errMsg = err;
+                FreeEXRErrorMessage(err); // release memory of error message.
+            }
+            return false;
+        }
+
+        *pBitmap = BitmapRGBA32f(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+
+        size_t sizeInBytes = pBitmap->GetSizeInBytes();
+        memcpy(pBitmap->GetPixels(), pData, sizeInBytes);
+
+        free(pData); // release memory of image data
+    }
+#endif
+    else {
         return false;
     }
-    size_t nbytesLoaded = static_cast<size_t>(width * height * reqComp * sizeof(float));
-
-    *pBitmap           = BitmapRGBA32f(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
-    size_t sizeInBytes = pBitmap->GetSizeInBytes();
-    assert((nbytesLoaded == sizeInBytes) && "size mismatch");
-
-    memcpy(pBitmap->GetPixels(), pData, sizeInBytes);
-
-    stbi_image_free(pData);
 
     return true;
 }

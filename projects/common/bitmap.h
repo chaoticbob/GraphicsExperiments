@@ -8,9 +8,16 @@
 
 enum BitmapSampleMode
 {
-    BITMAP_SAMPLE_MODE_BORDER = 0, // Black pixelS
+    BITMAP_SAMPLE_MODE_BORDER = 0, // Black pixels
     BITMAP_SAMPLE_MODE_CLAMP  = 1,
     BITMAP_SAMPLE_MODE_WRAP   = 2,
+};
+
+enum BitmapFilterMode
+{
+    BITMAP_FILTER_MODE_NEAREST  = 0,
+    BITMAP_FILTER_MODE_LINEAR   = 1,
+    BITMAP_FILTER_MODE_GAUSSIAN = 2,
 };
 
 template <typename T>
@@ -60,6 +67,15 @@ struct Pixel3T
     T r;
     T g;
     T b;
+
+    template <typename U>
+    Pixel3T operator=(const Pixel3T<U>& rhs)
+    {
+        this->r = static_cast<T>(rhs.r);
+        this->g = static_cast<T>(rhs.g);
+        this->b = static_cast<T>(rhs.b);
+        return *this;
+    }
 
     Pixel3T operator+=(const Pixel3T& rhs)
     {
@@ -133,6 +149,32 @@ struct Pixel4T
     T b;
     T a;
 
+    Pixel4T() {}
+
+    Pixel4T(T r_, T g_, T b_, T a_)
+        : r(r_), g(g_), b(b_), a(a_)
+    {
+    }
+
+    template <typename U>
+    Pixel4T(const Pixel4T<U>& obj)
+        : r(static_cast<T>(obj.r)),
+          g(static_cast<T>(obj.g)),
+          b(static_cast<T>(obj.b)),
+          a(static_cast<T>(obj.a))
+    {
+    }
+
+    template <typename U>
+    Pixel4T operator=(const Pixel4T<U>& rhs)
+    {
+        this->r = static_cast<T>(rhs.r);
+        this->g = static_cast<T>(rhs.g);
+        this->b = static_cast<T>(rhs.b);
+        this->a = static_cast<T>(rhs.a);
+        return *this;
+    }
+
     Pixel4T operator+=(const Pixel4T& rhs)
     {
         this->r += rhs.r;
@@ -188,6 +230,20 @@ struct Pixel4T
         g             = std::min<float>(g, ChannelOp<ChannelT>::MaxValue());
         b             = std::min<float>(b, ChannelOp<ChannelT>::MaxValue());
         a             = std::min<float>(a, ChannelOp<ChannelT>::MaxValue());
+        Pixel4T pixel = {};
+        pixel.r       = static_cast<ChannelT>(r);
+        pixel.g       = static_cast<ChannelT>(g);
+        pixel.b       = static_cast<ChannelT>(b);
+        pixel.a       = static_cast<ChannelT>(a);
+        return pixel;
+    }
+
+    static Pixel4T ClampToMaxNoConvert(const Pixel4T<float>& src)
+    {
+        float   r     = std::min<float>(src.r, ChannelOp<ChannelT>::MaxValue());
+        float   g     = std::min<float>(src.g, ChannelOp<ChannelT>::MaxValue());
+        float   b     = std::min<float>(src.b, ChannelOp<ChannelT>::MaxValue());
+        float   a     = std::min<float>(src.a, ChannelOp<ChannelT>::MaxValue());
         Pixel4T pixel = {};
         pixel.r       = static_cast<ChannelT>(r);
         pixel.g       = static_cast<ChannelT>(g);
@@ -457,19 +513,17 @@ public:
         BitmapSampleMode          modeU = BITMAP_SAMPLE_MODE_BORDER,
         BitmapSampleMode          modeV = BITMAP_SAMPLE_MODE_BORDER) const
     {
+        using PixelT32f = SelectPixel32f<PixelT>::type;
+
         int32_t kernelSize = static_cast<int32_t>(sqrt(static_cast<float>(kernel.size())));
         float   radius     = kernelSize / 2.0f;
         int32_t ix         = static_cast<int32_t>(floor(x));
         int32_t iy         = static_cast<int32_t>(floor(y));
 
-        PixelT   pixel      = PixelT::Black();
-        uint32_t numSamples = 0;
+        PixelT32f pixel32f = PixelT32f::Black();
         for (int32_t i = 0; i < kernelSize; ++i) {
             for (int32_t j = 0; j < kernelSize; ++j) {
                 uint32_t index = (i * kernelSize) + j;
-                // float    sampleX = x + (static_cast<float>(j) - radius);
-                // float    sampleY = y + (static_cast<float>(i) - radius);
-                // PixelT   sample  = GetBilinearSample(sampleX, sampleY, modeU, modeV);
 
                 int32_t sampleX = ix + (j - kernelSize / 2);
                 int32_t sampleY = iy + (i - kernelSize / 2);
@@ -480,13 +534,12 @@ public:
                     continue;
                 }
 
-                PixelT sample = GetSample(sampleX, sampleY, modeU, modeV);
-                pixel += (sample * kernel[index]);
-
-                ++numSamples;
+                PixelT32f sample = GetSample(sampleX, sampleY, modeU, modeV);
+                pixel32f += (sample * kernel[index]);
             }
         }
-        // pixel *= 1.0f / static_cast<float>(numSamples);
+
+        PixelT pixel = PixelT::ClampToMaxNoConvert(pixel32f);
         return pixel;
     }
 
@@ -507,6 +560,7 @@ protected:
     void ScaleTo(
         BitmapSampleMode modeU,
         BitmapSampleMode modeV,
+        BitmapFilterMode filterMode,
         BitmapT&         target) const;
 
     void CopyTo(
@@ -597,8 +651,9 @@ public:
     BitmapRGBA8u Scale(
         float            xScale,
         float            yScale,
-        BitmapSampleMode modeU = BITMAP_SAMPLE_MODE_BORDER,
-        BitmapSampleMode modeV = BITMAP_SAMPLE_MODE_BORDER) const
+        BitmapSampleMode modeU      = BITMAP_SAMPLE_MODE_BORDER,
+        BitmapSampleMode modeV      = BITMAP_SAMPLE_MODE_BORDER,
+        BitmapFilterMode filterMode = BITMAP_FILTER_MODE_NEAREST) const
     {
         uint32_t newWidth  = static_cast<uint32_t>((mWidth * std::max<float>(0, xScale)));
         uint32_t newHeight = static_cast<uint32_t>((mHeight * std::max<float>(0, yScale)));
@@ -607,7 +662,7 @@ public:
         }
 
         BitmapRGBA8u newBitmap = BitmapRGBA8u(newWidth, newHeight);
-        ScaleTo(modeU, modeV, newBitmap);
+        ScaleTo(modeU, modeV, filterMode, newBitmap);
 
         return newBitmap;
     }
@@ -615,9 +670,10 @@ public:
     void ScaleTo(
         BitmapSampleMode modeU,
         BitmapSampleMode modeV,
+        BitmapFilterMode filterMode,
         BitmapRGBA8u&    target) const
     {
-        BitmapT<PixelRGBA8u>::ScaleTo(modeU, modeV, target);
+        BitmapT<PixelRGBA8u>::ScaleTo(modeU, modeV, filterMode, target);
     }
 
     void CopyTo(
@@ -656,8 +712,9 @@ public:
     BitmapRGBA32f Scale(
         float            xScale,
         float            yScale,
-        BitmapSampleMode modeU = BITMAP_SAMPLE_MODE_BORDER,
-        BitmapSampleMode modeV = BITMAP_SAMPLE_MODE_BORDER) const
+        BitmapSampleMode modeU      = BITMAP_SAMPLE_MODE_BORDER,
+        BitmapSampleMode modeV      = BITMAP_SAMPLE_MODE_BORDER,
+        BitmapFilterMode filterMode = BITMAP_FILTER_MODE_NEAREST) const
     {
         uint32_t newWidth  = static_cast<uint32_t>((mWidth * std::max<float>(0, xScale)));
         uint32_t newHeight = static_cast<uint32_t>((mHeight * std::max<float>(0, yScale)));
@@ -666,7 +723,7 @@ public:
         }
 
         BitmapRGBA32f newBitmap = BitmapRGBA32f(newWidth, newHeight);
-        ScaleTo(modeU, modeV, newBitmap);
+        ScaleTo(modeU, modeV, filterMode, newBitmap);
 
         return newBitmap;
     }
@@ -790,12 +847,20 @@ public:
 
     MipmapT() {}
 
-    MipmapT(const MipBitmapT& mip0)
+    MipmapT(
+        const MipBitmapT& mip0,
+        BitmapSampleMode  modeU      = BITMAP_SAMPLE_MODE_CLAMP,
+        BitmapSampleMode  modeV      = BITMAP_SAMPLE_MODE_CLAMP,
+        BitmapFilterMode  filterMode = BITMAP_FILTER_MODE_NEAREST)
     {
-        BuildMipmap(mip0);
+        BuildMipmap(mip0, modeU, modeV, filterMode);
     }
 
-    void BuildMipmap(const MipBitmapT& mip0)
+    void BuildMipmap(
+        const MipBitmapT& mip0,
+        BitmapSampleMode  modeU      = BITMAP_SAMPLE_MODE_CLAMP,
+        BitmapSampleMode  modeV      = BITMAP_SAMPLE_MODE_CLAMP,
+        BitmapFilterMode  filterMode = BITMAP_FILTER_MODE_NEAREST)
     {
         if (mip0.Empty()) {
             return;
@@ -836,8 +901,9 @@ public:
         for (uint32_t level = 1; level < areaInfo.numLevels; ++level) {
             uint32_t prevLevel = level - 1;
             mMips[prevLevel].ScaleTo(
-                BITMAP_SAMPLE_MODE_BORDER,
-                BITMAP_SAMPLE_MODE_BORDER,
+                modeU,
+                modeV,
+                filterMode,
                 mMips[level]);
         }
     }
@@ -871,7 +937,8 @@ public:
         return mMips[level].GetWidth();
     }
 
-    uint32_t GetRowStride() const {
+    uint32_t GetRowStride() const
+    {
         return mStorage.GetRowStride();
     }
 
