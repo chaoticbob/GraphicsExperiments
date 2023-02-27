@@ -596,21 +596,7 @@ int main(int argc, char** argv)
             //
             pSceneParams->viewProjectionMatrix = projMat * viewMat;
             pSceneParams->eyePosition          = eyePosition;
-            // pSceneParams->numLights            = gNumLights;
-            // pSceneParams->lights[0].position   = vec3(3, 10, 0);
-            // pSceneParams->lights[0].color      = vec3(1, 1, 1);
-            // pSceneParams->lights[0].intensity  = 1.5f;
-            // pSceneParams->lights[1].position   = vec3(-8, 1, 4);
-            // pSceneParams->lights[1].color      = vec3(0.85f, 0.95f, 0.81f);
-            // pSceneParams->lights[1].intensity  = 0.4f;
-            // pSceneParams->lights[2].position   = vec3(0, 8, -8);
-            // pSceneParams->lights[2].color      = vec3(0.89f, 0.89f, 0.97f);
-            // pSceneParams->lights[2].intensity  = 0.95f;
-            // pSceneParams->lights[3].position   = vec3(15, 0, 0);
-            // pSceneParams->lights[3].color      = vec3(0.92f, 0.5f, 0.7f);
-            // pSceneParams->lights[3].intensity  = 0.5f;
-            pSceneParams->iblNumEnvLevels = envNumLevels;
-            // pSceneParams->iblIndex             = gIBLIndex;
+            pSceneParams->iblNumEnvLevels      = envNumLevels;
 
             // Draw environment
             {
@@ -622,7 +608,7 @@ int main(int argc, char** argv)
                 // SceneParmas (b0)
                 mat4 mvp = projMat * viewMat * moveUp;
                 commandList->SetGraphicsRoot32BitConstants(0, 16, &mvp, 0);
-                commandList->SetGraphicsRoot32BitConstants(0, 1, &gIBLIndex, 16);
+                commandList->SetGraphicsRoot32BitConstants(0, 1, &pSceneParams->iblIndex, 16);
                 // Textures (32)
                 D3D12_GPU_DESCRIPTOR_HANDLE tableStart = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
                 tableStart.ptr += IBL_ENVIRONMENT_MAPS_DESCRIPTOR_OFFSET * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -1457,10 +1443,9 @@ void CreateIBLTextures(
         }
     }
 
-    size_t maxEntries = 1; // std::min<size_t>(gMaxIBLs, iblFiles.size());
+    size_t maxEntries = std::min<size_t>(gMaxIBLs, iblFiles.size());
     for (size_t i = 0; i < maxEntries; ++i) {
         std::filesystem::path iblFile = iblFiles[i];
-        // std::filesystem::path iblFile = "IBL/amphitheatre_zanzibar_fort_4k.ibl";
 
         IBLMaps ibl = {};
         if (!LoadIBLMaps32f(iblFile, &ibl)) {
@@ -1608,14 +1593,6 @@ void CreateMaterials(
                     BITMAP_SAMPLE_MODE_WRAP,
                     BITMAP_FILTER_MODE_LINEAR);
 
-                // if (key == "basecolor") {
-                //     MipmapRGBA8u::Save("mipped_basecolor.png", &mipmap);
-                // }
-
-                // if (key == "normal") {
-                //     MipmapRGBA8u::Save("mipped_normal.png", &mipmap);
-                // }
-
                 std::vector<DxMipOffset> mipOffsets;
                 for (auto& srcOffset : mipmap.GetOffsets()) {
                     DxMipOffset dstOffset = {};
@@ -1644,7 +1621,7 @@ void CreateMaterials(
         outMaterialTexturesSets.push_back(materialTextures);
         outMaterialParametersSets.push_back(materialParams);
 
-        // Sure directory name for material name
+        // Use directory name for material name
         gMaterialNames.push_back(materialFile.parent_path().filename().string());
     }
 }

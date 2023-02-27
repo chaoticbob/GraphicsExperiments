@@ -69,3 +69,20 @@ HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which ar
 Notes:
 * Lighting is done in world space.
 * IBL uses rectangular images and not cube maps.
+
+## pbr_material_textures
+![alt text](../../images/screenshots/pbr/pbr_material_textures.png?raw=true)
+
+**Exploring PBR material textures**
+
+More advanced PBR material with textures sets and different lighting environments.
+
+Knob is borrowed from [Google Filament](https://github.com/google/filament) and monkey is generated from [Blender](https://www.blender.org/).
+
+Shaders are found in the [assets/projects/253_pbr_material_properties_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/253_pbr_material_textures_d3d12) directory.
+
+Textures and HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
+
+Notes:
+* Lighting is done in world space.
+* IBL uses rectangular images and not cube maps.
