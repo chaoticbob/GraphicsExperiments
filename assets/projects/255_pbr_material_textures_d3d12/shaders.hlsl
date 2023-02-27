@@ -52,10 +52,10 @@ SamplerState                         IBLIntegrationSampler         : register(s3
 SamplerState                         IBLMapSampler                 : register(s33);
 
 // Material textures are in groups of 4:
-//   [s40 + (MaterialIndex * MaterialTextureStride) + 0] : Albedo
-//   [s40 + (MaterialIndex * MaterialTextureStride) + 1] : Normal
-//   [s40 + (MaterialIndex * MaterialTextureStride) + 2] : Roughness
-//   [s40 + (MaterialIndex * MaterialTextureStride) + 3] : Metallic
+//   [t100 + (MaterialIndex * MaterialTextureStride) + 0] : Albedo
+//   [t100 + (MaterialIndex * MaterialTextureStride) + 1] : Normal
+//   [t100 + (MaterialIndex * MaterialTextureStride) + 2] : Roughness
+//   [t100 + (MaterialIndex * MaterialTextureStride) + 3] : Metallic
 //
 Texture2D    MaterialTextures[TOTAL_MATERIAL_TEXTURES] : register(t100);
 SamplerState MaterialSampler                           : register(s34);
@@ -332,11 +332,6 @@ float4 psmain(VSOutput input) : SV_TARGET
     float3 vT  = mul(DrawParams.ModelMatrix, float4(input.Tangent, 0)).xyz;
     float3 vB  = mul(DrawParams.ModelMatrix, float4(input.Bitangent, 0)).xyz;
     float3 N   = normalize(vNt.x * vT + vNt.y * vB + vNt.z * vN);
-    //float3 N   = normalize((vNt.y * vB) + (vNt.z * vN));
-    //float3x3 TBN  = float3x3(vT.x, vT.y, vT.z,
-    //                         vB.x, vB.y, vB.z,
-    //                         vN.x, vN.y, vN.z);
-    //float3 N = mul(vNt, TBN);
 
     // Reflection and cosine angle bewteen N and V 
     float3 R = reflect(-V, N);
