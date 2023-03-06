@@ -120,5 +120,12 @@ Vulkan Notes:
 
 Same as **basic_shadow** except with the light position updated via the constant/uniform buffer.
 
+## raytracing_triangles
+![alt text](../../images/screenshots/raytracing/raytracing_triangles.png?raw=true)
+
+**Shows basic ray intersection using triangle geometry**
+
+Same as **basic_procedural** except with triangles.
+
 
 

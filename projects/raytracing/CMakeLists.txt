@@ -13,6 +13,7 @@ if (GREX_ENABLE_D3D12)
     add_subdirectory(007_basic_reflection_d3d12)
     add_subdirectory(009_basic_shadow_d3d12)
     add_subdirectory(011_basic_shadow_dynamic_d3d12)
+    add_subdirectory(021_raytracing_triangles_d3d12)
 endif()
 
 

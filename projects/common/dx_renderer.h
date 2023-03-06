@@ -106,7 +106,7 @@ HRESULT CreateDrawNormalPipeline(
     DXGI_FORMAT              dsvFormat,
     ID3D12PipelineState**    ppPipeline,
     bool                     enableTangents = false,
-    D3D12_CULL_MODE          cullMode = D3D12_CULL_MODE_BACK);
+    D3D12_CULL_MODE          cullMode       = D3D12_CULL_MODE_BACK);
 
 HRESULT CreateDrawTexturePipeline(
     DxRenderer*              pRenderer,
@@ -140,7 +140,7 @@ HRESULT CreateGraphicsPipeline1(
 
 HRESULT CompileHLSL(
     const std::string& shaderSource,
-    const std::string& entryPoint,
+    const std::string& entryPoint, // Ignored if profile is lib_6_*
     const std::string& profile,
     std::vector<char>* pDXIL,
     std::string*       pErrorMsg);

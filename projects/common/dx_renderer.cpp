@@ -1359,7 +1359,7 @@ HRESULT CompileHLSL(
         return E_INVALIDARG;
     }
     // Check entry point
-    if (entryPoint.empty()) {
+    if (entryPoint.empty() && (!profile.starts_with("lib_6_"))) {
         assert(false && "no entrypoint");
         return E_INVALIDARG;
     }
