@@ -125,7 +125,11 @@ Same as **basic_shadow** except with the light position updated via the constant
 
 **Shows basic ray intersection using triangle geometry**
 
-Same as **basic_procedural** except with triangles.
+Same as **basic_procedural** except with triangles. 
+
+The purpose of this experiment is to show how to use HLSL's `PrimitiveIndex()` to up the vertex
+indices for an intersected triangle. These vertex indices then can be used to look up vertex attributes
+such as normals for shading. 
 
 Shaders are found in the [assets/projects/021_raytracing_triangles_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/021_raytracing_triangles_d3d12) directory.
 
