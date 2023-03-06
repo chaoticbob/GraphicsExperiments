@@ -26,6 +26,7 @@ target_include_directories(
            ${GREX_THIRD_PARTY_DIR}/stb
            ${GREX_THIRD_PARTY_DIR}/tinyexr
            ${GREX_THIRD_PARTY_DIR}/miniz-3.0.2
+           ${GREX_THIRD_PARTY_DIR}/pcg32
 )
 
 target_link_libraries(

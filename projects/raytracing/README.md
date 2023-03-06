@@ -127,5 +127,8 @@ Same as **basic_shadow** except with the light position updated via the constant
 
 Same as **basic_procedural** except with triangles.
 
+Shaders are found in the [assets/projects/021_raytracing_triangles_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/021_raytracing_triangles_d3d12) directory.
+
+
 
 

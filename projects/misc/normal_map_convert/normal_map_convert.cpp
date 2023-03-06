@@ -18,6 +18,8 @@ using namespace glm;
 
 #include "bitmap.h"
 
+#include "pcg32.h"
+
 // std::string ToLowerCaseCopy(std::string s)
 //{
 //     std::transform(
@@ -127,14 +129,16 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
+    pcg32 random = pcg32(0xDEADBEEF);
+
     auto pSrcPixels = inputBitmap.GetPixels();
     auto pDstPixels = outputBitmap.GetPixels();
     for (uint32_t row = 0; row < inputBitmap.GetHeight(); ++row) {
         for (uint32_t col = 0; col < inputBitmap.GetWidth(); ++col) {
-            float r = std::min<float>(255.0f * pSrcPixels->r, 255.0f);
-            float g = std::min<float>(255.0f * pSrcPixels->g, 255.0f);
-            float b = std::min<float>(255.0f * pSrcPixels->b, 255.0f);
-            float a = std::min<float>(255.0f * pSrcPixels->a, 255.0f);
+            float r = (255.0f * pSrcPixels->r);
+            float g = (255.0f * pSrcPixels->g);
+            float b = (255.0f * pSrcPixels->b);
+            float a = (255.0f * pSrcPixels->a);
             pDstPixels->r = static_cast<uint8_t>(r);
             pDstPixels->g = static_cast<uint8_t>(g);
             pDstPixels->b = static_cast<uint8_t>(b);
