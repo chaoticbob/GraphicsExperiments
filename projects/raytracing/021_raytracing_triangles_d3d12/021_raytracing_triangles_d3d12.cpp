@@ -372,6 +372,12 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     rootParameters[4].Descriptor.ShaderRegister = 4;
     rootParameters[4].Descriptor.RegisterSpace  = 0;
     rootParameters[4].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+    // Normal buffer (t5)
+    rootParameters[4].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    rootParameters[4].Descriptor.ShaderRegister = 5;
+    rootParameters[4].Descriptor.RegisterSpace  = 0;
+    rootParameters[4].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+
 
     D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
     rootSigDesc.NumParameters             = 5;

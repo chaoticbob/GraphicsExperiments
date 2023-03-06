@@ -15,7 +15,7 @@ struct Triangle {
 
 StructuredBuffer<Triangle> Triangles : register(t3); // Index buffer
 StructuredBuffer<float3>   Positions : register(t4); // Position buffer
-StructuredBuffer<float3>   Normals   : register(t4); // Normal buffer
+StructuredBuffer<float3>   Normals   : register(t5); // Normal buffer
 
 typedef BuiltInTriangleIntersectionAttributes MyAttributes;
 
