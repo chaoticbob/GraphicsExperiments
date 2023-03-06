@@ -264,6 +264,8 @@ int main(int argc, char** argv)
             commandList->SetComputeRootShaderResourceView(3, indexBuffer->GetGPUVirtualAddress());
             // Position buffer (t4)
             commandList->SetComputeRootShaderResourceView(4, positionBuffer->GetGPUVirtualAddress());
+            // Normal buffer (t5)
+            commandList->SetComputeRootShaderResourceView(5, normalBuffer->GetGPUVirtualAddress());
 
             commandList->SetPipelineState1(stateObject.Get());
 
@@ -346,7 +348,7 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     range.RegisterSpace                     = 0;
     range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[5];
+    D3D12_ROOT_PARAMETER rootParameters[6];
     // Accleration structure (t0)
     rootParameters[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
     rootParameters[0].Descriptor.ShaderRegister = 0;
@@ -373,14 +375,14 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     rootParameters[4].Descriptor.RegisterSpace  = 0;
     rootParameters[4].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
     // Normal buffer (t5)
-    rootParameters[4].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[4].Descriptor.ShaderRegister = 5;
-    rootParameters[4].Descriptor.RegisterSpace  = 0;
-    rootParameters[4].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[5].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    rootParameters[5].Descriptor.ShaderRegister = 5;
+    rootParameters[5].Descriptor.RegisterSpace  = 0;
+    rootParameters[5].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
 
 
     D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-    rootSigDesc.NumParameters             = 5;
+    rootSigDesc.NumParameters             = 6;
     rootSigDesc.pParameters               = rootParameters;
 
     ComPtr<ID3DBlob> blob;
