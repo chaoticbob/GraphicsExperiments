@@ -249,6 +249,8 @@ public:
 
     void AppendMesh(const TriMesh& srcMesh, const std::string& groupPrefix = "");
 
+    std::vector<glm::vec3> GetTBNLineSegments(uint32_t* pNumVertices, float length = 0.1f) const;
+
     static TriMesh Box(
         const glm::vec3& size,
         uint8_t          activeFaces      = ALL_AXES,
@@ -272,6 +274,12 @@ public:
         float          radius,
         uint32_t       usegs   = 8,
         uint32_t       vsegs   = 8,
+        const Options& options = {});
+
+    static TriMesh Cone(
+        float          height,
+        float          radius,
+        uint32_t       segs,
         const Options& options = {});
 
     static TriMesh CornellBox(const TriMesh::Options& options = {});

@@ -10,6 +10,11 @@
 #define GREX_DEFAULT_RTV_FORMAT DXGI_FORMAT_B8G8R8A8_UNORM
 #define GREX_DEFAULT_DSV_FORMAT DXGI_FORMAT_D32_FLOAT
 
+enum DxPipelineFlags
+{
+    DX_PIPELINE_FLAGS_INTERLEAVED_ATTRS = 0x00000001
+};
+
 struct DxMipOffset
 {
     uint32_t offset    = 0;
@@ -72,6 +77,14 @@ HRESULT CreateTexture(
     const void*      pSrcData,
     ID3D12Resource** ppResource);
 
+void CreateDescriptoBufferSRV(
+    DxRenderer*                 pRenderer,
+    uint32_t                    firstElement,
+    uint32_t                    numElements,
+    uint32_t                    structureByteStride,
+    ID3D12Resource*             pResource,
+    D3D12_CPU_DESCRIPTOR_HANDLE descriptor);
+
 void CreateDescriptorTexture2D(
     DxRenderer*                 pRenderer,
     ID3D12Resource*             pResource,
@@ -88,14 +101,16 @@ D3D12_RESOURCE_BARRIER CreateTransition(
     D3D12_RESOURCE_BARRIER_FLAGS Flags       = D3D12_RESOURCE_BARRIER_FLAG_NONE);
 
 HRESULT CreateDrawVertexColorPipeline(
-    DxRenderer*              pRenderer,
-    ID3D12RootSignature*     pRootSig,
-    const std::vector<char>& vsShaderBytecode,
-    const std::vector<char>& psShaderBytecode,
-    DXGI_FORMAT              rtvFormat,
-    DXGI_FORMAT              dsvFormat,
-    ID3D12PipelineState**    ppPipeline,
-    D3D12_CULL_MODE          cullMode = D3D12_CULL_MODE_BACK);
+    DxRenderer*                   pRenderer,
+    ID3D12RootSignature*          pRootSig,
+    const std::vector<char>&      vsShaderBytecode,
+    const std::vector<char>&      psShaderBytecode,
+    DXGI_FORMAT                   rtvFormat,
+    DXGI_FORMAT                   dsvFormat,
+    ID3D12PipelineState**         ppPipeline,
+    D3D12_CULL_MODE               cullMode      = D3D12_CULL_MODE_BACK,
+    D3D12_PRIMITIVE_TOPOLOGY_TYPE topologyType  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+    uint32_t                      pipelineFlags = 0);
 
 HRESULT CreateDrawNormalPipeline(
     DxRenderer*              pRenderer,

@@ -700,127 +700,26 @@ HRESULT CreateTexture(
         srcSizeBytes,
         pSrcData,
         ppResource);
+}
 
-    /*
-        if (IsNull(pRenderer)) {
-            return E_UNEXPECTED;
-        }
-        if (IsNull(ppResource)) {
-            return E_UNEXPECTED;
-        }
-        if ((format == DXGI_FORMAT_UNKNOWN) || IsVideo(format)) {
-            return E_INVALIDARG;
-        }
+void CreateDescriptoBufferSRV(
+    DxRenderer*                 pRenderer,
+    uint32_t                    firstElement,
+    uint32_t                    numElements,
+    uint32_t                    structureByteStride,
+    ID3D12Resource*             pResource,
+    D3D12_CPU_DESCRIPTOR_HANDLE descriptor)
+{
+    D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
+    desc.Format                          = DXGI_FORMAT_UNKNOWN;
+    desc.ViewDimension                   = D3D12_SRV_DIMENSION_BUFFER;
+    desc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    desc.Buffer.FirstElement             = firstElement;
+    desc.Buffer.NumElements              = numElements;
+    desc.Buffer.StructureByteStride      = structureByteStride;
+    desc.Buffer.Flags                    = D3D12_BUFFER_SRV_FLAG_NONE;
 
-        D3D12_RESOURCE_DESC desc = {};
-        desc.Dimension           = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Alignment           = 0;
-        desc.Width               = static_cast<UINT64>(width);
-        desc.Height              = static_cast<UINT>(height);
-        desc.DepthOrArraySize    = 1;
-        desc.MipLevels           = 1;
-        desc.Format              = format;
-        desc.SampleDesc          = {1, 0};
-        desc.Layout              = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        desc.Flags               = D3D12_RESOURCE_FLAG_NONE;
-
-        D3D12_HEAP_PROPERTIES heapProperties = {};
-        heapProperties.Type                  = D3D12_HEAP_TYPE_DEFAULT;
-
-        HRESULT hr = pRenderer->Device->CreateCommittedResource(
-            &heapProperties,                // pHeapProperties
-            D3D12_HEAP_FLAG_NONE,           // HeapFlags
-            &desc,                          // pDesc
-            D3D12_RESOURCE_STATE_COPY_DEST, // InitialResourceState
-            nullptr,                        // pOptimizedClearValues
-            IID_PPV_ARGS(ppResource));      // riidResource, ppvResouce
-        if (FAILED(hr)) {
-            return hr;
-        }
-
-        if (!IsNull(pSrcData)) {
-            const uint32_t pixelStride = PixelStride(format);
-            const uint32_t srcSize     = width * height * pixelStride;
-
-            ComPtr<ID3D12Resource> stagingBuffer;
-            hr = CreateBuffer(pRenderer, srcSize, pSrcData, &stagingBuffer);
-            if (FAILED(hr)) {
-                assert(false && "create staging buffer failed");
-                return hr;
-            }
-
-            ComPtr<ID3D12CommandAllocator> cmdAllocator;
-            hr = pRenderer->Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAllocator));
-            if (FAILED(hr)) {
-                assert(false && "create staging command allocator failed");
-                return hr;
-            }
-
-            ComPtr<ID3D12GraphicsCommandList> cmdList;
-            hr = pRenderer->Device->CreateCommandList1(0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(&cmdList));
-            if (FAILED(hr)) {
-                assert(false && "create staging command list failed");
-                return hr;
-            }
-
-            hr = cmdAllocator->Reset();
-            if (FAILED(hr)) {
-                assert(false && "reset command allocator failed");
-                return hr;
-            }
-
-            hr = cmdList->Reset(cmdAllocator.Get(), nullptr);
-            if (FAILED(hr)) {
-                assert(false && "reset command list failed");
-                return hr;
-            }
-
-            // Build
-            {
-                D3D12_TEXTURE_COPY_LOCATION dst = {};
-                dst.pResource                   = *ppResource;
-                dst.Type                        = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-                dst.SubresourceIndex            = 0;
-
-                D3D12_TEXTURE_COPY_LOCATION src        = {};
-                src.pResource                          = stagingBuffer.Get();
-                src.Type                               = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-                src.PlacedFootprint.Offset             = 0;
-                src.PlacedFootprint.Footprint.Format   = format;
-                src.PlacedFootprint.Footprint.Width    = static_cast<UINT>(width);
-                src.PlacedFootprint.Footprint.Height   = static_cast<UINT>(height);
-                src.PlacedFootprint.Footprint.Depth    = 1;
-                src.PlacedFootprint.Footprint.RowPitch = static_cast<UINT>(width * pixelStride);
-
-                cmdList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
-
-                D3D12_RESOURCE_BARRIER barrier = {};
-                barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-                barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-                barrier.Transition.pResource   = *ppResource;
-                barrier.Transition.Subresource = 0;
-                barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-                barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-
-                cmdList->ResourceBarrier(1, &barrier);
-            }
-            hr = cmdList->Close();
-            if (FAILED(hr)) {
-                assert(false && "close command list failed");
-                return hr;
-            }
-
-            ID3D12CommandList* pList = cmdList.Get();
-            pRenderer->Queue->ExecuteCommandLists(1, &pList);
-
-            if (!WaitForGpu(pRenderer)) {
-                assert(false && "WaitForGpu failed");
-                return false;
-            }
-        }
-
-        return S_OK;
-    */
+    pRenderer->Device->CreateShaderResourceView(pResource, &desc, descriptor);
 }
 
 void CreateDescriptorTexture2D(
@@ -861,15 +760,18 @@ D3D12_RESOURCE_BARRIER CreateTransition(
 }
 
 HRESULT CreateDrawVertexColorPipeline(
-    DxRenderer*              pRenderer,
-    ID3D12RootSignature*     pRootSig,
-    const std::vector<char>& vsShaderBytecode,
-    const std::vector<char>& psShaderBytecode,
-    DXGI_FORMAT              rtvFormat,
-    DXGI_FORMAT              dsvFormat,
-    ID3D12PipelineState**    ppPipeline,
-    D3D12_CULL_MODE          cullMode)
+    DxRenderer*                   pRenderer,
+    ID3D12RootSignature*          pRootSig,
+    const std::vector<char>&      vsShaderBytecode,
+    const std::vector<char>&      psShaderBytecode,
+    DXGI_FORMAT                   rtvFormat,
+    DXGI_FORMAT                   dsvFormat,
+    ID3D12PipelineState**         ppPipeline,
+    D3D12_CULL_MODE               cullMode,
+    D3D12_PRIMITIVE_TOPOLOGY_TYPE topologyType,
+    uint32_t                      pipelineFlags)
 {
+    bool                     isInterleavedAttrs  = pipelineFlags & DX_PIPELINE_FLAGS_INTERLEAVED_ATTRS;
     D3D12_INPUT_ELEMENT_DESC inputElementDesc[2] = {};
     inputElementDesc[0].SemanticName             = "POSITION";
     inputElementDesc[0].SemanticIndex            = 0;
@@ -881,7 +783,7 @@ HRESULT CreateDrawVertexColorPipeline(
     inputElementDesc[1].SemanticName             = "COLOR";
     inputElementDesc[1].SemanticIndex            = 0;
     inputElementDesc[1].Format                   = DXGI_FORMAT_R32G32B32_FLOAT;
-    inputElementDesc[1].InputSlot                = 1;
+    inputElementDesc[1].InputSlot                = isInterleavedAttrs ? 0 : 1;
     inputElementDesc[1].AlignedByteOffset        = D3D12_APPEND_ALIGNED_ELEMENT;
     inputElementDesc[1].InputSlotClass           = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
     inputElementDesc[1].InstanceDataStepRate     = 0;
@@ -927,7 +829,7 @@ HRESULT CreateDrawVertexColorPipeline(
     desc.InputLayout.NumElements                          = 2;
     desc.InputLayout.pInputElementDescs                   = inputElementDesc;
     desc.IBStripCutValue                                  = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF;
-    desc.PrimitiveTopologyType                            = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    desc.PrimitiveTopologyType                            = topologyType;
     desc.NumRenderTargets                                 = 1;
     desc.RTVFormats[0]                                    = rtvFormat;
     desc.DSVFormat                                        = dsvFormat;

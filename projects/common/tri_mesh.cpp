@@ -497,6 +497,77 @@ void TriMesh::AppendMesh(const TriMesh& srcMesh, const std::string& groupPrefix)
     }
 }
 
+std::vector<glm::vec3> TriMesh::GetTBNLineSegments(uint32_t* pNumVertices, float length) const
+{
+    if (pNumVertices == nullptr) {
+        return {};
+    }
+
+    // We need all these attributes
+    uint32_t numPs = CountU32(mPositions);
+    uint32_t numTs = CountU32(mTangents);
+    uint32_t numBs = CountU32(mBitangents);
+    uint32_t numNs = CountU32(mNormals);
+    if (!((numPs == numTs) && (numTs == numBs) && (numBs == numNs))) {
+        return {};
+    }
+
+    // Get unique indices
+    std::vector<uint32_t> uniqueIndices;
+    for (auto& tri : mTriangles) {
+        auto pTriIndices = reinterpret_cast<const uint32_t*>(&tri);
+        for (uint32_t i = 0; i < 3; ++i) {
+            uint32_t vIdx = pTriIndices[i];
+            auto     it   = std::find(uniqueIndices.begin(), uniqueIndices.end(), vIdx);
+            if (it != uniqueIndices.end()) {
+                continue;
+            }
+            uniqueIndices.push_back(vIdx);
+        }
+    }
+
+    // Construct the TBN line segments with vertex colors
+    //   T = red
+    //   B = green
+    //   N = blue
+    //
+    const glm::vec3 kRed   = glm::vec3(1, 0, 0);
+    const glm::vec3 kGreen = glm::vec3(0, 1, 0);
+    const glm::vec3 kBlue  = glm::vec3(0, 0, 1);
+    //
+    std::vector<glm::vec3> vertexData;
+    uint32_t               numVertices = 0;
+    for (auto& vIdx : uniqueIndices) {
+        auto& P = mPositions[vIdx];
+        auto& T = mTangents[vIdx];
+        auto& B = mBitangents[vIdx];
+        auto& N = mNormals[vIdx];
+
+        // T
+        vertexData.push_back(P);
+        vertexData.push_back(kRed);
+        vertexData.push_back(P + (length * glm::normalize(T)));
+        vertexData.push_back(kRed);
+        numVertices += 2;
+        // B
+        vertexData.push_back(P);
+        vertexData.push_back(kGreen);
+        vertexData.push_back(P + (length * glm::normalize(B)));
+        vertexData.push_back(kGreen);
+        numVertices += 2;
+        // N
+        vertexData.push_back(P);
+        vertexData.push_back(kBlue);
+        vertexData.push_back(P + (length * glm::normalize(N)));
+        vertexData.push_back(kBlue);
+        numVertices += 2;
+    }
+
+    *pNumVertices = numVertices;
+
+    return vertexData;
+}
+
 TriMesh TriMesh::Box(
     const glm::vec3&        size,
     uint8_t                 actives,
@@ -872,6 +943,113 @@ TriMesh TriMesh::Sphere(
             mesh.AddTriangle(v0, v2, v3);
         }
     }
+
+    return mesh;
+}
+
+TriMesh TriMesh::Cone(
+    float          height,
+    float          radius,
+    uint32_t       segs,
+    const Options& options)
+{
+    constexpr float     kPi    = glm::pi<float>();
+    constexpr float     kTwoPi = 2.0f * kPi;
+    constexpr glm::vec3 kUp    = glm::vec3(0, 1, 0);
+
+    TriMesh   mesh = TriMesh(options);
+    glm::vec3 tip  = glm::vec3(0, height, 0);
+
+    segs     = std::max<uint32_t>(3, segs);
+    float dt = kTwoPi / segs;
+
+    const std::vector<glm::vec3> kColors = {
+        glm::vec3(1, 0, 0),
+        glm::vec3(0, 1, 0),
+        glm::vec3(0, 0, 1),
+        glm::vec3(1, 1, 0),
+        glm::vec3(1, 0, 1),
+        glm::vec3(0, 1, 1),
+        glm::vec3(1, 1, 1),
+    };
+
+    float     baseMinU = -radius;
+    float     baseMinV = -radius;
+    glm::vec3 baseP0   = {};
+    for (uint32_t i = 0; i < segs; ++i) {
+        uint32_t i0 = i;
+        uint32_t i1 = i + 1;
+        float    t0 = -(i0 * dt);
+        float    t1 = -(i1 * dt);
+
+        glm::vec3 P0 = tip;
+        glm::vec3 P1 = radius * glm::vec3(cos(t0), 0, sin(t0));
+        glm::vec3 P2 = radius * glm::vec3(cos(t1), 0, sin(t1));
+
+        glm::vec3 color = kColors[i % kColors.size()];
+
+        glm::vec2 uv0 = glm::vec2(t0 / kTwoPi, 0);
+        glm::vec2 uv1 = glm::vec2(t0 / kTwoPi, 1);
+        glm::vec2 uv2 = glm::vec2(t1 / kTwoPi, 1);
+
+        glm::vec3 d0 = P1 - P0;
+        glm::vec3 d1 = P2 - P0;
+        glm::vec3 N0 = glm::normalize(glm::cross(d0, d1));
+        glm::vec3 N1 = glm::normalize(P1);
+        glm::vec3 N2 = glm::normalize(P2);
+
+        glm::vec3 T0 = glm::normalize(glm::cross(kUp, N0));
+        glm::vec3 T1 = glm::normalize(glm::cross(kUp, N1));
+        glm::vec3 T2 = glm::normalize(glm::cross(kUp, N2));
+
+        glm::vec3 B0 = glm::normalize(glm::cross(N0, T0));
+        glm::vec3 B1 = glm::normalize(glm::cross(N1, T1));
+        glm::vec3 B2 = glm::normalize(glm::cross(N2, T2));
+
+        // Slant triangle
+        mesh.AddVertex(P0, color, uv0, N0, T0, B0);
+        mesh.AddVertex(P1, color, uv1, N1, T1, B1);
+        mesh.AddVertex(P2, color, uv2, N2, T2, B2);
+
+        uint32_t n     = mesh.GetNumVertices();
+        uint32_t vIdx0 = n - 3;
+        uint32_t vIdx1 = n - 2;
+        uint32_t vIdx2 = n - 1;
+        mesh.AddTriangle(vIdx0, vIdx1, vIdx2);
+
+        // Base triangle
+        //
+        // # of base triangles = segs - 2
+        //
+        if ((i > 0) && (i < (segs - 1))) {
+            P0 = baseP0;
+
+            // Swap P1 and P2 since we're upside down
+            glm::vec3 tP = P1;
+            P1           = P2;
+            P2           = tP;
+
+            color = kColors[0];
+            N0 = N1 = N2 = glm::vec3(0, -1, 0);
+            T0 = T1 = T2 = glm::vec3(1, 0, 0);
+            B0 = B1 = B2 = glm::vec3(0, 0, 1);
+
+            mesh.AddVertex(P0, color, uv0, N0, T0, B0);
+            mesh.AddVertex(P1, color, uv1, N1, T1, B1);
+            mesh.AddVertex(P2, color, uv2, N2, T2, B2);
+
+            uint32_t n     = mesh.GetNumVertices();
+            uint32_t vIdx0 = n - 3;
+            uint32_t vIdx1 = n - 2;
+            uint32_t vIdx2 = n - 1;
+            mesh.AddTriangle(vIdx0, vIdx1, vIdx2);
+        }
+        else {
+            baseP0 = P1;
+        }
+    }
+
+    // Build base
 
     return mesh;
 }
@@ -1373,29 +1551,35 @@ bool TriMesh::WriteOBJ(const std::string path, const TriMesh& mesh)
             os << " ";
 
             os << vIdx0;
+            os << "/";
             if (writeTexCoords) {
-                os << "/" << vIdx0;
+                os << vIdx0;
             }
+            os << "/";
             if (writeNormals) {
-                os << "/" << vIdx0;
+                os << vIdx0;
             }
             os << " ";
 
             os << vIdx1;
+            os << "/";
             if (writeTexCoords) {
-                os << "/" << vIdx1;
+                os << vIdx1;
             }
+            os << "/";
             if (writeNormals) {
-                os << "/" << vIdx1;
+                os << vIdx1;
             }
             os << " ";
 
             os << vIdx2;
+            os << "/";
             if (writeTexCoords) {
-                os << "/" << vIdx2;
+                os << vIdx2;
             }
+            os << "/";
             if (writeNormals) {
-                os << "/" << vIdx2;
+                os << vIdx2;
             }
             os << "\n";
         }
