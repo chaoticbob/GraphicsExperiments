@@ -13,9 +13,10 @@ struct Triangle {
     uint vIdx2;
 };
 
-StructuredBuffer<Triangle> Triangles : register(t3); // Index buffer
-StructuredBuffer<float3>   Positions : register(t4); // Position buffer
-StructuredBuffer<float3>   Normals   : register(t5); // Normal buffer
+StructuredBuffer<float3>   Materials    : register(t3);  // Material colors
+StructuredBuffer<Triangle> Triangles[2] : register(t4);  // Index buffers
+StructuredBuffer<float3>   Positions[2] : register(t7);  // Position buffers
+StructuredBuffer<float3>   Normals[2]   : register(t10); // Normal buffers
 
 typedef BuiltInTriangleIntersectionAttributes MyAttributes;
 
@@ -49,7 +50,7 @@ void MyRaygenShader()
         RAY_FLAG_FORCE_OPAQUE, // RayFlags
         ~0,                    // InstanceInclusionMask
         0,                     // RayContributionToHitGroupIndex
-        1,                     // MultiplierForGeometryContributionToHitGroupIndex
+        0,                     // ** THIS IS DIFFERENT THAN OTHER EXPERIMENTS ** MultiplierForGeometryContributionToHitGroupIndex
         0,                     // MissShaderIndex
         ray,                   // Ray
         payload);              // Payload
@@ -66,15 +67,16 @@ void MyMissShader(inout RayPayload payload)
 [shader("closesthit")]
 void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
 {
+    uint geoIdx  = GeometryIndex();
     uint primIdx = PrimitiveIndex();
-    Triangle tri = Triangles[primIdx];
+    Triangle tri = Triangles[geoIdx][primIdx];
 
     float3 hitPosition  = WorldRayOrigin() + (RayTCurrent() * WorldRayDirection());
     float3 barycentrics = float3(1 - attr.barycentrics.x - attr.barycentrics.y, attr.barycentrics.x, attr.barycentrics.y);
 
-    float3 N0 = Normals[tri.vIdx0];
-    float3 N1 = Normals[tri.vIdx1];
-    float3 N2 = Normals[tri.vIdx2];
+    float3 N0 = Normals[geoIdx][tri.vIdx0];
+    float3 N1 = Normals[geoIdx][tri.vIdx1];
+    float3 N2 = Normals[geoIdx][tri.vIdx2];
     float3 N  = N0 * barycentrics.x + N1 * barycentrics.y + N2 * barycentrics.z;
 
     // Lambert shading
@@ -83,7 +85,8 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
     float d = 0.8 * saturate(dot(L, N));
     float a = 0.2;
 
-    float3 color = (float3)(d + a);
+    // Multiply diffuse + ambient by material color
+    float3 color = (float3)(d + a) * Materials[geoIdx];
 
     payload.color = float4(color, 1);
 }

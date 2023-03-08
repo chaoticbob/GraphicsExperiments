@@ -14,8 +14,9 @@ if (GREX_ENABLE_D3D12)
     add_subdirectory(009_basic_shadow_d3d12)
     add_subdirectory(011_basic_shadow_dynamic_d3d12)
     add_subdirectory(021_raytracing_triangles_d3d12)
+    add_subdirectory(023_raytracing_multi_geo_d3d12)
+    add_subdirectory(025_raytracing_multi_instance_d3d12)
 endif()
-
 
 if (GREX_ENABLE_VULKAN)
     add_subdirectory(000b_raygen_uv_vulkan)

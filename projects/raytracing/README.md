@@ -127,11 +127,44 @@ Same as **basic_shadow** except with the light position updated via the constant
 
 Same as **basic_procedural** except with triangles. 
 
-The purpose of this experiment is to show how to use HLSL's `PrimitiveIndex()` to up the vertex
+The purpose of this experiment is to show how to use HLSL's `PrimitiveIndex()` to look up the vertex
 indices for an intersected triangle. These vertex indices then can be used to look up vertex attributes
 such as normals for shading. 
 
 Shaders are found in the [assets/projects/021_raytracing_triangles_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/021_raytracing_triangles_d3d12) directory.
+
+## raytracing_multi_geo
+![alt text](../../images/screenshots/raytracing/raytracing_multi_geo.png?raw=true)
+
+**Shows basic ray intersection using multiple triangle geomtry descriptions**
+
+The purpose of this experiment is to show how to use HLSL's `GeometryIndex()` to look up
+the intersected geometry and the corresponding material. Once the geometry has been 
+identified, `PrimitiveIndex()` is used to look up the vertex indices for an intersected triangle. These 
+vertex indices then can be used to look up vertex attributes such as normals for shading. 
+
+A single BLAS is used to contain 3 difference pieces of geometry: cube, sphere, and cone.
+
+Note the argument value for  `TraceRay()`'s `MultiplierForGeometryContributionToHitGroupIndex` is set to 0.
+This is necessary for `GeometryIndex()` to work correctly.
+
+Shaders are found in the [assets/projects/023_raytracing_multi_geo_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/023_raytracing_multi_geo_d3d12) directory.
+
+## raytracing_multi_instance
+![alt text](../../images/screenshots/raytracing/raytracing_multi_instance.png?raw=true)
+
+**Shows basic ray intersection using multiple triangle geomtry descriptions**
+
+The purpose of this experiment is to show how to use HLSL's `InstanceIndex()` to look up
+the intersected geometry and the corresponding material. Once the geometry has been 
+identified, `PrimitiveIndex()` is used to look up the vertex indices for an intersected triangle. These 
+vertex indices then can be used to look up vertex attributes such as normals for shading. 
+
+There are 3 BLASes in this experiment - each containing a different geometry.  
+The TLAS has 3 instance descriptions - each pointing to one of the 3 BLASes.
+
+Shaders are found in the [assets/projects/025_raytracing_multi_instance_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/025_raytracing_multi_instance_d3d12) directory.
+
 
 
 
