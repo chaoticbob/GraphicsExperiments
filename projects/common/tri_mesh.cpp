@@ -889,6 +889,11 @@ TriMesh TriMesh::Sphere(
 
     for (uint32_t i = 0; i < uverts; ++i) {
         for (uint32_t j = 0; j < vverts; ++j) {
+            //
+            // NOTE: tangent and bitangent needs to flow the same direction
+            //       as u and v. Meaning that tangent must point towards u=1
+            //       and bitangent must point towards v=1.
+            //
             float     theta     = i * dt;
             float     phi       = j * dp;
             float     u         = options.texCoordScale.x * theta / kTwoPi;
@@ -900,6 +905,12 @@ TriMesh TriMesh::Sphere(
             glm::vec3 normal    = normalize(position);
             glm::vec3 tangent   = glm::normalize(-SphericalTangent(theta, phi));
             glm::vec3 bitangent = glm::normalize(glm::cross(normal, tangent));
+
+            if (options.invertTexCoordsV) {
+                v         = options.texCoordScale.y * (1.0f - phi / kPi);
+                tangent   = glm::normalize(SphericalTangent(theta, phi));
+                bitangent = glm::normalize(glm::cross(normal, tangent));
+            }
 
             position += options.center;
 

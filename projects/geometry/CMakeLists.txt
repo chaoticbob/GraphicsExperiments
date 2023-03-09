@@ -9,6 +9,7 @@ if (GREX_ENABLE_D3D12)
     add_subdirectory(101_color_cube_d3d12)
     add_subdirectory(103_cornell_box_d3d12)
     add_subdirectory(105_cone_d3d12)
+    add_subdirectory(107_debug_tbn_d3d12)
 endif()
 
 if (GREX_ENABLE_VULKAN)
