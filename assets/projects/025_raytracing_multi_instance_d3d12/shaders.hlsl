@@ -67,16 +67,16 @@ void MyMissShader(inout RayPayload payload)
 [shader("closesthit")]
 void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
 {
-    uint geoIdx  = InstanceIndex();
+    uint instIdx  = InstanceIndex();
     uint primIdx = PrimitiveIndex();
-    Triangle tri = Triangles[geoIdx][primIdx];
+    Triangle tri = Triangles[instIdx][primIdx];
 
     float3 hitPosition  = WorldRayOrigin() + (RayTCurrent() * WorldRayDirection());
     float3 barycentrics = float3(1 - attr.barycentrics.x - attr.barycentrics.y, attr.barycentrics.x, attr.barycentrics.y);
 
-    float3 N0 = Normals[geoIdx][tri.vIdx0];
-    float3 N1 = Normals[geoIdx][tri.vIdx1];
-    float3 N2 = Normals[geoIdx][tri.vIdx2];
+    float3 N0 = Normals[instIdx][tri.vIdx0];
+    float3 N1 = Normals[instIdx][tri.vIdx1];
+    float3 N2 = Normals[instIdx][tri.vIdx2];
     float3 N  = N0 * barycentrics.x + N1 * barycentrics.y + N2 * barycentrics.z;
 
     // Lambert shading
@@ -86,7 +86,7 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
     float a = 0.2;
 
     // Multiply diffuse + ambient by material color
-    float3 color = (float3)(d + a) * Materials[geoIdx];
+    float3 color = (float3)(d + a) * Materials[instIdx];
 
     payload.color = float4(color, 1);
 }
