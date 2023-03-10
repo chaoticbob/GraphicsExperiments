@@ -212,15 +212,19 @@ Window::~Window()
     }
 
 #if defined(ENABLE_IMGUI_D3D12)
-    ImGui_ImplDX12_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
+    if (mImGuiEnabled) {
+        ImGui_ImplDX12_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
+    }
 #endif
 
 #if defined(ENABLE_IMGUI_VULKAN)
-    ImGui_ImplVulkan_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
+    if (mImGuiEnabled) {
+        ImGui_ImplVulkan_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
+    }
 #endif
 
     glfwDestroyWindow(mWindow);
@@ -259,9 +263,11 @@ void Window::WindowResizeEvent(int width, int height)
 void Window::MouseDownEvent(int x, int y, int buttons)
 {
 #if defined(ENABLE_IMGUI_D3D12)
-    ImGuiIO& io = ImGui::GetIO();
-    if (io.WantCaptureMouse) {
-        return;
+    if (mImGuiEnabled) {
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.WantCaptureMouse) {
+            return;
+        }
     }
 #endif
 
@@ -273,9 +279,11 @@ void Window::MouseDownEvent(int x, int y, int buttons)
 void Window::MouseUpEvent(int x, int y, int buttons)
 {
 #if defined(ENABLE_IMGUI_D3D12)
-    ImGuiIO& io = ImGui::GetIO();
-    if (io.WantCaptureMouse) {
-        return;
+    if (mImGuiEnabled) {
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.WantCaptureMouse) {
+            return;
+        }
     }
 #endif
 
@@ -287,9 +295,11 @@ void Window::MouseUpEvent(int x, int y, int buttons)
 void Window::MouseMoveEvent(int x, int y, int buttons)
 {
 #if defined(ENABLE_IMGUI_D3D12)
-    ImGuiIO& io = ImGui::GetIO();
-    if (io.WantCaptureMouse) {
-        return;
+    if (mImGuiEnabled) {
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.WantCaptureMouse) {
+            return;
+        }
     }
 #endif
 
@@ -301,9 +311,11 @@ void Window::MouseMoveEvent(int x, int y, int buttons)
 void Window::MouseScrollEvent(float xoffset, float yoffset)
 {
 #if defined(ENABLE_IMGUI_D3D12)
-    ImGuiIO& io = ImGui::GetIO();
-    if (io.WantCaptureMouse) {
-        return;
+    if (mImGuiEnabled) {
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.WantCaptureMouse) {
+            return;
+        }
     }
 #endif
 
@@ -402,7 +414,13 @@ bool Window::InitImGuiForD3D12(DxRenderer* pRenderer)
         nullptr,
         pRenderer->ImGuiFontDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
         pRenderer->ImGuiFontDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-    return res;
+    if (!res) {
+        return false;
+    }
+
+    mImGuiEnabled = true;
+
+    return true;
 }
 
 void Window::ImGuiNewFrameD3D12()

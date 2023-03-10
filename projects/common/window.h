@@ -85,9 +85,10 @@ public:
 #endif // defined(ENABLE_IMGUI_VULKAN)
 
 private:
-    uint32_t    mWidth  = 0;
-    uint32_t    mHeight = 0;
-    GLFWwindow* mWindow = nullptr;
+    uint32_t    mWidth        = 0;
+    uint32_t    mHeight       = 0;
+    GLFWwindow* mWindow       = nullptr;
+    bool        mImGuiEnabled = false;
 
 private:
     friend struct WindowEvents;
