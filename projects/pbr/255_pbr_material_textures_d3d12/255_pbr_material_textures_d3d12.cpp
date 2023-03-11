@@ -131,7 +131,7 @@ void CreateIBLTextures(
     ID3D12Resource**                     ppMultiscatterBRDFLUT,
     std::vector<ComPtr<ID3D12Resource>>& outIrradianceTextures,
     std::vector<ComPtr<ID3D12Resource>>& outEnvironmentTextures,
-    uint32_t*                            pEnvNumLevels);
+    std::vector<uint32_t>&               outEnvNumLevels);
 void CreateMaterials(
     DxRenderer*                      pRenderer,
     MaterialTextures&                outDefaultMaterialTextures,
@@ -306,14 +306,14 @@ int main(int argc, char** argv)
     ComPtr<ID3D12Resource>              multiscatterBRDFLUT;
     std::vector<ComPtr<ID3D12Resource>> irrTextures;
     std::vector<ComPtr<ID3D12Resource>> envTextures;
-    uint32_t                            envNumLevels = 0;
+    std::vector<uint32_t>               envNumLevels;
     CreateIBLTextures(
         renderer.get(),
         &brdfLUT,
         &multiscatterBRDFLUT,
         irrTextures,
         envTextures,
-        &envNumLevels);
+        envNumLevels);
 
     // *************************************************************************
     // Material texture
@@ -364,7 +364,7 @@ int main(int argc, char** argv)
         // IBLEnvironmentMaps (t48)
         descriptor = {heapStart.ptr + IBL_ENVIRONMENT_MAPS_DESCRIPTOR_OFFSET * incSize};
         for (size_t i = 0; i < irrTextures.size(); ++i) {
-            CreateDescriptorTexture2D(renderer.get(), envTextures[i].Get(), descriptor, 0, envNumLevels);
+            CreateDescriptorTexture2D(renderer.get(), envTextures[i].Get(), descriptor, 0, envNumLevels[i]);
             descriptor.ptr += incSize;
         }
 
@@ -463,7 +463,7 @@ int main(int argc, char** argv)
     pSceneParams->lights[3].position  = vec3(15, 0, 0);
     pSceneParams->lights[3].color     = vec3(0.92f, 0.5f, 0.7f);
     pSceneParams->lights[3].intensity = 0.5f;
-    pSceneParams->iblNumEnvLevels     = envNumLevels;
+    pSceneParams->iblNumEnvLevels     = envNumLevels[gIBLIndex];
     pSceneParams->iblIndex            = gIBLIndex;
     pSceneParams->iblDiffuseStrength  = 1.0f;
     pSceneParams->iblSpecularStrength = 1.0f;
@@ -596,7 +596,7 @@ int main(int argc, char** argv)
             //
             pSceneParams->viewProjectionMatrix = projMat * viewMat;
             pSceneParams->eyePosition          = eyePosition;
-            pSceneParams->iblNumEnvLevels      = envNumLevels;
+            pSceneParams->iblNumEnvLevels      = envNumLevels[gIBLIndex];
 
             // Draw environment
             {
@@ -702,7 +702,7 @@ int main(int argc, char** argv)
 
                 const float yPos             = 0.0f;
                 uint32_t    materialIndex    = 0;
-                uint32_t    invertNormalMapY = 1; //(gModelIndex == 1);
+                uint32_t    invertNormalMapY = false; // Invert if sphere
 
                 // Material 0
                 {
@@ -1046,7 +1046,7 @@ void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     staticSamplers[1].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[1].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[1].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
+    staticSamplers[1].MipLODBias       = 0.5f; //D3D12_DEFAULT_MIP_LOD_BIAS;
     staticSamplers[1].MaxAnisotropy    = 0;
     staticSamplers[1].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     staticSamplers[1].MinLOD           = 0;
@@ -1186,7 +1186,9 @@ void CreateMaterialModels(
 {
     // Sphere
     {
-        TriMesh mesh = TriMesh::Sphere(1, 256, 256, {.enableTexCoords = true, .enableNormals = true, .enableTangents = true});
+        TriMesh::Options options = {.enableTexCoords = true, .enableNormals = true, .enableTangents = true};
+
+        TriMesh mesh = TriMesh::Sphere(1, 256, 256, options);
 
         GeometryBuffers buffers = {};
 
@@ -1402,7 +1404,7 @@ void CreateIBLTextures(
     ID3D12Resource**                     ppMultiscatterBRDFLUT,
     std::vector<ComPtr<ID3D12Resource>>& outIrradianceTextures,
     std::vector<ComPtr<ID3D12Resource>>& outEnvironmentTextures,
-    uint32_t*                            pEnvNumLevels)
+    std::vector<uint32_t>&               outEnvNumLevels)
 {
     // BRDF LUT
     {
@@ -1466,7 +1468,7 @@ void CreateIBLTextures(
             return;
         }
 
-        *pEnvNumLevels = ibl.numLevels;
+        outEnvNumLevels.push_back(ibl.numLevels);
 
         // Irradiance
         {

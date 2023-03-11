@@ -210,15 +210,12 @@ void CreateEnvironmentVertexBuffers(
 void CreateMaterialModels(
     DxRenderer*                   pRenderer,
     std::vector<GeometryBuffers>& outGeomtryBuffers);
-// void CreateMaterialKnobVertexBuffers(
-//     DxRenderer*                   pRenderer,
-//     std::vector<GeometryBuffers>& outGeomtryBuffers);
 void CreateIBLTextures(
     DxRenderer*                          pRenderer,
     ID3D12Resource**                     ppBRDFLUT,
     std::vector<ComPtr<ID3D12Resource>>& outIrradianceTextures,
     std::vector<ComPtr<ID3D12Resource>>& outEnvironmentTextures,
-    uint32_t*                            pEnvNumLevels);
+    std::vector<uint32_t>&               outEnvNumLevels);
 void CreateDescriptorHeap(
     DxRenderer*            pRenderer,
     ID3D12DescriptorHeap** ppHeap);
@@ -391,21 +388,14 @@ int main(int argc, char** argv)
         renderer.get(),
         matGeoBuffers);
 
-    //// *************************************************************************
-    //// Material knob vertex buffers
-    //// *************************************************************************
-    // CreateMaterialKnobVertexBuffers(
-    //     renderer.get(),
-    //     matGeoBuffers);
-
     // *************************************************************************
     // Environment texture
     // *************************************************************************
     ComPtr<ID3D12Resource>              brdfLUT;
     std::vector<ComPtr<ID3D12Resource>> irrTextures;
     std::vector<ComPtr<ID3D12Resource>> envTextures;
-    uint32_t                            envNumLevels = 0;
-    CreateIBLTextures(renderer.get(), &brdfLUT, irrTextures, envTextures, &envNumLevels);
+    std::vector<uint32_t>               envNumLevels;
+    CreateIBLTextures(renderer.get(), &brdfLUT, irrTextures, envTextures, envNumLevels);
 
     // *************************************************************************
     // Descriptor heaps
@@ -429,7 +419,7 @@ int main(int argc, char** argv)
         // Environment
         descriptor = {heapStart.ptr + (1 + gMaxIBLs) * incSize};
         for (size_t i = 0; i < irrTextures.size(); ++i) {
-            CreateDescriptorTexture2D(renderer.get(), envTextures[i].Get(), descriptor, 0, envNumLevels);
+            CreateDescriptorTexture2D(renderer.get(), envTextures[i].Get(), descriptor, 0, envNumLevels[i]);
             descriptor.ptr += incSize;
         }
     }
@@ -733,7 +723,7 @@ int main(int argc, char** argv)
             pSceneParams->lights[3].position   = vec3(15, 0, 0);
             pSceneParams->lights[3].color      = vec3(0.92f, 0.5f, 0.7f);
             pSceneParams->lights[3].intensity  = 0.5f;
-            pSceneParams->iblNumEnvLevels      = envNumLevels;
+            pSceneParams->iblNumEnvLevels      = envNumLevels[gIBLIndex];
             pSceneParams->iblIndex             = gIBLIndex;
             pSceneParams->iblDiffuseStrength   = gIBLDiffuseStrength;
             pSceneParams->iblSpecularStrength  = gIBLSpecularStrength;
@@ -1243,7 +1233,7 @@ void CreateIBLTextures(
     ID3D12Resource**                     ppBRDFLUT,
     std::vector<ComPtr<ID3D12Resource>>& outIrradianceTextures,
     std::vector<ComPtr<ID3D12Resource>>& outEnvironmentTextures,
-    uint32_t*                            pEnvNumLevels)
+    std::vector<uint32_t>&               outEnvNumLevels)
 {
     // BRDF LUT
     {
@@ -1288,7 +1278,7 @@ void CreateIBLTextures(
             return;
         }
 
-        *pEnvNumLevels = ibl.numLevels;
+        outEnvNumLevels.push_back(ibl.numLevels);
 
         // Irradiance
         {

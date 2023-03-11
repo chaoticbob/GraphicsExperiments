@@ -604,8 +604,8 @@ void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     staticSamplers[1].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
     staticSamplers[1].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[1].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[1].MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
+    staticSamplers[1].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[1].MipLODBias       = 0.5f; //D3D12_DEFAULT_MIP_LOD_BIAS;
     staticSamplers[1].MaxAnisotropy    = 0;
     staticSamplers[1].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     staticSamplers[1].MinLOD           = 0;

@@ -292,7 +292,7 @@ void ProcessScanlineIrradiance()
                 // Random point on sphere
                 u          = pRandom->nextFloat();
                 v          = pRandom->nextFloat();
-                float3 L   = ImportanceSampleGGX(float2(u, v), 0.79f, N);
+                float3 L   = ImportanceSampleGGX(float2(u, v), 0.89f, N);
                 float  NoL = saturate(dot(N, L));
 
                 // Get the spherical coorinate of of the sample vector
@@ -453,9 +453,9 @@ int main(int argc, char** argv)
                     break;
                 }
                 //
-                // We don't need more than 8 levels
+                // We don't need more than 7 levels
                 //
-                if (gNumLevels >= 8) {
+                if (gNumLevels >= 7) {
                     break;
                 }
                 ++gNumLevels;
@@ -474,7 +474,8 @@ int main(int argc, char** argv)
         gResX = static_cast<int>(gEnvironmentMap.GetWidth());
         gResY = static_cast<int>(gEnvironmentMap.GetHeight());
 
-        float deltaRoughness = 1.0f / static_cast<float>(2.0f * gNumLevels);
+        //float deltaRoughness = 1.0f / static_cast<float>(2.0f * gNumLevels);
+        float deltaRoughness = 1.0f / static_cast<float>(1.44f * gNumLevels);
 
         for (uint32_t level = 0; level < gNumLevels; ++level) {
             gCurrentLevel = level;
@@ -483,7 +484,8 @@ int main(int argc, char** argv)
             gDv = 1.0f / static_cast<float>(gResY - 1);
 
             // Calculate roughness
-            gRoughness = std::max<float>(level * deltaRoughness, 0.01f);
+            gRoughness = level * deltaRoughness;
+            std::cout << "level=" << level << ", roughness=" << std::setw(2) << std::setprecision(6) << std::fixed << gRoughness << std::endl;
 
             // Queue scanlines
             for (int i = 0; i < gResY; ++i) {
