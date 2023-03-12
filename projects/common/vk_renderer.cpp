@@ -195,7 +195,8 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
         queueCreateInfo.pQueuePriorities        = &kQueuePriority;
 
         std::vector<const char*> enabledExtensions = {
-            VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+            VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+            VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME};
 
         if (pRenderer->RayTracingEnabled) {
             enabledExtensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
@@ -203,7 +204,7 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
             enabledExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
             enabledExtensions.push_back(VK_KHR_RAY_TRACING_MAINTENANCE_1_EXTENSION_NAME);
             enabledExtensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
-            enabledExtensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+            enabledExtensions.push_back(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME);
         }
 
         // Make sure all the extenions are present
