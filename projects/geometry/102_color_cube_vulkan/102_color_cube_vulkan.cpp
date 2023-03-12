@@ -66,10 +66,8 @@ static uint32_t gWindowWidth        = 1280;
 static uint32_t gWindowHeight       = 720;
 static bool     gEnableDebug        = true;
 static bool     gEnableRayTracing   = false;
-static uint32_t gUniformmBufferSize = 256;
 
 void CreatePipelineLayout(VulkanRenderer* pRenderer, VkPipelineLayout* pLayout);
-void CreateRenderPass(VulkanRenderer* pRenderer, VkRenderPass* pRenderPass);
 void CreateShaderModules(
    VulkanRenderer*               pRenderer,
    const std::vector<uint32_t>&  spirvVS,
@@ -132,15 +130,6 @@ int main(int argc, char** argv)
     CreatePipelineLayout(renderer.get(), &pipelineLayout);
 
     // *************************************************************************
-    // RenderPass
-    // 
-    // This is used for pipeline creation
-    //
-    // *************************************************************************
-    VkRenderPass renderPass = VK_NULL_HANDLE;
-    CreateRenderPass(renderer.get(), &renderPass);
-
-    // *************************************************************************
     // Shader module
     // *************************************************************************
     VkShaderModule moduleVS = VK_NULL_HANDLE;
@@ -164,7 +153,6 @@ int main(int argc, char** argv)
     CreateDrawVertexColorPipeline(
        renderer.get(),
        pipelineLayout,
-       renderPass,
        moduleVS,
        moduleFS,
        GREX_DEFAULT_RTV_FORMAT,
@@ -207,11 +195,10 @@ int main(int argc, char** argv)
     }
 
     // *************************************************************************
-    // Swapchain image views, depth buffers/views, and framebuffers
+    // Swapchain image views, depth buffers/views
     // *************************************************************************
     std::vector<VkImageView> imageViews;
     std::vector<VkImageView> depthViews;
-    std::vector<VkFramebuffer> framebuffers;
     {
         std::vector<VkImage> images;
         CHECK_CALL(GetSwapchainImages(renderer.get(), images));
@@ -260,25 +247,6 @@ int main(int argc, char** argv)
 
            depthViews.push_back(depthView);
         }
-
-        for (int fbIndex = 0; fbIndex < images.size(); fbIndex++) {
-           // Create framebuffer object
-           VkFramebufferCreateInfo createInfo         = { VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO };
-           createInfo.renderPass                      = renderPass;
-           createInfo.width                           = window->GetWidth();
-           createInfo.height                          = window->GetHeight();
-           createInfo.layers                          = 1;
-           createInfo.renderPass                      = renderPass;
-           createInfo.attachmentCount                 = 2;
-
-           VkImageView attachments[] = { imageViews[fbIndex], depthViews[fbIndex] };
-           createInfo.pAttachments                    = attachments;
-
-           VkFramebuffer framebuffer = VK_NULL_HANDLE;
-           CHECK_CALL(vkCreateFramebuffer(renderer->Device, &createInfo, nullptr, &framebuffer));
-
-           framebuffers.push_back(framebuffer);
-        }
     }
 
     // *************************************************************************
@@ -296,7 +264,6 @@ int main(int argc, char** argv)
     clearValues[0].color = { {0.0f, 0.0f, 0.2f, 1.0f } };
     clearValues[1].depthStencil = { 1.0f, 0 };
 
-
     while (window->PollEvents()) {
         uint32_t imageIndex = 0;
         if (AcquireNextImage(renderer.get(), &imageIndex)) {
@@ -310,15 +277,29 @@ int main(int argc, char** argv)
         CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
 
         {
-           VkRenderPassBeginInfo rpbi      = { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
-           rpbi.renderPass                 = renderPass;
-           rpbi.framebuffer                = framebuffers[imageIndex];
-           rpbi.renderArea.extent.width    = gWindowWidth;
-           rpbi.renderArea.extent.height   = gWindowHeight;
-           rpbi.clearValueCount            = 2;
-           rpbi.pClearValues               = clearValues;
+           VkRenderingAttachmentInfo colorAttachment  = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
+           colorAttachment.imageView                  = imageViews[imageIndex];
+           colorAttachment.imageLayout                = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+           colorAttachment.loadOp                     = VK_ATTACHMENT_LOAD_OP_CLEAR;
+           colorAttachment.storeOp                    = VK_ATTACHMENT_STORE_OP_STORE;
+           colorAttachment.clearValue                 = clearValues[0];
 
-           vkCmdBeginRenderPass(cmdBuf.CommandBuffer, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
+           VkRenderingAttachmentInfo depthAttachment  = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
+           depthAttachment.imageView                  = depthViews[imageIndex];
+           depthAttachment.imageLayout                = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+           depthAttachment.loadOp                     = VK_ATTACHMENT_LOAD_OP_CLEAR;
+           depthAttachment.storeOp                    = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+           depthAttachment.clearValue                 = clearValues[1];
+
+           VkRenderingInfo vkri                       = { VK_STRUCTURE_TYPE_RENDERING_INFO };
+           vkri.layerCount                            = 1;
+           vkri.colorAttachmentCount                  = 1;
+           vkri.pColorAttachments                     = &colorAttachment;
+           vkri.pDepthAttachment                      = &depthAttachment;
+           vkri.renderArea.extent.width               = gWindowWidth;
+           vkri.renderArea.extent.height              = gWindowHeight;
+
+           vkCmdBeginRendering(cmdBuf.CommandBuffer, &vkri);
 
            VkViewport viewport = { 0, static_cast<float>(gWindowHeight), static_cast<float>(gWindowWidth), -static_cast<float>(gWindowHeight), 0.0f, 1.0f };
            vkCmdSetViewport(cmdBuf.CommandBuffer, 0, 1, &viewport);
@@ -348,7 +329,7 @@ int main(int argc, char** argv)
 
            vkCmdDrawIndexed(cmdBuf.CommandBuffer, 36, 1, 0, 0, 0);
 
-           vkCmdEndRenderPass(cmdBuf.CommandBuffer);
+           vkCmdEndRendering(cmdBuf.CommandBuffer);
         }
 
         CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));
@@ -408,60 +389,6 @@ void CreateShaderModules(
 
         CHECK_CALL(vkCreateShaderModule(pRenderer->Device, &createInfo, nullptr, pModuleFS));
     }
-}
-
-void CreateRenderPass(VulkanRenderer* pRenderer, VkRenderPass* pRenderPass)
-{
-   VkAttachmentDescription attachments[2] = {};
-   attachments[0].format                                             = GREX_DEFAULT_RTV_FORMAT;
-   attachments[0].samples                                            = VK_SAMPLE_COUNT_1_BIT;
-   attachments[0].loadOp                                             = VK_ATTACHMENT_LOAD_OP_CLEAR;
-   attachments[0].storeOp                                            = VK_ATTACHMENT_STORE_OP_STORE;
-   attachments[0].initialLayout                                      = VK_IMAGE_LAYOUT_UNDEFINED;
-   attachments[0].finalLayout                                        = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-   attachments[1].format                                             = GREX_DEFAULT_DSV_FORMAT;
-   attachments[1].samples                                            = VK_SAMPLE_COUNT_1_BIT;
-   attachments[1].loadOp                                             = VK_ATTACHMENT_LOAD_OP_CLEAR;
-   attachments[1].storeOp                                            = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-   attachments[1].initialLayout                                      = VK_IMAGE_LAYOUT_UNDEFINED;
-   attachments[1].finalLayout                                        = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-   VkAttachmentReference color_reference                             = {};
-   color_reference.attachment                                        = 0;
-   color_reference.layout                                            = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-   VkAttachmentReference depth_reference                             = {};
-   depth_reference.attachment                                        = 1;
-   depth_reference.layout                                            = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-   VkSubpassDescription subpass_description                          = {};
-   subpass_description.pipelineBindPoint                             = VK_PIPELINE_BIND_POINT_GRAPHICS;
-   subpass_description.colorAttachmentCount                          = 1;
-   subpass_description.pColorAttachments                             = &color_reference;
-   subpass_description.pDepthStencilAttachment                       = &depth_reference;
-
-   VkSubpassDependency dependencies[2]                               = {};
-   dependencies[0].srcSubpass                                        = VK_SUBPASS_EXTERNAL;
-   dependencies[0].srcStageMask                                      = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-   dependencies[0].dstStageMask                                      = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-   dependencies[0].srcAccessMask                                     = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-   dependencies[0].dstAccessMask                                     = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;;
-
-   dependencies[1].srcSubpass                                        = VK_SUBPASS_EXTERNAL;
-   dependencies[1].srcStageMask                                      = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-   dependencies[1].dstStageMask                                      = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-   dependencies[1].dstAccessMask                                     = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;;
-
-   VkRenderPassCreateInfo render_pass_create_info                    = { VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO };
-   render_pass_create_info.attachmentCount                           = 2;
-   render_pass_create_info.pAttachments                              = attachments;
-   render_pass_create_info.subpassCount                              = 1;
-   render_pass_create_info.pSubpasses                                = &subpass_description;
-   render_pass_create_info.dependencyCount                           = 2;
-   render_pass_create_info.pDependencies                             = dependencies;
-
-   vkCreateRenderPass(pRenderer->Device, &render_pass_create_info, nullptr, pRenderPass);
 }
 
 void CreateGeometryBuffers(

@@ -197,7 +197,6 @@ VkDeviceAddress GetDeviceAddress(VulkanRenderer* pRenderer, VkAccelerationStruct
 VkResult CreateDrawVertexColorPipeline(
    VulkanRenderer*      pRenderer,
    VkPipelineLayout     pipeline_layout,
-   VkRenderPass         render_pass,
    VkShaderModule       vsShaderModule,
    VkShaderModule       fsShaderModule,
    VkFormat             rtvFormat,

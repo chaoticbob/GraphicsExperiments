@@ -203,6 +203,7 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
             enabledExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
             enabledExtensions.push_back(VK_KHR_RAY_TRACING_MAINTENANCE_1_EXTENSION_NAME);
             enabledExtensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
+            enabledExtensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
         }
 
         // Make sure all the extenions are present
@@ -1037,7 +1038,6 @@ VkDeviceAddress GetDeviceAddress(VulkanRenderer* pRenderer, VkAccelerationStruct
 VkResult CreateDrawVertexColorPipeline(
    VulkanRenderer*         pRenderer,
    VkPipelineLayout        pipeline_layout,
-   VkRenderPass            render_pass,
    VkShaderModule          vsShaderModule,
    VkShaderModule          fsShaderModule,
    VkFormat                rtvFormat,
@@ -1045,6 +1045,13 @@ VkResult CreateDrawVertexColorPipeline(
    VkPipeline*             pPipeline,
    VkCullModeFlags         cullMode)
 {
+   VkFormat rtv_format= GREX_DEFAULT_RTV_FORMAT;
+   VkPipelineRenderingCreateInfo pipeline_rendering_create_info      = {};
+   pipeline_rendering_create_info.sType                              = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+   pipeline_rendering_create_info.colorAttachmentCount               = 1;
+   pipeline_rendering_create_info.pColorAttachmentFormats            = &rtv_format;
+   pipeline_rendering_create_info.depthAttachmentFormat              = GREX_DEFAULT_DSV_FORMAT;
+
    VkPipelineShaderStageCreateInfo shader_stages[2]                  = {};
    shader_stages[0].sType                                            = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
    shader_stages[0].stage                                            = VK_SHADER_STAGE_VERTEX_BIT;
@@ -1147,6 +1154,7 @@ VkResult CreateDrawVertexColorPipeline(
 
    VkGraphicsPipelineCreateInfo pipeline_info                        = {};
    pipeline_info.sType                                               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+   pipeline_info.pNext                                               = &pipeline_rendering_create_info;
    pipeline_info.stageCount                                          = 2;
    pipeline_info.pStages                                             = shader_stages;
    pipeline_info.pVertexInputState                                   = &vertex_input_state;
@@ -1157,7 +1165,7 @@ VkResult CreateDrawVertexColorPipeline(
    pipeline_info.pColorBlendState                                    = &color_blend_state;
    pipeline_info.pDynamicState                                       = &dynamic_state;
    pipeline_info.layout                                              = pipeline_layout;
-   pipeline_info.renderPass                                          = render_pass;
+   pipeline_info.renderPass                                          = VK_NULL_HANDLE;
    pipeline_info.subpass                                             = 0;
    pipeline_info.basePipelineHandle                                  = VK_NULL_HANDLE;
    pipeline_info.basePipelineIndex                                   = -1;
