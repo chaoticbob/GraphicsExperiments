@@ -803,7 +803,7 @@ HRESULT CreateDrawVertexColorPipeline(
     desc.BlendState.RenderTarget[0].DestBlendAlpha        = D3D12_BLEND_ZERO;
     desc.BlendState.RenderTarget[0].BlendOpAlpha          = D3D12_BLEND_OP_ADD;
     desc.BlendState.RenderTarget[0].LogicOp               = D3D12_LOGIC_OP_NOOP;
-    desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xF;
+    desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     desc.SampleMask                                       = D3D12_DEFAULT_SAMPLE_MASK;
     desc.RasterizerState.FillMode                         = D3D12_FILL_MODE_SOLID;
     desc.RasterizerState.CullMode                         = cullMode;
@@ -827,6 +827,101 @@ HRESULT CreateDrawVertexColorPipeline(
     desc.DepthStencilState.FrontFace.StencilFunc          = D3D12_COMPARISON_FUNC_NEVER;
     desc.DepthStencilState.BackFace                       = desc.DepthStencilState.FrontFace;
     desc.InputLayout.NumElements                          = 2;
+    desc.InputLayout.pInputElementDescs                   = inputElementDesc;
+    desc.IBStripCutValue                                  = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF;
+    desc.PrimitiveTopologyType                            = topologyType;
+    desc.NumRenderTargets                                 = 1;
+    desc.RTVFormats[0]                                    = rtvFormat;
+    desc.DSVFormat                                        = dsvFormat;
+    desc.SampleDesc.Count                                 = 1;
+    desc.SampleDesc.Quality                               = 0;
+    desc.NodeMask                                         = 0;
+    desc.CachedPSO                                        = {};
+    desc.Flags                                            = D3D12_PIPELINE_STATE_FLAG_NONE;
+
+    HRESULT hr = pRenderer->Device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(ppPipeline));
+    if (FAILED(hr)) {
+        return hr;
+    }
+
+    return S_OK;
+}
+
+HRESULT CreateDrawVertexColorAndTexCoordPipeline(
+    DxRenderer*                   pRenderer,
+    ID3D12RootSignature*          pRootSig,
+    const std::vector<char>&      vsShaderBytecode,
+    const std::vector<char>&      psShaderBytecode,
+    DXGI_FORMAT                   rtvFormat,
+    DXGI_FORMAT                   dsvFormat,
+    ID3D12PipelineState**         ppPipeline,
+    D3D12_CULL_MODE               cullMode,
+    D3D12_PRIMITIVE_TOPOLOGY_TYPE topologyType,
+    uint32_t                      pipelineFlags)
+{
+    bool                     isInterleavedAttrs  = pipelineFlags & DX_PIPELINE_FLAGS_INTERLEAVED_ATTRS;
+    D3D12_INPUT_ELEMENT_DESC inputElementDesc[3] = {};
+    inputElementDesc[0].SemanticName             = "POSITION";
+    inputElementDesc[0].SemanticIndex            = 0;
+    inputElementDesc[0].Format                   = DXGI_FORMAT_R32G32B32_FLOAT;
+    inputElementDesc[0].InputSlot                = 0;
+    inputElementDesc[0].AlignedByteOffset        = D3D12_APPEND_ALIGNED_ELEMENT;
+    inputElementDesc[0].InputSlotClass           = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+    inputElementDesc[0].InstanceDataStepRate     = 0;
+    inputElementDesc[1].SemanticName             = "COLOR";
+    inputElementDesc[1].SemanticIndex            = 0;
+    inputElementDesc[1].Format                   = DXGI_FORMAT_R32G32B32_FLOAT;
+    inputElementDesc[1].InputSlot                = isInterleavedAttrs ? 0 : 1;
+    inputElementDesc[1].AlignedByteOffset        = D3D12_APPEND_ALIGNED_ELEMENT;
+    inputElementDesc[1].InputSlotClass           = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+    inputElementDesc[1].InstanceDataStepRate     = 0;
+    inputElementDesc[2].SemanticName             = "TEXCOORD";
+    inputElementDesc[2].SemanticIndex            = 0;
+    inputElementDesc[2].Format                   = DXGI_FORMAT_R32G32_FLOAT;
+    inputElementDesc[2].InputSlot                = isInterleavedAttrs ? 0 : 2;
+    inputElementDesc[2].AlignedByteOffset        = D3D12_APPEND_ALIGNED_ELEMENT;
+    inputElementDesc[2].InputSlotClass           = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+    inputElementDesc[2].InstanceDataStepRate     = 0;
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC desc               = {};
+    desc.pRootSignature                                   = pRootSig;
+    desc.VS                                               = {DataPtr(vsShaderBytecode), CountU32(vsShaderBytecode)};
+    desc.PS                                               = {DataPtr(psShaderBytecode), CountU32(psShaderBytecode)};
+    desc.BlendState.AlphaToCoverageEnable                 = FALSE;
+    desc.BlendState.IndependentBlendEnable                = FALSE;
+    desc.BlendState.RenderTarget[0].BlendEnable           = TRUE;
+    desc.BlendState.RenderTarget[0].LogicOpEnable         = FALSE;
+    desc.BlendState.RenderTarget[0].SrcBlend              = D3D12_BLEND_SRC_ALPHA;
+    desc.BlendState.RenderTarget[0].DestBlend             = D3D12_BLEND_ONE;
+    desc.BlendState.RenderTarget[0].BlendOp               = D3D12_BLEND_OP_ADD;
+    desc.BlendState.RenderTarget[0].SrcBlendAlpha         = D3D12_BLEND_SRC_ALPHA;
+    desc.BlendState.RenderTarget[0].DestBlendAlpha        = D3D12_BLEND_ONE;
+    desc.BlendState.RenderTarget[0].BlendOpAlpha          = D3D12_BLEND_OP_ADD;
+    desc.BlendState.RenderTarget[0].LogicOp               = D3D12_LOGIC_OP_NOOP;
+    desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    desc.SampleMask                                       = D3D12_DEFAULT_SAMPLE_MASK;
+    desc.RasterizerState.FillMode                         = D3D12_FILL_MODE_SOLID;
+    desc.RasterizerState.CullMode                         = cullMode;
+    desc.RasterizerState.FrontCounterClockwise            = TRUE;
+    desc.RasterizerState.DepthBias                        = D3D12_DEFAULT_DEPTH_BIAS;
+    desc.RasterizerState.DepthBiasClamp                   = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
+    desc.RasterizerState.SlopeScaledDepthBias             = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+    desc.RasterizerState.DepthClipEnable                  = FALSE;
+    desc.RasterizerState.MultisampleEnable                = FALSE;
+    desc.RasterizerState.AntialiasedLineEnable            = FALSE;
+    desc.RasterizerState.ForcedSampleCount                = 0;
+    desc.DepthStencilState.DepthEnable                    = (dsvFormat != DXGI_FORMAT_UNKNOWN);
+    desc.DepthStencilState.DepthWriteMask                 = D3D12_DEPTH_WRITE_MASK_ALL;
+    desc.DepthStencilState.DepthFunc                      = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    desc.DepthStencilState.StencilEnable                  = FALSE;
+    desc.DepthStencilState.StencilReadMask                = D3D12_DEFAULT_STENCIL_READ_MASK;
+    desc.DepthStencilState.StencilWriteMask               = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+    desc.DepthStencilState.FrontFace.StencilFailOp        = D3D12_STENCIL_OP_KEEP;
+    desc.DepthStencilState.FrontFace.StencilDepthFailOp   = D3D12_STENCIL_OP_KEEP;
+    desc.DepthStencilState.FrontFace.StencilPassOp        = D3D12_STENCIL_OP_KEEP;
+    desc.DepthStencilState.FrontFace.StencilFunc          = D3D12_COMPARISON_FUNC_NEVER;
+    desc.DepthStencilState.BackFace                       = desc.DepthStencilState.FrontFace;
+    desc.InputLayout.NumElements                          = 3;
     desc.InputLayout.pInputElementDescs                   = inputElementDesc;
     desc.IBStripCutValue                                  = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF;
     desc.PrimitiveTopologyType                            = topologyType;
@@ -905,7 +1000,7 @@ HRESULT CreateDrawNormalPipeline(
     desc.BlendState.RenderTarget[0].DestBlendAlpha        = D3D12_BLEND_ZERO;
     desc.BlendState.RenderTarget[0].BlendOpAlpha          = D3D12_BLEND_OP_ADD;
     desc.BlendState.RenderTarget[0].LogicOp               = D3D12_LOGIC_OP_NOOP;
-    desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xF;
+    desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     desc.SampleMask                                       = D3D12_DEFAULT_SAMPLE_MASK;
     desc.RasterizerState.FillMode                         = D3D12_FILL_MODE_SOLID;
     desc.RasterizerState.CullMode                         = cullMode;
@@ -990,7 +1085,7 @@ HRESULT CreateDrawTexturePipeline(
     desc.BlendState.RenderTarget[0].DestBlendAlpha        = D3D12_BLEND_ZERO;
     desc.BlendState.RenderTarget[0].BlendOpAlpha          = D3D12_BLEND_OP_ADD;
     desc.BlendState.RenderTarget[0].LogicOp               = D3D12_LOGIC_OP_NOOP;
-    desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xF;
+    desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     desc.SampleMask                                       = D3D12_DEFAULT_SAMPLE_MASK;
     desc.RasterizerState.FillMode                         = D3D12_FILL_MODE_SOLID;
     desc.RasterizerState.CullMode                         = cullMode;
@@ -1082,7 +1177,7 @@ HRESULT CreateDrawBasicPipeline(
     desc.BlendState.RenderTarget[0].DestBlendAlpha        = D3D12_BLEND_ZERO;
     desc.BlendState.RenderTarget[0].BlendOpAlpha          = D3D12_BLEND_OP_ADD;
     desc.BlendState.RenderTarget[0].LogicOp               = D3D12_LOGIC_OP_NOOP;
-    desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xF;
+    desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     desc.SampleMask                                       = D3D12_DEFAULT_SAMPLE_MASK;
     desc.RasterizerState.FillMode                         = D3D12_FILL_MODE_SOLID;
     desc.RasterizerState.CullMode                         = cullMode;
@@ -1195,7 +1290,7 @@ HRESULT CreateGraphicsPipeline1(
     desc.BlendState.RenderTarget[0].DestBlendAlpha        = D3D12_BLEND_ZERO;
     desc.BlendState.RenderTarget[0].BlendOpAlpha          = D3D12_BLEND_OP_ADD;
     desc.BlendState.RenderTarget[0].LogicOp               = D3D12_LOGIC_OP_NOOP;
-    desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xF;
+    desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     desc.SampleMask                                       = D3D12_DEFAULT_SAMPLE_MASK;
     desc.RasterizerState.FillMode                         = D3D12_FILL_MODE_SOLID;
     desc.RasterizerState.CullMode                         = cullMode;
@@ -1518,4 +1613,28 @@ uint32_t BitsPerPixel(DXGI_FORMAT fmt)
         default:
             return 0;
     }
+}
+
+HRESULT CopyDataToBuffer(size_t dataSize, void* pData, ID3D12Resource* pBuffer)
+{
+    if ((dataSize == 0) || (pData == nullptr) || (pBuffer == nullptr)) {
+        return E_INVALIDARG;
+    }
+
+    if (dataSize > pBuffer->GetDesc().Width) {
+        assert(false && "data size exceeds buffer size");
+        return E_ABORT;
+    }
+
+    char*   pDst = nullptr;
+    HRESULT hr   = pBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pDst));
+    if (FAILED(hr)) {
+        return hr;
+    }
+
+    memcpy(pDst, pData, dataSize);
+
+    pBuffer->Unmap(0, nullptr);
+
+    return S_OK;
 }

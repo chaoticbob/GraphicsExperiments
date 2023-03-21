@@ -8,6 +8,8 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/config.h
 )
 
+set_target_properties(ibl_furnace PROPERTIES FOLDER "misc")
+
 target_include_directories(
     ibl_furnace
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}

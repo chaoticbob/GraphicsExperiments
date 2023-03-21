@@ -12,6 +12,8 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/window.cpp
 )
 
+set_target_properties(ibl_prefilter_env PROPERTIES FOLDER "misc")
+
 target_include_directories(
     ibl_prefilter_env
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}

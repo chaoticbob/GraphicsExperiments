@@ -112,6 +112,18 @@ HRESULT CreateDrawVertexColorPipeline(
     D3D12_PRIMITIVE_TOPOLOGY_TYPE topologyType  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
     uint32_t                      pipelineFlags = 0);
 
+HRESULT CreateDrawVertexColorAndTexCoordPipeline(
+    DxRenderer*                   pRenderer,
+    ID3D12RootSignature*          pRootSig,
+    const std::vector<char>&      vsShaderBytecode,
+    const std::vector<char>&      psShaderBytecode,
+    DXGI_FORMAT                   rtvFormat,
+    DXGI_FORMAT                   dsvFormat,
+    ID3D12PipelineState**         ppPipeline,
+    D3D12_CULL_MODE               cullMode      = D3D12_CULL_MODE_BACK,
+    D3D12_PRIMITIVE_TOPOLOGY_TYPE topologyType  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+    uint32_t                      pipelineFlags = 0);
+
 HRESULT CreateDrawNormalPipeline(
     DxRenderer*              pRenderer,
     ID3D12RootSignature*     pRootSig,
@@ -159,3 +171,6 @@ HRESULT CompileHLSL(
     const std::string& profile,
     std::vector<char>* pDXIL,
     std::string*       pErrorMsg);
+
+
+HRESULT CopyDataToBuffer(size_t dataSize, void* pData, ID3D12Resource* pBuffer);

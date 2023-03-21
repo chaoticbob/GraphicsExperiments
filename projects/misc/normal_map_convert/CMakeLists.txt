@@ -14,6 +14,8 @@ add_executable(
     ${GREX_THIRD_PARTY_DIR}/miniz-3.0.2/miniz.c
 )
 
+set_target_properties(normal_map_convert PROPERTIES FOLDER "misc")
+
 target_compile_definitions(
     normal_map_convert
     PUBLIC GREX_ENABLE_EXR
