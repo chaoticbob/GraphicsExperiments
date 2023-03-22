@@ -269,7 +269,8 @@ void ProcessScanlineEnvironmentMap()
 
 void ProcessScanlineIrradiance()
 {
-    const uint32_t kNumSamples = 5120;
+    const uint32_t kNumSamples = 8192;
+    const float    kRoughness  = 1.0f;
 
     uint32_t threadIndex = sThreadCounter++;
     pcg32*   pRandom     = &gRandoms[threadIndex];
@@ -292,7 +293,7 @@ void ProcessScanlineIrradiance()
                 // Random point on sphere
                 u          = pRandom->nextFloat();
                 v          = pRandom->nextFloat();
-                float3 L   = ImportanceSampleGGX(float2(u, v), 0.89f, N);
+                float3 L   = ImportanceSampleGGX(float2(u, v), kRoughness, N);
                 float  NoL = saturate(dot(N, L));
 
                 // Get the spherical coorinate of of the sample vector
@@ -337,6 +338,14 @@ int main(int argc, char** argv)
         std::cout << "error: ibl_prefilter_env requires two arguments:" << std::endl;
         std::cout << "   ibl_prefilter_env <input file> <output dir>" << std::endl;
         return EXIT_FAILURE;
+    }
+
+    bool irrOnly = false;
+    for (int i = 3; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--irr-only") {
+            irrOnly = true;
+        }
     }
 
     std::filesystem::path inputFilePath = std::filesystem::absolute(argv[1]);
@@ -424,6 +433,10 @@ int main(int argc, char** argv)
 
             std::cout << "Successfully wrote " << irradianceMapFilePath << std::endl;
         }
+
+        if (irrOnly) {
+            return EXIT_SUCCESS;
+        }
     }
 
     // =========================================================================
@@ -474,7 +487,7 @@ int main(int argc, char** argv)
         gResX = static_cast<int>(gEnvironmentMap.GetWidth());
         gResY = static_cast<int>(gEnvironmentMap.GetHeight());
 
-        //float deltaRoughness = 1.0f / static_cast<float>(2.0f * gNumLevels);
+        // float deltaRoughness = 1.0f / static_cast<float>(2.0f * gNumLevels);
         float deltaRoughness = 1.0f / static_cast<float>(1.44f * gNumLevels);
 
         for (uint32_t level = 0; level < gNumLevels; ++level) {
@@ -509,18 +522,18 @@ int main(int argc, char** argv)
             gEnvironmentMap = gTarget->CopyFrom(0, gTargetYOffset, gResX, gResY);
 
             //// Kernel for image convolution sampling to smooth out the noise
-            //radius          = 7;
-            //kernelSize      = 2 * radius + 1;
-            //gGaussianKernel = GaussianKernel(kernelSize);
+            // radius          = 7;
+            // kernelSize      = 2 * radius + 1;
+            // gGaussianKernel = GaussianKernel(kernelSize);
             //
-            //for (int row = 0; row < gResY; ++row) {
-            //    for (int col = 0; col < gResX; ++col) {
-            //        float x     = (col + 0.5f);
-            //        float y     = (row + 0.5f);
-            //        auto  pixel = gEnvironmentMap.GetGaussianSample(x, y, gGaussianKernel, BITMAP_SAMPLE_MODE_WRAP, BITMAP_SAMPLE_MODE_CLAMP);
-            //        gTarget->SetPixel(col, row + gTargetYOffset, pixel);
-            //    }
-            //}
+            // for (int row = 0; row < gResY; ++row) {
+            //     for (int col = 0; col < gResX; ++col) {
+            //         float x     = (col + 0.5f);
+            //         float y     = (row + 0.5f);
+            //         auto  pixel = gEnvironmentMap.GetGaussianSample(x, y, gGaussianKernel, BITMAP_SAMPLE_MODE_WRAP, BITMAP_SAMPLE_MODE_CLAMP);
+            //         gTarget->SetPixel(col, row + gTargetYOffset, pixel);
+            //     }
+            // }
 
             gTargetYOffset += gResY;
 
