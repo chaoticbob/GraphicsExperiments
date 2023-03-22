@@ -16,6 +16,8 @@ if (GREX_ENABLE_D3D12)
     add_subdirectory(021_raytracing_triangles_d3d12)
     add_subdirectory(023_raytracing_multi_geo_d3d12)
     add_subdirectory(025_raytracing_multi_instance_d3d12)
+    add_subdirectory(027_raytracing_pbr_spheres_d3d12)
+    add_subdirectory(029_raytracing_path_trace_d3d12)
 endif()
 
 if (GREX_ENABLE_VULKAN)
