@@ -497,6 +497,34 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData
     return CreateBuffer(pRenderer, srcSize, pSrcData, ppResource);
 }
 
+HRESULT CreateBuffer(DxRenderer* pRenderer, size_t rowStride, size_t numRows, const void* pSrcData, ID3D12Resource** ppResource)
+{
+    size_t alignedRowStride  = Align<size_t>(rowStride, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+    size_t alignedBufferSize = alignedRowStride * numRows;
+
+    HRESULT hr = CreateBuffer(pRenderer, alignedBufferSize, nullptr, ppResource);
+    if (FAILED(hr)) {
+        return hr;
+    }
+
+    char* pDstRow = nullptr;
+    hr            = (*ppResource)->Map(0, nullptr, reinterpret_cast<void**>(&pDstRow));
+    if (FAILED(hr)) {
+        return hr;
+    }
+
+    const char* pSrcRow = static_cast<const char*>(pSrcData);
+    for (size_t i = 0; i < numRows; ++i) {
+        memcpy(pDstRow, pSrcRow, rowStride);
+        pSrcRow += rowStride;
+        pDstRow += alignedRowStride;
+    }
+
+    (*ppResource)->Unmap(0, nullptr);
+
+    return S_OK;
+}
+
 HRESULT CreateUAVBuffer(DxRenderer* pRenderer, size_t size, D3D12_RESOURCE_STATES initialResourceState, ID3D12Resource** ppResource)
 {
     if (IsNull(pRenderer)) {
@@ -586,11 +614,19 @@ HRESULT CreateTexture(
     }
 
     if (!IsNull(pSrcData)) {
-        // const uint32_t pixelStride = PixelStride(format);
-        // const uint32_t srcSize     = width * height * pixelStride;
+        const uint32_t rowStride = width * PixelStride(format);
+        // Calculate the total number of rows for all mip maps
+        uint32_t numRows   = 0;
+        {
+            uint32_t mipHeight = height;
+            for (UINT level = 0; level < mipLevels; ++level) {
+                numRows += mipHeight;
+                mipHeight >>= 1;
+            }
+        }
 
         ComPtr<ID3D12Resource> stagingBuffer;
-        hr = CreateBuffer(pRenderer, srcSizeBytes, pSrcData, &stagingBuffer);
+        hr = CreateBuffer(pRenderer, rowStride, numRows, pSrcData, &stagingBuffer);
         if (FAILED(hr)) {
             assert(false && "create staging buffer failed");
             return hr;
@@ -627,7 +663,8 @@ HRESULT CreateTexture(
             uint32_t levelWidth  = width;
             uint32_t levelHeight = height;
             for (UINT level = 0; level < mipLevels; ++level) {
-                const auto& mipOffset = mipOffsets[level];
+                const auto&    mipOffset    = mipOffsets[level];
+                const uint32_t mipRowStride = Align<uint32_t>(mipOffset.rowStride, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
 
                 D3D12_TEXTURE_COPY_LOCATION dst = {};
                 dst.pResource                   = *ppResource;
@@ -642,7 +679,7 @@ HRESULT CreateTexture(
                 src.PlacedFootprint.Footprint.Width    = static_cast<UINT>(levelWidth);
                 src.PlacedFootprint.Footprint.Height   = static_cast<UINT>(levelHeight);
                 src.PlacedFootprint.Footprint.Depth    = 1;
-                src.PlacedFootprint.Footprint.RowPitch = static_cast<UINT>(mipOffset.rowStride);
+                src.PlacedFootprint.Footprint.RowPitch = static_cast<UINT>(mipRowStride);
 
                 cmdList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
 
