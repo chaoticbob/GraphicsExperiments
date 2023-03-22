@@ -377,7 +377,7 @@ void CreateGeometryBuffers(
         auto& matDesc = mesh.GetMaterial(materialIndex);
 
         Material material     = {};
-        material.albedo       = matDesc.albedo;
+        material.albedo       = matDesc.baseColor;
         material.recieveLight = (matDesc.name != "white light") ? true: false;
         materials.push_back(material);
 
