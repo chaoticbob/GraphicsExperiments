@@ -115,7 +115,7 @@ float3 ImportanceSampleGGX(float2 Xi, float Roughness, float3 N)
     H.x             = SinTheta * cos(Phi);
     H.y             = SinTheta * sin(Phi);
     H.z             = CosTheta;
-    float3 UpVector = abs(N.z) < 0.999f ? float3(0, 0, 1) : float3(1, 0, 0);
+    float3 UpVector = abs(N.y) < 0.99999f ? float3(0, 1, 0) : float3(1, 0, 0);
     float3 TangentX = normalize(cross(UpVector, N));
     float3 TangentY = cross(N, TangentX);
 
@@ -211,7 +211,7 @@ float3 PrefilterEnvMap(float Roughness, float3 R, pcg32* pRandom)
 // Main
 // =============================================================================
 
-int              gNumThreads = 128;
+int              gNumThreads = 1; // 128;
 int              gResX       = 0;
 int              gResY       = 0;
 float            gDu         = 0;
@@ -269,7 +269,7 @@ void ProcessScanlineEnvironmentMap()
 
 void ProcessScanlineIrradiance()
 {
-    const uint32_t kNumSamples = 8192;
+    const uint32_t kNumSamples = 4069;
     const float    kRoughness  = 1.0f;
 
     uint32_t threadIndex = sThreadCounter++;
@@ -290,13 +290,16 @@ void ProcessScanlineIrradiance()
             float4 pixel        = float4(0);
             float  totalSamples = 0;
             for (uint32_t i = 0; i < kNumSamples; ++i) {
+                // NOTE: Hammersley is not used here because it can causes artifacting
+                //       on the poles. The artifact looks like a pinch at the poles.
+                //
                 // Random point on sphere
-                u          = pRandom->nextFloat();
-                v          = pRandom->nextFloat();
+                float  u   = pRandom->nextFloat();
+                float  v   = pRandom->nextFloat();
                 float3 L   = ImportanceSampleGGX(float2(u, v), kRoughness, N);
                 float  NoL = saturate(dot(N, L));
 
-                // Get the spherical coorinate of of the sample vector
+                // Get the spherical coordinate of of the sample vector
                 float2 uv = CartesianToSpherical(L);
                 u         = saturate(uv.x / (2.0f * PI));
                 v         = saturate(uv.y / PI);
@@ -308,7 +311,7 @@ void ProcessScanlineIrradiance()
                 // based on Lambert. This produces a much nicer result than
                 // without it.
                 //
-                value *= NoL;
+                // value *= NoL;
 
                 // Accumulate!
                 pixel.r += value.r;
@@ -316,7 +319,7 @@ void ProcessScanlineIrradiance()
                 pixel.b += value.b;
                 pixel.a += value.a;
 
-                totalSamples += NoL;
+                totalSamples += 1; // NoL;
             }
             // Compute average
             pixel = pixel / static_cast<float>(totalSamples);

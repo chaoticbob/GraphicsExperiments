@@ -35,7 +35,7 @@ float3 ImportanceSampleGGX(float2 Xi, float Roughness, float3 N)
     H.x             = SinTheta * cos(Phi);
     H.y             = SinTheta * sin(Phi);
     H.z             = CosTheta;
-    float3 UpVector = abs(N.z) < 0.999 ? float3(0, 0, 1) : float3(1, 0, 0);
+    float3 UpVector = abs(N.y) < 0.999f ? float3(0, 1, 0) : float3(1, 0, 0);
     float3 TangentX = normalize(cross(UpVector, N));
     float3 TangentY = cross(N, TangentX);
 
@@ -107,11 +107,9 @@ float geometry(float cosTheta, float k)
 float smithsIBL(float NdotV, float NdotL, float roughness)
 {
     float k = (roughness * roughness) / 2.0f;
-
     return geometry(NdotV, k) * geometry(NdotL, k);
 }
 
-// DEFAULT - supports Geometry_Smiths
 // Schlick-Beckmann (https://www.shadertoy.com/view/3tlBW7)
 //
 float Geometry_SchlickBeckman(float NoV, float k)
@@ -119,7 +117,6 @@ float Geometry_SchlickBeckman(float NoV, float k)
     return NoV / (NoV * (1.0f - k) + k);
 }
 
-// DEFAULT
 // Smiths (https://www.shadertoy.com/view/3tlBW7)
 //
 float Geometry_Smiths(float NoV, float NoL, float roughness)
@@ -135,22 +132,31 @@ float Geometry_Smiths(float NoV, float NoL, float roughness)
 
 float2 IntegrateBRDF(float Roughness, float NoV)
 {
+    /*
+        float3 V = float3(0);
+        V.x      = sqrt(1.0f - NoV * NoV); // sin
+        V.y      = 0;
+        V.z      = NoV; // cos
+        float A  = 0;
+        float B  = 0;
+    */
+
     float3 V = float3(0);
     V.x      = sqrt(1.0f - NoV * NoV); // sin
-    V.y      = 0;
-    V.z      = NoV; // cos
+    V.y      = NoV;                    // cos
+    V.z      = 0;
     float A  = 0;
     float B  = 0;
 
-    float3 N = float3(0, 0, 1);
+    float3 N = float3(0, 1, 0);
 
     const uint NumSamples = 1024;
     for (uint i = 0; i < NumSamples; i++) {
         float2 Xi  = Hammersley(i, NumSamples);
         float3 H   = ImportanceSampleGGX(Xi, Roughness, N);
         float3 L   = 2 * dot(V, H) * H - V;
-        float  NoL = saturate(L.z);
-        float  NoH = saturate(H.z);
+        float  NoL = saturate(L.y);
+        float  NoH = saturate(H.y);
         float  VoH = saturate(dot(V, H));
         if (NoL > 0) {
             float G     = Geometry_Smiths(NoV, NoL, Roughness);
@@ -279,7 +285,7 @@ float2 IntegrateBRDF_Narkowicz(int x, float ndotv, int LUT_WIDTH)
 // Main
 // =============================================================================
 
-int                 gNumThreads = 64;
+int                 gNumThreads = 16;
 int                 gResX       = 0;
 int                 gResY       = 0;
 std::vector<int>    gScanlines;
@@ -439,7 +445,7 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        std::cout << "Successfully wrote " << gResX << "x" << gResY <<  (gMultiscatter ? " multiscatter" : "") << " BRDF LUT to " << outputFile << std::endl;
+        std::cout << "Successfully wrote " << gResX << "x" << gResY << (gMultiscatter ? " multiscatter" : "") << " BRDF LUT to " << outputFile << std::endl;
     }
 
     return EXIT_SUCCESS;
