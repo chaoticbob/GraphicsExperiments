@@ -311,7 +311,7 @@ void ProcessScanlineIrradiance()
                 // based on Lambert. This produces a much nicer result than
                 // without it.
                 //
-                // value *= NoL;
+                //value *= NoL;
 
                 // Accumulate!
                 pixel.r += value.r;
