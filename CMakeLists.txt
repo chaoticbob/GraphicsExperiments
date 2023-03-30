@@ -43,8 +43,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Compile flags and definitions
 # ------------------------------------------------------------------------------
 if (MSVC)
-    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} /MP")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
+    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} /MP -D_CRT_SECURE_NO_WARNINGS")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP -D_CRT_SECURE_NO_WARNINGS")
 endif()
 
 if (GREX_LINUX)

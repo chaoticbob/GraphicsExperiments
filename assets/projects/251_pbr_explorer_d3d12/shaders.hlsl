@@ -629,7 +629,7 @@ float4 psmain(VSOutput input) : SV_TARGET
         // Diffuse IBL component
         float3 F = Fresnel(F_Func, cosTheta, F0, roughness);
         float3 kD = (1.0 - F) * (1.0 - metalness);
-        float3 irradiance = GetIBLIrradiance(R);
+        float3 irradiance = GetIBLIrradiance(N);
         float3 diffuse = irradiance * albedo / PI;
         
         // Specular IBL component

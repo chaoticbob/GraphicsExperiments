@@ -57,8 +57,8 @@ struct PBRImplementationInfo
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth  = 1280;
-static uint32_t gWindowHeight = 1024;
+static uint32_t gWindowWidth  = 1920;
+static uint32_t gWindowHeight = 1080;
 static bool     gEnableDebug  = true;
 
 static LPCWSTR gVSShaderName = L"vsmain";
@@ -391,10 +391,11 @@ int main(int argc, char** argv)
             gAngle += (gTargetAngle - gAngle) * 0.1f;
 
             // Camera matrices
-            vec3 eyePosition = vec3(0, 0, 9);
-            mat4 viewMat     = glm::lookAt(eyePosition, vec3(0, 0, 0), vec3(0, 1, 0));
-            mat4 projMat     = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
-            mat4 rotMat      = glm::rotate(glm::radians(gAngle), vec3(0, 1, 0));
+            mat4 transformEyeMat     = glm::rotate(glm::radians(-gAngle), vec3(0, 1, 0));
+            vec3 startingEyePosition = vec3(0, 0, 4);
+            vec3 eyePosition         = transformEyeMat * vec4(startingEyePosition, 1);
+            mat4 viewMat             = glm::lookAt(eyePosition, vec3(0, 0, 0), vec3(0, 1, 0));
+            mat4 projMat             = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
 
             // Set constant buffer values
             pSceneParams->viewProjectionMatrix    = projMat * viewMat;
@@ -485,6 +486,91 @@ int main(int argc, char** argv)
                 // Pipeline state
                 commandList->SetPipelineState(pbrPipelineState.Get());
 
+                // Shiny pastic
+                {
+                    MaterialParameters materialParams = {};
+                    materialParams.albedo             = vec3(1.0f, 1.0f, 1.0f);
+                    materialParams.roughness          = 0;
+                    materialParams.metalness          = 0;
+                    materialParams.F0                 = F0_DiletricPlastic;
+
+                    float x = -2.25f;
+                    float y = 0;
+                    float z = 0;
+
+                    glm::mat4 modelMat = glm::translate(vec3(x, y, z));
+                    // DrawParams (b1)
+                    commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
+                    // MaterialParams (b2)
+                    commandList->SetGraphicsRoot32BitConstants(2, 8, &materialParams, 0);
+
+                    commandList->DrawIndexedInstanced(materialSphereNumIndices, 1, 0, 0, 0);
+                }
+
+                // Rough plastic
+                {
+                    MaterialParameters materialParams = {};
+                    materialParams.albedo             = vec3(1.0f, 1.0f, 1.0f);
+                    materialParams.roughness          = 1;
+                    materialParams.metalness          = 0;
+                    materialParams.F0                 = F0_DiletricPlastic;
+
+                    float x = -0.75f;
+                    float y = 0;
+                    float z = 0;
+
+                    glm::mat4 modelMat = glm::translate(vec3(x, y, z));
+                    // DrawParams (b1)
+                    commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
+                    // MaterialParams (b2)
+                    commandList->SetGraphicsRoot32BitConstants(2, 8, &materialParams, 0);
+
+                    commandList->DrawIndexedInstanced(materialSphereNumIndices, 1, 0, 0, 0);
+                }
+
+                // Shiny metal
+                {
+                    MaterialParameters materialParams = {};
+                    materialParams.albedo             = vec3(0.5f, 0.5f, 0.5f);
+                    materialParams.roughness          = 0;
+                    materialParams.metalness          = 1;
+                    materialParams.F0                 = F0_MetalGold;
+
+                    float x = 0.75f;
+                    float y = 0;
+                    float z = 0;
+
+                    glm::mat4 modelMat = glm::translate(vec3(x, y, z));
+                    // DrawParams (b1)
+                    commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
+                    // MaterialParams (b2)
+                    commandList->SetGraphicsRoot32BitConstants(2, 8, &materialParams, 0);
+
+                    commandList->DrawIndexedInstanced(materialSphereNumIndices, 1, 0, 0, 0);
+                }
+
+                // Rough metal
+                {
+                    MaterialParameters materialParams = {};
+                    materialParams.albedo             = vec3(0.5f, 0.5f, 0.5f);
+                    materialParams.roughness          = 1;
+                    materialParams.metalness          = 1;
+                    materialParams.F0                 = F0_MetalGold;
+
+                    float x = 2.25f;
+                    float y = 0;
+                    float z = 0;
+
+                    glm::mat4 modelMat = glm::translate(vec3(x, y, z));
+                    // DrawParams (b1)
+                    commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
+                    // MaterialParams (b2)
+                    commandList->SetGraphicsRoot32BitConstants(2, 8, &materialParams, 0);
+
+                    commandList->DrawIndexedInstanced(materialSphereNumIndices, 1, 0, 0, 0);
+                }
+
+                /*
                 MaterialParameters materialParams = {};
                 materialParams.albedo             = vec3(0.8f, 0.8f, 0.9f);
                 materialParams.roughness          = 0;
@@ -512,7 +598,7 @@ int main(int argc, char** argv)
                         x += slotSize / 2.0f;
                         y += slotSize / 2.0f;
 
-                        glm::mat4 modelMat = rotMat * glm::translate(vec3(x, y, z));
+                        glm::mat4 modelMat = glm::translate(vec3(x, y, z));
                         // DrawParams (b1)
                         commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
                         // MaterialParams (b2)
@@ -524,6 +610,7 @@ int main(int argc, char** argv)
                     }
                     materialParams.roughness += metalnessStep;
                 }
+                */
             }
 
             // Draw ImGui
@@ -605,7 +692,7 @@ void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     staticSamplers[1].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[1].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[1].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].MipLODBias       = 0.5f; //D3D12_DEFAULT_MIP_LOD_BIAS;
+    staticSamplers[1].MipLODBias       = 0.5f; // D3D12_DEFAULT_MIP_LOD_BIAS;
     staticSamplers[1].MaxAnisotropy    = 0;
     staticSamplers[1].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     staticSamplers[1].MinLOD           = 0;
@@ -662,7 +749,7 @@ void CreateEnvironmentRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRoo
     staticSampler.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSampler.MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
     staticSampler.MaxAnisotropy    = 0;
-    staticSampler.ComparisonFunc   = D3D12_COMPARISON_FUNC_NEVER   ;
+    staticSampler.ComparisonFunc   = D3D12_COMPARISON_FUNC_NEVER;
     staticSampler.MinLOD           = 0;
     staticSampler.MaxLOD           = D3D12_FLOAT32_MAX;
     staticSampler.ShaderRegister   = 1;
@@ -693,7 +780,7 @@ void CreateMaterialSphereVertexBuffers(
     ID3D12Resource** ppPositionBuffer,
     ID3D12Resource** ppNormalBuffer)
 {
-    TriMesh mesh = TriMesh::Sphere(0.42f, 256, 256, {.enableNormals = true});
+    TriMesh mesh = TriMesh::Sphere(0.6f, 256, 256, {.enableNormals = true});
 
     *pNumIndices = 3 * mesh.GetNumTriangles();
 

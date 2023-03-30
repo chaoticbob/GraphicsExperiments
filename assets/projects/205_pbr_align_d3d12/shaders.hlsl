@@ -239,7 +239,7 @@ float4 psmain(VSOutput input) : SV_TARGET
         // Diffuse IBL component
         float3 F = Fresnel_SchlickRoughness(cosTheta, F0, roughness);
         float3 kD = (1.0 - F) * (1.0 - metalness);
-        float3 irradiance = GetIBLIrradiance(R);
+        float3 irradiance = GetIBLIrradiance(N);
         float3 diffuse = irradiance * albedo / PI;
         
         // Specular IBL component
@@ -249,6 +249,8 @@ float4 psmain(VSOutput input) : SV_TARGET
         float3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
 
         indirectLighting = kD * diffuse + specular;
+
+        //indirectLighting = irradiance;
     }
 
     float3 finalColor = directLighting + indirectLighting;

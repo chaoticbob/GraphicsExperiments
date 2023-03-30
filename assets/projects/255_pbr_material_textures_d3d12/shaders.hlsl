@@ -433,7 +433,7 @@ float4 psmain(VSOutput input) : SV_TARGET
         }
 
         // Diffuse IBL component
-        float3 irradiance = GetIBLIrradiance(Rr);
+        float3 irradiance = GetIBLIrradiance(N);
         float3 diffuse = irradiance * diffuseColor * Fd_Lambert();
         diffuse *= SceneParams.IBLDiffuseStrength;
         
