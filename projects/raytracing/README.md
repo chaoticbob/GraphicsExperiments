@@ -165,6 +165,49 @@ The TLAS has 3 instance descriptions - each pointing to one of the 3 BLASes.
 
 Shaders are found in the [assets/projects/025_raytracing_multi_instance_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/025_raytracing_multi_instance_d3d12) directory.
 
+## pbr_spheres
+![alt text](../../images/screenshots/raytracing/pbr_spheres.png?raw=true)
+
+**Shows ray tracing and PBR using same technique as raster version**
+
+The purpose of this experiment is to render typical roughness / metallic grid using ray tracing
+and the typical PBR approach (with LUT, irradiance, and environment textures). It's very slow
+since there's a large number of samples for both the diffuse and specular calculation.
+
+There are no punctual lights in this sample, all the lighting is done via IBL. Punctual lights migt
+get added later.
+
+Shaders are found in the [assets/projects/027_raytracing_pbr_spheres_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/027_raytracing_pbr_spheres_d3d12) directory.
+
+## refract
+![alt text](../../images/screenshots/raytracing/refract.png?raw=true)
+
+**Demonstrates recursive ray tracing and ray splitting for refraction/reflection**
+
+The purpose of this experiment is to understand how recursive ray tracing works when doing a ray split
+for refraction and reflection. Refraction implementation is pretty naive and may need some fixes/tweaks
+to achieve the look you want. 
+
+There are no punctual lights in this sample, all the lighting is done via IBL. Punctual lights migt
+get added later.
+
+Shaders are found in the [assets/projects/029_raytracing_refract_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/029_raytracing_refract_d3d12) directory.
+
+## path_trace
+![alt text](../../images/screenshots/raytracing/path_trace_teapots.png?raw=true)
+
+**Naive/fun path tracing experiment**
+
+Inspired by [https://github.com/TheRealMJP/DXRPathTracer]. This experiments shows a very naive and simplistic path tracer.
+Shading doesn't use PBR yet. The main idea for this one was to incorporate the recursive ray tracing and refraction from the
+earlier experiment with an increasing sample count. Sampling mechanism is pretty naive and there's definitely some artifacts.
+But fun to see it staring to work.
+
+There are no punctual lights in this sample, all the lighting is done via IBL. Punctual lights migt
+get added later.
+
+Shaders are found in the [assets/projects/031_raytracing_path_trace_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/031_raytracing_path_trace_d3d12) directory.
+
 
 
 
