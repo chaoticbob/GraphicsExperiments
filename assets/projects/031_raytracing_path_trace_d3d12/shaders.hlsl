@@ -1,6 +1,5 @@
 #define PI          3.1415292
 #define EPSILON     0.00001
-#define MAX_SAMPLES 4096
 
 // -----------------------------------------------------------------------------
 // Common Resources
@@ -17,7 +16,8 @@ struct SceneParameters
 	float4x4 ViewInverseMatrix;
 	float4x4 ProjectionInverseMatrix;
 	float4x4 ViewProjectionMatrix;
-    float3   EyePosition;
+    float3   EyePosition;    
+    uint     MaxSamples;
     uint     NumLights;
     Light    Lights[8];
 };
@@ -264,7 +264,7 @@ float3 GenIrradianceSampleDir(uint sampleIndex, float3 N)
 {
     const float a = 1.0;
 
-    float2 Xi       = Hammersley(sampleIndex, MAX_SAMPLES);
+    float2 Xi       = Hammersley(sampleIndex, SceneParams.MaxSamples);
     float  Phi      = 2 * PI * Xi.x;
     float CosTheta = sqrt((1 - Xi.y) / (1 + (a * a - 1) * Xi.y));
     float  SinTheta = sqrt(1 - CosTheta * CosTheta);
@@ -318,7 +318,7 @@ float3 GenIrradianceSampleDir(uint sampleIndex, float3 N)
 
 float3 GenSpecularSampleDir(uint sampleIndex, float3 N, float3 V, float Roughness)
 {
-    float2 Xi = Hammersley(sampleIndex, MAX_SAMPLES);
+    float2 Xi = Hammersley(sampleIndex, SceneParams.MaxSamples);
     float3 H  = ImportanceSampleGGX(Xi, Roughness, N);
     float3 L  = 2 * dot(V, H) * H - V;
     return L;
@@ -350,14 +350,10 @@ void MyRaygenShader()
     uint2 rayIndex2 = DispatchRaysIndex().xy;
     uint  rayIndex = rayIndex2.y * 1920 + rayIndex2.x;
     uint sampleCount = RayGenSamples[rayIndex];
-    
-    //if (sampleCount == 0) {
-    //    AccumTarget[rayIndex2] = 0;    
-    //}
-   
-    if (sampleCount < MAX_SAMPLES)
+       
+    if (sampleCount < SceneParams.MaxSamples)
     {
-        float2 Xi = Hammersley(sampleCount, MAX_SAMPLES);
+        float2 Xi = Hammersley(sampleCount, SceneParams.MaxSamples);
         const float2 pixelCenter = (float2) rayIndex2 + float2(0.5, 0.5) + Xi;
 	    const float2 inUV = pixelCenter/(float2)DispatchRaysDimensions();
 	    float2 d = inUV * 2.0 - 1.0;

@@ -63,7 +63,9 @@ static LPCWSTR gClosestHitShaderName = L"MyClosestHitShader";
 static float gTargetAngle = 0.0f;
 static float gAngle       = 0.0f;
 
-static bool gResetRayGenSamples = true;
+static bool     gResetRayGenSamples = true;
+static uint32_t gMaxSamples         = 4096;
+static uint32_t gCurrentMaxSamples  = 0;
 
 struct Light
 {
@@ -78,6 +80,7 @@ struct SceneParameters
     mat4  ProjectionInverseMatrix;
     mat4  ViewProjectionMatrix;
     vec3  EyePosition;
+    uint  MaxSamples;
     uint  NumLights;
     Light Lights[8];
 };
@@ -427,6 +430,14 @@ int main(int argc, char** argv)
     }
 
     // *************************************************************************
+    // Imgui
+    // *************************************************************************
+    if (!window->InitImGuiForD3D12(renderer.get())) {
+        assert(false && "Window::InitImGuiForD3D12 failed");
+        return EXIT_FAILURE;
+    }
+
+    // *************************************************************************
     // Command allocator
     // *************************************************************************
     ComPtr<ID3D12CommandAllocator> commandAllocator;
@@ -458,21 +469,21 @@ int main(int argc, char** argv)
     // Main loop
     // *************************************************************************
     while (window->PollEvents()) {
+        window->ImGuiNewFrameD3D12();
+
+        if (ImGui::Begin("Scene")) {
+            ImGui::SliderInt("Max Samples Per Pixel", reinterpret_cast<int*>(&gMaxSamples), 1, 16384);
+        }
+        ImGui::End();
+
+        // ---------------------------------------------------------------------
+
         CHECK_CALL(commandAllocator->Reset());
         CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
 
-        if (gResetRayGenSamples) {
-            commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
-
-            commandList->SetComputeRootSignature(clearRayGenRootSig.Get());
-            commandList->SetPipelineState(clearRayGenPSO.Get());
-
-            D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
-            descriptorTable.ptr += (kOutputResourcesOffset + 1) * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            commandList->SetComputeRootDescriptorTable(0, descriptorTable);
-
-            commandList->Dispatch(gWindowWidth / 8, gWindowHeight / 8, 1);
-            gResetRayGenSamples = false;
+        if (gCurrentMaxSamples != gMaxSamples) {
+            gCurrentMaxSamples  = gMaxSamples;
+            gResetRayGenSamples = true;
         }
 
         // Smooth out the rotation on Y
@@ -493,6 +504,22 @@ int main(int argc, char** argv)
         pSceneParams->ViewInverseMatrix       = glm::inverse(viewMat);
         pSceneParams->ProjectionInverseMatrix = glm::inverse(projMat);
         pSceneParams->EyePosition             = eyePosition;
+        pSceneParams->MaxSamples              = gCurrentMaxSamples;
+
+        // Reset ray gen samples
+        if (gResetRayGenSamples) {
+            commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
+
+            commandList->SetComputeRootSignature(clearRayGenRootSig.Get());
+            commandList->SetPipelineState(clearRayGenPSO.Get());
+
+            D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
+            descriptorTable.ptr += (kOutputResourcesOffset + 1) * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            commandList->SetComputeRootDescriptorTable(0, descriptorTable);
+
+            commandList->Dispatch(gWindowWidth / 8, gWindowHeight / 8, 1);
+            gResetRayGenSamples = false;
+        }
 
         // Trace rays
         {
@@ -582,6 +609,48 @@ int main(int argc, char** argv)
             if (!WaitForGpu(renderer.get())) {
                 assert(false && "WaitForGpu failed");
                 break;
+            }
+
+            // ImGui
+            {
+                UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
+
+                ComPtr<ID3D12Resource> swapchainBuffer;
+                CHECK_CALL(renderer->Swapchain->GetBuffer(bufferIndex, IID_PPV_ARGS(&swapchainBuffer)));
+
+                CHECK_CALL(commandAllocator->Reset());
+                CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
+
+                D3D12_RESOURCE_BARRIER preRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+                commandList->ResourceBarrier(1, &preRenderBarrier);
+                {
+                    commandList->OMSetRenderTargets(
+                        1,
+                        &renderer->SwapchainRTVDescriptorHandles[bufferIndex],
+                        false,
+                        &renderer->SwapchainDSVDescriptorHandles[bufferIndex]);
+
+                    // Viewport and scissor
+                    D3D12_VIEWPORT viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
+                    commandList->RSSetViewports(1, &viewport);
+                    D3D12_RECT scissor = {0, 0, static_cast<long>(gWindowWidth), static_cast<long>(gWindowHeight)};
+                    commandList->RSSetScissorRects(1, &scissor);
+
+                    // Draw ImGui
+                    window->ImGuiRenderDrawData(renderer.get(), commandList.Get());
+                }
+                D3D12_RESOURCE_BARRIER postRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+                commandList->ResourceBarrier(1, &postRenderBarrier);
+
+                commandList->Close();
+
+                ID3D12CommandList* pList = commandList.Get();
+                renderer->Queue->ExecuteCommandLists(1, &pList);
+
+                if (!WaitForGpu(renderer.get())) {
+                    assert(false && "WaitForGpu failed");
+                    break;
+                }
             }
         }
 
