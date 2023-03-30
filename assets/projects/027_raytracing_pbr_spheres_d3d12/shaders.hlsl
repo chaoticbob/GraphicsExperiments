@@ -223,24 +223,10 @@ float3 GetIBLIrradiance(float3 N)
     const float a = 1.0;
     float3 Color = 0;
 
-    const uint NumSamples = 1024;
+    const uint NumSamples = 2048;
     for (uint i = 0; i < NumSamples; ++i) {
-        float2 Xi       = Hammersley(i, NumSamples);
-        float  Phi      = 2 * PI * Xi.x;
-        //float  CosTheta = cos(PI / 2 * Xi.y);
-        float CosTheta = sqrt((1 - Xi.y) / (1 + (a * a - 1) * Xi.y));
-        float  SinTheta = sqrt(1 - CosTheta * CosTheta);
-
-        float3 L        = (float3)0;
-        L.x             = SinTheta * cos(Phi);
-        L.y             = SinTheta * sin(Phi);
-        L.z             = CosTheta;
-        float3 UpVector = abs(N.z) < 0.999f ? float3(0, 0, 1) : float3(1, 0, 0);
-        float3 TangentX = normalize(cross(UpVector, N));
-        float3 TangentY = cross(N, TangentX);
-
-        // Tangent to world space
-        L = TangentX * L.x + TangentY * L.y + N * L.z;
+        float2 Xi = Hammersley(i, NumSamples);
+        float3 L  = ImportanceSampleGGX(Xi, 1.0, N);
 
         float3 SampleColor = GetIBLEnvironment(L, 0);
         Color += SampleColor;
@@ -254,7 +240,7 @@ float3 GetIBLSpecular(float3 SpecularColor, float3 N, float3 V, float Roughness)
 {
     float3 Color = 0;
 
-    const uint NumSamples = 1024;
+    const uint NumSamples = 2048;
     for (uint i = 0; i < NumSamples; ++i) {
         float2 Xi = Hammersley(i, NumSamples);
         float3 H   = ImportanceSampleGGX(Xi, Roughness, N);
@@ -403,7 +389,7 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
         // Diffuse IBL component
         float3 F = Fresnel_SchlickRoughness(cosTheta, F0, roughness);
         float3 kD = (1.0 - F) * (1.0 - metalness);
-        float3 irradiance = GetIBLIrradiance(R);
+        float3 irradiance = GetIBLIrradiance(N);
         float3 diffuse = irradiance * albedo / PI;
 
         // Specular IBL component

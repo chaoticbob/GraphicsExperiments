@@ -24,6 +24,31 @@ using namespace glm;
     }
 
 // =============================================================================
+// Macros, enums, and constants
+// =============================================================================
+const uint32_t kOutputResourcesOffset = 0;
+const uint32_t kGeoBuffersOffset      = 20;
+const uint32_t kIBLTextureOffset      = 3;
+
+// =============================================================================
+// Shader code
+// =============================================================================
+const char* gClearRayGenSamplesShader = R"(
+
+RWTexture2D<float4>      AccumTarget   : register(u0); // Accumulation texture
+RWStructuredBuffer<uint> RayGenSamples : register(u1); // Ray generation samples
+
+[numthreads(8, 8, 1)]
+void csmain(uint3 tid : SV_DispatchThreadId)
+{
+    AccumTarget[tid.xy] = float4(0, 0, 0, 0);
+
+    uint idx = tid.y * 1920 + tid.x;
+    RayGenSamples[idx] = 0;    
+}
+)";
+
+// =============================================================================
 // Globals
 // =============================================================================
 static uint32_t gWindowWidth  = 1920;
@@ -37,6 +62,8 @@ static LPCWSTR gClosestHitShaderName = L"MyClosestHitShader";
 
 static float gTargetAngle = 0.0f;
 static float gAngle       = 0.0f;
+
+static bool gResetRayGenSamples = true;
 
 struct Light
 {
@@ -77,6 +104,7 @@ struct MaterialParameters
     float roughness;
     float metallic;
     float specularReflectance;
+    float ior;
 };
 
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
@@ -109,12 +137,21 @@ void CreateTLAS(
     ID3D12Resource**                 ppTLAS,
     std::vector<MaterialParameters>& outMaterialParams);
 void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer);
-// void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource* pRayGenSRT, ID3D12Resource** ppConstantBuffer);
+void CreateAccumTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer);
 void CreateIBLTextures(
     DxRenderer*      pRenderer,
     ID3D12Resource** ppBRDFLUT,
     IBLTextures&     outIBLTextures);
 void CreateDescriptorHeap(DxRenderer* pRenderer, ID3D12DescriptorHeap** ppHeap);
+void WriteDescriptors(
+    DxRenderer*           pRenderer,
+    ID3D12DescriptorHeap* pDescriptorHeap,
+    ID3D12Resource*       pOutputTexture,
+    ID3D12Resource*       pAccumTexture,
+    ID3D12Resource*       pRayGenSamplesBuffer,
+    const Geometry&       sphereGeometry,
+    const Geometry&       boxGeometry,
+    const IBLTextures&    iblTextures);
 
 void MouseMove(int x, int y, int buttons)
 {
@@ -126,11 +163,15 @@ void MouseMove(int x, int y, int buttons)
         int dy = y - prevY;
 
         gTargetAngle += 0.25f * dx;
+
+        gResetRayGenSamples = true;
     }
 
     prevX = x;
     prevY = y;
 }
+
+void WriteDescriptors(std::unique_ptr<DxRenderer>& renderer, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& descriptorHeap, Microsoft::WRL::ComPtr<ID3D12Resource>& outputTexture, Microsoft::WRL::ComPtr<ID3D12Resource>& accumTexture, Microsoft::WRL::ComPtr<ID3D12Resource>& rayGenSamplesBuffer, Geometry& sphereGeometry, Geometry& boxGeometry, IBLTextures& iblTextures);
 
 // =============================================================================
 // main()
@@ -156,17 +197,31 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Compile shaders
     // *************************************************************************
-    std::vector<char> dxil;
+    std::vector<char> rayTraceDxil;
     {
-        auto source = LoadString("projects/029_raytracing_path_trace_d3d12/shaders.hlsl");
+        auto source = LoadString("projects/031_raytracing_path_trace_d3d12/shaders.hlsl");
         assert((!source.empty()) && "no shader source!");
 
         std::string errorMsg;
-        HRESULT     hr = CompileHLSL(source, "", "lib_6_5", &dxil, &errorMsg);
+        HRESULT     hr = CompileHLSL(source, "", "lib_6_5", &rayTraceDxil, &errorMsg);
         if (FAILED(hr)) {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (raytracing): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            assert(false);
+            return EXIT_FAILURE;
+        }
+    }
+
+    std::vector<char> clearRayGenDxil;
+    {
+        std::string errorMsg;
+        HRESULT     hr = CompileHLSL(gClearRayGenSamplesShader, "csmain", "cs_6_5", &clearRayGenDxil, &errorMsg);
+        if (FAILED(hr)) {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (clear ray gen): " << errorMsg << "\n";
             GREX_LOG_ERROR(ss.str().c_str());
             assert(false);
             return EXIT_FAILURE;
@@ -190,8 +245,8 @@ int main(int argc, char** argv)
     CreateRayTracingStateObject(
         renderer.get(),
         globalRootSig.Get(),
-        dxil.size(),
-        dxil.data(),
+        rayTraceDxil.size(),
+        rayTraceDxil.data(),
         &stateObject);
 
     // *************************************************************************
@@ -206,6 +261,53 @@ int main(int argc, char** argv)
         &rgenSRT,
         &missSRT,
         &hitgSRT);
+
+    // *************************************************************************
+    // Clear ray gen pipeline
+    // *************************************************************************
+    ComPtr<ID3D12RootSignature> clearRayGenRootSig;
+    ComPtr<ID3D12PipelineState> clearRayGenPSO;
+    {
+        D3D12_DESCRIPTOR_RANGE range            = {};
+        range.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+        range.NumDescriptors                    = 2;
+        range.BaseShaderRegister                = 0;
+        range.RegisterSpace                     = 0;
+        range.OffsetInDescriptorsFromTableStart = 0;
+
+        D3D12_ROOT_PARAMETER rootParameters[1];
+        rootParameters[0].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        rootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
+        rootParameters[0].DescriptorTable.pDescriptorRanges   = &range;
+        rootParameters[0].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
+
+        D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
+        rootSigDesc.NumParameters             = 1;
+        rootSigDesc.pParameters               = rootParameters;
+
+        ComPtr<ID3DBlob> blob;
+        ComPtr<ID3DBlob> error;
+        HRESULT          hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error);
+        if (FAILED(hr)) {
+            std::string errorMsg = std::string(reinterpret_cast<const char*>(error->GetBufferPointer()), error->GetBufferSize());
+
+            std::stringstream ss;
+            ss << "\n"
+               << "D3D12SerializeRootSignature failed: " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            assert(false);
+        }
+        CHECK_CALL(renderer->Device->CreateRootSignature(
+            0,                                   // nodeMask
+            blob->GetBufferPointer(),            // pBloblWithRootSignature
+            blob->GetBufferSize(),               // blobLengthInBytes
+            IID_PPV_ARGS(&clearRayGenRootSig))); // riid, ppvRootSignature
+
+        D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+        psoDesc.pRootSignature                    = clearRayGenRootSig.Get();
+        psoDesc.CS                                = {clearRayGenDxil.data(), clearRayGenDxil.size()};
+        CHECK_CALL(renderer->Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&clearRayGenPSO)));
+    }
 
     // *************************************************************************
     // Create geometry
@@ -242,10 +344,12 @@ int main(int argc, char** argv)
         materialParams);
 
     // *************************************************************************
-    // Output texture
+    // Output and accumulation texture
     // *************************************************************************
     ComPtr<ID3D12Resource> outputTexture;
+    ComPtr<ID3D12Resource> accumTexture;
     CreateOutputTexture(renderer.get(), &outputTexture);
+    CreateAccumTexture(renderer.get(), &accumTexture);
 
     // *************************************************************************
     // Material params buffer
@@ -268,6 +372,16 @@ int main(int argc, char** argv)
         &sceneParamsBuffer));
 
     // *************************************************************************
+    // Ray gen samples buffer
+    // *************************************************************************
+    ComPtr<ID3D12Resource> rayGenSamplesBuffer;
+    CHECK_CALL(CreateUAVBuffer(
+        renderer.get(),
+        (gWindowWidth * gWindowHeight * sizeof(uint32_t)),
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        &rayGenSamplesBuffer));
+
+    // *************************************************************************
     // Descriptor heaps
     // *************************************************************************
     ComPtr<ID3D12Resource> brdfLUT;
@@ -283,104 +397,21 @@ int main(int argc, char** argv)
     ComPtr<ID3D12DescriptorHeap> descriptorHeap;
     CreateDescriptorHeap(renderer.get(), &descriptorHeap);
 
-    const uint32_t kOutputResourcesOffset = 0;
-    const uint32_t kGeoBuffersOffset      = 20;
-    const uint32_t kIBLTextureOffset      = 3;
     // Write descriptor to descriptor heap
-    {
-        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-        uavDesc.ViewDimension                    = D3D12_UAV_DIMENSION_TEXTURE2D;
-
-        // Outputs resources
-        {
-            D3D12_CPU_DESCRIPTOR_HANDLE descriptor = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
-            descriptor.ptr += kOutputResourcesOffset * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-            // Output texture (u1)
-            renderer->Device->CreateUnorderedAccessView(outputTexture.Get(), nullptr, &uavDesc, descriptor);
-            descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-            // Ray generation samples (u2)
-            renderer->Device->CreateUnorderedAccessView(outputTexture.Get(), nullptr, &uavDesc, descriptor);
-            descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        }
-
-        // Geometry
-        {
-            const uint32_t kGeometryStride      = 5;
-            const uint32_t kNumSpheres          = 4;
-            const uint32_t kIndexBufferIndex    = 0;
-            const uint32_t kPositionBufferIndex = 1;
-            const uint32_t kNormalBufferIndex   = 2;
-
-            const D3D12_CPU_DESCRIPTOR_HANDLE kBaseDescriptor = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
-            const UINT                        kIncrementSize  = renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-            // Spheres
-            for (uint32_t i = 0; i < kNumSpheres; ++i) {
-                uint32_t                    offset     = 0;
-                D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
-
-                // Index buffer (t20)
-                offset     = kGeoBuffersOffset + (kIndexBufferIndex * kGeometryStride) + i;
-                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
-                CreateDescriptoBufferSRV(renderer.get(), 0, sphereGeometry.indexCount / 3, 12, sphereGeometry.indexBuffer.Get(), descriptor);
-
-                // Position buffer (t25)
-                offset     = kGeoBuffersOffset + (kPositionBufferIndex * kGeometryStride) + i;
-                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
-                CreateDescriptoBufferSRV(renderer.get(), 0, sphereGeometry.vertexCount, 4, sphereGeometry.positionBuffer.Get(), descriptor);
-
-                // Normal buffer (t30)
-                offset     = kGeoBuffersOffset + (kNormalBufferIndex * kGeometryStride) + i;
-                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
-                CreateDescriptoBufferSRV(renderer.get(), 0, sphereGeometry.vertexCount, 4, sphereGeometry.normalBuffer.Get(), descriptor);
-            }
-
-            // Box
-            {
-                uint32_t                    i          = 4;
-                uint32_t                    offset     = 0;
-                D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
-
-                // Index buffer (t20)
-                offset     = kGeoBuffersOffset + (kIndexBufferIndex * kGeometryStride) + i;
-                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
-                CreateDescriptoBufferSRV(renderer.get(), 0, boxGeometry.indexCount / 3, 12, boxGeometry.indexBuffer.Get(), descriptor);
-
-                // Position buffer (t25)
-                offset     = kGeoBuffersOffset + (kPositionBufferIndex * kGeometryStride) + i;
-                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
-                CreateDescriptoBufferSRV(renderer.get(), 0, boxGeometry.vertexCount, 4, boxGeometry.positionBuffer.Get(), descriptor);
-
-                // Normal buffer (t30)
-                offset     = kGeoBuffersOffset + (kNormalBufferIndex * kGeometryStride) + i;
-                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
-                CreateDescriptoBufferSRV(renderer.get(), 0, boxGeometry.vertexCount, 4, boxGeometry.normalBuffer.Get(), descriptor);
-            }
-        }
-
-        // IBL Textures
-        {
-            D3D12_CPU_DESCRIPTOR_HANDLE descriptor = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
-            descriptor.ptr += kIBLTextureOffset * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-            // BRDF LUT
-            CreateDescriptorTexture2D(renderer.get(), brdfLUT.Get(), descriptor);
-            descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            // Irradiance map
-            CreateDescriptorTexture2D(renderer.get(), iblTextures.irrTexture.Get(), descriptor);
-            descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            // Environment map
-            CreateDescriptorTexture2D(renderer.get(), iblTextures.envTexture.Get(), descriptor, 0, iblTextures.envNumLevels);
-            descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        }
-    }
+    WriteDescriptors(
+        renderer.get(),
+        descriptorHeap.Get(),
+        outputTexture.Get(),
+        accumTexture.Get(),
+        rayGenSamplesBuffer.Get(),
+        sphereGeometry,
+        boxGeometry,
+        iblTextures);
 
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "029_raytracing_path_trace_d3d12");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "031_raytracing_path_trace_d3d12");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -430,15 +461,33 @@ int main(int argc, char** argv)
         CHECK_CALL(commandAllocator->Reset());
         CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
 
+        if (gResetRayGenSamples) {
+            commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
+
+            commandList->SetComputeRootSignature(clearRayGenRootSig.Get());
+            commandList->SetPipelineState(clearRayGenPSO.Get());
+
+            D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
+            descriptorTable.ptr += (kOutputResourcesOffset + 1) * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            commandList->SetComputeRootDescriptorTable(0, descriptorTable);
+
+            commandList->Dispatch(gWindowWidth / 8, gWindowHeight / 8, 1);
+            gResetRayGenSamples = false;
+        }
+
         // Smooth out the rotation on Y
         gAngle += (gTargetAngle - gAngle) * 0.1f;
+        // Keep resetting until the angle is somewhat stable
+        if (fabs(gTargetAngle - gAngle) > 0.1f) {
+            gResetRayGenSamples = true;
+        }
 
         // Camera matrices
-        vec3 eyePosition = vec3(0, 5.5f, 6.0f);
-        mat4 viewMat     = glm::lookAt(eyePosition, vec3(0, 0, -10), vec3(0, 1, 0));
-        mat4 projMat     = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
-        mat4 rotMat      = glm::rotate(glm::radians(-gAngle), vec3(0, 1, 0));
-        mat4 invRotMat   = glm::inverse(rotMat);
+        mat4 transformEyeMat     = glm::rotate(glm::radians(-gAngle), vec3(0, 1, 0));
+        vec3 startingEyePosition = vec3(0, 3.5f, 6.0f);
+        vec3 eyePosition         = transformEyeMat * vec4(startingEyePosition, 1);
+        mat4 viewMat             = glm::lookAt(eyePosition, vec3(0, 3, 0), vec3(0, 1, 0));
+        mat4 projMat             = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
 
         // Set constant buffer values
         pSceneParams->ViewInverseMatrix       = glm::inverse(viewMat);
@@ -450,29 +499,28 @@ int main(int argc, char** argv)
             commandList->SetComputeRootSignature(globalRootSig.Get());
             commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
 
+            D3D12_GPU_DESCRIPTOR_HANDLE descriptorHeapStart = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
+            UINT                        descriptorIncSize   = renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
             // Acceleration structure (t0)
             commandList->SetComputeRootShaderResourceView(0, tlasBuffer->GetGPUVirtualAddress());
             // Output texture (u1)
+            // Accumulation texture (u2)
+            // Ray generation samples (u3)
+            D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = {descriptorHeapStart.ptr + kOutputResourcesOffset * descriptorIncSize};
             commandList->SetComputeRootDescriptorTable(1, descriptorHeap->GetGPUDescriptorHandleForHeapStart());
             // Scene params (b5)
             commandList->SetComputeRootConstantBufferView(2, sceneParamsBuffer->GetGPUVirtualAddress());
-            // Model params (b6)
-            commandList->SetComputeRoot32BitConstants(3, 16, &rotMat, 0);
-            commandList->SetComputeRoot32BitConstants(3, 16, &invRotMat, 16);
-            // Index buffer (t20)
-            // Position buffer (t25)
-            // Normal buffer (t30)
-            D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
-            descriptorTable.ptr += kGeoBuffersOffset * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            commandList->SetComputeRootDescriptorTable(4, descriptorTable);
-            // BRDF LUT (t10)
-            // Irradiance map (t11)
+            //  Index buffer (t20)
+            //  Position buffer (t25)
+            //  Normal buffer (t30)
+            descriptorTable = {descriptorHeapStart.ptr + kGeoBuffersOffset * descriptorIncSize};
+            commandList->SetComputeRootDescriptorTable(3, descriptorTable);
             // Environment map (t12)
-            descriptorTable = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
-            descriptorTable.ptr += kIBLTextureOffset * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            commandList->SetComputeRootDescriptorTable(5, descriptorTable);
+            descriptorTable = {descriptorHeapStart.ptr + kIBLTextureOffset * descriptorIncSize};
+            commandList->SetComputeRootDescriptorTable(4, descriptorTable);
             // Material params (t9)
-            commandList->SetComputeRootShaderResourceView(6, materialParamsBuffer->GetGPUVirtualAddress());
+            commandList->SetComputeRootShaderResourceView(5, materialParamsBuffer->GetGPUVirtualAddress());
 
             commandList->SetPipelineState1(stateObject.Get());
 
@@ -548,13 +596,15 @@ int main(int argc, char** argv)
 
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 {
-    D3D12_DESCRIPTOR_RANGE range            = {};
-    range.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-    range.NumDescriptors                    = 2;
-    range.BaseShaderRegister                = 1;
-    range.RegisterSpace                     = 0;
-    range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    // Output range
+    D3D12_DESCRIPTOR_RANGE rangeOutput            = {};
+    rangeOutput.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+    rangeOutput.NumDescriptors                    = 3;
+    rangeOutput.BaseShaderRegister                = 1;
+    rangeOutput.RegisterSpace                     = 0;
+    rangeOutput.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
+    // Geometry buffers range
     D3D12_DESCRIPTOR_RANGE rangeGeometryBuffers            = {};
     rangeGeometryBuffers.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     rangeGeometryBuffers.NumDescriptors                    = 15;
@@ -562,88 +612,69 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     rangeGeometryBuffers.RegisterSpace                     = 0;
     rangeGeometryBuffers.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
+    // IBLrange
     D3D12_DESCRIPTOR_RANGE rangeIBL            = {};
     rangeIBL.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    rangeIBL.NumDescriptors                    = 3;
-    rangeIBL.BaseShaderRegister                = 10;
+    rangeIBL.NumDescriptors                    = 1;
+    rangeIBL.BaseShaderRegister                = 100;
     rangeIBL.RegisterSpace                     = 0;
     rangeIBL.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[7];
+    D3D12_ROOT_PARAMETER rootParameters[6];
     // Accleration structure (t0)
     rootParameters[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
     rootParameters[0].Descriptor.ShaderRegister = 0;
     rootParameters[0].Descriptor.RegisterSpace  = 0;
     rootParameters[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
     // Output texture (u1)
-    // Ray generaiton sampling (u2)
+    // Accumulation texture (u2)
+    // Ray generaiton sampling (u3)
     rootParameters[1].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[1].DescriptorTable.pDescriptorRanges   = &range;
+    rootParameters[1].DescriptorTable.pDescriptorRanges   = &rangeOutput;
     rootParameters[1].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
     // Scene params (b5)
     rootParameters[2].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[2].Descriptor.ShaderRegister = 5;
     rootParameters[2].Descriptor.RegisterSpace  = 0;
     rootParameters[2].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // Model params (b6)
-    rootParameters[3].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    rootParameters[3].Constants.Num32BitValues = 32;
-    rootParameters[3].Constants.ShaderRegister = 6;
-    rootParameters[3].Constants.RegisterSpace  = 0;
-    rootParameters[3].ShaderVisibility         = D3D12_SHADER_VISIBILITY_ALL;
-    // Index buffers (t20)
-    // Position buffers (t25)
-    // Normal buffers (t30)
+    //  Index buffers (t20)
+    //  Position buffers (t25)
+    //  Normal buffers (t30)
+    rootParameters[3].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[3].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[3].DescriptorTable.pDescriptorRanges   = &rangeGeometryBuffers;
+    rootParameters[3].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
+    // Environment map (t12)
     rootParameters[4].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[4].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[4].DescriptorTable.pDescriptorRanges   = &rangeGeometryBuffers;
+    rootParameters[4].DescriptorTable.pDescriptorRanges   = &rangeIBL;
     rootParameters[4].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-    // BRDF LUT (t10)
-    // Irradiance map (t11)
-    // Environment map (t12)
-    rootParameters[5].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[5].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[5].DescriptorTable.pDescriptorRanges   = &rangeIBL;
-    rootParameters[5].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
     // Material params (t9)
-    rootParameters[6].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[6].Descriptor.ShaderRegister = 9;
-    rootParameters[6].Descriptor.RegisterSpace  = 0;
-    rootParameters[6].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[5].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    rootParameters[5].Descriptor.ShaderRegister = 9;
+    rootParameters[5].Descriptor.RegisterSpace  = 0;
+    rootParameters[5].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
 
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {};
-    // ClampedSampler (s13)
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
+    // IBLMapSampler (s10)
     staticSamplers[0].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSamplers[0].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[0].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[0].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[0].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[0].MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
     staticSamplers[0].MaxAnisotropy    = 0;
     staticSamplers[0].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     staticSamplers[0].MinLOD           = 0;
-    staticSamplers[0].MaxLOD           = 1;
-    staticSamplers[0].ShaderRegister   = 13;
+    staticSamplers[0].MaxLOD           = D3D12_FLOAT32_MAX;
+    staticSamplers[0].ShaderRegister   = 10;
     staticSamplers[0].RegisterSpace    = 0;
     staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-    // UWrapSampler (s14)
-    staticSamplers[1].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSamplers[1].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[1].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
-    staticSamplers[1].MaxAnisotropy    = 0;
-    staticSamplers[1].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    staticSamplers[1].MinLOD           = 0;
-    staticSamplers[1].MaxLOD           = D3D12_FLOAT32_MAX;
-    staticSamplers[1].ShaderRegister   = 14;
-    staticSamplers[1].RegisterSpace    = 0;
-    staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
     D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-    rootSigDesc.NumParameters             = 7;
+    rootSigDesc.NumParameters             = 6;
     rootSigDesc.pParameters               = rootParameters;
-    rootSigDesc.NumStaticSamplers         = 2;
+    rootSigDesc.NumStaticSamplers         = 1;
     rootSigDesc.pStaticSamplers           = staticSamplers;
 
     ComPtr<ID3DBlob> blob;
@@ -757,8 +788,8 @@ void CreateRayTracingStateObject(
     //
     // ---------------------------------------------------------------------
     D3D12_RAYTRACING_SHADER_CONFIG shaderConfig = {};
-    shaderConfig.MaxPayloadSizeInBytes          = 4 * sizeof(float); // float4 color
-    shaderConfig.MaxAttributeSizeInBytes        = 2 * sizeof(float); // float2 barycentrics
+    shaderConfig.MaxPayloadSizeInBytes          = 4 * sizeof(float) + 3 * sizeof(uint32_t); // color, ray depth, sample count, ior
+    shaderConfig.MaxAttributeSizeInBytes        = 2 * sizeof(float);                        // barycentrics
 
     pSubobject        = &subobjects[SHADER_CONFIG_INDEX];
     pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG;
@@ -786,7 +817,7 @@ void CreateRayTracingStateObject(
     //
     // ---------------------------------------------------------------------
     D3D12_RAYTRACING_PIPELINE_CONFIG pipelineConfigDesc = {};
-    pipelineConfigDesc.MaxTraceRecursionDepth           = 1;
+    pipelineConfigDesc.MaxTraceRecursionDepth           = 8;
 
     pSubobject        = &subobjects[PIPELINE_CONFIG_INDEX];
     pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
@@ -907,8 +938,21 @@ void CreateGeometries(
 {
     // Sphere
     {
-        TriMesh   mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
-        Geometry& geo  = outSphereGeometry;
+        // TriMesh mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
+
+        TriMesh::Options options   = {.enableNormals = true};
+        options.applyTransform     = true;
+        options.transformRotate.y  = glm::radians(135.0f);
+        options.transformTranslate = vec3(0, -2.1f, 0); // vec3(0, -0.11f, 0);
+
+        TriMesh mesh;
+        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/teapot.obj").string(), "", options, &mesh);
+        if (!res) {
+            assert(false && "failed to load model");
+        }
+        mesh.ScaleToFit(1.25f);
+
+        Geometry& geo = outSphereGeometry;
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
@@ -1086,9 +1130,10 @@ void CreateTLAS(
         {
             MaterialParameters materialParams  = {};
             materialParams.baseColor           = vec3(1, 1, 1);
-            materialParams.roughness           = 1;
+            materialParams.roughness           = 1.0f;
             materialParams.metallic            = 0;
             materialParams.specularReflectance = 0.0f;
+            materialParams.ior                 = 0;
 
             outMaterialParams.push_back(materialParams);
         }
@@ -1100,6 +1145,7 @@ void CreateTLAS(
             materialParams.roughness           = 0;
             materialParams.metallic            = 0;
             materialParams.specularReflectance = 0.5f;
+            materialParams.ior                 = 0;
 
             outMaterialParams.push_back(materialParams);
         }
@@ -1107,10 +1153,11 @@ void CreateTLAS(
         // Glass
         {
             MaterialParameters materialParams  = {};
-            materialParams.baseColor           = F0_DiletricGlass;
+            materialParams.baseColor           = vec3(1, 1, 1);
             materialParams.roughness           = 0;
             materialParams.metallic            = 0;
-            materialParams.specularReflectance = 1.0f;
+            materialParams.specularReflectance = 0.0f;
+            materialParams.ior                 = 1.50f;
 
             outMaterialParams.push_back(materialParams);
         }
@@ -1119,9 +1166,10 @@ void CreateTLAS(
         {
             MaterialParameters materialParams  = {};
             materialParams.baseColor           = F0_MetalGold;
-            materialParams.roughness           = 0.25f;
+            materialParams.roughness           = 0.30f;
             materialParams.metallic            = 1;
             materialParams.specularReflectance = 0.0f;
+            materialParams.ior                 = 0;
 
             outMaterialParams.push_back(materialParams);
         }
@@ -1129,10 +1177,11 @@ void CreateTLAS(
         // Box
         {
             MaterialParameters materialParams  = {};
-            materialParams.baseColor           = F0_Generic;
+            materialParams.baseColor           = vec3(0.6f, 0.7f, 0.75f);
             materialParams.roughness           = 1.0f;
             materialParams.metallic            = 0;
             materialParams.specularReflectance = 0.0f;
+            materialParams.ior                 = 0;
 
             outMaterialParams.push_back(materialParams);
         }
@@ -1143,6 +1192,7 @@ void CreateTLAS(
         D3D12_RAYTRACING_INSTANCE_DESC instanceDesc = {};
         instanceDesc.InstanceMask                   = 1;
         instanceDesc.AccelerationStructure          = pSphereBLAS->GetGPUVirtualAddress();
+        instanceDesc.Flags                          = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
 
         uint32_t transformIdx = 0;
 
@@ -1157,8 +1207,10 @@ void CreateTLAS(
         ++transformIdx;
 
         // Glass sphere
-        memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
-        instanceDescs.push_back(instanceDesc);
+        D3D12_RAYTRACING_INSTANCE_DESC thisInstanceDesc = instanceDesc;
+        thisInstanceDesc.Flags |= D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE | D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE;
+        memcpy(thisInstanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instanceDescs.push_back(thisInstanceDesc);
         ++transformIdx;
 
         // Gold sphere
@@ -1263,6 +1315,32 @@ void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)
         IID_PPV_ARGS(ppBuffer)));              // riidResource, ppvResource
 }
 
+void CreateAccumTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)
+{
+    D3D12_HEAP_PROPERTIES heapProperties = {};
+    heapProperties.Type                  = D3D12_HEAP_TYPE_DEFAULT;
+
+    D3D12_RESOURCE_DESC desc = {};
+    desc.Dimension           = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Alignment           = 0;
+    desc.Width               = gWindowWidth;
+    desc.Height              = gWindowHeight;
+    desc.DepthOrArraySize    = 1;
+    desc.MipLevels           = 1;
+    desc.Format              = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    desc.SampleDesc          = {1, 0};
+    desc.Layout              = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    desc.Flags               = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+    CHECK_CALL(pRenderer->Device->CreateCommittedResource(
+        &heapProperties,                       // pHeapProperties
+        D3D12_HEAP_FLAG_NONE,                  // HeapFlags
+        &desc,                                 // pDesc
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS, // InitialResourceState
+        nullptr,                               // pOptimizedClearValue
+        IID_PPV_ARGS(ppBuffer)));              // riidResource, ppvResource
+}
+
 void CreateIBLTextures(
     DxRenderer*      pRenderer,
     ID3D12Resource** ppBRDFLUT,
@@ -1353,4 +1431,119 @@ void CreateDescriptorHeap(DxRenderer* pRenderer, ID3D12DescriptorHeap** ppHeap)
     desc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 
     CHECK_CALL(pRenderer->Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(ppHeap)));
+}
+
+void WriteDescriptors(
+    DxRenderer*           pRenderer,
+    ID3D12DescriptorHeap* pDescriptorHeap,
+    ID3D12Resource*       pOutputTexture,
+    ID3D12Resource*       pAccumTexture,
+    ID3D12Resource*       pRayGenSamplesBuffer,
+    const Geometry&       sphereGeometry,
+    const Geometry&       boxGeometry,
+    const IBLTextures&    iblTextures)
+{
+    {
+        UINT descriptorIncSize = pRenderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+        // Outputs resources
+        {
+            D3D12_CPU_DESCRIPTOR_HANDLE descriptor = pDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+            descriptor.ptr += kOutputResourcesOffset * descriptorIncSize;
+
+            // Output texture (u1)
+            {
+                D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+
+                uavDesc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM;
+                uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+                pRenderer->Device->CreateUnorderedAccessView(pOutputTexture, nullptr, &uavDesc, descriptor);
+                descriptor.ptr += descriptorIncSize;
+
+                uavDesc.Format        = DXGI_FORMAT_R32G32B32A32_FLOAT;
+                uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+                pRenderer->Device->CreateUnorderedAccessView(pAccumTexture, nullptr, &uavDesc, descriptor);
+                descriptor.ptr += descriptorIncSize;
+            }
+
+            // Ray generation samples (u3)
+            {
+                D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+                uavDesc.ViewDimension                    = D3D12_UAV_DIMENSION_BUFFER;
+                uavDesc.Buffer.FirstElement              = 0;
+                uavDesc.Buffer.NumElements               = gWindowWidth * gWindowHeight;
+                uavDesc.Buffer.StructureByteStride       = sizeof(uint32_t);
+                uavDesc.Buffer.CounterOffsetInBytes      = 0;
+                uavDesc.Buffer.Flags                     = D3D12_BUFFER_UAV_FLAG_NONE;
+
+                pRenderer->Device->CreateUnorderedAccessView(pRayGenSamplesBuffer, nullptr, &uavDesc, descriptor);
+                descriptor.ptr += descriptorIncSize;
+            }
+        }
+
+        // Geometry
+        {
+            const uint32_t kGeometryStride      = 5;
+            const uint32_t kNumSpheres          = 4;
+            const uint32_t kIndexBufferIndex    = 0;
+            const uint32_t kPositionBufferIndex = 1;
+            const uint32_t kNormalBufferIndex   = 2;
+
+            const D3D12_CPU_DESCRIPTOR_HANDLE kBaseDescriptor = pDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+            const UINT                        kIncrementSize  = pRenderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+            // Spheres
+            for (uint32_t i = 0; i < kNumSpheres; ++i) {
+                uint32_t                    offset     = 0;
+                D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
+
+                // Index buffer (t20)
+                offset     = kGeoBuffersOffset + (kIndexBufferIndex * kGeometryStride) + i;
+                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
+                CreateDescriptoBufferSRV(pRenderer, 0, sphereGeometry.indexCount / 3, 12, sphereGeometry.indexBuffer.Get(), descriptor);
+
+                // Position buffer (t25)
+                offset     = kGeoBuffersOffset + (kPositionBufferIndex * kGeometryStride) + i;
+                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
+                CreateDescriptoBufferSRV(pRenderer, 0, sphereGeometry.vertexCount, 4, sphereGeometry.positionBuffer.Get(), descriptor);
+
+                // Normal buffer (t30)
+                offset     = kGeoBuffersOffset + (kNormalBufferIndex * kGeometryStride) + i;
+                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
+                CreateDescriptoBufferSRV(pRenderer, 0, sphereGeometry.vertexCount, 4, sphereGeometry.normalBuffer.Get(), descriptor);
+            }
+
+            // Box
+            {
+                uint32_t                    i          = 4;
+                uint32_t                    offset     = 0;
+                D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
+
+                // Index buffer (t20)
+                offset     = kGeoBuffersOffset + (kIndexBufferIndex * kGeometryStride) + i;
+                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
+                CreateDescriptoBufferSRV(pRenderer, 0, boxGeometry.indexCount / 3, 12, boxGeometry.indexBuffer.Get(), descriptor);
+
+                // Position buffer (t25)
+                offset     = kGeoBuffersOffset + (kPositionBufferIndex * kGeometryStride) + i;
+                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
+                CreateDescriptoBufferSRV(pRenderer, 0, boxGeometry.vertexCount, 4, boxGeometry.positionBuffer.Get(), descriptor);
+
+                // Normal buffer (t30)
+                offset     = kGeoBuffersOffset + (kNormalBufferIndex * kGeometryStride) + i;
+                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
+                CreateDescriptoBufferSRV(pRenderer, 0, boxGeometry.vertexCount, 4, boxGeometry.normalBuffer.Get(), descriptor);
+            }
+        }
+
+        // IBL Textures
+        {
+            D3D12_CPU_DESCRIPTOR_HANDLE descriptor = pDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+            descriptor.ptr += kIBLTextureOffset * pRenderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+            // Environment map
+            CreateDescriptorTexture2D(pRenderer, iblTextures.envTexture.Get(), descriptor, 0, iblTextures.envNumLevels);
+            descriptor.ptr += pRenderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        }
+    }
 }

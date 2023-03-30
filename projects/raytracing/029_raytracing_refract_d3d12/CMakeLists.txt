@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.0)
 
-project(029_raytracing_path_trace_d3d12)
+project(029_raytracing_refract_d3d12)
 
 add_executable(
-    029_raytracing_path_trace_d3d12
-    029_raytracing_path_trace_d3d12.cpp
+    029_raytracing_refract_d3d12
+    029_raytracing_refract_d3d12.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/dx_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/dx_renderer.cpp
@@ -17,15 +17,15 @@ add_executable(
     ${IMGUI_D3D12_FILES}
 )
 
-set_target_properties(029_raytracing_path_trace_d3d12 PROPERTIES FOLDER "raytracing")
+set_target_properties(029_raytracing_refract_d3d12 PROPERTIES FOLDER "raytracing")
 
 target_compile_definitions(
-    029_raytracing_path_trace_d3d12
+    029_raytracing_refract_d3d12
     PUBLIC ENABLE_IMGUI_D3D12
 )
 
 target_include_directories(
-    029_raytracing_path_trace_d3d12
+    029_raytracing_refract_d3d12
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
            ${GREX_THIRD_PARTY_DIR}/glm
            ${GREX_THIRD_PARTY_DIR}/tinyobjloader
@@ -35,7 +35,7 @@ target_include_directories(
 )
 
 target_link_libraries(
-    029_raytracing_path_trace_d3d12
+    029_raytracing_refract_d3d12
     PUBLIC glfw
            d3d12
            dxgi
