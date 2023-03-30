@@ -201,7 +201,7 @@ Shaders are found in the [assets/projects/029_raytracing_refract_d3d12](https://
 Inspired by [https://github.com/TheRealMJP/DXRPathTracer]. This experiments shows a very naive and simplistic path tracer.
 Shading doesn't use PBR yet. The main idea for this one was to incorporate the recursive ray tracing and refraction from the
 earlier experiment with an increasing sample count. Sampling mechanism is pretty naive and there's definitely some artifacts.
-But fun to see it staring to work.
+But fun to see it starting to work. Sample count get reset if camera is move using mouse drag.
 
 There are no punctual lights in this sample, all the lighting is done via IBL. Punctual lights migt
 get added later.
