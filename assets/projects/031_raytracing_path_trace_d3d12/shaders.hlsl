@@ -55,9 +55,6 @@ struct MaterialParameters
     float  ior;
 };
 
-// We'll use a StructuredBuffer here since we can't 
-// set root constants per draw. 
-//
 StructuredBuffer<MaterialParameters> MaterialParams : register(t9); // Material params
 
 Texture2D    IBLEnvironmentMap : register(t100);
