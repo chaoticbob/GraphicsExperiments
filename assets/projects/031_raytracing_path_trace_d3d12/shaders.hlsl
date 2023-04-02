@@ -449,8 +449,7 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
     float3 kD = (1.0 - F) * (1.0 - metallic);
     bool   inside  = (HitKind() == HIT_KIND_TRIANGLE_BACK_FACE);
     
-    float3 diffuse = 0;
-    float3 specular = 0;
+    float3 reflection = 0;
     float3 refraction = 0;
     float  kr = 1;
     float  kt = 0;
@@ -491,11 +490,14 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
                     ray,                    // Ray
                     thisPayload);           // Payload
         
-                diffuse = saturate(dot(N, rayDir)) * thisPayload.color.xyz;
+                float3 diffuse = thisPayload.color.xyz;
+                reflection += kD * diffuse / PI * saturate(dot(rayDir, N));
+                
             }
         
             // Specular
-            if (roughness < 1.0) {
+            //if (roughness < 1.0) 
+            {
                 float3 rayDir = GenSpecularSampleDir(payload.sampleIndex, N, -I, roughness);
         
                 RayDesc ray;
@@ -516,7 +518,8 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
                     ray,                    // Ray
                     thisPayload);           // Payload
                                       
-                specular = thisPayload.color.xyz;
+                float3 specular = thisPayload.color.xyz;
+                reflection += F * specular;
             }
         }
         
@@ -550,7 +553,8 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
         }
     }
     
-    float3 finalColor = ((kD * diffuse / PI + specular) * baseColor) * kr + refraction * kt;
+    //float3 finalColor = ((kD * diffuse / PI + specular) * baseColor) * kr + refraction * kt;
+    float3 finalColor = (reflection * kr * baseColor) + (refraction * kt);
     
     payload.color = float4(finalColor, 0);
 }
