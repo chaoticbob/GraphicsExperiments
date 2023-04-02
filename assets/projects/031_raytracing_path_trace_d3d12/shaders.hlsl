@@ -224,41 +224,6 @@ float3 GetIBLEnvironment(float3 dir, float lod)
     return color;
 }
 
-//// Samples hemisphere using Hammersley pattern for irradiance contribution
-//float3 GetIBLIrradiance(uint sampleIndex, float3 N)
-//{
-//    const float a = 1.0;
-//    float3 Color = 0;
-//
-//    const uint NumSamples = MAX_SAMPLES;
-//    //for (uint i = 0; i < NumSamples; ++i) 
-//    {
-//        //float2 Xi       = Hammersley(i, NumSamples);
-//        float2 Xi       = Hammersley(sampleIndex, NumSamples);
-//        float  Phi      = 2 * PI * Xi.x;
-//        //float  CosTheta = cos(PI / 2 * Xi.y);
-//        float CosTheta = sqrt((1 - Xi.y) / (1 + (a * a - 1) * Xi.y));
-//        float  SinTheta = sqrt(1 - CosTheta * CosTheta);
-//
-//        float3 L        = (float3)0;
-//        L.x             = SinTheta * cos(Phi);
-//        L.y             = SinTheta * sin(Phi);
-//        L.z             = CosTheta;
-//        float3 UpVector = abs(N.y) < 0.99999f ? float3(0, 1, 0) : float3(1, 0, 0);
-//        float3 TangentX = normalize(cross(UpVector, N));
-//        float3 TangentY = cross(N, TangentX);
-//
-//        // Tangent to world space
-//        L = TangentX * L.x + TangentY * L.y + N * L.z;
-//
-//        float3 SampleColor = GetIBLEnvironment(L, 0);
-//        Color += SampleColor;
-//    }
-//
-//    //return Color / NumSamples;
-//    return Color;
-//}
-
 // Samples hemisphere using Hammersley pattern for irradiance contribution
 float3 GenIrradianceSampleDir(uint sampleIndex, float3 N)
 {
@@ -283,38 +248,6 @@ float3 GenIrradianceSampleDir(uint sampleIndex, float3 N)
 
     return L;
 }
-
-//// Importance samples the hemisphere for specular contribution
-//float3 GetIBLSpecular(uint sampleIndex, float3 SpecularColor, float3 N, float3 V, float Roughness)
-//{
-//    float3 Color = 0;
-//
-//    const uint NumSamples = MAX_SAMPLES;
-//    //for (uint i = 0; i < NumSamples; ++i) 
-//    {
-//        //float2 Xi = Hammersley(i, NumSamples);
-//        float2 Xi = Hammersley(sampleIndex, MAX_SAMPLES);
-//        float3 H  = ImportanceSampleGGX(Xi, Roughness, N);
-//        float3 L  = 2 * dot(V, H) * H - V;
-//
-//        float NoV = saturate(dot(N , V));
-//        float NoL = saturate(dot(N , L));
-//        float NoH = saturate(dot(N , H));
-//        float VoH = saturate(dot(V , H));
-//
-//        if (NoL > 0) {
-//            float3 SampleColor = GetIBLEnvironment(L, 0);
-//
-//            float  G  = Geometry_SmithIBL(N, V, L, Roughness);
-//            float  Fc = pow(1 - VoH, 5);
-//            float3 F  = (1 - Fc) * SpecularColor + Fc;
-//
-//            Color += SampleColor * F * G * VoH / (NoH * NoV);
-//        }
-//    }
-//
-//    return Color;
-//}
 
 float3 GenSpecularSampleDir(uint sampleIndex, float3 N, float3 V, float Roughness)
 {
@@ -396,15 +329,7 @@ void MyRaygenShader()
 void MyMissShader(inout RayPayload payload)
 {
     float3 dir = WorldRayDirection();
-    
-    //// Since we only want to transform the geometry - we'll undo the model transform.
-    //// NOTE: This transforms the ray direction from object space to world space.
-    ////
-    //dir = mul(ModelParams.InverseModelMatrix, float4(dir, 0)).xyz;
-
     float3 color = GetIBLEnvironment(dir, 0);
-    //color = ACESFilm(color);
-    //color = pow(color, 0.9);
     payload.color = float4(color, 1);
 }
 
@@ -415,16 +340,16 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
     uint primIdx = PrimitiveIndex();
     Triangle tri = Triangles[instIdx][primIdx];
 
-    float3 hitPosition  = WorldRayOrigin() + (RayTCurrent() * WorldRayDirection());
+    float3 P = WorldRayOrigin() + (RayTCurrent() * WorldRayDirection());
+    float3 I = normalize(WorldRayDirection());        
+    float3 V = -I;
+    bool   inside = (HitKind() == HIT_KIND_TRIANGLE_BACK_FACE);       
     float3 barycentrics = float3(1 - attr.barycentrics.x - attr.barycentrics.y, attr.barycentrics.x, attr.barycentrics.y);
-
+    
     float3 N0 = Normals[instIdx][tri.vIdx0];
     float3 N1 = Normals[instIdx][tri.vIdx1];
     float3 N2 = Normals[instIdx][tri.vIdx2];
     float3 N  = normalize(N0 * barycentrics.x + N1 * barycentrics.y + N2 * barycentrics.z);
-    float3 P = hitPosition;
-    float3 V = normalize(SceneParams.EyePosition - P);
-    float3 R = reflect(-V, N);
 
     // -------------------------------------------------------------------------
     // Where the PBR begins...
@@ -442,12 +367,10 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
 
     // Calculate F0
     float3 F0 = 0.16 * specularReflectance * specularReflectance * (1 - metallic) + baseColor * metallic;    
-
-    float3 I = normalize(WorldRayDirection());       
+   
     float  cosTheta = saturate(dot(N, -I));
     float3 F = Fresnel_SchlickRoughness(cosTheta, F0, roughness);
     float3 kD = (1.0 - F) * (1.0 - metallic);
-    bool   inside  = (HitKind() == HIT_KIND_TRIANGLE_BACK_FACE);
     
     float3 reflection = 0;
     float3 refraction = 0;
@@ -496,7 +419,6 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
             }
         
             // Specular
-            //if (roughness < 1.0) 
             {
                 float3 rayDir = GenSpecularSampleDir(payload.sampleIndex, N, -I, roughness);
         
@@ -553,7 +475,6 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
         }
     }
     
-    //float3 finalColor = ((kD * diffuse / PI + specular) * baseColor) * kr + refraction * kt;
     float3 finalColor = (reflection * kr * baseColor) + (refraction * kt);
     
     payload.color = float4(finalColor, 0);
