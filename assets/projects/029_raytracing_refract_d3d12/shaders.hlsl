@@ -238,25 +238,27 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
     float3 absorption = 1;
 
     float eta1 = 1.0;
-    float eta2 = 1.5;
-        
-    float kr = FresnelSchlick(I, N, eta1, eta2); 
+    float eta2 = 1.57;
+
     if (inside) {
-        kr = FresnelSchlick(I, -N, eta2, eta1);
+        float temp = eta1;
+        eta1 = eta2;
+        eta2 = temp;
+        N = -N;
     }
+
+
+    float kr = FresnelSchlick(I, N, eta1, eta2); 
     kr = saturate(kr);
     kr = pow(kr, 1.4);
     float kt = 1.0 - kr;
    
-    if (payload.rayDepth < 6) { 
+    if (payload.rayDepth < 15) { 
         const float offset = 0.001;  
     
         // refraction
         if (kt > 0) {
             float3 rayDir = refract(I, N, eta1 / eta2);
-            if (inside) {
-                rayDir = refract(I, -N, eta2 / eta1);    
-            }
             
             RayDesc ray = (RayDesc) 0;
             ray.Origin = P + offset * rayDir;
@@ -281,9 +283,6 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
         
         if (kr > 0) {
             float3 rayDir = reflect(I, N);
-            if (inside) {
-                rayDir = reflect(I, -N);  
-            }
             
             RayDesc ray = (RayDesc) 0;
             ray.Origin = P + offset * rayDir;

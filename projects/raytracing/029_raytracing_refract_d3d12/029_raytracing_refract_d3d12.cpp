@@ -703,7 +703,7 @@ void CreateRayTracingStateObject(
     //
     // ---------------------------------------------------------------------
     D3D12_RAYTRACING_PIPELINE_CONFIG pipelineConfigDesc = {};
-    pipelineConfigDesc.MaxTraceRecursionDepth           = 7;
+    pipelineConfigDesc.MaxTraceRecursionDepth           = 16;
 
     pSubobject        = &subobjects[PIPELINE_CONFIG_INDEX];
     pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
@@ -824,7 +824,17 @@ void CreateGeometries(
 {
     // Sphere
     {
-        TriMesh   mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
+        TriMesh::Options options   = {.enableNormals = true};
+        
+        TriMesh mesh;
+        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/monkey_lowres.obj").string(), "", options, &mesh);
+        if (!res) {
+            assert(false && "failed to load model");
+        }
+        mesh.ScaleToFit(1.2f);
+        
+        //mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
+
         Geometry& geo  = outSphereGeometry;
 
         CHECK_CALL(CreateBuffer(
@@ -1035,7 +1045,7 @@ void CreateTLAS(
         memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
         instanceDescs.push_back(instanceDesc);
         ++transformIdx;
-
+        
         // Glass sphere (red)
         memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
         instanceDescs.push_back(instanceDesc);
