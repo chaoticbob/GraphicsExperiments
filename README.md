@@ -1,3 +1,5 @@
+![alt text](images/screenshots/raytracing/path_trace__pbr.png?raw=true)
+
 # Graphics Experiments
 Collection of small and mostly self contained graphics experiments for reference. 
 These experiments focus on doing graphics things using the graphics API. 
@@ -6,7 +8,7 @@ mind if you make use of the code.
 
 #### What kinds of experiments are in here?
 Graphics experiments for rendering, ray tracing, geometry generation, proceudral textures, etc.
-Pretty much anything that's graphically interesting.
+Pretty much anything that's graphically interesting. Everything can be foundin the [projects](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects) directory.
 
 # Some Stuff
 1. The main idea behind these graphics experiments is to show how XYZ is done without a bunch of noise around it. 
