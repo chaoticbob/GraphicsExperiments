@@ -41,7 +41,7 @@ StructuredBuffer<float3>   Positions[5] : register(t25); // Position buffer (4 s
 StructuredBuffer<float3>   Normals[5]   : register(t30); // Normal buffer (4 spheres, 1 box)
 
 // -----------------------------------------------------------------------------
-// PBR Resources
+// Material Parameters
 // -----------------------------------------------------------------------------
 struct MaterialParameters 
 {

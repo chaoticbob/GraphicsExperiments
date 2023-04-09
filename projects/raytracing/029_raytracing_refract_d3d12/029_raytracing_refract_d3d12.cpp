@@ -824,18 +824,18 @@ void CreateGeometries(
 {
     // Sphere
     {
-        TriMesh::Options options   = {.enableNormals = true};
-        
+        TriMesh::Options options = {.enableNormals = true};
+
         TriMesh mesh;
         bool    res = TriMesh::LoadOBJ(GetAssetPath("models/monkey_lowres.obj").string(), "", options, &mesh);
         if (!res) {
             assert(false && "failed to load model");
         }
         mesh.ScaleToFit(1.2f);
-        
-        //mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
 
-        Geometry& geo  = outSphereGeometry;
+        // mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
+
+        Geometry& geo = outSphereGeometry;
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
@@ -971,7 +971,8 @@ void CreateBLASes(
         ID3D12CommandList* pList = commandList.Get();
         pRenderer->Queue->ExecuteCommandLists(1, &pList);
 
-        assert(WaitForGpu(pRenderer));
+        bool waitres = WaitForGpu(pRenderer);
+        assert(waitres && "WaitForGpu failed");
     }
 }
 
@@ -1045,7 +1046,7 @@ void CreateTLAS(
         memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
         instanceDescs.push_back(instanceDesc);
         ++transformIdx;
-        
+
         // Glass sphere (red)
         memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
         instanceDescs.push_back(instanceDesc);
@@ -1118,7 +1119,8 @@ void CreateTLAS(
     ID3D12CommandList* pList = commandList.Get();
     pRenderer->Queue->ExecuteCommandLists(1, &pList);
 
-    assert(WaitForGpu(pRenderer));
+    bool waitres = WaitForGpu(pRenderer);
+    assert(waitres && "WaitForGpu failed");
 }
 
 void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)
@@ -1174,8 +1176,8 @@ void CreateAccumTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)
 }
 
 void CreateIBLTextures(
-    DxRenderer*      pRenderer,
-    IBLTextures&     outIBLTextures)
+    DxRenderer*  pRenderer,
+    IBLTextures& outIBLTextures)
 {
     // IBL file
     auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
