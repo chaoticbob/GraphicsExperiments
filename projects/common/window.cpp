@@ -593,6 +593,19 @@ fs::path GetAssetPath(const fs::path& subPath)
     return assetPath;
 }
 
+std::vector<fs::path> GetEveryAssetPath(const fs::path& subPath)
+{
+    InitAssetDirs();
+    std::vector<fs::path> assetPaths;
+    for (auto& assetDir : sAssetDirs) {
+        fs::path path = assetDir / subPath;
+        if (fs::exists(path)) {
+            assetPaths.push_back(path);
+        }
+    }
+    return assetPaths;
+}
+
 std::vector<char> LoadAsset(const fs::path& subPath)
 {
     fs::path absPath = GetAssetPath(subPath);

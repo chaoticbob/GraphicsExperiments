@@ -121,6 +121,7 @@ uint32_t GetProcessId();
 std::vector<char> LoadFile(const fs::path& absPath);
 
 const std::vector<fs::path>& GetAssetDirs();
+std::vector<fs::path>        GetEveryAssetPath(const fs::path& subPath);
 void                         AddAssetDir(const fs::path& absPath);
 fs::path                     GetAssetPath(const fs::path& subPath);
 std::vector<char>            LoadAsset(const fs::path& subPath);
