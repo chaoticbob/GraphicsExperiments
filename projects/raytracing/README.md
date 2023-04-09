@@ -227,8 +227,8 @@ in getting an idea of how the IBL contribution should work for indirect lighting
 was the key. It wasn't obvious to me in the beginning how the D(h) - the normal distribution function - was suppose
 to be handled. 
 
-THe diffuse component doesn't use cosine weighted sampling. The weighting towards the middle of hemisphere pulls too much on the structured
-of the IBL ahd "diffuse" gets lost. 
+The diffuse component doesn't use cosine weighted sampling. The weighting towards the middle of hemisphere pulls too much on the structured
+of the IBL and diffuse began to look more like specular - which wasn't desirable.
 
 There are no punctual lights in this sample, all the lighting is done via IBL. Punctual lights might
 get added later.
