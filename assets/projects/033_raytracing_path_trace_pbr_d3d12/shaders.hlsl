@@ -16,7 +16,8 @@ struct SceneParameters
 	float4x4 ViewInverseMatrix;
 	float4x4 ProjectionInverseMatrix;
 	float4x4 ViewProjectionMatrix;
-    float3   EyePosition;    
+    float3   EyePosition;
+    uint     IBLIndex;
     uint     MaxSamples;
     uint     NumLights;
     Light    Lights[8];
@@ -39,9 +40,9 @@ struct Triangle {
     uint vIdx2;
 };
 
-StructuredBuffer<Triangle> Triangles[5] : register(t20); // Index buffer (4 spheres, 1 box)
-StructuredBuffer<float3>   Positions[5] : register(t25); // Position buffer (4 spheres, 1 box)
-StructuredBuffer<float3>   Normals[5]   : register(t30); // Normal buffer (4 spheres, 1 box)
+StructuredBuffer<Triangle> Triangles[25] : register(t20); // Index buffers
+StructuredBuffer<float3>   Positions[25] : register(t45); // Position buffers
+StructuredBuffer<float3>   Normals[25]   : register(t70); // Normal buffers
 
 // -----------------------------------------------------------------------------
 // PBR Resources
@@ -57,13 +58,14 @@ struct MaterialParameters
 
 StructuredBuffer<MaterialParameters> MaterialParams : register(t9); // Material params
 
-Texture2D    IBLEnvironmentMap : register(t100);
-SamplerState IBLMapSampler     : register(s10);
+Texture2D    IBLEnvironmentMap[100] : register(t100);
+SamplerState IBLMapSampler          : register(s10);
 
 // -----------------------------------------------------------------------------
-// PBR Functions
+// Utility Functions
 // -----------------------------------------------------------------------------
 
+// https://www.reedbeta.com/blog/hash-functions-for-gpu-rendering/
 uint pcg_hash(inout uint rngState)
 {
     uint state = rngState;
@@ -72,15 +74,14 @@ uint pcg_hash(inout uint rngState)
     return (word >> 22u) ^ word;
 }
 
-float Random01(uint input)
+float Random01(inout uint input)
 {
     return pcg_hash(input) / 4294967296.0;
 }
 
 // -----------------------------------------------------------------------------
-// PBR Functions
+// Lighting Functions
 // -----------------------------------------------------------------------------
-
 float Distribution_GGX(float3 N, float3 H, float roughness)
 {
     float NoH    = saturate(dot(N, H));
@@ -116,18 +117,13 @@ float Geometry_SmithIBL(float3 N, float3 V, float3 L,  float roughness)
     return G1 * G2;
 }
 
-float3 Fresnel_Schlick(float cosTheta, float3 F0)
-{
-    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
-} 
-
 float3 Fresnel_SchlickRoughness(float cosTheta, float3 F0, float roughness)
 {
     float3 r = (float3)(1 - roughness);
     return F0 + (max(r, F0) - F0) * pow(1 - cosTheta, 5);
 }
 
-float FresnelSchlick(float3 I, float3 N, float n1, float n2)
+float FresnelSchlickReflectionAmount(float3 I, float3 N, float n1, float n2)
 {
     float r0 = (n1 - n2) / (n1 + n2);
     r0 = r0 * r0;
@@ -142,7 +138,9 @@ float FresnelSchlick(float3 I, float3 N, float n1, float n2)
         cosX = sqrt(1.0 - sinT2);
     }
     float x = 1.0 - cosX;
-    return r0 + (1.0 - r0) * x * x * x * x *x;
+    float fr = r0 + (1.0 - r0) * x * x * x * x *x;
+
+    return fr;
 }
 
 // circular atan2 - converts (x,y) on a unit circle to [0, 2pi]
@@ -221,7 +219,7 @@ float3 ImportanceSampleGGX(float2 Xi, float Roughness, float3 N)
     H.x             = SinTheta * cos(Phi);
     H.y             = SinTheta * sin(Phi);
     H.z             = CosTheta;
-    float3 UpVector = abs(N.y) < 0.99999f ? float3(0, 1, 0) : float3(1, 0, 0);
+    float3 UpVector = abs(N.y) < 0.999999f ? float3(0, 1, 0) : float3(1, 0, 0);
     float3 TangentX = normalize(cross(UpVector, N));
     float3 TangentY = cross(N, TangentX);
 
@@ -229,37 +227,39 @@ float3 ImportanceSampleGGX(float2 Xi, float Roughness, float3 N)
     return TangentX * H.x + TangentY * H.y + N * H.z;
 }
 
+float3 CosineWeightedSample(float2 Xi, float3 N)
+{
+    float Phi      = 2 * PI * Xi.x;
+    float CosTheta = cos(PI / 2 * Xi.y);
+    float SinTheta = sqrt(1 - CosTheta * CosTheta);
+
+    float3 H        = (float3)0;
+    H.x             = SinTheta * cos(Phi);
+    H.y             = SinTheta * sin(Phi);
+    H.z             = CosTheta;
+    float3 UpVector = abs(N.y) < 0.999999f ? float3(0, 1, 0) : float3(1, 0, 0);
+    float3 TangentX = normalize(cross(UpVector, N));
+    float3 TangentY = cross(N, TangentX);
+
+    // Tangent to world space
+    return TangentX * H.x + TangentY * H.y + N * H.z;    
+}
+
 float3 GetIBLEnvironment(float3 dir, float lod)
 {
     float2 uv = CartesianToSpherical(normalize(dir));
     uv.x = saturate(uv.x / (2.0 * PI));
     uv.y = saturate(uv.y / PI);
-    float3 color = IBLEnvironmentMap.SampleLevel(IBLMapSampler, uv, lod).rgb;
+    float3 color = IBLEnvironmentMap[SceneParams.IBLIndex].SampleLevel(IBLMapSampler, uv, lod).rgb;
+    color = min(color, (float3)100.0);
     return color;
 }
 
 // Samples hemisphere using Hammersley pattern for irradiance contribution
 float3 GenIrradianceSampleDir(uint sampleIndex, float3 N)
 {
-    const float a = 1.0;
-
-    float2 Xi       = Hammersley(sampleIndex, SceneParams.MaxSamples);
-    float  Phi      = 2 * PI * Xi.x;
-    float CosTheta = sqrt((1 - Xi.y) / (1 + (a * a - 1) * Xi.y));
-    float  SinTheta = sqrt(1 - CosTheta * CosTheta);
-
-    float3 L        = (float3)0;
-    L.x             = SinTheta * cos(Phi);
-    L.y             = SinTheta * sin(Phi);
-    L.z             = CosTheta;
-    float3 UpVector = abs(N.y) < 0.99999f ? float3(0, 1, 0) : float3(1, 0, 0);
-    float3 TangentX = normalize(cross(UpVector, N));
-    float3 TangentY = cross(N, TangentX);
-
-    // Tangent to world space
-    L = TangentX * L.x + TangentY * L.y + N * L.z;
-    L = normalize(L);
-
+    float2 Xi = Hammersley(sampleIndex, SceneParams.MaxSamples);
+    float3 L  = ImportanceSampleGGX(Xi, 1.0, N);
     return L;
 }
 
@@ -267,13 +267,29 @@ float3 GenSpecularSampleDir(uint sampleIndex, float3 N, float Roughness)
 {
     float2 Xi = Hammersley(sampleIndex, SceneParams.MaxSamples);
     float3 L  = ImportanceSampleGGX(Xi, Roughness, N);
-    L = normalize(L);
     return L;
 }
 
-//
+// Samples hemisphere using RNG for irradiance contribution
+float3 GenIrradianceSampleDirRNG(inout uint rngState, float3 N)
+{
+    float   u = Random01(rngState);
+    float   v = Random01(rngState);
+    float2 Xi = float2(u, v);
+    float3 L  = ImportanceSampleGGX(Xi, 1.0, N);
+    return L;
+}
+
+float3 GenSpecularSampleDirRNG(inout uint rngState, float3 N, float Roughness)
+{
+    float   u = Random01(rngState);
+    float   v = Random01(rngState);
+    float2 Xi = float2(u, v);
+    float3 L  = ImportanceSampleGGX(Xi, Roughness, N);
+    return L;
+}
+
 // https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
-//
 float3 ACESFilm(float3 x){
     return saturate((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14));
 }
@@ -318,6 +334,7 @@ void MyRaygenShader()
         ray.TMin = 0.001;
         ray.TMax = 10000.0;
 
+        uint sampleIndex = (sampleCount + 15 * rayIndex) % SceneParams.MaxSamples;
         RayPayload payload = {float4(0, 0, 0, 0), 0, sampleCount, rngState };
 
         TraceRay(
@@ -349,30 +366,6 @@ void MyMissShader(inout RayPayload payload)
     payload.color = float4(color, 1);
 }
 
-float ggxNormalDistribution( float NdotH, float roughness )
-{
-	float a2 = roughness * roughness;
-	float d = ((NdotH * a2 - NdotH) * NdotH + 1);
-	return a2 / (d * d * PI);
-}
-
-float ggxSchlickMaskingTerm(float NdotL, float NdotV, float roughness)
-{
-	// Karis notes they use alpha / 2 (or roughness^2 / 2)
-	float k = roughness*roughness / 2;
-
-	// Compute G(v) and G(l).  These equations directly from Schlick 1994
-	//     (Though note, Schlick's notation is cryptic and confusing.)
-	float g_v = NdotV / (NdotV*(1 - k) + k);
-	float g_l = NdotL / (NdotL*(1 - k) + k);
-	return g_v * g_l;
-}
-
-float3 schlickFresnel(float3 f0, float lDotH)
-{
-	return f0 + (float3(1.0f, 1.0f, 1.0f) - f0) * pow(1.0f - lDotH, 5.0f);
-}
-
 [shader("closesthit")]
 void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
 {
@@ -390,11 +383,13 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
     float3 N1 = Normals[instIdx][tri.vIdx1];
     float3 N2 = Normals[instIdx][tri.vIdx2];
     float3 N  = normalize(N0 * barycentrics.x + N1 * barycentrics.y + N2 * barycentrics.z);
-    float3 R  = reflect(I, N);
 
-    // -------------------------------------------------------------------------
-    // Where the PBR begins...
-    // -------------------------------------------------------------------------
+    // Transform normal trom object to world space
+    float3x4 m0 = ObjectToWorld3x4();
+    float3x3 m1 = float3x3(m0._11, m0._12, m0._13,
+                           m0._21, m0._22, m0._23,
+                           m0._31, m0._32, m0._33);
+    N = mul(m1, N);                        
 
     // Material variables
     float3 baseColor = MaterialParams[instIdx].baseColor;
@@ -405,15 +400,10 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
 
     // Remap
     roughness = roughness * roughness;
-    roughness = max(roughness, 0.089);
 
     // Calculate F0
-    float3 F0 = 0.16 * specularReflectance * specularReflectance * (1 - metallic) + baseColor * metallic;    
-   
-    float  cosTheta = saturate(dot(N, -I));
-    float3 F = Fresnel_SchlickRoughness(cosTheta, F0, roughness);
-    float3 kD = (1.0 - F) * (1.0 - metallic);
-    
+    float3 F0 = 0.16 * specularReflectance * specularReflectance * (1 - metallic) + baseColor * metallic;
+      
     float3 reflection = 0;
     float3 refraction = 0;
     float  kr = 1;
@@ -422,23 +412,33 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
     
     float eta1 = 1.0;
     float eta2 = ior;
-    if (ior > 1.0) {
-        kr = FresnelSchlick(I, N, eta1, eta2); 
-        if (inside) {
-            kr = FresnelSchlick(I, -N, eta2, eta1);
-        }
-        kr = saturate(pow(kr, 1.5));
-        kt = 1.0 - kr;
+
+    if (inside) {
+        float temp = eta1;
+        eta1 = eta2;
+        eta2 = temp;
+        N = -N;
     }
 
-    if (payload.rayDepth < 2) {
-        float amountDiffuse = 1.0 - metallic;
-        float amountSpecular = 1.0;
-        float chanceSpecular = 1.0 / (amountDiffuse + amountSpecular);
-        float isDiffuse = Random01(payload.rngState) >= chanceSpecular;
+    if (ior > 1.0) {
+        kr = saturate(FresnelSchlickReflectionAmount(I, N, eta1, eta2)); 
+        kt = 1.0 - kr;
+        // Hack - intended to amp up the specular on glass
+        kr = pow(kr, 0.0001);
+    }
+
+    if (payload.rayDepth < 10) {
+        // Naive scheme for picking which type of ray to fire
+        float chanceDiffuse = 0.5 + (-0.5 * roughness) + ((ior > 1.0) ? 0.49 : 0);    
+        float isDiffuse = Random01(payload.rngState) >= chanceDiffuse;
 
         if (isDiffuse) {           
-            float3 L = GenIrradianceSampleDir(payload.sampleIndex, N);
+            float  NoV = saturate(dot(N, V));
+            float3 F = Fresnel_SchlickRoughness(NoV, F0, roughness);
+            float3 kD = (1.0 - F) * (1.0 - metallic);
+
+            //float3 L = GenIrradianceSampleDir(payload.sampleIndex, N);
+            float3 L = GenIrradianceSampleDirRNG(payload.rngState, N);
             
             float3 rayDir = L;
 
@@ -461,90 +461,37 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
                 thisPayload);           // Payload
 
             float3 bounceColor = thisPayload.color.xyz;
-
-            float NdotL = saturate(dot(N, L));
-
-            // Accumulate the color: (NdotL * incomingLight * dif / pi)
-            // Probability of sampling this ray:  (NdotL / pi) * probDiffuse
-            //reflection += kD * bounceColor / PI * (1.0 - chanceSpecular) * baseColor;
+            payload.rngState = thisPayload.rngState;
+                        
+            float NoL = saturate(dot(N, L));
+            reflection += kD * bounceColor * baseColor * NoL;
         }
         else {
-            float3 L = normalize(GenSpecularSampleDir(payload.sampleIndex, R, roughness));
-            float3 H = normalize(V + L);
-            
-            //if (saturate(dot(N, L)) > 0) 
-            {
-            float3 rayDir = L;
+            //
+            // Most of the logic for specular contribution was understood from here:
+            //   https://www.mathematik.uni-marburg.de/~thormae/lectures/graphics1/graphics_10_2_eng_web.html#1
+            //
 
-            RayDesc ray;
-            ray.Origin = P + offset * rayDir;
-            ray.Direction = rayDir;
-            ray.TMin = 0.001;
-            ray.TMax = 10000.0;
+            //float3 H = normalize(GenSpecularSampleDir(payload.sampleIndex, N, roughness));
+            float3 H = normalize(GenSpecularSampleDirRNG(payload.rngState, N, roughness));
+            float3 L = 2.0 * dot(V, H) * H  - V;
 
-            RayPayload thisPayload = {(float4)0, payload.rayDepth + 1, payload.sampleIndex, payload.rngState};
+            float NoV = saturate(dot(N, V));
+            float NoL = saturate(dot(N, L));
+            float NoH = saturate(dot(N, H));
+            float VoH = saturate(dot(V, H));
+            float LoH = saturate(dot(L, H));
+            if ((NoL > 0) && (NoH > 0) && (NoV > 0) && (VoH > 0)) {
+                float3 rayDir = L;
 
-            TraceRay(
-                Scene,                  // AccelerationStructure
-                RAY_FLAG_FORCE_OPAQUE,  // RayFlags
-                ~0,                     // InstanceInclusionMask
-                0,                      // RayContributionToHitGroupIndex
-                1,                      // MultiplierForGeometryContributionToHitGroupIndex
-                0,                      // MissShaderIndex
-                ray,                    // Ray
-                thisPayload);           // Payload
-
-            // Compute our color by tracing a ray in this direction
-            float3 bounceColor = thisPayload.color.xyz;
-
-            // Compute some dot products needed for shading
-            float NdotL = saturate(dot(N, L));
-            float NdotH = saturate(dot(N, H));
-            float LdotH = saturate(dot(L, H));
-            float NdotV = saturate(dot(N, V));
-            float VdotH = saturate(dot(V, H));
-
-            // Evaluate our BRDF using a microfacet BRDF model
-            //float  D = ggxNormalDistribution(NdotH, roughness);          
-            float  D = Distribution_GGX(N, H, roughness);
-            //float  G = ggxSchlickMaskingTerm(NdotL, NdotV, roughness); 
-            float  G = Geometry_SmithIBL(N, V, L, roughness);
-            //float3 F = schlickFresnel(F0, LdotH);                 
-            float3 ggxTerm = D * G * F / (4 * NdotL * NdotV);        
-
-            // What's the probability of sampling vector H from getGGXMicrofacet()?
-            float  ggxProb = D * NdotH / (4 * LdotH);
-
-            // Accumulate color:  ggx-BRDF * lightIn * NdotL / probability-of-sampling
-            //    -> Note: Should really cancel and simplify the math above
-            //reflection += bounceColor * NdotL * ggxTerm / (ggxProb * (1.0 - 0));
-           
-            reflection += D; //F * G * D / max(0.001, (4 * NdotL * NdotV)) * chanceSpecular;// * G * D / (4 * NdotL * NdotH) * chanceSpecular; //D * F * G / (4 * NdotL * NdotV) * chanceSpecular; //bounceColor * D * F * G / (4 * NdotL * NdotV) * chanceSpecular;
-
-            //reflection += bounceColor * ggxTerm * chanceSpecular; //G < 1000 ? float3(1, 0, 0) : float3(0, 1, 0); // * G; //bounceColor * F * G;
-            }
-        }
-    }
-
-    float3 finalColor = (reflection * kr * baseColor) + (refraction * kt);
-    
-    payload.color += float4(finalColor, 0);
-    
-/*    
-    if (payload.rayDepth < 7) {
-        if (kr > 0) {
-            // Diffuse
-            {
-                float3 rayDir = GenIrradianceSampleDir(payload.sampleIndex, N);
-        
                 RayDesc ray;
                 ray.Origin = P + offset * rayDir;
                 ray.Direction = rayDir;
                 ray.TMin = 0.001;
                 ray.TMax = 10000.0;
-        
-                RayPayload thisPayload = {(float4)0, payload.rayDepth + 1, payload.sampleIndex, 0};
-       
+
+                RayPayload thisPayload = {(float4)0, payload.rayDepth + 1, payload.sampleIndex, payload.rngState};
+
                 TraceRay(
                     Scene,                  // AccelerationStructure
                     RAY_FLAG_FORCE_OPAQUE,  // RayFlags
@@ -554,46 +501,21 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
                     0,                      // MissShaderIndex
                     ray,                    // Ray
                     thisPayload);           // Payload
-        
-                float3 diffuse = thisPayload.color.xyz;
-                reflection += kD * diffuse / PI * saturate(dot(rayDir, N));
-                
-            }
-        
-            // Specular
-            {
-                float3 rayDir = GenSpecularSampleDir(payload.sampleIndex, N, -I, roughness);
-        
-                RayDesc ray;
-                ray.Origin = P + offset * rayDir;
-                ray.Direction = rayDir;
-                ray.TMin = 0.001;
-                ray.TMax = 10000.0;
-        
-                RayPayload thisPayload = {(float4)0, payload.rayDepth + 1, payload.sampleIndex, 0};
-       
-                TraceRay(
-                    Scene,                  // AccelerationStructure
-                    RAY_FLAG_FORCE_OPAQUE,  // RayFlags
-                    ~0,                     // InstanceInclusionMask
-                    0,                      // RayContributionToHitGroupIndex
-                    1,                      // MultiplierForGeometryContributionToHitGroupIndex
-                    0,                      // MissShaderIndex
-                    ray,                    // Ray
-                    thisPayload);           // Payload
-                                      
-                float3 specular = thisPayload.color.xyz;
-                reflection += F * specular;
+
+                float3 bounceColor = thisPayload.color.xyz;
+                payload.rngState = thisPayload.rngState;
+
+
+                float3 F = Fresnel_SchlickRoughness(VoH, F0, roughness);
+                float  G = Geometry_SmithIBL(N, V, L, roughness);
+
+                reflection += bounceColor * F * G * VoH / (NoH * NoV);
             }
         }
-        
-        
+
         // Refraction
         if (kt > 0) {
             float3 rayDir = refract(I, N, eta1 / eta2);
-            if (inside) {
-                rayDir = refract(I, -N, eta2 / eta1);    
-            }
             
             RayDesc ray;
             ray.Origin = P + offset * rayDir;
@@ -601,7 +523,7 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
             ray.TMin = 0.001;
             ray.TMax = 10000.0;
             
-            RayPayload thisPayload = {(float4)0, payload.rayDepth + 1, payload.sampleIndex, 0};
+            RayPayload thisPayload = {(float4)0, payload.rayDepth + 1, payload.sampleIndex, payload.rngState};
             
             TraceRay(
             Scene,          // AccelerationStructure
@@ -613,12 +535,11 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
             ray,            // Ray
             thisPayload);   // Payload   
     
-            refraction += thisPayload.color.xyz;            
+            float3 bounceColor = thisPayload.color.xyz;
+            refraction += bounceColor;
         }
     }
-    
-    float3 finalColor = (reflection * kr * baseColor) + (refraction * kt);
-    
-    payload.color = float4(finalColor, 0);
-*/    
+
+    float3 finalColor = (reflection * kr) + (refraction * kt);
+    payload.color += float4(finalColor, 0);
 }

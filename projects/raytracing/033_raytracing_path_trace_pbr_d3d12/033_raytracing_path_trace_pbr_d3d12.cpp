@@ -28,7 +28,8 @@ using namespace glm;
 // =============================================================================
 const uint32_t kOutputResourcesOffset = 0;
 const uint32_t kGeoBuffersOffset      = 20;
-const uint32_t kIBLTextureOffset      = 3;
+const uint32_t kIBLTextureOffset      = 100;
+const uint32_t kMaxIBLs               = 100;
 
 // =============================================================================
 // Shader code
@@ -63,6 +64,11 @@ static LPCWSTR gClosestHitShaderName = L"MyClosestHitShader";
 static float gTargetAngle = 0.0f;
 static float gAngle       = 0.0f;
 
+static std::vector<std::string> gMaterialNames = {};
+static std::vector<std::string> gIBLNames      = {};
+
+static uint32_t gIBLIndex           = 0;
+static uint32_t gCurrentIBLIndex    = 0xFFFFFFFF;
 static bool     gResetRayGenSamples = true;
 static uint32_t gMaxSamples         = 4096;
 static uint32_t gCurrentMaxSamples  = 0;
@@ -76,13 +82,14 @@ struct Light
 
 struct SceneParameters
 {
-    mat4  ViewInverseMatrix;
-    mat4  ProjectionInverseMatrix;
-    mat4  ViewProjectionMatrix;
-    vec3  EyePosition;
-    uint  MaxSamples;
-    uint  NumLights;
-    Light Lights[8];
+    mat4     ViewInverseMatrix;
+    mat4     ProjectionInverseMatrix;
+    mat4     ViewProjectionMatrix;
+    vec3     EyePosition;
+    uint32_t IBLIndex;
+    uint     MaxSamples;
+    uint     NumLights;
+    Light    Lights[8];
 };
 
 struct Geometry
@@ -126,35 +133,49 @@ void CreateShaderRecordTables(
 void CreateGeometries(
     DxRenderer* pRenderer,
     Geometry&   outSphereGeometry,
+    Geometry&   outKnobGeometry,
+    Geometry&   outMonkeyGeometry,
+    Geometry&   outTeapotGeometry,
     Geometry&   outBoxGeometry);
 void CreateBLASes(
     DxRenderer*      pRenderer,
     const Geometry&  sphereGeometry,
+    const Geometry&  knobGeometry,
+    const Geometry&  monkeyGeometry,
+    const Geometry&  teapotGeometry,
     const Geometry&  boxGeometry,
     ID3D12Resource** ppSphereBLAS,
+    ID3D12Resource** ppKnobBLAS,
+    ID3D12Resource** ppMonkeyBLAS,
+    ID3D12Resource** ppTeapotBLAS,
     ID3D12Resource** ppBoxBLAS);
 void CreateTLAS(
     DxRenderer*                      pRenderer,
     ID3D12Resource*                  pSphereBLAS,
+    ID3D12Resource*                  pKnobBLAS,
+    ID3D12Resource*                  pMonkeyBLAS,
+    ID3D12Resource*                  pTeapotBLAS,
     ID3D12Resource*                  pBoxBLAS,
     ID3D12Resource**                 ppTLAS,
     std::vector<MaterialParameters>& outMaterialParams);
 void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer);
 void CreateAccumTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer);
 void CreateIBLTextures(
-    DxRenderer*      pRenderer,
-    ID3D12Resource** ppBRDFLUT,
-    IBLTextures&     outIBLTextures);
+    DxRenderer*               pRenderer,
+    std::vector<IBLTextures>& outIBLTextures);
 void CreateDescriptorHeap(DxRenderer* pRenderer, ID3D12DescriptorHeap** ppHeap);
 void WriteDescriptors(
-    DxRenderer*           pRenderer,
-    ID3D12DescriptorHeap* pDescriptorHeap,
-    ID3D12Resource*       pOutputTexture,
-    ID3D12Resource*       pAccumTexture,
-    ID3D12Resource*       pRayGenSamplesBuffer,
-    const Geometry&       sphereGeometry,
-    const Geometry&       boxGeometry,
-    const IBLTextures&    iblTextures);
+    DxRenderer*                     pRenderer,
+    ID3D12DescriptorHeap*           pDescriptorHeap,
+    ID3D12Resource*                 pOutputTexture,
+    ID3D12Resource*                 pAccumTexture,
+    ID3D12Resource*                 pRayGenSamplesBuffer,
+    const Geometry&                 sphereGeometry,
+    const Geometry&                 knobGeometry,
+    const Geometry&                 monkeyGeometry,
+    const Geometry&                 teapotGeometry,
+    const Geometry&                 boxGeometry,
+    const std::vector<IBLTextures>& iblTextures);
 
 void MouseMove(int x, int y, int buttons)
 {
@@ -316,22 +337,37 @@ int main(int argc, char** argv)
     // Create geometry
     // *************************************************************************
     Geometry sphereGeometry;
+    Geometry knobGeometry;
+    Geometry monkeyGeometry;
+    Geometry teapotGeometry;
     Geometry boxGeometry;
     CreateGeometries(
         renderer.get(),
         sphereGeometry,
+        knobGeometry,
+        monkeyGeometry,
+        teapotGeometry,
         boxGeometry);
 
     // *************************************************************************
     // Bottom level acceleration structure
     // *************************************************************************
     ComPtr<ID3D12Resource> sphereBLAS;
+    ComPtr<ID3D12Resource> knobBLAS;
+    ComPtr<ID3D12Resource> monkeyBLAS;
+    ComPtr<ID3D12Resource> teapotBLAS;
     ComPtr<ID3D12Resource> boxBLAS;
     CreateBLASes(
         renderer.get(),
         sphereGeometry,
+        knobGeometry,
+        monkeyGeometry,
+        teapotGeometry,
         boxGeometry,
         &sphereBLAS,
+        &knobBLAS,
+        &monkeyBLAS,
+        &teapotBLAS,
         &boxBLAS);
 
     // *************************************************************************
@@ -342,6 +378,9 @@ int main(int argc, char** argv)
     CreateTLAS(
         renderer.get(),
         sphereBLAS.Get(),
+        knobBLAS.Get(),
+        monkeyBLAS.Get(),
+        teapotBLAS.Get(),
         boxBLAS.Get(),
         &tlasBuffer,
         materialParams);
@@ -387,11 +426,9 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Descriptor heaps
     // *************************************************************************
-    ComPtr<ID3D12Resource> brdfLUT;
-    IBLTextures            iblTextures = {};
+    std::vector<IBLTextures> iblTextures = {};
     CreateIBLTextures(
         renderer.get(),
-        &brdfLUT,
         iblTextures);
 
     // *************************************************************************
@@ -408,6 +445,9 @@ int main(int argc, char** argv)
         accumTexture.Get(),
         rayGenSamplesBuffer.Get(),
         sphereGeometry,
+        knobGeometry,
+        monkeyGeometry,
+        teapotGeometry,
         boxGeometry,
         iblTextures);
 
@@ -466,6 +506,11 @@ int main(int argc, char** argv)
     CHECK_CALL(sceneParamsBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pSceneParams)));
 
     // *************************************************************************
+    // Misc vars
+    // *************************************************************************
+    uint32_t sampleCount = 0;
+
+    // *************************************************************************
     // Main loop
     // *************************************************************************
     while (window->PollEvents()) {
@@ -473,6 +518,28 @@ int main(int argc, char** argv)
 
         if (ImGui::Begin("Scene")) {
             ImGui::SliderInt("Max Samples Per Pixel", reinterpret_cast<int*>(&gMaxSamples), 1, 16384);
+
+            static const char* currentIBLName = gIBLNames[0].c_str();
+            if (ImGui::BeginCombo("IBL", currentIBLName)) {
+                for (size_t i = 0; i < gIBLNames.size(); ++i) {
+                    bool isSelected = (currentIBLName == gIBLNames[i]);
+                    if (ImGui::Selectable(gIBLNames[i].c_str(), isSelected)) {
+                        currentIBLName = gIBLNames[i].c_str();
+                        gIBLIndex      = static_cast<uint32_t>(i);
+                    }
+                    if (isSelected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
+            ImGui::Separator();
+
+            float progress = sampleCount / static_cast<float>(gMaxSamples);
+            char  buf[256] = {};
+            sprintf(buf, "%d/%d Samples", sampleCount, gMaxSamples);
+            ImGui::ProgressBar(progress, ImVec2(-1, 0), buf);
         }
         ImGui::End();
 
@@ -486,6 +553,11 @@ int main(int argc, char** argv)
             gResetRayGenSamples = true;
         }
 
+        if (gCurrentIBLIndex != gIBLIndex) {
+            gCurrentIBLIndex    = gIBLIndex;
+            gResetRayGenSamples = true;
+        }
+
         // Smooth out the rotation on Y
         gAngle += (gTargetAngle - gAngle) * 0.1f;
         // Keep resetting until the angle is somewhat stable
@@ -495,7 +567,7 @@ int main(int argc, char** argv)
 
         // Camera matrices
         mat4 transformEyeMat     = glm::rotate(glm::radians(-gAngle), vec3(0, 1, 0));
-        vec3 startingEyePosition = vec3(0, 3.5f, 6.0f);
+        vec3 startingEyePosition = vec3(0, 4.0f, 8.5f);
         vec3 eyePosition         = transformEyeMat * vec4(startingEyePosition, 1);
         mat4 viewMat             = glm::lookAt(eyePosition, vec3(0, 3, 0), vec3(0, 1, 0));
         mat4 projMat             = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
@@ -503,11 +575,14 @@ int main(int argc, char** argv)
         // Set constant buffer values
         pSceneParams->ViewInverseMatrix       = glm::inverse(viewMat);
         pSceneParams->ProjectionInverseMatrix = glm::inverse(projMat);
+        pSceneParams->IBLIndex                = gCurrentIBLIndex;
         pSceneParams->EyePosition             = eyePosition;
         pSceneParams->MaxSamples              = gCurrentMaxSamples;
 
         // Reset ray gen samples
         if (gResetRayGenSamples) {
+            sampleCount = 0;
+
             commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
 
             commandList->SetComputeRootSignature(clearRayGenRootSig.Get());
@@ -539,11 +614,11 @@ int main(int argc, char** argv)
             // Scene params (b5)
             commandList->SetComputeRootConstantBufferView(2, sceneParamsBuffer->GetGPUVirtualAddress());
             //  Index buffer (t20)
-            //  Position buffer (t25)
-            //  Normal buffer (t30)
+            //  Position buffer (t45)
+            //  Normal buffer (t70)
             descriptorTable = {descriptorHeapStart.ptr + kGeoBuffersOffset * descriptorIncSize};
             commandList->SetComputeRootDescriptorTable(3, descriptorTable);
-            // Environment map (t12)
+            // Environment map (t100)
             descriptorTable = {descriptorHeapStart.ptr + kIBLTextureOffset * descriptorIncSize};
             commandList->SetComputeRootDescriptorTable(4, descriptorTable);
             // Material params (t9)
@@ -654,6 +729,11 @@ int main(int argc, char** argv)
             }
         }
 
+        // Update sample count
+        if (sampleCount < gMaxSamples) {
+            ++sampleCount;
+        }
+
         if (!SwapchainPresent(renderer.get())) {
             assert(false && "SwapchainPresent failed");
             break;
@@ -676,7 +756,7 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     // Geometry buffers range
     D3D12_DESCRIPTOR_RANGE rangeGeometryBuffers            = {};
     rangeGeometryBuffers.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    rangeGeometryBuffers.NumDescriptors                    = 15;
+    rangeGeometryBuffers.NumDescriptors                    = 75;
     rangeGeometryBuffers.BaseShaderRegister                = 20;
     rangeGeometryBuffers.RegisterSpace                     = 0;
     rangeGeometryBuffers.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
@@ -684,7 +764,7 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     // IBLrange
     D3D12_DESCRIPTOR_RANGE rangeIBL            = {};
     rangeIBL.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    rangeIBL.NumDescriptors                    = 1;
+    rangeIBL.NumDescriptors                    = kMaxIBLs;
     rangeIBL.BaseShaderRegister                = 100;
     rangeIBL.RegisterSpace                     = 0;
     rangeIBL.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
@@ -708,13 +788,13 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     rootParameters[2].Descriptor.RegisterSpace  = 0;
     rootParameters[2].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
     //  Index buffers (t20)
-    //  Position buffers (t25)
-    //  Normal buffers (t30)
+    //  Position buffers (t45)
+    //  Normal buffers (t70)
     rootParameters[3].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[3].DescriptorTable.NumDescriptorRanges = 1;
     rootParameters[3].DescriptorTable.pDescriptorRanges   = &rangeGeometryBuffers;
     rootParameters[3].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-    // Environment map (t12)
+    // Environment map (t100)
     rootParameters[4].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[4].DescriptorTable.NumDescriptorRanges = 1;
     rootParameters[4].DescriptorTable.pDescriptorRanges   = &rangeIBL;
@@ -886,7 +966,7 @@ void CreateRayTracingStateObject(
     //
     // ---------------------------------------------------------------------
     D3D12_RAYTRACING_PIPELINE_CONFIG pipelineConfigDesc = {};
-    pipelineConfigDesc.MaxTraceRecursionDepth           = 8;
+    pipelineConfigDesc.MaxTraceRecursionDepth           = 16;
 
     pSubobject        = &subobjects[PIPELINE_CONFIG_INDEX];
     pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
@@ -1003,23 +1083,14 @@ void CreateShaderRecordTables(
 void CreateGeometries(
     DxRenderer* pRenderer,
     Geometry&   outSphereGeometry,
+    Geometry&   outKnobGeometry,
+    Geometry&   outMonkeyGeometry,
+    Geometry&   outTeapotGeometry,
     Geometry&   outBoxGeometryy)
 {
     // Sphere
     {
-        // TriMesh mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
-
-        TriMesh::Options options   = {.enableNormals = true};
-        options.applyTransform     = true;
-        options.transformRotate.y  = glm::radians(135.0f);
-        options.transformTranslate = vec3(0, -2.1f, 0); // vec3(0, -0.11f, 0);
-
-        TriMesh mesh;
-        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/teapot.obj").string(), "", options, &mesh);
-        if (!res) {
-            assert(false && "failed to load model");
-        }
-        mesh.ScaleToFit(1.25f);
+        TriMesh mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
 
         Geometry& geo = outSphereGeometry;
 
@@ -1045,10 +1116,126 @@ void CreateGeometries(
         geo.vertexCount = mesh.GetNumVertices();
     }
 
+    // Knob
+    {
+        TriMesh::Options options = {.enableNormals = true};
+        options.applyTransform   = true;
+        options.transformRotate.y = glm::radians(180.0f);
+
+        TriMesh mesh;
+        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh);
+        if (!res) {
+            assert(false && "failed to load model");
+        }
+        mesh.ScaleToFit(1.25f);
+
+        Geometry& geo = outKnobGeometry;
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTriangles()),
+            DataPtr(mesh.GetTriangles()),
+            &geo.indexBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetPositions()),
+            DataPtr(mesh.GetPositions()),
+            &geo.positionBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetNormals()),
+            DataPtr(mesh.GetNormals()),
+            &geo.normalBuffer));
+
+        geo.indexCount  = 3 * mesh.GetNumTriangles();
+        geo.vertexCount = mesh.GetNumVertices();
+    }
+
+    // Monkey
+    {
+        TriMesh::Options options = {.enableNormals = true};
+
+        TriMesh mesh;
+        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/monkey_lowres.obj").string(), "", options, &mesh);
+        if (!res) {
+            assert(false && "failed to load model");
+        }
+        mesh.ScaleToFit(1.20f);
+
+        Geometry& geo = outMonkeyGeometry;
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTriangles()),
+            DataPtr(mesh.GetTriangles()),
+            &geo.indexBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetPositions()),
+            DataPtr(mesh.GetPositions()),
+            &geo.positionBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetNormals()),
+            DataPtr(mesh.GetNormals()),
+            &geo.normalBuffer));
+
+        geo.indexCount  = 3 * mesh.GetNumTriangles();
+        geo.vertexCount = mesh.GetNumVertices();
+    }
+
+    // Teapot
+    {
+        TriMesh::Options options  = {.enableNormals = true};
+        options.applyTransform    = true;
+        options.transformRotate.y = glm::radians(160.0f);
+
+        TriMesh mesh;
+        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/teapot.obj").string(), "", options, &mesh);
+        if (!res) {
+            assert(false && "failed to load model");
+        }
+        mesh.ScaleToFit(1.5f);
+
+        Geometry& geo = outTeapotGeometry;
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTriangles()),
+            DataPtr(mesh.GetTriangles()),
+            &geo.indexBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetPositions()),
+            DataPtr(mesh.GetPositions()),
+            &geo.positionBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetNormals()),
+            DataPtr(mesh.GetNormals()),
+            &geo.normalBuffer));
+
+        geo.indexCount  = 3 * mesh.GetNumTriangles();
+        geo.vertexCount = mesh.GetNumVertices();
+    }
+
     // Box
     {
-        TriMesh   mesh = TriMesh::Cube(glm::vec3(15, 1, 4.5f), false, {.enableNormals = true});
-        Geometry& geo  = outBoxGeometryy;
+        TriMesh::Options options = {.enableNormals = true};
+
+        TriMesh mesh;
+        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/shelf.obj").string(), "", options, &mesh);
+        if (!res) {
+            assert(false && "failed to load model");
+        }
+
+        Geometry& geo = outBoxGeometryy;
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
@@ -1076,14 +1263,21 @@ void CreateGeometries(
 void CreateBLASes(
     DxRenderer*      pRenderer,
     const Geometry&  sphereGeometry,
+    const Geometry&  knobGeometry,
+    const Geometry&  monkeyGeometry,
+    const Geometry&  teapotGeometry,
     const Geometry&  boxGeometry,
     ID3D12Resource** ppSphereBLAS,
+    ID3D12Resource** ppKnobBLAS,
+    ID3D12Resource** ppMonkeyBLAS,
+    ID3D12Resource** ppTeapotBLAS,
     ID3D12Resource** ppBoxBLAS)
 {
-    std::vector<const Geometry*>  geometries = {&sphereGeometry, &boxGeometry};
-    std::vector<ID3D12Resource**> BLASes     = {ppSphereBLAS, ppBoxBLAS};
+    std::vector<const Geometry*>  geometries = {&sphereGeometry, &knobGeometry, &monkeyGeometry, &teapotGeometry, &boxGeometry};
+    std::vector<ID3D12Resource**> BLASes     = {ppSphereBLAS, ppKnobBLAS, ppMonkeyBLAS, ppTeapotBLAS, ppBoxBLAS};
 
-    for (uint32_t i = 0; i < 2; ++i) {
+    uint32_t n = static_cast<uint32_t>(geometries.size());
+    for (uint32_t i = 0; i < n; ++i) {
         auto pGeometry = geometries[i];
         auto ppBLAS    = BLASes[i];
 
@@ -1157,13 +1351,17 @@ void CreateBLASes(
         ID3D12CommandList* pList = commandList.Get();
         pRenderer->Queue->ExecuteCommandLists(1, &pList);
 
-        assert(WaitForGpu(pRenderer));
+        bool waitres = WaitForGpu(pRenderer);
+        assert(waitres && "WaitForGpu failed");
     }
 }
 
 void CreateTLAS(
     DxRenderer*                      pRenderer,
     ID3D12Resource*                  pSphereBLAS,
+    ID3D12Resource*                  pKnobBLAS,
+    ID3D12Resource*                  pMonkeyBLAS,
+    ID3D12Resource*                  pTeapotBLAS,
     ID3D12Resource*                  pBoxBLAS,
     ID3D12Resource**                 ppTLAS,
     std::vector<MaterialParameters>& outMaterialParams)
@@ -1171,34 +1369,90 @@ void CreateTLAS(
     // clang-format off
      std::vector<glm::mat3x4> transforms = {
          // Rough plastic sphere
-         {{1.0f, 0.0f, 0.0f, -3.75f},
-          {0.0f, 1.0f, 0.0f,  2.0f},
-          {0.0f, 0.0f, 1.0f,  0.0f}},
+         {{ 1.0f, 0.0f, 0.0f, 1.25f},
+          { 0.0f, 1.0f, 0.0f, 4.0f},
+          { 0.0f, 0.0f, 1.0f, 1.5f}},
          // Shiny plastic sphere 
-         {{1.0f, 0.0f, 0.0f, -1.25f},
-          {0.0f, 1.0f, 0.0f,  2.0f},
-          {0.0f, 0.0f, 1.0f,  0.0f}},
-         // Glass sphere
-         {{1.0f, 0.0f, 0.0f,  1.25f},
-          {0.0f, 1.0f, 0.0f,  2.0f},
-          {0.0f, 0.0f, 1.0f,  0.0f}},
-         // Gold sphere
+         {{-1.0f, 0.0f,  0.0f, -1.25f},
+          { 0.0f, 1.0f,  0.0f,  1.0f},
+          { 0.0f, 0.0f, -1.0f, -1.5f}},
+         // Crystal sphere
          {{1.0f, 0.0f, 0.0f,  3.75f},
-          {0.0f, 1.0f, 0.0f,  2.0f},
-          {0.0f, 0.0f, 1.0f,  0.0f}},
+          {0.0f, 1.0f, 0.0f,  1.0f},
+          {0.0f, 0.0f, 1.0f,  1.5f}},
+         // Metal sphere
+         {{-1.0f, 0.0f,  0.0f,  3.75f},
+          { 0.0f, 1.0f,  0.0f,  4.0f},
+          { 0.0f, 0.0f, -1.0f, -1.5f}},
+
+         // Rough plastic knob
+         {{-1.0f, 0.0f,  0.0f,  3.75f},
+          { 0.0f, 1.0f,  0.0f,  0.96f},
+          { 0.0f, 0.0f, -1.0f, -1.5f}},
+         // Shiny plastic knob 
+         {{-1.0f, 0.0f,  0.0f, -3.75f},
+          { 0.0f, 1.0f,  0.0f,  3.96f},
+          { 0.0f, 0.0f, -1.0f, -1.5f}},
+         // Glass knob
+         {{1.0f, 0.0f, 0.0f, -3.75f},
+          {0.0f, 1.0f, 0.0f,  3.96f},
+          {0.0f, 0.0f, 1.0f,  1.5f}},
+         // Metal knob
+         {{1.0f, 0.0f, 0.0f, -1.25f},
+          {0.0f, 1.0f, 0.0f,  0.96f},
+          {0.0f, 0.0f, 1.0f,  1.5f}},
+
+         // Rough plastic monkey
+         {{-1.0f, 0.0f,  0.0f,  1.25f},
+          { 0.0f, 1.0f,  0.0f,  3.96f},
+          { 0.0f, 0.0f, -1.0f, -1.5f}},
+         // Shiny plastic monkey 
+         {{1.0f, 0.0f, 0.0f,  1.25f},
+          {0.0f, 1.0f, 0.0f,  0.96f},
+          {0.0f, 0.0f, 1.0f,  1.5f}},
+         // Diamond monkey
+         {{-1.0f, 0.0f,  0.0f, -3.75f},
+          { 0.0f, 1.0f,  0.0f,  0.96f},
+          { 0.0f, 0.0f, -1.0f, -1.5f}},
+         // Metal monkey
+         {{ 1.0f, 0.0f,  0.0f,  3.75f},
+          { 0.0f, 1.0f,  0.0f,  3.96f},
+          { 0.0f, 0.0f,  1.0f,  1.5f}},
+
+         // Rough plastic teapot
+         {{ 1.0f, 0.0f,  0.0f, -3.75f},
+          { 0.0f, 1.0f,  0.0f,  0.001f},
+          { 0.0f, 0.0f,  1.0f,  1.35f}},
+         // Shiny plastic teapot 
+         {{1.0f, 0.0f, 0.0f, -1.25f},
+          {0.0f, 1.0f, 0.0f,  3.001f},
+          {0.0f, 0.0f, 1.0f,  1.35f}},
+         // Glass teapot
+         {{-1.0f, 0.0f,  0.0f, -1.25f},
+          { 0.0f, 1.0f,  0.0f,  3.001f},
+          { 0.0f, 0.0f, -1.0f, -1.35f}},
+         // Metal teapot
+         {{-1.0f, 0.0f,  0.0f,  1.25f},
+          { 0.0f, 1.0f,  0.0f,  0.001f},
+          { 0.0f, 0.0f, -1.0f, -1.35f}},
+
          // Box
          {{1.0f, 0.0f, 0.0f,  0.0f},
-          {0.0f, 1.0f, 0.0f,  0.5f},
+          {0.0f, 1.0f, 0.0f,  0.0f},
           {0.0f, 0.0f, 1.0f,  0.0f}},
      };
     // clang-format on
 
     // Material params
     {
+        // ---------------------------------------------------------------------
+        // Spheres
+        // ---------------------------------------------------------------------
+
         // Rough plastic
         {
             MaterialParameters materialParams  = {};
-            materialParams.baseColor           = vec3(1, 1, 1);
+            materialParams.baseColor           = vec3(0.0f, 1.0f, 1.0f);
             materialParams.roughness           = 1.0f;
             materialParams.metallic            = 0;
             materialParams.specularReflectance = 0.0f;
@@ -1210,10 +1464,62 @@ void CreateTLAS(
         // Shiny plastic
         {
             MaterialParameters materialParams  = {};
-            materialParams.baseColor           = vec3(1, 1, 1);
+            materialParams.baseColor           = vec3(0.07f, 0.05f, 0.1f);
+            materialParams.roughness           = 0.0f;
+            materialParams.metallic            = 0;
+            materialParams.specularReflectance = 1.0f;
+            materialParams.ior                 = 0;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Crystal
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = F0_DiletricCrystal;
             materialParams.roughness           = 0;
             materialParams.metallic            = 0;
             materialParams.specularReflectance = 0.5f;
+            materialParams.ior                 = 2.0f;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Metal with a bit of roughness
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = F0_MetalChromium;
+            materialParams.roughness           = 0.25f;
+            materialParams.metallic            = 1;
+            materialParams.specularReflectance = 0.0f;
+            materialParams.ior                 = 0;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // ---------------------------------------------------------------------
+        // Knob
+        // ---------------------------------------------------------------------
+
+        // Rough plastic
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = vec3(1.0f, 0.0f, 1.0f);
+            materialParams.roughness           = 1.0f;
+            materialParams.metallic            = 0;
+            materialParams.specularReflectance = 0.0f;
+            materialParams.ior                 = 0;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Shiny plastic
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = vec3(1.25f, 0.07f, 0.05f);
+            materialParams.roughness           = 0.0f;
+            materialParams.metallic            = 0;
+            materialParams.specularReflectance = 1.0f;
             materialParams.ior                 = 0;
 
             outMaterialParams.push_back(materialParams);
@@ -1225,16 +1531,68 @@ void CreateTLAS(
             materialParams.baseColor           = vec3(1, 1, 1);
             materialParams.roughness           = 0;
             materialParams.metallic            = 0;
-            materialParams.specularReflectance = 0.0f;
-            materialParams.ior                 = 1.50f;
+            materialParams.specularReflectance = 0.5f;
+            materialParams.ior                 = 1.5f;
 
             outMaterialParams.push_back(materialParams);
         }
 
-        // Gold with a bit of roughness
+        // Metal with a bit of roughness
         {
             MaterialParameters materialParams  = {};
             materialParams.baseColor           = F0_MetalGold;
+            materialParams.roughness           = 0.25f;
+            materialParams.metallic            = 1;
+            materialParams.specularReflectance = 0.0f;
+            materialParams.ior                 = 0;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // ---------------------------------------------------------------------
+        // Monkey
+        // ---------------------------------------------------------------------
+
+        // Rough plastic
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = vec3(1.0f, 1.0f, 0.2f);
+            materialParams.roughness           = 1.0f;
+            materialParams.metallic            = 0;
+            materialParams.specularReflectance = 0.0f;
+            materialParams.ior                 = 0;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Shiny plastic
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = vec3(0.2f, 1.0f, 0.2f);
+            materialParams.roughness           = 0.0f;
+            materialParams.metallic            = 0;
+            materialParams.specularReflectance = 1.0f;
+            materialParams.ior                 = 0;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Diamond
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = F0_DiletricDiamond + vec3(0, 0, 0.25f);
+            materialParams.roughness           = 0;
+            materialParams.metallic            = 0;
+            materialParams.specularReflectance = 0.5f;
+            materialParams.ior                 = 2.418f;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Metal
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = F0_MetalSilver;
             materialParams.roughness           = 0.0f;
             materialParams.metallic            = 1;
             materialParams.specularReflectance = 0.0f;
@@ -1243,13 +1601,69 @@ void CreateTLAS(
             outMaterialParams.push_back(materialParams);
         }
 
-        // Box
+        // ---------------------------------------------------------------------
+        // Teapot
+        // ---------------------------------------------------------------------
+
+        // Rough plastic
         {
             MaterialParameters materialParams  = {};
-            materialParams.baseColor           = vec3(0.6f, 0.7f, 0.75f);
+            materialParams.baseColor           = vec3(1.5f, 1.5f, 1.5f);
             materialParams.roughness           = 1.0f;
             materialParams.metallic            = 0;
             materialParams.specularReflectance = 0.0f;
+            materialParams.ior                 = 0;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Shiny plastic
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = 2.0f * vec3(1.0f, 0.35f, 0.05f);
+            materialParams.roughness           = 0.0f;
+            materialParams.metallic            = 0;
+            materialParams.specularReflectance = 1.0f;
+            materialParams.ior                 = 0;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Glass
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = vec3(1, 1, 1);
+            materialParams.roughness           = 0.25f;
+            materialParams.metallic            = 0;
+            materialParams.specularReflectance = 0.5f;
+            materialParams.ior                 = 1.5f;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Metal with a bit of roughness
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = F0_MetalCopper;
+            materialParams.roughness           = 0.45f;
+            materialParams.metallic            = 1;
+            materialParams.specularReflectance = 0.0f;
+            materialParams.ior                 = 0;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // ---------------------------------------------------------------------
+        // Box
+        // ---------------------------------------------------------------------
+
+        // Box
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = vec3(0.35f, 0.36f, 0.36f);
+            materialParams.roughness           = 1.0f;
+            materialParams.metallic            = 0;
+            materialParams.specularReflectance = 0.2f;
             materialParams.ior                 = 0;
 
             outMaterialParams.push_back(materialParams);
@@ -1260,10 +1674,14 @@ void CreateTLAS(
     {
         D3D12_RAYTRACING_INSTANCE_DESC instanceDesc = {};
         instanceDesc.InstanceMask                   = 1;
-        instanceDesc.AccelerationStructure          = pSphereBLAS->GetGPUVirtualAddress();
-        instanceDesc.Flags                          = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+        instanceDesc.Flags                          = D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_OPAQUE;
 
         uint32_t transformIdx = 0;
+
+        // ---------------------------------------------------------------------
+        // Sphere
+        // ---------------------------------------------------------------------
+        instanceDesc.AccelerationStructure = pSphereBLAS->GetGPUVirtualAddress();
 
         // Rough plastic sphere
         memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
@@ -1275,17 +1693,103 @@ void CreateTLAS(
         instanceDescs.push_back(instanceDesc);
         ++transformIdx;
 
-        // Glass sphere
+        // Crystal sphere
         D3D12_RAYTRACING_INSTANCE_DESC thisInstanceDesc = instanceDesc;
-        thisInstanceDesc.Flags |= D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE | D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE;
+        thisInstanceDesc.Flags                          = D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE | D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE;
         memcpy(thisInstanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
         instanceDescs.push_back(thisInstanceDesc);
         ++transformIdx;
 
-        // Gold sphere
+        // Metal sphere
         memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
         instanceDescs.push_back(instanceDesc);
         ++transformIdx;
+
+        // ---------------------------------------------------------------------
+        // Knob
+        // ---------------------------------------------------------------------
+        instanceDesc.AccelerationStructure = pKnobBLAS->GetGPUVirtualAddress();
+
+        // Rough plastic knob
+        memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instanceDescs.push_back(instanceDesc);
+        ++transformIdx;
+
+        // Shiny plastic knob
+        memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instanceDescs.push_back(instanceDesc);
+        ++transformIdx;
+
+        // Glass knob
+        thisInstanceDesc       = instanceDesc;
+        thisInstanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE | D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE;
+        memcpy(thisInstanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instanceDescs.push_back(thisInstanceDesc);
+        ++transformIdx;
+
+        // Metal knob
+        memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instanceDescs.push_back(instanceDesc);
+        ++transformIdx;
+
+        // ---------------------------------------------------------------------
+        // Monkey
+        // ---------------------------------------------------------------------
+        instanceDesc.AccelerationStructure = pMonkeyBLAS->GetGPUVirtualAddress();
+
+        // Rough plastic monkey
+        memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instanceDescs.push_back(instanceDesc);
+        ++transformIdx;
+
+        // Shiny plastic monkey
+        memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instanceDescs.push_back(instanceDesc);
+        ++transformIdx;
+
+        // Diamond monkey
+        thisInstanceDesc       = instanceDesc;
+        thisInstanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE | D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE;
+        memcpy(thisInstanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instanceDescs.push_back(thisInstanceDesc);
+        ++transformIdx;
+
+        // Metal monkey
+        memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instanceDescs.push_back(instanceDesc);
+        ++transformIdx;
+
+        // ---------------------------------------------------------------------
+        // Teapot
+        // ---------------------------------------------------------------------
+        instanceDesc.AccelerationStructure = pTeapotBLAS->GetGPUVirtualAddress();
+
+        // Rough plastic teapot
+        memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instanceDescs.push_back(instanceDesc);
+        ++transformIdx;
+
+        // Shiny plastic teapot
+        memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instanceDescs.push_back(instanceDesc);
+        ++transformIdx;
+
+        // Glass teapot
+        thisInstanceDesc       = instanceDesc;
+        thisInstanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE | D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE;
+        memcpy(thisInstanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instanceDescs.push_back(thisInstanceDesc);
+        ++transformIdx;
+
+        // Metal teapot
+        memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instanceDescs.push_back(instanceDesc);
+        ++transformIdx;
+
+        // ---------------------------------------------------------------------
+        // Box
+        // ---------------------------------------------------------------------
+        instanceDesc.AccelerationStructure = pMonkeyBLAS->GetGPUVirtualAddress();
 
         // Box
         instanceDesc.AccelerationStructure = pBoxBLAS->GetGPUVirtualAddress();
@@ -1355,7 +1859,8 @@ void CreateTLAS(
     ID3D12CommandList* pList = commandList.Get();
     pRenderer->Queue->ExecuteCommandLists(1, &pList);
 
-    assert(WaitForGpu(pRenderer));
+    bool waitres = WaitForGpu(pRenderer);
+    assert(waitres && "WaitForGpu failed");
 }
 
 void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)
@@ -1411,85 +1916,81 @@ void CreateAccumTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)
 }
 
 void CreateIBLTextures(
-    DxRenderer*      pRenderer,
-    ID3D12Resource** ppBRDFLUT,
-    IBLTextures&     outIBLTextures)
+    DxRenderer*               pRenderer,
+    std::vector<IBLTextures>& outIBLTextures)
 {
-    // BRDF LUT
+    std::vector<std::filesystem::path> iblFiles;
     {
-        auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut.hdr"));
-        if (bitmap.Empty()) {
-            assert(false && "Load image failed");
+        auto iblDirs = GetEveryAssetPath("IBL");
+        for (auto& dir : iblDirs) {
+            for (auto& entry : std::filesystem::directory_iterator(dir)) {
+                if (!entry.is_regular_file()) {
+                    continue;
+                }
+                auto path = entry.path();
+                auto ext  = path.extension();
+                if (ext == ".ibl") {
+                    path = std::filesystem::relative(path, dir.parent_path());
+                    iblFiles.push_back(path);
+                }
+            }
+        }
+    }
+
+    size_t maxEntries = std::min<size_t>(kMaxIBLs, iblFiles.size());
+    for (size_t i = 0; i < maxEntries; ++i) {
+        std::filesystem::path iblFile = iblFiles[i];
+
+        IBLMaps ibl = {};
+        if (!LoadIBLMaps32f(iblFile, &ibl)) {
+            GREX_LOG_ERROR("failed to load: " << iblFile);
             return;
         }
 
-        ComPtr<ID3D12Resource> texture;
-        CHECK_CALL(CreateTexture(
-            pRenderer,
-            bitmap.GetWidth(),
-            bitmap.GetHeight(),
-            DXGI_FORMAT_R32G32B32A32_FLOAT,
-            bitmap.GetSizeInBytes(),
-            bitmap.GetPixels(),
-            ppBRDFLUT));
-    }
+        IBLTextures iblTexture = {};
 
-    // IBL file
-    auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
+        iblTexture.envNumLevels = ibl.numLevels;
 
-    IBLMaps ibl = {};
-    if (!LoadIBLMaps32f(iblFile, &ibl)) {
-        GREX_LOG_ERROR("failed to load: " << iblFile);
-        return;
-    }
+        // Environment
+        {
+            const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
+            const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
 
-    outIBLTextures.envNumLevels = ibl.numLevels;
+            std::vector<DxMipOffset> mipOffsets;
+            uint32_t                 levelOffset = 0;
+            uint32_t                 levelWidth  = ibl.baseWidth;
+            uint32_t                 levelHeight = ibl.baseHeight;
+            for (uint32_t i = 0; i < ibl.numLevels; ++i) {
+                DxMipOffset mipOffset = {};
+                mipOffset.offset      = levelOffset;
+                mipOffset.rowStride   = rowStride;
 
-    // Irradiance
-    {
-        CHECK_CALL(CreateTexture(
-            pRenderer,
-            ibl.irradianceMap.GetWidth(),
-            ibl.irradianceMap.GetHeight(),
-            DXGI_FORMAT_R32G32B32A32_FLOAT,
-            ibl.irradianceMap.GetSizeInBytes(),
-            ibl.irradianceMap.GetPixels(),
-            &outIBLTextures.irrTexture));
-    }
+                mipOffsets.push_back(mipOffset);
 
-    // Environment
-    {
-        const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
-        const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
+                levelOffset += (rowStride * levelHeight);
+                levelWidth >>= 1;
+                levelHeight >>= 1;
+            }
 
-        std::vector<DxMipOffset> mipOffsets;
-        uint32_t                 levelOffset = 0;
-        uint32_t                 levelWidth  = ibl.baseWidth;
-        uint32_t                 levelHeight = ibl.baseHeight;
-        for (uint32_t i = 0; i < ibl.numLevels; ++i) {
-            DxMipOffset mipOffset = {};
-            mipOffset.offset      = levelOffset;
-            mipOffset.rowStride   = rowStride;
+            ComPtr<ID3D12Resource> texture;
+            CHECK_CALL(CreateTexture(
+                pRenderer,
+                ibl.baseWidth,
+                ibl.baseHeight,
+                DXGI_FORMAT_R32G32B32A32_FLOAT,
+                mipOffsets,
+                ibl.environmentMap.GetSizeInBytes(),
+                ibl.environmentMap.GetPixels(),
+                &texture));
+            iblTexture.envTexture = texture;
 
-            mipOffsets.push_back(mipOffset);
-
-            levelOffset += (rowStride * levelHeight);
-            levelWidth >>= 1;
-            levelHeight >>= 1;
+            outIBLTextures.push_back(iblTexture);
         }
 
-        CHECK_CALL(CreateTexture(
-            pRenderer,
-            ibl.baseWidth,
-            ibl.baseHeight,
-            DXGI_FORMAT_R32G32B32A32_FLOAT,
-            mipOffsets,
-            ibl.environmentMap.GetSizeInBytes(),
-            ibl.environmentMap.GetPixels(),
-            &outIBLTextures.envTexture));
-    }
+        gIBLNames.push_back(iblFile.filename().replace_extension().string());
 
-    GREX_LOG_INFO("Loaded " << iblFile);
+        GREX_LOG_INFO("Loaded " << iblFile);
+    }
 }
 
 void CreateDescriptorHeap(DxRenderer* pRenderer, ID3D12DescriptorHeap** ppHeap)
@@ -1503,116 +2004,175 @@ void CreateDescriptorHeap(DxRenderer* pRenderer, ID3D12DescriptorHeap** ppHeap)
 }
 
 void WriteDescriptors(
-    DxRenderer*           pRenderer,
-    ID3D12DescriptorHeap* pDescriptorHeap,
-    ID3D12Resource*       pOutputTexture,
-    ID3D12Resource*       pAccumTexture,
-    ID3D12Resource*       pRayGenSamplesBuffer,
-    const Geometry&       sphereGeometry,
-    const Geometry&       boxGeometry,
-    const IBLTextures&    iblTextures)
+    DxRenderer*                     pRenderer,
+    ID3D12DescriptorHeap*           pDescriptorHeap,
+    ID3D12Resource*                 pOutputTexture,
+    ID3D12Resource*                 pAccumTexture,
+    ID3D12Resource*                 pRayGenSamplesBuffer,
+    const Geometry&                 sphereGeometry,
+    const Geometry&                 knobGeometry,
+    const Geometry&                 monkeyGeometry,
+    const Geometry&                 teapotGeometry,
+    const Geometry&                 boxGeometry,
+    const std::vector<IBLTextures>& iblTextures)
 {
+    const D3D12_CPU_DESCRIPTOR_HANDLE kBaseDescriptor = pDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    const UINT                        kIncrementSize  = pRenderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+    // Outputs resources
     {
-        UINT descriptorIncSize = pRenderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        D3D12_CPU_DESCRIPTOR_HANDLE descriptor = pDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+        descriptor.ptr += kOutputResourcesOffset * kIncrementSize;
 
-        // Outputs resources
+        // Output texture (u1)
         {
-            D3D12_CPU_DESCRIPTOR_HANDLE descriptor = pDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-            descriptor.ptr += kOutputResourcesOffset * descriptorIncSize;
+            D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
 
-            // Output texture (u1)
-            {
-                D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+            uavDesc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM;
+            uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+            pRenderer->Device->CreateUnorderedAccessView(pOutputTexture, nullptr, &uavDesc, descriptor);
+            descriptor.ptr += kIncrementSize;
 
-                uavDesc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM;
-                uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-                pRenderer->Device->CreateUnorderedAccessView(pOutputTexture, nullptr, &uavDesc, descriptor);
-                descriptor.ptr += descriptorIncSize;
-
-                uavDesc.Format        = DXGI_FORMAT_R32G32B32A32_FLOAT;
-                uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-                pRenderer->Device->CreateUnorderedAccessView(pAccumTexture, nullptr, &uavDesc, descriptor);
-                descriptor.ptr += descriptorIncSize;
-            }
-
-            // Ray generation samples (u3)
-            {
-                D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-                uavDesc.ViewDimension                    = D3D12_UAV_DIMENSION_BUFFER;
-                uavDesc.Buffer.FirstElement              = 0;
-                uavDesc.Buffer.NumElements               = gWindowWidth * gWindowHeight;
-                uavDesc.Buffer.StructureByteStride       = sizeof(uint32_t);
-                uavDesc.Buffer.CounterOffsetInBytes      = 0;
-                uavDesc.Buffer.Flags                     = D3D12_BUFFER_UAV_FLAG_NONE;
-
-                pRenderer->Device->CreateUnorderedAccessView(pRayGenSamplesBuffer, nullptr, &uavDesc, descriptor);
-                descriptor.ptr += descriptorIncSize;
-            }
+            uavDesc.Format        = DXGI_FORMAT_R32G32B32A32_FLOAT;
+            uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+            pRenderer->Device->CreateUnorderedAccessView(pAccumTexture, nullptr, &uavDesc, descriptor);
+            descriptor.ptr += kIncrementSize;
         }
 
-        // Geometry
+        // Ray generation samples (u3)
         {
-            const uint32_t kGeometryStride      = 5;
-            const uint32_t kNumSpheres          = 4;
-            const uint32_t kIndexBufferIndex    = 0;
-            const uint32_t kPositionBufferIndex = 1;
-            const uint32_t kNormalBufferIndex   = 2;
+            D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+            uavDesc.ViewDimension                    = D3D12_UAV_DIMENSION_BUFFER;
+            uavDesc.Buffer.FirstElement              = 0;
+            uavDesc.Buffer.NumElements               = gWindowWidth * gWindowHeight;
+            uavDesc.Buffer.StructureByteStride       = sizeof(uint32_t);
+            uavDesc.Buffer.CounterOffsetInBytes      = 0;
+            uavDesc.Buffer.Flags                     = D3D12_BUFFER_UAV_FLAG_NONE;
 
-            const D3D12_CPU_DESCRIPTOR_HANDLE kBaseDescriptor = pDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-            const UINT                        kIncrementSize  = pRenderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            pRenderer->Device->CreateUnorderedAccessView(pRayGenSamplesBuffer, nullptr, &uavDesc, descriptor);
+            descriptor.ptr += kIncrementSize;
+        }
+    }
 
-            // Spheres
-            for (uint32_t i = 0; i < kNumSpheres; ++i) {
-                uint32_t                    offset     = 0;
-                D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
+    // Geometry
+    {
+        const uint32_t kBuffersStride       = 25;
+        const uint32_t kNumInstances        = 4;
+        const uint32_t kIndexBufferIndex    = 0;
+        const uint32_t kPositionBufferIndex = 1;
+        const uint32_t kNormalBufferIndex   = 2;
 
-                // Index buffer (t20)
-                offset     = kGeoBuffersOffset + (kIndexBufferIndex * kGeometryStride) + i;
-                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
-                CreateDescriptoBufferSRV(pRenderer, 0, sphereGeometry.indexCount / 3, 12, sphereGeometry.indexBuffer.Get(), descriptor);
+        uint32_t indexBufferOffset    = kGeoBuffersOffset + kIndexBufferIndex * kBuffersStride;
+        uint32_t positionBufferOffset = kGeoBuffersOffset + kPositionBufferIndex * kBuffersStride;
+        uint32_t normalBufferOffset   = kGeoBuffersOffset + kNormalBufferIndex * kBuffersStride;
 
-                // Position buffer (t25)
-                offset     = kGeoBuffersOffset + (kPositionBufferIndex * kGeometryStride) + i;
-                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
-                CreateDescriptoBufferSRV(pRenderer, 0, sphereGeometry.vertexCount, 4, sphereGeometry.positionBuffer.Get(), descriptor);
+        // Spheres
+        for (uint32_t i = 0; i < kNumInstances; ++i) {
+            D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
 
-                // Normal buffer (t30)
-                offset     = kGeoBuffersOffset + (kNormalBufferIndex * kGeometryStride) + i;
-                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
-                CreateDescriptoBufferSRV(pRenderer, 0, sphereGeometry.vertexCount, 4, sphereGeometry.normalBuffer.Get(), descriptor);
-            }
+            // Index buffer (t20)
+            descriptor = {kBaseDescriptor.ptr + indexBufferOffset * kIncrementSize};
+            CreateDescriptoBufferSRV(pRenderer, 0, sphereGeometry.indexCount / 3, 12, sphereGeometry.indexBuffer.Get(), descriptor);
+            ++indexBufferOffset;
 
-            // Box
-            {
-                uint32_t                    i          = 4;
-                uint32_t                    offset     = 0;
-                D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
+            // Position buffer (t45)
+            descriptor = {kBaseDescriptor.ptr + positionBufferOffset * kIncrementSize};
+            CreateDescriptoBufferSRV(pRenderer, 0, sphereGeometry.vertexCount, 4, sphereGeometry.positionBuffer.Get(), descriptor);
+            ++positionBufferOffset;
 
-                // Index buffer (t20)
-                offset     = kGeoBuffersOffset + (kIndexBufferIndex * kGeometryStride) + i;
-                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
-                CreateDescriptoBufferSRV(pRenderer, 0, boxGeometry.indexCount / 3, 12, boxGeometry.indexBuffer.Get(), descriptor);
-
-                // Position buffer (t25)
-                offset     = kGeoBuffersOffset + (kPositionBufferIndex * kGeometryStride) + i;
-                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
-                CreateDescriptoBufferSRV(pRenderer, 0, boxGeometry.vertexCount, 4, boxGeometry.positionBuffer.Get(), descriptor);
-
-                // Normal buffer (t30)
-                offset     = kGeoBuffersOffset + (kNormalBufferIndex * kGeometryStride) + i;
-                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
-                CreateDescriptoBufferSRV(pRenderer, 0, boxGeometry.vertexCount, 4, boxGeometry.normalBuffer.Get(), descriptor);
-            }
+            // Normal buffer (t70)
+            descriptor = {kBaseDescriptor.ptr + normalBufferOffset * kIncrementSize};
+            CreateDescriptoBufferSRV(pRenderer, 0, sphereGeometry.vertexCount, 4, sphereGeometry.normalBuffer.Get(), descriptor);
+            ++normalBufferOffset;
         }
 
-        // IBL Textures
-        {
-            D3D12_CPU_DESCRIPTOR_HANDLE descriptor = pDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-            descriptor.ptr += kIBLTextureOffset * pRenderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        // Knob
+        for (uint32_t i = 0; i < kNumInstances; ++i) {
+            D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
 
-            // Environment map
-            CreateDescriptorTexture2D(pRenderer, iblTextures.envTexture.Get(), descriptor, 0, iblTextures.envNumLevels);
-            descriptor.ptr += pRenderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            // Index buffer (t20)
+            descriptor = {kBaseDescriptor.ptr + indexBufferOffset * kIncrementSize};
+            CreateDescriptoBufferSRV(pRenderer, 0, knobGeometry.indexCount / 3, 12, knobGeometry.indexBuffer.Get(), descriptor);
+            ++indexBufferOffset;
+
+            // Position buffer (t45)
+            descriptor = {kBaseDescriptor.ptr + positionBufferOffset * kIncrementSize};
+            CreateDescriptoBufferSRV(pRenderer, 0, knobGeometry.vertexCount, 4, knobGeometry.positionBuffer.Get(), descriptor);
+            ++positionBufferOffset;
+
+            // Normal buffer (t70)
+            descriptor = {kBaseDescriptor.ptr + normalBufferOffset * kIncrementSize};
+            CreateDescriptoBufferSRV(pRenderer, 0, knobGeometry.vertexCount, 4, knobGeometry.normalBuffer.Get(), descriptor);
+            ++normalBufferOffset;
         }
+
+        // Monkey
+        for (uint32_t i = 0; i < kNumInstances; ++i) {
+            D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
+
+            // Index buffer (t20)
+            descriptor = {kBaseDescriptor.ptr + indexBufferOffset * kIncrementSize};
+            CreateDescriptoBufferSRV(pRenderer, 0, monkeyGeometry.indexCount / 3, 12, monkeyGeometry.indexBuffer.Get(), descriptor);
+            ++indexBufferOffset;
+
+            // Position buffer (t45)
+            descriptor = {kBaseDescriptor.ptr + positionBufferOffset * kIncrementSize};
+            CreateDescriptoBufferSRV(pRenderer, 0, monkeyGeometry.vertexCount, 4, monkeyGeometry.positionBuffer.Get(), descriptor);
+            ++positionBufferOffset;
+
+            // Normal buffer (t70)
+            descriptor = {kBaseDescriptor.ptr + normalBufferOffset * kIncrementSize};
+            CreateDescriptoBufferSRV(pRenderer, 0, monkeyGeometry.vertexCount, 4, monkeyGeometry.normalBuffer.Get(), descriptor);
+            ++normalBufferOffset;
+        }
+
+        // Teapot
+        for (uint32_t i = 0; i < kNumInstances; ++i) {
+            D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
+
+            // Index buffer (t20)
+            descriptor = {kBaseDescriptor.ptr + indexBufferOffset * kIncrementSize};
+            CreateDescriptoBufferSRV(pRenderer, 0, teapotGeometry.indexCount / 3, 12, teapotGeometry.indexBuffer.Get(), descriptor);
+            ++indexBufferOffset;
+
+            // Position buffer (t45)
+            descriptor = {kBaseDescriptor.ptr + positionBufferOffset * kIncrementSize};
+            CreateDescriptoBufferSRV(pRenderer, 0, teapotGeometry.vertexCount, 4, teapotGeometry.positionBuffer.Get(), descriptor);
+            ++positionBufferOffset;
+
+            // Normal buffer (t70)
+            descriptor = {kBaseDescriptor.ptr + normalBufferOffset * kIncrementSize};
+            CreateDescriptoBufferSRV(pRenderer, 0, teapotGeometry.vertexCount, 4, teapotGeometry.normalBuffer.Get(), descriptor);
+            ++normalBufferOffset;
+        }
+
+        // Box
+        uint32_t instanceStride = 0 * kNumInstances;
+        {
+            D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
+
+            // Index buffer (t20)
+            descriptor = {kBaseDescriptor.ptr + indexBufferOffset * kIncrementSize};
+            CreateDescriptoBufferSRV(pRenderer, 0, boxGeometry.indexCount / 3, 12, boxGeometry.indexBuffer.Get(), descriptor);
+            ++indexBufferOffset;
+
+            // Position buffer (t45)
+            descriptor = {kBaseDescriptor.ptr + positionBufferOffset * kIncrementSize};
+            CreateDescriptoBufferSRV(pRenderer, 0, boxGeometry.vertexCount, 4, boxGeometry.positionBuffer.Get(), descriptor);
+            ++positionBufferOffset;
+
+            // Normal buffer (t70)
+            descriptor = {kBaseDescriptor.ptr + normalBufferOffset * kIncrementSize};
+            CreateDescriptoBufferSRV(pRenderer, 0, boxGeometry.vertexCount, 4, boxGeometry.normalBuffer.Get(), descriptor);
+            ++normalBufferOffset;
+        }
+    }
+
+    // IBL Textures
+    for (uint32_t i = 0; i < iblTextures.size(); ++i) {
+        auto& iblTexture = iblTextures[i];
+
+        D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {kBaseDescriptor.ptr + ((kIBLTextureOffset + i) * kIncrementSize)};
+        CreateDescriptorTexture2D(pRenderer, iblTexture.envTexture.Get(), descriptor, 0, iblTexture.envNumLevels);
     }
 }
