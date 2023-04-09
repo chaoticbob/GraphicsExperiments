@@ -466,6 +466,11 @@ int main(int argc, char** argv)
     CHECK_CALL(sceneParamsBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pSceneParams)));
 
     // *************************************************************************
+    // Misc vars
+    // *************************************************************************
+    uint32_t sampleCount = 0;
+
+    // *************************************************************************
     // Main loop
     // *************************************************************************
     while (window->PollEvents()) {
@@ -473,6 +478,13 @@ int main(int argc, char** argv)
 
         if (ImGui::Begin("Scene")) {
             ImGui::SliderInt("Max Samples Per Pixel", reinterpret_cast<int*>(&gMaxSamples), 1, 16384);
+
+            ImGui::Separator();
+
+            float progress = sampleCount / static_cast<float>(gMaxSamples);
+            char  buf[256] = {};
+            sprintf(buf, "%d/%d Samples", sampleCount, gMaxSamples);
+            ImGui::ProgressBar(progress, ImVec2(-1, 0), buf);
         }
         ImGui::End();
 
@@ -508,6 +520,8 @@ int main(int argc, char** argv)
 
         // Reset ray gen samples
         if (gResetRayGenSamples) {
+            sampleCount = 0;
+
             commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
 
             commandList->SetComputeRootSignature(clearRayGenRootSig.Get());
@@ -652,6 +666,11 @@ int main(int argc, char** argv)
                     break;
                 }
             }
+        }
+
+        // Update sample count
+        if (sampleCount < gMaxSamples) {
+            ++sampleCount;
         }
 
         if (!SwapchainPresent(renderer.get())) {
@@ -1005,21 +1024,33 @@ void CreateGeometries(
     Geometry&   outSphereGeometry,
     Geometry&   outBoxGeometryy)
 {
-    // Sphere
+    // Geometry
     {
-        // TriMesh mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
+        // Sphere
+        TriMesh mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
 
-        TriMesh::Options options   = {.enableNormals = true};
-        options.applyTransform     = true;
-        options.transformRotate.y  = glm::radians(135.0f);
-        options.transformTranslate = vec3(0, -2.1f, 0); // vec3(0, -0.11f, 0);
+        //// Material knob
+        //TriMesh::Options options   = {.enableNormals = true};
+        //options.applyTransform     = true;
+        //options.transformRotate.y  = glm::radians(180.0f);
+        //TriMesh mesh;
+        //bool    res = TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh);
+        //if (!res) {
+        //    assert(false && "failed to load model");
+        //}
+        //mesh.ScaleToFit(1.25f);
 
-        TriMesh mesh;
-        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/teapot.obj").string(), "", options, &mesh);
-        if (!res) {
-            assert(false && "failed to load model");
-        }
-        mesh.ScaleToFit(1.25f);
+        //// Material knob
+        //TriMesh::Options options   = {.enableNormals = true};
+        //options.applyTransform     = true;
+        //options.transformRotate.y  = glm::radians(135.0f);
+        //options.transformTranslate = vec3(0, -2.1f, 0);
+        //TriMesh mesh;
+        //bool    res = TriMesh::LoadOBJ(GetAssetPath("models/teapot.obj").string(), "", options, &mesh);
+        //if (!res) {
+        //    assert(false && "failed to load model");
+        //}
+        //mesh.ScaleToFit(1.25f);
 
         Geometry& geo = outSphereGeometry;
 
@@ -1157,7 +1188,8 @@ void CreateBLASes(
         ID3D12CommandList* pList = commandList.Get();
         pRenderer->Queue->ExecuteCommandLists(1, &pList);
 
-        assert(WaitForGpu(pRenderer));
+        bool waitres = WaitForGpu(pRenderer);
+        assert(waitres && "WaitForGpu failed");
     }
 }
 
@@ -1355,7 +1387,8 @@ void CreateTLAS(
     ID3D12CommandList* pList = commandList.Get();
     pRenderer->Queue->ExecuteCommandLists(1, &pList);
 
-    assert(WaitForGpu(pRenderer));
+    bool waitres = WaitForGpu(pRenderer);
+    assert(waitres && "WaitForGpu failed");
 }
 
 void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)
