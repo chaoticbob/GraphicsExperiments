@@ -105,7 +105,6 @@ void CreateTLAS(
     ID3D12Resource**                 ppTLAS,
     std::vector<MaterialParameters>& outMaterialParams);
 void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer);
-// void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource* pRayGenSRT, ID3D12Resource** ppConstantBuffer);
 void CreateIBLTextures(
     DxRenderer*      pRenderer,
     ID3D12Resource** ppBRDFLUT,
@@ -927,7 +926,8 @@ void CreateBLAS(
     ID3D12CommandList* pList = commandList.Get();
     pRenderer->Queue->ExecuteCommandLists(1, &pList);
 
-    assert(WaitForGpu(pRenderer));
+    bool waitres = WaitForGpu(pRenderer);
+    assert(waitres && "WaitForGpu failed");
 }
 
 void CreateTLAS(
@@ -1049,7 +1049,8 @@ void CreateTLAS(
     ID3D12CommandList* pList = commandList.Get();
     pRenderer->Queue->ExecuteCommandLists(1, &pList);
 
-    assert(WaitForGpu(pRenderer));
+    bool waitres = WaitForGpu(pRenderer);
+    assert(waitres && "WaitForGpu failed");
 }
 
 void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)
@@ -1077,26 +1078,6 @@ void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)
         nullptr,                               // pOptimizedClearValue
         IID_PPV_ARGS(ppBuffer)));              // riidResource, ppvResource
 }
-
-// void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource* pRayGenSRT, ID3D12Resource** ppConstantBuffer)
-//{
-//     struct Camera
-//     {
-//         glm::mat4 viewInverse;
-//         glm::mat4 projInverse;
-//     };
-//
-//     Camera camera      = {};
-//     camera.projInverse = glm::inverse(glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 512.0f));
-//     camera.viewInverse = glm::inverse(glm::translate(glm::mat4(1), glm::vec3(0.0f, 0.0f, -3.0f)));
-//
-//     CHECK_CALL(CreateBuffer(
-//         pRenderer,          // pRenderer
-//         sizeof(Camera),     // srcSize
-//         &camera,            // pSrcData
-//         256,                // minAlignment
-//         ppConstantBuffer)); // ppResource
-// }
 
 void CreateIBLTextures(
     DxRenderer*      pRenderer,
