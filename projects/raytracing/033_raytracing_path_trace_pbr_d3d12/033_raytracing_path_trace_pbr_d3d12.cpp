@@ -115,6 +115,7 @@ struct MaterialParameters
     float metallic;
     float specularReflectance;
     float ior;
+    vec3  emissionColor;
 };
 
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
@@ -1118,8 +1119,8 @@ void CreateGeometries(
 
     // Knob
     {
-        TriMesh::Options options = {.enableNormals = true};
-        options.applyTransform   = true;
+        TriMesh::Options options  = {.enableNormals = true};
+        options.applyTransform    = true;
         options.transformRotate.y = glm::radians(180.0f);
 
         TriMesh mesh;
@@ -1608,11 +1609,12 @@ void CreateTLAS(
         // Rough plastic
         {
             MaterialParameters materialParams  = {};
-            materialParams.baseColor           = vec3(1.5f, 1.5f, 1.5f);
+            materialParams.baseColor           = vec3(1.0f, 1.0f, 1.0f);
             materialParams.roughness           = 1.0f;
             materialParams.metallic            = 0;
             materialParams.specularReflectance = 0.0f;
             materialParams.ior                 = 0;
+            materialParams.emissionColor       = vec3(1.0f, 1.0f, 1.0f);
 
             outMaterialParams.push_back(materialParams);
         }

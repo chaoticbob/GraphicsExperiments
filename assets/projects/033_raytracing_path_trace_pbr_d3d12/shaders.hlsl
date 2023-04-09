@@ -54,6 +54,7 @@ struct MaterialParameters
     float  metallic;
     float  specularReflectance;
     float  ior;
+    float3 emissionColor;
 };
 
 StructuredBuffer<MaterialParameters> MaterialParams : register(t9); // Material params
@@ -312,9 +313,8 @@ void MyRaygenShader()
 {
     uint2 rayIndex2 = DispatchRaysIndex().xy;
     uint  rayIndex = rayIndex2.y * 1920 + rayIndex2.x;
-    uint sampleCount = RayGenSamples[rayIndex];
-
-    uint rngState = sampleCount + rayIndex * 1943006372;
+    uint  sampleCount = RayGenSamples[rayIndex];
+    uint  rngState = sampleCount + rayIndex * 1943006372;
 
     if (sampleCount < SceneParams.MaxSamples)
     {
@@ -397,6 +397,7 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
     float  metallic  = MaterialParams[instIdx].metallic;
     float  specularReflectance = MaterialParams[instIdx].specularReflectance;
     float  ior = MaterialParams[instIdx].ior;
+    float3 emission = MaterialParams[instIdx].emissionColor;
 
     // Remap
     roughness = roughness * roughness;
@@ -505,7 +506,6 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
                 float3 bounceColor = thisPayload.color.xyz;
                 payload.rngState = thisPayload.rngState;
 
-
                 float3 F = Fresnel_SchlickRoughness(VoH, F0, roughness);
                 float  G = Geometry_SmithIBL(N, V, L, roughness);
 
@@ -536,10 +536,12 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
             thisPayload);   // Payload   
     
             float3 bounceColor = thisPayload.color.xyz;
+            payload.rngState = thisPayload.rngState;
+
             refraction += bounceColor;
         }
     }
 
-    float3 finalColor = (reflection * kr) + (refraction * kt);
+    float3 finalColor = (reflection * kr) + (refraction * kt) + emission;
     payload.color += float4(finalColor, 0);
 }
