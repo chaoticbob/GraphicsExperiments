@@ -211,7 +211,7 @@ float3 PrefilterEnvMap(float Roughness, float3 R, pcg32* pRandom)
 // Main
 // =============================================================================
 
-int              gNumThreads = 1; // 128;
+int              gNumThreads = 16;
 int              gResX       = 0;
 int              gResY       = 0;
 float            gDu         = 0;
@@ -350,6 +350,9 @@ int main(int argc, char** argv)
             irrOnly = true;
         }
     }
+
+    gNumThreads = std::thread::hardware_concurrency();
+    std::cout << "Using " << gNumThreads << " threads" << std::endl;
 
     std::filesystem::path inputFilePath = std::filesystem::absolute(argv[1]);
     std::filesystem::path outputDir     = std::filesystem::absolute(argv[2]);
