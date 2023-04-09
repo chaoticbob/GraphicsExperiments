@@ -233,9 +233,10 @@ of the IBL and diffuse began to look more like specular - which wasn't desirable
 There are no punctual lights in this sample, all the lighting is done via IBL. Punctual lights might
 get added later.
 
+Shaders are found in the [assets/projects/033_raytracing_path_trace_pbr_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/033_raytracing_path_trace_pbr_d3d12) directory.
+
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
-Shaders are found in the [assets/projects/031_raytracing_path_trace_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/033_raytracing_path_trace_pbr_d3d12) directory.
 
 
 
