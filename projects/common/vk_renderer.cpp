@@ -944,6 +944,194 @@ VkResult CreateUAVBuffer(
     return VK_SUCCESS;
 }
 
+VkResult CreateTexture(
+   VulkanRenderer*                  pRenderer,
+   uint32_t                         width,
+   uint32_t                         height,
+   VkFormat                         format,
+   const std::vector<VkMipOffset>&  mipOffsets,
+   uint64_t                         srcSizeBytes,
+   const void*                      pSrcData,
+   VulkanImage*                     pImage)
+{
+   if (IsNull(pRenderer)) {
+      return VK_ERROR_UNKNOWN;
+   }
+   if (IsNull(ppResource)) {
+      return VK_ERROR_UNKNOWN;
+   }
+   if ((format == VK_FORMAT_UNDEFINED) || IsVideo(format)) {
+      return VK_ERROR_UNKNOWN;
+   }
+   if (mipOffsets.empty()) {
+      return VK_ERROR_UNKNOWN;
+   }
+
+   UINT mipLevels = static_cast<UINT>(mipOffsets.size());
+   VkImageCreateInfo vkci                    = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+   vkci.imageType                            = VK_IMAGE_TYPE_2D;
+   vkci.format                               = format;
+   vkci.extent.width                         = width;
+   vkci.extent.height                        = height;
+   vkci.extent.depth                         = depth;
+   vkci.mipLevels                            = mipLevels;
+   vkci.arrayLayers                          = 1;
+   vkci.usage                                = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+   vkci.initialLayout                        = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+   vkci.samples                              = VK_SAMPLE_COUNT_1_BIT;
+
+   VmaAllocationCreateInfo allocCreateInfo   = {};
+   allocCreateInfo.usage                     = memoryUsage;
+
+   VkResult vkres = vmaCreateImage(
+      pRenderer->Allocator,
+      &vkci,
+      &allocCreateInfo,
+      &pImage->Image,
+      &pImage->Allocation,
+      &pImage->AllocationInfo);
+
+   if (vkres != VK_SUCCESS) {
+      return vkres;
+   }
+
+   if (!IsNull(pSrcData)) {
+      const uint32_t rowStride = width * PixelStride(format);
+      // Calculate the total number of rows for all mip maps
+      uint32_t numRows   = 0;
+      {
+         uint32_t mipHeight = height;
+         for (UINT level = 0; level < mipLevels; ++level) {
+            numRows += mipHeight;
+            mipHeight >>= 1;
+         }
+      }
+
+      VulkanBuffer stagingBuffer;
+      vkres= CreateBuffer(pRenderer, rowStride * numRows, pSrcData, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &stagingBuffer);
+      if (vkres != VK_SUCCESS)
+      {
+         assert(false && "create staging buffer failed");
+         return vkres;
+      }
+
+      CommandObjects cmdBuf = {};
+      VkResult       vkres  = CreateCommandBuffer(pRenderer, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, &cmdBuf);
+      if (vkres != VK_SUCCESS) {
+         assert(false && "CreateCommandBuffer failed");
+         return vkres;
+      }
+
+      VkCommandBufferBeginInfo vkbi = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+      vkbi.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+      vkres = vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi);
+      if (vkres != VK_SUCCESS) {
+         assert(false && "vkBeginCommandBuffer failed");
+         return vkres;
+      }
+
+      // Build command buffer
+      {
+         uint32_t levelWidth  = width;
+         uint32_t levelHeight = height;
+         for (UINT level = 0; level < mipLevels; ++level) {
+            const auto& mipOffset    = mipOffsets[level];
+            const uint32_t mipRowStride = mipOffset.rowStride;
+
+            VkImageAspectFlagBits aspectFlags= VK_IMAGE_ASPECT_COLOR_BIT;
+            VkBufferImageCopy srcRegion            = {};
+            srcRegion.bufferOffset                 = mipOffset.offset;
+            srcRegion.bufferRowLength              = mipRowStride;
+            srcRegion.bufferImageHeight            = height;
+            srcRegion.imageSubresource.aspectMask  = aspectFlags;
+            srcRegion.imageSubresource.layerCount  = 1
+            srcRegion.imageSubresource.mipLevel    = level;
+            srcRegion.imageExtent.width            = width;
+            srcRegion.imageExtent.height           = height;
+            srcRegion.imageExtent.depth            = 1;
+
+            vkCmdCopyBufferToImage(cmdBuf.CommandBuffer, stagingBuffer->Buffer, pImage->Image, format, 1, &srcRegion);
+
+            VkImageMemoryBarrier2 barrier           = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
+            barrier.pNext                           = nullptr;
+            barrier.srcStageMask                    = 0;
+            barrier.srcAccessMask                   = 0;
+            barrier.dstStageMask                    = 0;
+            barrier.dstAccessMask                   = 0;
+            barrier.oldLayout                       = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            barrier.newLayout                       = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+            barrier.image                           = pImage->Image;
+            barrier.subresourceRange.aspectMask     = aspectFlags;
+            barrier.subresourceRange.baseMipLevel   = level;
+            barrier.subresourceRange.levelCount     = 1;
+            barrier.subresourceRange.baseArrayLayer = 0;
+            barrier.subresourceRange.layerCount     = 1;
+
+            VkDependencyInfo dependencyInfo         = { VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+            dependencyInfo.pNext                    = nullptr;
+            dependencyInfo.dependencyFlags          = 0;
+            dependencyInfo.memoryBarrierCount       = 0;
+            dependencyInfo.pMemoryBarriers          = nullptr;
+            dependencyInfo.bufferMemoryBarrierCount = 0;
+            dependencyInfo.pBufferMemoryBarriers    = nullptr;
+            dependencyInfo.imageMemoryBarrierCount  = 1;
+            dependencyInfo.pImageMemoryBarriers     = &barrier;
+
+            vkCmdPipelineBarrier2(cmdBuf.CommandBuffer, &dependencyInfo);
+
+            levelWidth >>= 1;
+            levelHeight >>= 1;
+         }
+      }
+
+      vkres = vkEndCommandBuffer(cmdBuf.CommandBuffer);
+      if (vkres != VK_SUCCESS) {
+         assert(false && "vkEndCommandBuffer failed");
+         return vkres;
+      }
+
+      vkres = ExecuteCommandBuffer(pRenderer, &cmdBuf);
+      if (vkres != VK_SUCCESS) {
+         assert(false && "ExecuteCommandBuffer failed");
+         return vkres;
+      }
+
+      vkres = vkQueueWaitIdle(pRenderer->Queue);
+      if (vkres != VK_SUCCESS) {
+         assert(false && "vkQueueWaitIdle failed");
+         return vkres;
+      }
+   }
+
+    return VK_SUCCESS;
+}
+
+VkResult CreateTexture(
+   VulkanRenderer*   pRenderer,
+   uint32_t          width,
+   uint32_t          height,
+   uint64_t          srcSizeBytes,
+   const void*       pSrcData,
+   VulkanImage*      pImage)
+{
+   VkMipOffset mipOffset = {};
+   mipOffset.offset = 0;
+   mipOffset.rowStride = width * PixelStride(format);
+
+   return CreateTexture(
+      pRenderer,
+      width,
+      height,
+      format,
+      {mipOffset},
+      srcSizeBytes,
+      pSrcData,
+      pImage);
+}
+
 VkResult Create2DImage(
    VulkanRenderer*      pRenderer,
    VkImageType          imageType,
@@ -984,6 +1172,50 @@ VkResult Create2DImage(
       &pImage->AllocationInfo);
 
    return vkres;
+}
+
+VkResult Create2DImage(
+   VulkanRenderer*      pRenderer,
+   VkImageType          imageType,
+   VkImageUsageFlags    imageUsage,
+   uint32_t             width,
+   uint32_t             height,
+   uint32_t             depth,
+   VkMipOffset          mipOffset,
+   VkFormat             format,
+   VkImageLayout        initialLayout,
+   VmaMemoryUsage       memoryUsage,
+   VulkanImage*         pImage)
+{
+   if (IsNull(pImage)) {
+      return VK_ERROR_INITIALIZATION_FAILED;
+   }
+
+   VkImageCreateInfo vkci                    = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+   vkci.imageType                            = imageType;
+   vkci.format                               = format;
+   vkci.extent.width                         = width;
+   vkci.extent.height                        = height;
+   vkci.extent.depth                         = depth;
+   vkci.mipLevels                            = 1;
+   vkci.arrayLayers                          = 1;
+   vkci.usage                                = imageUsage;
+   vkci.initialLayout                        = initialLayout;
+   vkci.samples                              = VK_SAMPLE_COUNT_1_BIT;
+
+   VmaAllocationCreateInfo allocCreateInfo   = {};
+   allocCreateInfo.usage                     = memoryUsage;
+
+   VkResult vkres = vmaCreateImage(
+      pRenderer->Allocator,
+      &vkci,
+      &allocCreateInfo,
+      &pImage->Image,
+      &pImage->Allocation,
+      &pImage->AllocationInfo);
+
+   return vkres;
+
 }
 
 VkResult CreateDSV(

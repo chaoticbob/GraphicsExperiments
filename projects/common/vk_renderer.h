@@ -69,6 +69,12 @@ struct CompilerOptions
 #define GREX_DEFAULT_RTV_FORMAT VK_FORMAT_B8G8R8A8_UNORM
 #define GREX_DEFAULT_DSV_FORMAT VK_FORMAT_D32_SFLOAT
 
+struct VkMipOffset
+{
+    uint32_t offset    = 0;
+    uint32_t rowStride = 0;
+};
+
 struct VulkanRenderer
 {
    bool             DebugEnabled             = true;
@@ -170,6 +176,24 @@ VkResult CreateUAVBuffer(
    VkBufferUsageFlags   usageFlags,
    VkDeviceSize         minAlignment, // Use 0 for no alignment
    VulkanBuffer*        pBuffer);
+
+VkResult CreateTexture(
+   VulkanRenderer*                  pRenderer,
+   uint32_t                         width,
+   uint32_t                         height,
+   VkFormat                         format,
+   const std::vector<VkMipOffset>&  mipOffsets,
+   uint64_t                         srcSizeBytes,
+   const void*                      pSrcData,
+   VulkanImage*                     pImage);
+
+VkResult CreateTexture(
+   VulkanRenderer*   pRenderer,
+   uint32_t          width,
+   uint32_t          height,
+   uint64_t          srcSizeBytes,
+   const void*       pSrcData,
+   VulkanImage*      pImage);
 
 VkResult Create2DImage(
    VulkanRenderer*      pRenderer,
