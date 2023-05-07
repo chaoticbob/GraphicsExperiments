@@ -5,6 +5,8 @@
 #include <vulkan/vulkan.h>
 #include "vk_mem_alloc.h"
 
+#include <dxcapi.h>
+
 #define GREX_ALL_SUBRESOURCES 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS
 
 // Use D3D12 style resource states to simplify synchronization

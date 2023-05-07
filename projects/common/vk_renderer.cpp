@@ -947,10 +947,20 @@ VkResult CreateUAVBuffer(
     VulkanRenderer*     pRenderer,
     VkBufferCreateFlags createFlags,
     size_t              size,
-    VkBufferUsageFlags  usageFlags,
     VkDeviceSize        minAlignment,
     VulkanBuffer*       pBuffer)
 {
+    VkResult vkres = CreateBuffer(
+        pRenderer,
+        size,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY,
+        minAlignment,
+        pBuffer);
+    if (vkres != VK_SUCCESS) {
+        return vkres;
+    }
+
     return VK_SUCCESS;
 }
 
@@ -1654,6 +1664,110 @@ CompileResult CompileGLSL(
     glslang_finalize_process();
 
     return COMPILE_SUCCESS;
+}
+
+
+static std::wstring AsciiToUTF16(const std::string& ascii)
+{
+    std::wstring utf16;
+    for (auto& c : ascii) {
+        utf16.push_back(static_cast<std::wstring::value_type>(c));
+    }
+    return utf16;
+}
+
+HRESULT CompileHLSL(
+    const std::string& shaderSource,
+    const std::string& entryPoint,
+    const std::string& profile,
+    std::vector<char>* pDXIL,
+    std::string*       pErrorMsg)
+{
+    // Check source
+    if (shaderSource.empty()) {
+        assert(false && "no shader source");
+        return E_INVALIDARG;
+    }
+    // Check entry point
+    if (entryPoint.empty() && (!profile.starts_with("lib_6_"))) {
+        assert(false && "no entrypoint");
+        return E_INVALIDARG;
+    }
+    // Check profile
+    if (profile.empty()) {
+        assert(false && "no profile");
+        return E_INVALIDARG;
+    }
+    // Check output
+    if (IsNull(pDXIL)) {
+        assert(false && "DXIL output arg is null");
+        return E_INVALIDARG;
+    }
+
+    ComPtr<IDxcLibrary> dxcLibrary;
+    HRESULT             hr = DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&dxcLibrary));
+
+    ComPtr<IDxcCompiler3> dxcCompiler;
+    hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxcCompiler));
+
+    DxcBuffer source = {};
+    source.Ptr       = shaderSource.data();
+    source.Size      = shaderSource.length();
+
+    std::wstring entryPointUTF16 = AsciiToUTF16(entryPoint);
+    std::wstring profileUT16     = AsciiToUTF16(profile);
+
+    std::vector<LPCWSTR> args = {L"-spirv"};
+   
+    args.push_back(L"-E");
+    args.push_back(entryPointUTF16.c_str());
+    args.push_back(L"-T");
+    args.push_back(profileUT16.c_str());
+
+    // LPCWSTR args[2] = {L"-T", L"lib_6_3"};
+
+    ComPtr<IDxcResult> result;
+    hr = dxcCompiler->Compile(
+        &source,
+        args.data(),
+        static_cast<UINT>(args.size()),
+        nullptr,
+        IID_PPV_ARGS(&result));
+    if (FAILED(hr)) {
+        assert(false && "compile failed");
+        return hr;
+    }
+
+    ComPtr<IDxcBlob> errors;
+    hr = result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errors), nullptr);
+    if (FAILED(hr)) {
+        assert(false && "Get error output failed");
+        return hr;
+    }
+    if (errors && (errors->GetBufferSize() > 0) && !IsNull(pErrorMsg)) {
+        const char* pBuffer    = static_cast<const char*>(errors->GetBufferPointer());
+        size_t      bufferSize = static_cast<size_t>(errors->GetBufferSize());
+        *pErrorMsg             = std::string(pBuffer, pBuffer + bufferSize);
+        // std::string       errorMsg = std::string(reinterpret_cast<const char*>(errors->GetBufferPointer()), errors->GetBufferSize());
+        // std::stringstream ss;
+        // ss << "\n"
+        //    << "Shader compiler error: " << errorMsg << "\n";
+        // GREX_LOG_ERROR(ss.str().c_str());
+        return E_FAIL;
+    }
+
+    ComPtr<IDxcBlob> shaderBinary;
+    hr = result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shaderBinary), nullptr);
+    if (FAILED(hr)) {
+        assert(false && "Get compile output failed");
+        return hr;
+    }
+
+    const char* pBuffer    = static_cast<const char*>(shaderBinary->GetBufferPointer());
+    size_t      bufferSize = static_cast<size_t>(shaderBinary->GetBufferSize());
+    *pDXIL                 = std::vector<char>(pBuffer, pBuffer + bufferSize);
+
+    return S_OK;
 }
 
 uint32_t BitsPerPixel(VkFormat fmt)
