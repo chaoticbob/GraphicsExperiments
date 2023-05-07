@@ -26,6 +26,14 @@ PFN_vkGetDescriptorEXT                         fn_vkGetDescriptorEXT            
 PFN_vkCmdBindDescriptorBuffersEXT              fn_vkCmdBindDescriptorBuffersEXT              = nullptr;
 PFN_vkCmdSetDescriptorBufferOffsetsEXT         fn_vkCmdSetDescriptorBufferOffsetsEXT         = nullptr;
 
+uint32_t BitsPerPixel(VkFormat fmt);
+
+uint32_t PixelStride(VkFormat fmt)
+{
+    uint32_t nbytes = BitsPerPixel(fmt) / 8;
+    return nbytes;
+}
+
 std::vector<std::string> EnumeratePhysicalDeviceExtensionNames(VkPhysicalDevice physicalDevice)
 {
     uint32_t count = 0;
@@ -45,6 +53,9 @@ std::vector<std::string> EnumeratePhysicalDeviceExtensionNames(VkPhysicalDevice 
     return names;
 }
 
+// =================================================================================================
+// DxRenderer
+// =================================================================================================
 VulkanRenderer::VulkanRenderer()
 {
 }
@@ -292,7 +303,6 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
             return false;
         }
 
-        
         VkPhysicalDeviceProperties deviceProperties = {};
         vkGetPhysicalDeviceProperties(pRenderer->PhysicalDevice, &deviceProperties);
         GREX_LOG_INFO("Created device using " << deviceProperties.deviceName);
@@ -945,296 +955,293 @@ VkResult CreateUAVBuffer(
 }
 
 VkResult CreateTexture(
-   VulkanRenderer*                  pRenderer,
-   uint32_t                         width,
-   uint32_t                         height,
-   VkFormat                         format,
-   const std::vector<VkMipOffset>&  mipOffsets,
-   uint64_t                         srcSizeBytes,
-   const void*                      pSrcData,
-   VulkanImage*                     pImage)
+    VulkanRenderer*                 pRenderer,
+    uint32_t                        width,
+    uint32_t                        height,
+    VkFormat                        format,
+    const std::vector<VkMipOffset>& mipOffsets,
+    uint64_t                        srcSizeBytes,
+    const void*                     pSrcData,
+    VulkanImage*                    pImage)
 {
-   if (IsNull(pRenderer)) {
-      return VK_ERROR_UNKNOWN;
-   }
-   if (IsNull(ppResource)) {
-      return VK_ERROR_UNKNOWN;
-   }
-   if ((format == VK_FORMAT_UNDEFINED) || IsVideo(format)) {
-      return VK_ERROR_UNKNOWN;
-   }
-   if (mipOffsets.empty()) {
-      return VK_ERROR_UNKNOWN;
-   }
+    if (IsNull(pRenderer)) {
+        return VK_ERROR_UNKNOWN;
+    }
+    if (IsNull(ppResource)) {
+        return VK_ERROR_UNKNOWN;
+    }
+    if ((format == VK_FORMAT_UNDEFINED) || IsVideo(format)) {
+        return VK_ERROR_UNKNOWN;
+    }
+    if (mipOffsets.empty()) {
+        return VK_ERROR_UNKNOWN;
+    }
 
-   UINT mipLevels = static_cast<UINT>(mipOffsets.size());
-   VkImageCreateInfo vkci                    = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
-   vkci.imageType                            = VK_IMAGE_TYPE_2D;
-   vkci.format                               = format;
-   vkci.extent.width                         = width;
-   vkci.extent.height                        = height;
-   vkci.extent.depth                         = depth;
-   vkci.mipLevels                            = mipLevels;
-   vkci.arrayLayers                          = 1;
-   vkci.usage                                = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-   vkci.initialLayout                        = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-   vkci.samples                              = VK_SAMPLE_COUNT_1_BIT;
+    UINT              mipLevels = static_cast<UINT>(mipOffsets.size());
+    VkImageCreateInfo vkci      = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+    vkci.imageType              = VK_IMAGE_TYPE_2D;
+    vkci.format                 = format;
+    vkci.extent.width           = width;
+    vkci.extent.height          = height;
+    vkci.extent.depth           = depth;
+    vkci.mipLevels              = mipLevels;
+    vkci.arrayLayers            = 1;
+    vkci.usage                  = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    vkci.initialLayout          = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    vkci.samples                = VK_SAMPLE_COUNT_1_BIT;
 
-   VmaAllocationCreateInfo allocCreateInfo   = {};
-   allocCreateInfo.usage                     = memoryUsage;
+    VmaAllocationCreateInfo allocCreateInfo = {};
+    allocCreateInfo.usage                   = memoryUsage;
 
-   VkResult vkres = vmaCreateImage(
-      pRenderer->Allocator,
-      &vkci,
-      &allocCreateInfo,
-      &pImage->Image,
-      &pImage->Allocation,
-      &pImage->AllocationInfo);
+    VkResult vkres = vmaCreateImage(
+        pRenderer->Allocator,
+        &vkci,
+        &allocCreateInfo,
+        &pImage->Image,
+        &pImage->Allocation,
+        &pImage->AllocationInfo);
 
-   if (vkres != VK_SUCCESS) {
-      return vkres;
-   }
+    if (vkres != VK_SUCCESS) {
+        return vkres;
+    }
 
-   if (!IsNull(pSrcData)) {
-      const uint32_t rowStride = width * PixelStride(format);
-      // Calculate the total number of rows for all mip maps
-      uint32_t numRows   = 0;
-      {
-         uint32_t mipHeight = height;
-         for (UINT level = 0; level < mipLevels; ++level) {
-            numRows += mipHeight;
-            mipHeight >>= 1;
-         }
-      }
+    if (!IsNull(pSrcData)) {
+        const uint32_t rowStride = width * PixelStride(format);
+        // Calculate the total number of rows for all mip maps
+        uint32_t numRows = 0;
+        {
+            uint32_t mipHeight = height;
+            for (UINT level = 0; level < mipLevels; ++level) {
+                numRows += mipHeight;
+                mipHeight >>= 1;
+            }
+        }
 
-      VulkanBuffer stagingBuffer;
-      vkres= CreateBuffer(pRenderer, rowStride * numRows, pSrcData, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &stagingBuffer);
-      if (vkres != VK_SUCCESS)
-      {
-         assert(false && "create staging buffer failed");
-         return vkres;
-      }
+        VulkanBuffer stagingBuffer;
+        vkres = CreateBuffer(pRenderer, rowStride * numRows, pSrcData, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &stagingBuffer);
+        if (vkres != VK_SUCCESS) {
+            assert(false && "create staging buffer failed");
+            return vkres;
+        }
 
-      CommandObjects cmdBuf = {};
-      VkResult       vkres  = CreateCommandBuffer(pRenderer, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, &cmdBuf);
-      if (vkres != VK_SUCCESS) {
-         assert(false && "CreateCommandBuffer failed");
-         return vkres;
-      }
+        CommandObjects cmdBuf = {};
+        VkResult       vkres  = CreateCommandBuffer(pRenderer, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, &cmdBuf);
+        if (vkres != VK_SUCCESS) {
+            assert(false && "CreateCommandBuffer failed");
+            return vkres;
+        }
 
-      VkCommandBufferBeginInfo vkbi = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-      vkbi.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        VkCommandBufferBeginInfo vkbi = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        vkbi.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-      vkres = vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi);
-      if (vkres != VK_SUCCESS) {
-         assert(false && "vkBeginCommandBuffer failed");
-         return vkres;
-      }
+        vkres = vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi);
+        if (vkres != VK_SUCCESS) {
+            assert(false && "vkBeginCommandBuffer failed");
+            return vkres;
+        }
 
-      // Build command buffer
-      {
-         uint32_t levelWidth  = width;
-         uint32_t levelHeight = height;
-         for (UINT level = 0; level < mipLevels; ++level) {
-            const auto& mipOffset    = mipOffsets[level];
-            const uint32_t mipRowStride = mipOffset.rowStride;
+        // Build command buffer
+        {
+            uint32_t levelWidth  = width;
+            uint32_t levelHeight = height;
+            for (UINT level = 0; level < mipLevels; ++level) {
+                const auto&    mipOffset    = mipOffsets[level];
+                const uint32_t mipRowStride = mipOffset.rowStride;
 
-            VkImageAspectFlagBits aspectFlags= VK_IMAGE_ASPECT_COLOR_BIT;
-            VkBufferImageCopy srcRegion            = {};
-            srcRegion.bufferOffset                 = mipOffset.offset;
-            srcRegion.bufferRowLength              = mipRowStride;
-            srcRegion.bufferImageHeight            = height;
-            srcRegion.imageSubresource.aspectMask  = aspectFlags;
-            srcRegion.imageSubresource.layerCount  = 1
-            srcRegion.imageSubresource.mipLevel    = level;
-            srcRegion.imageExtent.width            = width;
-            srcRegion.imageExtent.height           = height;
-            srcRegion.imageExtent.depth            = 1;
+                VkImageAspectFlagBits aspectFlags     = VK_IMAGE_ASPECT_COLOR_BIT;
+                VkBufferImageCopy     srcRegion       = {};
+                srcRegion.bufferOffset                = mipOffset.offset;
+                srcRegion.bufferRowLength             = mipRowStride;
+                srcRegion.bufferImageHeight           = height;
+                srcRegion.imageSubresource.aspectMask = aspectFlags;
+                srcRegion.imageSubresource.layerCount = 1 srcRegion.imageSubresource.mipLevel = level;
+                srcRegion.imageExtent.width                                                   = width;
+                srcRegion.imageExtent.height                                                  = height;
+                srcRegion.imageExtent.depth                                                   = 1;
 
-            vkCmdCopyBufferToImage(cmdBuf.CommandBuffer, stagingBuffer->Buffer, pImage->Image, format, 1, &srcRegion);
+                vkCmdCopyBufferToImage(cmdBuf.CommandBuffer, stagingBuffer->Buffer, pImage->Image, format, 1, &srcRegion);
 
-            VkImageMemoryBarrier2 barrier           = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
-            barrier.pNext                           = nullptr;
-            barrier.srcStageMask                    = 0;
-            barrier.srcAccessMask                   = 0;
-            barrier.dstStageMask                    = 0;
-            barrier.dstAccessMask                   = 0;
-            barrier.oldLayout                       = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            barrier.newLayout                       = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-            barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-            barrier.image                           = pImage->Image;
-            barrier.subresourceRange.aspectMask     = aspectFlags;
-            barrier.subresourceRange.baseMipLevel   = level;
-            barrier.subresourceRange.levelCount     = 1;
-            barrier.subresourceRange.baseArrayLayer = 0;
-            barrier.subresourceRange.layerCount     = 1;
+                VkImageMemoryBarrier2 barrier           = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
+                barrier.pNext                           = nullptr;
+                barrier.srcStageMask                    = 0;
+                barrier.srcAccessMask                   = 0;
+                barrier.dstStageMask                    = 0;
+                barrier.dstAccessMask                   = 0;
+                barrier.oldLayout                       = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                barrier.newLayout                       = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+                barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+                barrier.image                           = pImage->Image;
+                barrier.subresourceRange.aspectMask     = aspectFlags;
+                barrier.subresourceRange.baseMipLevel   = level;
+                barrier.subresourceRange.levelCount     = 1;
+                barrier.subresourceRange.baseArrayLayer = 0;
+                barrier.subresourceRange.layerCount     = 1;
 
-            VkDependencyInfo dependencyInfo         = { VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
-            dependencyInfo.pNext                    = nullptr;
-            dependencyInfo.dependencyFlags          = 0;
-            dependencyInfo.memoryBarrierCount       = 0;
-            dependencyInfo.pMemoryBarriers          = nullptr;
-            dependencyInfo.bufferMemoryBarrierCount = 0;
-            dependencyInfo.pBufferMemoryBarriers    = nullptr;
-            dependencyInfo.imageMemoryBarrierCount  = 1;
-            dependencyInfo.pImageMemoryBarriers     = &barrier;
+                VkDependencyInfo dependencyInfo         = {VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+                dependencyInfo.pNext                    = nullptr;
+                dependencyInfo.dependencyFlags          = 0;
+                dependencyInfo.memoryBarrierCount       = 0;
+                dependencyInfo.pMemoryBarriers          = nullptr;
+                dependencyInfo.bufferMemoryBarrierCount = 0;
+                dependencyInfo.pBufferMemoryBarriers    = nullptr;
+                dependencyInfo.imageMemoryBarrierCount  = 1;
+                dependencyInfo.pImageMemoryBarriers     = &barrier;
 
-            vkCmdPipelineBarrier2(cmdBuf.CommandBuffer, &dependencyInfo);
+                vkCmdPipelineBarrier2(cmdBuf.CommandBuffer, &dependencyInfo);
 
-            levelWidth >>= 1;
-            levelHeight >>= 1;
-         }
-      }
+                levelWidth >>= 1;
+                levelHeight >>= 1;
+            }
+        }
 
-      vkres = vkEndCommandBuffer(cmdBuf.CommandBuffer);
-      if (vkres != VK_SUCCESS) {
-         assert(false && "vkEndCommandBuffer failed");
-         return vkres;
-      }
+        vkres = vkEndCommandBuffer(cmdBuf.CommandBuffer);
+        if (vkres != VK_SUCCESS) {
+            assert(false && "vkEndCommandBuffer failed");
+            return vkres;
+        }
 
-      vkres = ExecuteCommandBuffer(pRenderer, &cmdBuf);
-      if (vkres != VK_SUCCESS) {
-         assert(false && "ExecuteCommandBuffer failed");
-         return vkres;
-      }
+        vkres = ExecuteCommandBuffer(pRenderer, &cmdBuf);
+        if (vkres != VK_SUCCESS) {
+            assert(false && "ExecuteCommandBuffer failed");
+            return vkres;
+        }
 
-      vkres = vkQueueWaitIdle(pRenderer->Queue);
-      if (vkres != VK_SUCCESS) {
-         assert(false && "vkQueueWaitIdle failed");
-         return vkres;
-      }
-   }
+        vkres = vkQueueWaitIdle(pRenderer->Queue);
+        if (vkres != VK_SUCCESS) {
+            assert(false && "vkQueueWaitIdle failed");
+            return vkres;
+        }
+    }
 
     return VK_SUCCESS;
 }
 
 VkResult CreateTexture(
-   VulkanRenderer*   pRenderer,
-   uint32_t          width,
-   uint32_t          height,
-   uint64_t          srcSizeBytes,
-   const void*       pSrcData,
-   VulkanImage*      pImage)
+    VulkanRenderer* pRenderer,
+    uint32_t        width,
+    uint32_t        height,
+    uint64_t        srcSizeBytes,
+    const void*     pSrcData,
+    VulkanImage*    pImage)
 {
-   VkMipOffset mipOffset = {};
-   mipOffset.offset = 0;
-   mipOffset.rowStride = width * PixelStride(format);
+    VkMipOffset mipOffset = {};
+    mipOffset.offset      = 0;
+    mipOffset.rowStride   = width * PixelStride(format);
 
-   return CreateTexture(
-      pRenderer,
-      width,
-      height,
-      format,
-      {mipOffset},
-      srcSizeBytes,
-      pSrcData,
-      pImage);
+    return CreateTexture(
+        pRenderer,
+        width,
+        height,
+        format,
+        {mipOffset},
+        srcSizeBytes,
+        pSrcData,
+        pImage);
 }
 
 VkResult Create2DImage(
-   VulkanRenderer*      pRenderer,
-   VkImageType          imageType,
-   VkImageUsageFlags    imageUsage,
-   uint32_t             width,
-   uint32_t             height,
-   uint32_t             depth,
-   VkFormat             format,
-   VkImageLayout        initialLayout,
-   VmaMemoryUsage       memoryUsage,
-   VulkanImage*         pImage)
+    VulkanRenderer*   pRenderer,
+    VkImageType       imageType,
+    VkImageUsageFlags imageUsage,
+    uint32_t          width,
+    uint32_t          height,
+    uint32_t          depth,
+    VkFormat          format,
+    VkImageLayout     initialLayout,
+    VmaMemoryUsage    memoryUsage,
+    VulkanImage*      pImage)
 {
-   if (IsNull(pImage)) {
-      return VK_ERROR_INITIALIZATION_FAILED;
-   }
+    if (IsNull(pImage)) {
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
 
-   VkImageCreateInfo vkci                    = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
-   vkci.imageType                            = imageType;
-   vkci.format                               = format;
-   vkci.extent.width                         = width;
-   vkci.extent.height                        = height;
-   vkci.extent.depth                         = depth;
-   vkci.mipLevels                            = 1;
-   vkci.arrayLayers                          = 1;
-   vkci.usage                                = imageUsage;
-   vkci.initialLayout                        = initialLayout;
-   vkci.samples                              = VK_SAMPLE_COUNT_1_BIT;
+    VkImageCreateInfo vkci = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+    vkci.imageType         = imageType;
+    vkci.format            = format;
+    vkci.extent.width      = width;
+    vkci.extent.height     = height;
+    vkci.extent.depth      = depth;
+    vkci.mipLevels         = 1;
+    vkci.arrayLayers       = 1;
+    vkci.usage             = imageUsage;
+    vkci.initialLayout     = initialLayout;
+    vkci.samples           = VK_SAMPLE_COUNT_1_BIT;
 
-   VmaAllocationCreateInfo allocCreateInfo   = {};
-   allocCreateInfo.usage                     = memoryUsage;
+    VmaAllocationCreateInfo allocCreateInfo = {};
+    allocCreateInfo.usage                   = memoryUsage;
 
-   VkResult vkres = vmaCreateImage(
-      pRenderer->Allocator,
-      &vkci,
-      &allocCreateInfo,
-      &pImage->Image,
-      &pImage->Allocation,
-      &pImage->AllocationInfo);
+    VkResult vkres = vmaCreateImage(
+        pRenderer->Allocator,
+        &vkci,
+        &allocCreateInfo,
+        &pImage->Image,
+        &pImage->Allocation,
+        &pImage->AllocationInfo);
 
-   return vkres;
+    return vkres;
 }
 
 VkResult Create2DImage(
-   VulkanRenderer*      pRenderer,
-   VkImageType          imageType,
-   VkImageUsageFlags    imageUsage,
-   uint32_t             width,
-   uint32_t             height,
-   uint32_t             depth,
-   VkMipOffset          mipOffset,
-   VkFormat             format,
-   VkImageLayout        initialLayout,
-   VmaMemoryUsage       memoryUsage,
-   VulkanImage*         pImage)
+    VulkanRenderer*   pRenderer,
+    VkImageType       imageType,
+    VkImageUsageFlags imageUsage,
+    uint32_t          width,
+    uint32_t          height,
+    uint32_t          depth,
+    VkMipOffset       mipOffset,
+    VkFormat          format,
+    VkImageLayout     initialLayout,
+    VmaMemoryUsage    memoryUsage,
+    VulkanImage*      pImage)
 {
-   if (IsNull(pImage)) {
-      return VK_ERROR_INITIALIZATION_FAILED;
-   }
+    if (IsNull(pImage)) {
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
 
-   VkImageCreateInfo vkci                    = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
-   vkci.imageType                            = imageType;
-   vkci.format                               = format;
-   vkci.extent.width                         = width;
-   vkci.extent.height                        = height;
-   vkci.extent.depth                         = depth;
-   vkci.mipLevels                            = 1;
-   vkci.arrayLayers                          = 1;
-   vkci.usage                                = imageUsage;
-   vkci.initialLayout                        = initialLayout;
-   vkci.samples                              = VK_SAMPLE_COUNT_1_BIT;
+    VkImageCreateInfo vkci = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+    vkci.imageType         = imageType;
+    vkci.format            = format;
+    vkci.extent.width      = width;
+    vkci.extent.height     = height;
+    vkci.extent.depth      = depth;
+    vkci.mipLevels         = 1;
+    vkci.arrayLayers       = 1;
+    vkci.usage             = imageUsage;
+    vkci.initialLayout     = initialLayout;
+    vkci.samples           = VK_SAMPLE_COUNT_1_BIT;
 
-   VmaAllocationCreateInfo allocCreateInfo   = {};
-   allocCreateInfo.usage                     = memoryUsage;
+    VmaAllocationCreateInfo allocCreateInfo = {};
+    allocCreateInfo.usage                   = memoryUsage;
 
-   VkResult vkres = vmaCreateImage(
-      pRenderer->Allocator,
-      &vkci,
-      &allocCreateInfo,
-      &pImage->Image,
-      &pImage->Allocation,
-      &pImage->AllocationInfo);
+    VkResult vkres = vmaCreateImage(
+        pRenderer->Allocator,
+        &vkci,
+        &allocCreateInfo,
+        &pImage->Image,
+        &pImage->Allocation,
+        &pImage->AllocationInfo);
 
-   return vkres;
-
+    return vkres;
 }
 
 VkResult CreateDSV(
-   VulkanRenderer*      pRenderer,
-   uint32_t             width,
-   uint32_t             height,
-   VulkanImage*         pImage)
+    VulkanRenderer* pRenderer,
+    uint32_t        width,
+    uint32_t        height,
+    VulkanImage*    pImage)
 {
-   return Create2DImage(
-      pRenderer,
-      VK_IMAGE_TYPE_2D,
-      VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-      width,
-      height,
-      1,
-      GREX_DEFAULT_DSV_FORMAT,
-      VK_IMAGE_LAYOUT_UNDEFINED,
-      VMA_MEMORY_USAGE_GPU_ONLY,
-      pImage);
+    return Create2DImage(
+        pRenderer,
+        VK_IMAGE_TYPE_2D,
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        width,
+        height,
+        1,
+        GREX_DEFAULT_DSV_FORMAT,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VMA_MEMORY_USAGE_GPU_ONLY,
+        pImage);
 }
 
 void DestroyBuffer(VulkanRenderer* pRenderer, const VulkanBuffer* pBuffer)
@@ -1269,140 +1276,140 @@ VkDeviceAddress GetDeviceAddress(VulkanRenderer* pRenderer, VkAccelerationStruct
 }
 
 VkResult CreateDrawVertexColorPipeline(
-   VulkanRenderer*         pRenderer,
-   VkPipelineLayout        pipeline_layout,
-   VkShaderModule          vsShaderModule,
-   VkShaderModule          fsShaderModule,
-   VkFormat                rtvFormat,
-   VkFormat                dsvFormat,
-   VkPipeline*             pPipeline,
-   VkCullModeFlags         cullMode)
+    VulkanRenderer*  pRenderer,
+    VkPipelineLayout pipeline_layout,
+    VkShaderModule   vsShaderModule,
+    VkShaderModule   fsShaderModule,
+    VkFormat         rtvFormat,
+    VkFormat         dsvFormat,
+    VkPipeline*      pPipeline,
+    VkCullModeFlags  cullMode)
 {
-   VkFormat rtv_format= GREX_DEFAULT_RTV_FORMAT;
-   VkPipelineRenderingCreateInfo pipeline_rendering_create_info      = { VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
-   pipeline_rendering_create_info.colorAttachmentCount               = 1;
-   pipeline_rendering_create_info.pColorAttachmentFormats            = &rtv_format;
-   pipeline_rendering_create_info.depthAttachmentFormat              = GREX_DEFAULT_DSV_FORMAT;
+    VkFormat                      rtv_format                     = GREX_DEFAULT_RTV_FORMAT;
+    VkPipelineRenderingCreateInfo pipeline_rendering_create_info = {VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
+    pipeline_rendering_create_info.colorAttachmentCount          = 1;
+    pipeline_rendering_create_info.pColorAttachmentFormats       = &rtv_format;
+    pipeline_rendering_create_info.depthAttachmentFormat         = GREX_DEFAULT_DSV_FORMAT;
 
-   VkPipelineShaderStageCreateInfo shader_stages[2]                  = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-   shader_stages[0].stage                                            = VK_SHADER_STAGE_VERTEX_BIT;
-   shader_stages[0].module                                           = vsShaderModule;
-   shader_stages[0].pName                                            = "main";
-   shader_stages[1].sType                                            = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-   shader_stages[1].stage                                            = VK_SHADER_STAGE_FRAGMENT_BIT;
-   shader_stages[1].module                                           = fsShaderModule;
-   shader_stages[1].pName                                            = "main";
+    VkPipelineShaderStageCreateInfo shader_stages[2] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+    shader_stages[0].stage                           = VK_SHADER_STAGE_VERTEX_BIT;
+    shader_stages[0].module                          = vsShaderModule;
+    shader_stages[0].pName                           = "main";
+    shader_stages[1].sType                           = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shader_stages[1].stage                           = VK_SHADER_STAGE_FRAGMENT_BIT;
+    shader_stages[1].module                          = fsShaderModule;
+    shader_stages[1].pName                           = "main";
 
-   VkVertexInputBindingDescription vertex_binding_desc[2]            = { };
-   vertex_binding_desc[0].binding                                    = 0;
-   vertex_binding_desc[0].stride                                     = 12;
-   vertex_binding_desc[0].inputRate                                  = VK_VERTEX_INPUT_RATE_VERTEX;
+    VkVertexInputBindingDescription vertex_binding_desc[2] = {};
+    vertex_binding_desc[0].binding                         = 0;
+    vertex_binding_desc[0].stride                          = 12;
+    vertex_binding_desc[0].inputRate                       = VK_VERTEX_INPUT_RATE_VERTEX;
 
-   vertex_binding_desc[1].binding                                    = 1;
-   vertex_binding_desc[1].stride                                     = 12;
-   vertex_binding_desc[1].inputRate                                  = VK_VERTEX_INPUT_RATE_VERTEX;
+    vertex_binding_desc[1].binding   = 1;
+    vertex_binding_desc[1].stride    = 12;
+    vertex_binding_desc[1].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-   VkVertexInputAttributeDescription vertex_attribute_desc[2]        = { };
-   vertex_attribute_desc[0].location                                 = 0;
-   vertex_attribute_desc[0].binding                                  = 0;
-   vertex_attribute_desc[0].format                                   = VK_FORMAT_R32G32B32_SFLOAT;
-   vertex_attribute_desc[0].offset                                   = 0;
+    VkVertexInputAttributeDescription vertex_attribute_desc[2] = {};
+    vertex_attribute_desc[0].location                          = 0;
+    vertex_attribute_desc[0].binding                           = 0;
+    vertex_attribute_desc[0].format                            = VK_FORMAT_R32G32B32_SFLOAT;
+    vertex_attribute_desc[0].offset                            = 0;
 
-   vertex_attribute_desc[1].location                                 = 1;
-   vertex_attribute_desc[1].binding                                  = 1;
-   vertex_attribute_desc[1].format                                   = VK_FORMAT_R32G32B32_SFLOAT;
-   vertex_attribute_desc[1].offset                                   = 0;
+    vertex_attribute_desc[1].location = 1;
+    vertex_attribute_desc[1].binding  = 1;
+    vertex_attribute_desc[1].format   = VK_FORMAT_R32G32B32_SFLOAT;
+    vertex_attribute_desc[1].offset   = 0;
 
-   VkPipelineVertexInputStateCreateInfo vertex_input_state           = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
-   vertex_input_state.vertexBindingDescriptionCount                  = 2;
-   vertex_input_state.pVertexBindingDescriptions                     = vertex_binding_desc;
-   vertex_input_state.vertexAttributeDescriptionCount                = 2;
-   vertex_input_state.pVertexAttributeDescriptions                   = vertex_attribute_desc;
+    VkPipelineVertexInputStateCreateInfo vertex_input_state = {VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+    vertex_input_state.vertexBindingDescriptionCount        = 2;
+    vertex_input_state.pVertexBindingDescriptions           = vertex_binding_desc;
+    vertex_input_state.vertexAttributeDescriptionCount      = 2;
+    vertex_input_state.pVertexAttributeDescriptions         = vertex_attribute_desc;
 
-   VkPipelineInputAssemblyStateCreateInfo input_assembly             = { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
-   input_assembly.topology                                           = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    VkPipelineInputAssemblyStateCreateInfo input_assembly = {VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+    input_assembly.topology                               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-   VkPipelineViewportStateCreateInfo viewport_state                  = { VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO  };
-   viewport_state.viewportCount                                      = 1;
-   viewport_state.scissorCount                                       = 1;
+    VkPipelineViewportStateCreateInfo viewport_state = {VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
+    viewport_state.viewportCount                     = 1;
+    viewport_state.scissorCount                      = 1;
 
-   VkPipelineRasterizationStateCreateInfo rasterization_state        = { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
-   rasterization_state.depthClampEnable                              = VK_FALSE;
-   rasterization_state.rasterizerDiscardEnable                       = VK_FALSE;
-   rasterization_state.polygonMode                                   = VK_POLYGON_MODE_FILL;
-   rasterization_state.cullMode                                      = cullMode;
-   rasterization_state.frontFace                                     = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-   rasterization_state.depthBiasEnable                               = VK_TRUE;
-   rasterization_state.depthBiasConstantFactor                       = 0.0f;
-   rasterization_state.depthBiasClamp                                = 0.0f;
-   rasterization_state.depthBiasSlopeFactor                          = 1.0f;
-   rasterization_state.lineWidth                                     = 1.0f;
+    VkPipelineRasterizationStateCreateInfo rasterization_state = {VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+    rasterization_state.depthClampEnable                       = VK_FALSE;
+    rasterization_state.rasterizerDiscardEnable                = VK_FALSE;
+    rasterization_state.polygonMode                            = VK_POLYGON_MODE_FILL;
+    rasterization_state.cullMode                               = cullMode;
+    rasterization_state.frontFace                              = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterization_state.depthBiasEnable                        = VK_TRUE;
+    rasterization_state.depthBiasConstantFactor                = 0.0f;
+    rasterization_state.depthBiasClamp                         = 0.0f;
+    rasterization_state.depthBiasSlopeFactor                   = 1.0f;
+    rasterization_state.lineWidth                              = 1.0f;
 
-   VkPipelineDepthStencilStateCreateInfo depth_stencil_state         = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
-   depth_stencil_state.depthTestEnable                               = (dsvFormat != VK_FORMAT_UNDEFINED);
-   depth_stencil_state.depthWriteEnable                              = (dsvFormat != VK_FORMAT_UNDEFINED);
-   depth_stencil_state.depthCompareOp                                = VK_COMPARE_OP_LESS_OR_EQUAL;
-   depth_stencil_state.depthBoundsTestEnable                         = VK_FALSE;
-   depth_stencil_state.stencilTestEnable                             = VK_FALSE;
-   depth_stencil_state.front.failOp                                  = VK_STENCIL_OP_KEEP;
-   depth_stencil_state.front.depthFailOp                             = VK_STENCIL_OP_KEEP;
-   depth_stencil_state.front.compareOp                               = VK_COMPARE_OP_ALWAYS;
-   depth_stencil_state.back                                          = depth_stencil_state.front;
+    VkPipelineDepthStencilStateCreateInfo depth_stencil_state = {VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+    depth_stencil_state.depthTestEnable                       = (dsvFormat != VK_FORMAT_UNDEFINED);
+    depth_stencil_state.depthWriteEnable                      = (dsvFormat != VK_FORMAT_UNDEFINED);
+    depth_stencil_state.depthCompareOp                        = VK_COMPARE_OP_LESS_OR_EQUAL;
+    depth_stencil_state.depthBoundsTestEnable                 = VK_FALSE;
+    depth_stencil_state.stencilTestEnable                     = VK_FALSE;
+    depth_stencil_state.front.failOp                          = VK_STENCIL_OP_KEEP;
+    depth_stencil_state.front.depthFailOp                     = VK_STENCIL_OP_KEEP;
+    depth_stencil_state.front.compareOp                       = VK_COMPARE_OP_ALWAYS;
+    depth_stencil_state.back                                  = depth_stencil_state.front;
 
-   VkPipelineColorBlendAttachmentState color_blend_attachment_state  = { };
-   color_blend_attachment_state.blendEnable                          = VK_FALSE;
-   color_blend_attachment_state.srcColorBlendFactor                  = VK_BLEND_FACTOR_SRC_COLOR;
-   color_blend_attachment_state.dstColorBlendFactor                  = VK_BLEND_FACTOR_ZERO;
-   color_blend_attachment_state.colorBlendOp                         = VK_BLEND_OP_ADD;
-   color_blend_attachment_state.srcAlphaBlendFactor                  = VK_BLEND_FACTOR_SRC_ALPHA;
-   color_blend_attachment_state.dstAlphaBlendFactor                  = VK_BLEND_FACTOR_ZERO;
-   color_blend_attachment_state.alphaBlendOp                         = VK_BLEND_OP_ADD;
-   color_blend_attachment_state.colorWriteMask                       = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_A_BIT;
+    VkPipelineColorBlendAttachmentState color_blend_attachment_state = {};
+    color_blend_attachment_state.blendEnable                         = VK_FALSE;
+    color_blend_attachment_state.srcColorBlendFactor                 = VK_BLEND_FACTOR_SRC_COLOR;
+    color_blend_attachment_state.dstColorBlendFactor                 = VK_BLEND_FACTOR_ZERO;
+    color_blend_attachment_state.colorBlendOp                        = VK_BLEND_OP_ADD;
+    color_blend_attachment_state.srcAlphaBlendFactor                 = VK_BLEND_FACTOR_SRC_ALPHA;
+    color_blend_attachment_state.dstAlphaBlendFactor                 = VK_BLEND_FACTOR_ZERO;
+    color_blend_attachment_state.alphaBlendOp                        = VK_BLEND_OP_ADD;
+    color_blend_attachment_state.colorWriteMask                      = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_A_BIT;
 
-   VkPipelineColorBlendStateCreateInfo color_blend_state             = { VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
-   color_blend_state.logicOpEnable                                   = VK_FALSE;
-   color_blend_state.logicOp                                         = VK_LOGIC_OP_NO_OP;
-   color_blend_state.attachmentCount                                 = 1;
-   color_blend_state.pAttachments                                    = &color_blend_attachment_state;
-   color_blend_state.blendConstants[0]                               = 0.0f;
-   color_blend_state.blendConstants[1]                               = 0.0f;
-   color_blend_state.blendConstants[2]                               = 0.0f;
-   color_blend_state.blendConstants[3]                               = 0.0f;
+    VkPipelineColorBlendStateCreateInfo color_blend_state = {VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+    color_blend_state.logicOpEnable                       = VK_FALSE;
+    color_blend_state.logicOp                             = VK_LOGIC_OP_NO_OP;
+    color_blend_state.attachmentCount                     = 1;
+    color_blend_state.pAttachments                        = &color_blend_attachment_state;
+    color_blend_state.blendConstants[0]                   = 0.0f;
+    color_blend_state.blendConstants[1]                   = 0.0f;
+    color_blend_state.blendConstants[2]                   = 0.0f;
+    color_blend_state.blendConstants[3]                   = 0.0f;
 
-   VkDynamicState dynamic_states[2]                                  = { };
-   dynamic_states[0]                                                 = VK_DYNAMIC_STATE_VIEWPORT;
-   dynamic_states[1]                                                 = VK_DYNAMIC_STATE_SCISSOR;
+    VkDynamicState dynamic_states[2] = {};
+    dynamic_states[0]                = VK_DYNAMIC_STATE_VIEWPORT;
+    dynamic_states[1]                = VK_DYNAMIC_STATE_SCISSOR;
 
-   VkPipelineDynamicStateCreateInfo dynamic_state                    = { VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
-   dynamic_state.dynamicStateCount                                   = 2;
-   dynamic_state.pDynamicStates                                      = dynamic_states;
+    VkPipelineDynamicStateCreateInfo dynamic_state = {VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
+    dynamic_state.dynamicStateCount                = 2;
+    dynamic_state.pDynamicStates                   = dynamic_states;
 
-   VkGraphicsPipelineCreateInfo pipeline_info                        = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
-   pipeline_info.pNext                                               = &pipeline_rendering_create_info;
-   pipeline_info.stageCount                                          = 2;
-   pipeline_info.pStages                                             = shader_stages;
-   pipeline_info.pVertexInputState                                   = &vertex_input_state;
-   pipeline_info.pInputAssemblyState                                 = &input_assembly;
-   pipeline_info.pViewportState                                      = &viewport_state;
-   pipeline_info.pRasterizationState                                 = &rasterization_state;
-   pipeline_info.pDepthStencilState                                  = &depth_stencil_state;
-   pipeline_info.pColorBlendState                                    = &color_blend_state;
-   pipeline_info.pDynamicState                                       = &dynamic_state;
-   pipeline_info.layout                                              = pipeline_layout;
-   pipeline_info.renderPass                                          = VK_NULL_HANDLE;
-   pipeline_info.subpass                                             = 0;
-   pipeline_info.basePipelineHandle                                  = VK_NULL_HANDLE;
-   pipeline_info.basePipelineIndex                                   = -1;
+    VkGraphicsPipelineCreateInfo pipeline_info = {VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
+    pipeline_info.pNext                        = &pipeline_rendering_create_info;
+    pipeline_info.stageCount                   = 2;
+    pipeline_info.pStages                      = shader_stages;
+    pipeline_info.pVertexInputState            = &vertex_input_state;
+    pipeline_info.pInputAssemblyState          = &input_assembly;
+    pipeline_info.pViewportState               = &viewport_state;
+    pipeline_info.pRasterizationState          = &rasterization_state;
+    pipeline_info.pDepthStencilState           = &depth_stencil_state;
+    pipeline_info.pColorBlendState             = &color_blend_state;
+    pipeline_info.pDynamicState                = &dynamic_state;
+    pipeline_info.layout                       = pipeline_layout;
+    pipeline_info.renderPass                   = VK_NULL_HANDLE;
+    pipeline_info.subpass                      = 0;
+    pipeline_info.basePipelineHandle           = VK_NULL_HANDLE;
+    pipeline_info.basePipelineIndex            = -1;
 
-   VkResult vkres = vkCreateGraphicsPipelines(
-      pRenderer->Device,
-      VK_NULL_HANDLE,   // Not using a pipeline cache
-      1,
-      &pipeline_info,
-      nullptr,
-      pPipeline);
+    VkResult vkres = vkCreateGraphicsPipelines(
+        pRenderer->Device,
+        VK_NULL_HANDLE, // Not using a pipeline cache
+        1,
+        &pipeline_info,
+        nullptr,
+        pPipeline);
 
-   return vkres;
+    return vkres;
 }
 
 CompileResult CompileGLSL(
@@ -1647,4 +1654,349 @@ CompileResult CompileGLSL(
     glslang_finalize_process();
 
     return COMPILE_SUCCESS;
+}
+
+uint32_t BitsPerPixel(VkFormat fmt)
+{
+    switch (fmt) {
+    case VK_FORMAT_R4G4_UNORM_PACK8:
+        return 8;
+
+    case VK_FORMAT_R4G4B4A4_UNORM_PACK16:
+    case VK_FORMAT_B4G4R4A4_UNORM_PACK16:
+    case VK_FORMAT_R5G6B5_UNORM_PACK16:
+    case VK_FORMAT_B5G6R5_UNORM_PACK16:
+    case VK_FORMAT_R5G5B5A1_UNORM_PACK16:
+    case VK_FORMAT_B5G5R5A1_UNORM_PACK16:
+    case VK_FORMAT_A1R5G5B5_UNORM_PACK16:
+        return 16;
+
+    case VK_FORMAT_R8_UNORM:
+    case VK_FORMAT_R8_SNORM:
+    case VK_FORMAT_R8_USCALED:
+    case VK_FORMAT_R8_SSCALED:
+    case VK_FORMAT_R8_UINT:
+    case VK_FORMAT_R8_SINT:
+    case VK_FORMAT_R8_SRGB:
+        return 8;
+
+    case VK_FORMAT_R8G8_UNORM:
+    case VK_FORMAT_R8G8_SNORM:
+    case VK_FORMAT_R8G8_USCALED:
+    case VK_FORMAT_R8G8_SSCALED:
+    case VK_FORMAT_R8G8_UINT:
+    case VK_FORMAT_R8G8_SINT:
+    case VK_FORMAT_R8G8_SRGB:
+        return 16;
+
+    case VK_FORMAT_R8G8B8_UNORM:
+    case VK_FORMAT_R8G8B8_SNORM:
+    case VK_FORMAT_R8G8B8_USCALED:
+    case VK_FORMAT_R8G8B8_SSCALED:
+    case VK_FORMAT_R8G8B8_UINT:
+    case VK_FORMAT_R8G8B8_SINT:
+    case VK_FORMAT_R8G8B8_SRGB:
+    case VK_FORMAT_B8G8R8_UNORM:
+    case VK_FORMAT_B8G8R8_SNORM:
+    case VK_FORMAT_B8G8R8_USCALED:
+    case VK_FORMAT_B8G8R8_SSCALED:
+    case VK_FORMAT_B8G8R8_UINT:
+    case VK_FORMAT_B8G8R8_SINT:
+    case VK_FORMAT_B8G8R8_SRGB:
+        return 24;
+
+    case VK_FORMAT_R8G8B8A8_UNORM:
+    case VK_FORMAT_R8G8B8A8_SNORM:
+    case VK_FORMAT_R8G8B8A8_USCALED:
+    case VK_FORMAT_R8G8B8A8_SSCALED:
+    case VK_FORMAT_R8G8B8A8_UINT:
+    case VK_FORMAT_R8G8B8A8_SINT:
+    case VK_FORMAT_R8G8B8A8_SRGB:
+    case VK_FORMAT_B8G8R8A8_UNORM:
+    case VK_FORMAT_B8G8R8A8_SNORM:
+    case VK_FORMAT_B8G8R8A8_USCALED:
+    case VK_FORMAT_B8G8R8A8_SSCALED:
+    case VK_FORMAT_B8G8R8A8_UINT:
+    case VK_FORMAT_B8G8R8A8_SINT:
+    case VK_FORMAT_B8G8R8A8_SRGB:
+    case VK_FORMAT_A8B8G8R8_UNORM_PACK32:
+    case VK_FORMAT_A8B8G8R8_SNORM_PACK32:
+    case VK_FORMAT_A8B8G8R8_USCALED_PACK32:
+    case VK_FORMAT_A8B8G8R8_SSCALED_PACK32:
+    case VK_FORMAT_A8B8G8R8_UINT_PACK32:
+    case VK_FORMAT_A8B8G8R8_SINT_PACK32:
+    case VK_FORMAT_A8B8G8R8_SRGB_PACK32:
+    case VK_FORMAT_A2R10G10B10_UNORM_PACK32:
+    case VK_FORMAT_A2R10G10B10_SNORM_PACK32:
+    case VK_FORMAT_A2R10G10B10_USCALED_PACK32:
+    case VK_FORMAT_A2R10G10B10_SSCALED_PACK32:
+    case VK_FORMAT_A2R10G10B10_UINT_PACK32:
+    case VK_FORMAT_A2R10G10B10_SINT_PACK32:
+    case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
+    case VK_FORMAT_A2B10G10R10_SNORM_PACK32:
+    case VK_FORMAT_A2B10G10R10_USCALED_PACK32:
+    case VK_FORMAT_A2B10G10R10_SSCALED_PACK32:
+    case VK_FORMAT_A2B10G10R10_UINT_PACK32:
+    case VK_FORMAT_A2B10G10R10_SINT_PACK32:
+        return 32;
+
+    case VK_FORMAT_R16_UNORM:
+    case VK_FORMAT_R16_SNORM:
+    case VK_FORMAT_R16_USCALED:
+    case VK_FORMAT_R16_SSCALED:
+    case VK_FORMAT_R16_UINT:
+    case VK_FORMAT_R16_SINT:
+    case VK_FORMAT_R16_SFLOAT:
+        return 16;
+
+    case VK_FORMAT_R16G16_UNORM:
+    case VK_FORMAT_R16G16_SNORM:
+    case VK_FORMAT_R16G16_USCALED:
+    case VK_FORMAT_R16G16_SSCALED:
+    case VK_FORMAT_R16G16_UINT:
+    case VK_FORMAT_R16G16_SINT:
+    case VK_FORMAT_R16G16_SFLOAT:
+        return 32;
+
+    case VK_FORMAT_R16G16B16_UNORM:
+    case VK_FORMAT_R16G16B16_SNORM:
+    case VK_FORMAT_R16G16B16_USCALED:
+    case VK_FORMAT_R16G16B16_SSCALED:
+    case VK_FORMAT_R16G16B16_UINT:
+    case VK_FORMAT_R16G16B16_SINT:
+    case VK_FORMAT_R16G16B16_SFLOAT:
+        return 48;
+
+    case VK_FORMAT_R16G16B16A16_UNORM:
+    case VK_FORMAT_R16G16B16A16_SNORM:
+    case VK_FORMAT_R16G16B16A16_USCALED:
+    case VK_FORMAT_R16G16B16A16_SSCALED:
+    case VK_FORMAT_R16G16B16A16_UINT:
+    case VK_FORMAT_R16G16B16A16_SINT:
+    case VK_FORMAT_R16G16B16A16_SFLOAT:
+        return 64;
+
+    case VK_FORMAT_R32_UINT:
+    case VK_FORMAT_R32_SINT:
+    case VK_FORMAT_R32_SFLOAT:
+        return 32;
+
+    case VK_FORMAT_R32G32_UINT:
+    case VK_FORMAT_R32G32_SINT:
+    case VK_FORMAT_R32G32_SFLOAT:
+        return 64;
+
+    case VK_FORMAT_R32G32B32_UINT:
+    case VK_FORMAT_R32G32B32_SINT:
+    case VK_FORMAT_R32G32B32_SFLOAT:
+        return 96;
+
+    case VK_FORMAT_R32G32B32A32_UINT:
+    case VK_FORMAT_R32G32B32A32_SINT:
+    case VK_FORMAT_R32G32B32A32_SFLOAT:
+        return 128;
+
+    case VK_FORMAT_R64_UINT:
+    case VK_FORMAT_R64_SINT:
+    case VK_FORMAT_R64_SFLOAT:
+        return 64;
+
+    case VK_FORMAT_R64G64_UINT:
+    case VK_FORMAT_R64G64_SINT:
+    case VK_FORMAT_R64G64_SFLOAT:
+        return 128;
+
+    case VK_FORMAT_R64G64B64_UINT:
+    case VK_FORMAT_R64G64B64_SINT:
+    case VK_FORMAT_R64G64B64_SFLOAT:
+        return 192;
+
+    case VK_FORMAT_R64G64B64A64_UINT:
+    case VK_FORMAT_R64G64B64A64_SINT:
+    case VK_FORMAT_R64G64B64A64_SFLOAT:
+        return 256;
+
+    case VK_FORMAT_B10G11R11_UFLOAT_PACK32:
+    case VK_FORMAT_E5B9G9R9_UFLOAT_PACK32:
+        return 32;
+
+    case VK_FORMAT_D16_UNORM:
+        return 16;
+
+    // Implementation dependant
+    case VK_FORMAT_X8_D24_UNORM_PACK32:
+        return 0;
+
+    case VK_FORMAT_D32_SFLOAT:
+        return 32;
+
+    case VK_FORMAT_S8_UINT:
+        return 8;
+
+    case VK_FORMAT_D16_UNORM_S8_UINT:
+        return 24;
+
+    case VK_FORMAT_D24_UNORM_S8_UINT:
+        return 32;
+
+    // Implementation dependant
+    case VK_FORMAT_D32_SFLOAT_S8_UINT:
+        return 0;
+
+    case VK_FORMAT_BC1_RGB_UNORM_BLOCK:
+    case VK_FORMAT_BC1_RGB_SRGB_BLOCK:
+    case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
+    case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
+        return 64;
+
+    case VK_FORMAT_BC2_UNORM_BLOCK:
+    case VK_FORMAT_BC2_SRGB_BLOCK:
+    case VK_FORMAT_BC3_UNORM_BLOCK:
+    case VK_FORMAT_BC3_SRGB_BLOCK:
+        return 128;
+
+    case VK_FORMAT_BC4_UNORM_BLOCK:
+    case VK_FORMAT_BC4_SNORM_BLOCK:
+        return 64;
+
+    case VK_FORMAT_BC5_UNORM_BLOCK:
+    case VK_FORMAT_BC5_SNORM_BLOCK:
+    case VK_FORMAT_BC6H_UFLOAT_BLOCK:
+    case VK_FORMAT_BC6H_SFLOAT_BLOCK:
+    case VK_FORMAT_BC7_UNORM_BLOCK:
+    case VK_FORMAT_BC7_SRGB_BLOCK:
+        return 128;
+
+    case VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK:
+    case VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK:
+    case VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK:
+    case VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK:
+        return 64;
+
+    case VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK:
+    case VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK:
+        return 128;
+
+    case VK_FORMAT_EAC_R11_UNORM_BLOCK:
+    case VK_FORMAT_EAC_R11_SNORM_BLOCK:
+        return 64;
+
+    case VK_FORMAT_EAC_R11G11_UNORM_BLOCK:
+    case VK_FORMAT_EAC_R11G11_SNORM_BLOCK:
+        return 128;
+
+    case VK_FORMAT_ASTC_4x4_UNORM_BLOCK:
+    case VK_FORMAT_ASTC_4x4_SRGB_BLOCK:
+    case VK_FORMAT_ASTC_5x4_UNORM_BLOCK:
+    case VK_FORMAT_ASTC_5x4_SRGB_BLOCK:
+    case VK_FORMAT_ASTC_5x5_UNORM_BLOCK:
+    case VK_FORMAT_ASTC_5x5_SRGB_BLOCK:
+    case VK_FORMAT_ASTC_6x5_UNORM_BLOCK:
+    case VK_FORMAT_ASTC_6x5_SRGB_BLOCK:
+    case VK_FORMAT_ASTC_6x6_UNORM_BLOCK:
+    case VK_FORMAT_ASTC_6x6_SRGB_BLOCK:
+    case VK_FORMAT_ASTC_8x5_UNORM_BLOCK:
+    case VK_FORMAT_ASTC_8x5_SRGB_BLOCK:
+    case VK_FORMAT_ASTC_8x6_UNORM_BLOCK:
+    case VK_FORMAT_ASTC_8x6_SRGB_BLOCK:
+    case VK_FORMAT_ASTC_8x8_UNORM_BLOCK:
+    case VK_FORMAT_ASTC_8x8_SRGB_BLOCK:
+    case VK_FORMAT_ASTC_10x5_UNORM_BLOCK:
+    case VK_FORMAT_ASTC_10x5_SRGB_BLOCK:
+    case VK_FORMAT_ASTC_10x6_UNORM_BLOCK:
+    case VK_FORMAT_ASTC_10x6_SRGB_BLOCK:
+    case VK_FORMAT_ASTC_10x8_UNORM_BLOCK:
+    case VK_FORMAT_ASTC_10x8_SRGB_BLOCK:
+    case VK_FORMAT_ASTC_10x10_UNORM_BLOCK:
+    case VK_FORMAT_ASTC_10x10_SRGB_BLOCK:
+    case VK_FORMAT_ASTC_12x10_UNORM_BLOCK:
+    case VK_FORMAT_ASTC_12x10_SRGB_BLOCK:
+    case VK_FORMAT_ASTC_12x12_UNORM_BLOCK:
+    case VK_FORMAT_ASTC_12x12_SRGB_BLOCK:
+        return 128;
+
+    case VK_FORMAT_G8B8G8R8_422_UNORM:
+    case VK_FORMAT_B8G8R8G8_422_UNORM:
+        return 32;
+
+    // TODO: Figure these out
+    case VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM:
+    case VK_FORMAT_G8_B8R8_2PLANE_420_UNORM:
+    case VK_FORMAT_G8_B8_R8_3PLANE_422_UNORM:
+    case VK_FORMAT_G8_B8R8_2PLANE_422_UNORM:
+    case VK_FORMAT_G8_B8_R8_3PLANE_444_UNORM:
+    case VK_FORMAT_R10X6_UNORM_PACK16:
+    case VK_FORMAT_R10X6G10X6_UNORM_2PACK16:
+    case VK_FORMAT_R10X6G10X6B10X6A10X6_UNORM_4PACK16:
+    case VK_FORMAT_G10X6B10X6G10X6R10X6_422_UNORM_4PACK16:
+    case VK_FORMAT_B10X6G10X6R10X6G10X6_422_UNORM_4PACK16:
+    case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_420_UNORM_3PACK16:
+    case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16:
+    case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_422_UNORM_3PACK16:
+    case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16:
+    case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_444_UNORM_3PACK16:
+    case VK_FORMAT_R12X4_UNORM_PACK16:
+    case VK_FORMAT_R12X4G12X4_UNORM_2PACK16:
+    case VK_FORMAT_R12X4G12X4B12X4A12X4_UNORM_4PACK16:
+    case VK_FORMAT_G12X4B12X4G12X4R12X4_422_UNORM_4PACK16:
+    case VK_FORMAT_B12X4G12X4R12X4G12X4_422_UNORM_4PACK16:
+    case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_420_UNORM_3PACK16:
+    case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_420_UNORM_3PACK16:
+    case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_422_UNORM_3PACK16:
+    case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_422_UNORM_3PACK16:
+    case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_444_UNORM_3PACK16:
+        return 0;
+
+    case VK_FORMAT_G16B16G16R16_422_UNORM:
+    case VK_FORMAT_B16G16R16G16_422_UNORM:
+        return 64;
+
+    // TODO: Figure these out
+    case VK_FORMAT_G16_B16_R16_3PLANE_420_UNORM:
+    case VK_FORMAT_G16_B16R16_2PLANE_420_UNORM:
+    case VK_FORMAT_G16_B16_R16_3PLANE_422_UNORM:
+    case VK_FORMAT_G16_B16R16_2PLANE_422_UNORM:
+    case VK_FORMAT_G16_B16_R16_3PLANE_444_UNORM:
+    case VK_FORMAT_G8_B8R8_2PLANE_444_UNORM:
+    case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_444_UNORM_3PACK16:
+    case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_444_UNORM_3PACK16:
+    case VK_FORMAT_G16_B16R16_2PLANE_444_UNORM:
+        return 0;
+
+    case VK_FORMAT_A4R4G4B4_UNORM_PACK16:
+    case VK_FORMAT_A4B4G4R4_UNORM_PACK16:
+        return 16;
+
+    case VK_FORMAT_ASTC_4x4_SFLOAT_BLOCK:
+    case VK_FORMAT_ASTC_5x4_SFLOAT_BLOCK:
+    case VK_FORMAT_ASTC_5x5_SFLOAT_BLOCK:
+    case VK_FORMAT_ASTC_6x5_SFLOAT_BLOCK:
+    case VK_FORMAT_ASTC_6x6_SFLOAT_BLOCK:
+    case VK_FORMAT_ASTC_8x5_SFLOAT_BLOCK:
+    case VK_FORMAT_ASTC_8x6_SFLOAT_BLOCK:
+    case VK_FORMAT_ASTC_8x8_SFLOAT_BLOCK:
+    case VK_FORMAT_ASTC_10x5_SFLOAT_BLOCK:
+    case VK_FORMAT_ASTC_10x6_SFLOAT_BLOCK:
+    case VK_FORMAT_ASTC_10x8_SFLOAT_BLOCK:
+    case VK_FORMAT_ASTC_10x10_SFLOAT_BLOCK:
+    case VK_FORMAT_ASTC_12x10_SFLOAT_BLOCK:
+    case VK_FORMAT_ASTC_12x12_SFLOAT_BLOCK:
+        return 128;
+
+    case VK_FORMAT_PVRTC1_2BPP_UNORM_BLOCK_IMG:
+    case VK_FORMAT_PVRTC1_4BPP_UNORM_BLOCK_IMG:
+    case VK_FORMAT_PVRTC2_2BPP_UNORM_BLOCK_IMG:
+    case VK_FORMAT_PVRTC2_4BPP_UNORM_BLOCK_IMG:
+    case VK_FORMAT_PVRTC1_2BPP_SRGB_BLOCK_IMG:
+    case VK_FORMAT_PVRTC1_4BPP_SRGB_BLOCK_IMG:
+    case VK_FORMAT_PVRTC2_2BPP_SRGB_BLOCK_IMG:
+    case VK_FORMAT_PVRTC2_4BPP_SRGB_BLOCK_IMG:
+        return 64;
+
+    case VK_FORMAT_R16G16_S10_5_NV:
+        return 0;
+
+    default:
+        return 0;
+    }
 }
