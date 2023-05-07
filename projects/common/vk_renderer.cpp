@@ -1680,7 +1680,7 @@ HRESULT CompileHLSL(
     const std::string& shaderSource,
     const std::string& entryPoint,
     const std::string& profile,
-    std::vector<char>* pDXIL,
+    std::vector<char>* pSpirv,
     std::string*       pErrorMsg)
 {
     // Check source
@@ -1699,7 +1699,7 @@ HRESULT CompileHLSL(
         return E_INVALIDARG;
     }
     // Check output
-    if (IsNull(pDXIL)) {
+    if (IsNull(pSpirv)) {
         assert(false && "DXIL output arg is null");
         return E_INVALIDARG;
     }
@@ -1724,8 +1724,6 @@ HRESULT CompileHLSL(
     args.push_back(L"-T");
     args.push_back(profileUT16.c_str());
 
-    // LPCWSTR args[2] = {L"-T", L"lib_6_3"};
-
     ComPtr<IDxcResult> result;
     hr = dxcCompiler->Compile(
         &source,
@@ -1748,11 +1746,6 @@ HRESULT CompileHLSL(
         const char* pBuffer    = static_cast<const char*>(errors->GetBufferPointer());
         size_t      bufferSize = static_cast<size_t>(errors->GetBufferSize());
         *pErrorMsg             = std::string(pBuffer, pBuffer + bufferSize);
-        // std::string       errorMsg = std::string(reinterpret_cast<const char*>(errors->GetBufferPointer()), errors->GetBufferSize());
-        // std::stringstream ss;
-        // ss << "\n"
-        //    << "Shader compiler error: " << errorMsg << "\n";
-        // GREX_LOG_ERROR(ss.str().c_str());
         return E_FAIL;
     }
 
@@ -1765,7 +1758,7 @@ HRESULT CompileHLSL(
 
     const char* pBuffer    = static_cast<const char*>(shaderBinary->GetBufferPointer());
     size_t      bufferSize = static_cast<size_t>(shaderBinary->GetBufferSize());
-    *pDXIL                 = std::vector<char>(pBuffer, pBuffer + bufferSize);
+    *pSpirv                 = std::vector<char>(pBuffer, pBuffer + bufferSize);
 
     return S_OK;
 }

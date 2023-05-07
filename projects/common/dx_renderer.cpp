@@ -1371,7 +1371,7 @@ HRESULT CreateGraphicsPipeline1(
     return S_OK;
 }
 
-std::wstring AsciiToUTF16(const std::string& ascii)
+static std::wstring AsciiToUTF16(const std::string& ascii)
 {
     std::wstring utf16;
     for (auto& c : ascii) {
