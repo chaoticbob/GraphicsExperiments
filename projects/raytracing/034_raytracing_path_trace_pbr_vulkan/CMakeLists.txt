@@ -14,6 +14,8 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/window.cpp
     ${GREX_PROJECTS_COMMON_DIR}/tri_mesh.h
     ${GREX_PROJECTS_COMMON_DIR}/tri_mesh.cpp
+    ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/resource_limits_c.cpp
+    ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/ResourceLimits.cpp
     #${IMGUI_VULKAN_FILES}
 )
 
@@ -27,6 +29,7 @@ set_target_properties(034_raytracing_path_trace_pbr_vulkan PROPERTIES FOLDER "ra
 target_include_directories(
     034_raytracing_path_trace_pbr_vulkan
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
+           ${GREX_THIRD_PARTY_DIR}/glslang # This needs to come before ${VULKAN_INCLUDE_DIR}
 		   ${VULKAN_INCLUDE_DIR}
            ${GREX_THIRD_PARTY_DIR}/VulkanMemoryAllocator/include
            ${GREX_THIRD_PARTY_DIR}/glm
@@ -38,6 +41,8 @@ target_include_directories(
 target_link_libraries(
     034_raytracing_path_trace_pbr_vulkan
     PUBLIC glfw
+           glslang
+           SPIRV
            dxcompiler
 )
 

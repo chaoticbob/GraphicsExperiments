@@ -52,9 +52,11 @@ void csmain(uint3 tid : SV_DispatchThreadId)
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth  = 1920;
-static uint32_t gWindowHeight = 1080;
-static bool     gEnableDebug  = true;
+static uint32_t gWindowWidth        = 1920;
+static uint32_t gWindowHeight       = 1080;
+static bool     gEnableDebug        = true;
+static bool     gEnableRayTracing   = true;
+static uint32_t gUniformmBufferSize = 256;
 
 static LPCWSTR gHitGroupName         = L"MyHitGroup";
 static LPCWSTR gRayGenShaderName     = L"MyRaygenShader";
@@ -117,7 +119,7 @@ struct MaterialParameters
     float ior;
     vec3  emissionColor;
 };
-
+/*
 void CreateDescriptorSetLayout(VulkanRenderer* pRenderer, VkDescriptorSetLayout* pLayout);
 void CreatePipelineLayout(VulkanRenderer* pRenderer, VkDescriptorSetLayout descriptorSetLayout, VkPipelineLayout* pLayout);
 void CreateRayTracingPipeline(
@@ -180,6 +182,7 @@ void WriteDescriptors(
     const Geometry&                 teapotGeometry,
     const Geometry&                 boxGeometry,
     const std::vector<IBLTextures>& iblTextures);
+*/
 
 void MouseMove(int x, int y, int buttons)
 {
@@ -198,9 +201,9 @@ void MouseMove(int x, int y, int buttons)
     prevX = x;
     prevY = y;
 }
-
+/*
 void WriteDescriptors(std::unique_ptr<VulkanRenderer>& renderer, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& descriptorHeap, Microsoft::WRL::ComPtr<ID3D12Resource>& outputTexture, Microsoft::WRL::ComPtr<ID3D12Resource>& accumTexture, Microsoft::WRL::ComPtr<ID3D12Resource>& rayGenSamplesBuffer, Geometry& sphereGeometry, Geometry& boxGeometry, IBLTextures& iblTextures);
-
+*/
 // =============================================================================
 // main()
 // =============================================================================
@@ -208,17 +211,7 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    if (!InitDx(renderer.get(), gEnableDebug)) {
-        return EXIT_FAILURE;
-    }
-
-    D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5 = {};
-    //
-    CHECK_CALL(renderer->Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5)));
-
-    bool isRayTracingSupported = (options5.RaytracingTier == D3D12_RAYTRACING_TIER_1_1);
-    if (!isRayTracingSupported) {
-        assert(false && "Required ray tracing tier not supported");
+    if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRayTracing)) {
         return EXIT_FAILURE;
     }
 
@@ -255,7 +248,7 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
     }
-
+/*
     // *************************************************************************
     // Global root signature
     //
@@ -743,10 +736,10 @@ int main(int argc, char** argv)
             break;
         }
     }
-
+*/
     return 0;
 }
-
+/*
 void CreateGlobalRootSig(VulkanRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 {
     // Output range
@@ -2181,3 +2174,4 @@ void WriteDescriptors(
         CreateDescriptorTexture2D(pRenderer, iblTexture.envTexture.Get(), descriptor, 0, iblTexture.envNumLevels);
     }
 }
+*/
