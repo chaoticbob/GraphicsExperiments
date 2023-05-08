@@ -426,7 +426,7 @@ int main(int argc, char** argv)
         &rayGenSamplesBuffer));
 
     // *************************************************************************
-    // Descriptor heaps
+    // IBL textures
     // *************************************************************************
     std::vector<IBLTextures> iblTextures = {};
     CreateIBLTextures(

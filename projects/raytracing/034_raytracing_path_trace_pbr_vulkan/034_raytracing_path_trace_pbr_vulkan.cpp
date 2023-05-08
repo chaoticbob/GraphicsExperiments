@@ -167,9 +167,11 @@ void CreateTLAS(
     const VulkanAccelStruct&         boxBLAS,
     VulkanAccelStruct*               pTLAS,
     std::vector<MaterialParameters>& outMaterialParams);
+void CreateAccumTexture(VulkanRenderer* pRenderer, VulkanImage* pBuffer);
+void CreateIBLTextures(
+    VulkanRenderer*           pRenderer,
+    std::vector<IBLTextures>& outIBLTextures);
 /*
-void CreateOutputTexture(VulkanRenderer* pRenderer, ID3D12Resource** ppBuffer);
-void CreateAccumTexture(VulkanRenderer* pRenderer, ID3D12Resource** ppBuffer);
 void CreateIBLTextures(
     VulkanRenderer*           pRenderer,
     std::vector<IBLTextures>& outIBLTextures);
@@ -426,53 +428,56 @@ int main(int argc, char** argv)
         &tlasBuffer,
         materialParams);
 
-    /*
     // *************************************************************************
-    // Output and accumulation texture
+    // Accumulation texture
     // *************************************************************************
-    ComPtr<ID3D12Resource> outputTexture;
-    ComPtr<ID3D12Resource> accumTexture;
-    CreateOutputTexture(renderer.get(), &outputTexture);
+    VulkanImage accumTexture = {};
     CreateAccumTexture(renderer.get(), &accumTexture);
 
     // *************************************************************************
     // Material params buffer
     // *************************************************************************
-    ComPtr<ID3D12Resource> materialParamsBuffer;
+    VulkanBuffer materialParamsBuffer = {};
     CreateBuffer(
         renderer.get(),
         SizeInBytes(materialParams),
         DataPtr(materialParams),
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        0,
         &materialParamsBuffer);
 
     // *************************************************************************
     // Scene params constant buffer
     // *************************************************************************
-    ComPtr<ID3D12Resource> sceneParamsBuffer;
+    VulkanBuffer sceneParamsBuffer = {};
     CHECK_CALL(CreateBuffer(
         renderer.get(),
         Align<size_t>(sizeof(SceneParameters), 256),
         nullptr,
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        0,
         &sceneParamsBuffer));
 
     // *************************************************************************
     // Ray gen samples buffer
     // *************************************************************************
-    ComPtr<ID3D12Resource> rayGenSamplesBuffer;
-    CHECK_CALL(CreateUAVBuffer(
+    VulkanBuffer rayGenSamplesBuffer = {};
+    CHECK_CALL(CreateBuffer(
         renderer.get(),
         (gWindowWidth * gWindowHeight * sizeof(uint32_t)),
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY,
+        0,
         &rayGenSamplesBuffer));
 
     // *************************************************************************
-    // Descriptor heaps
+    // IBL textures
     // *************************************************************************
     std::vector<IBLTextures> iblTextures = {};
     CreateIBLTextures(
         renderer.get(),
         iblTextures);
-
+/*
     // *************************************************************************
     // Descriptor heaps
     // *************************************************************************
@@ -781,8 +786,8 @@ int main(int argc, char** argv)
             break;
         }
     }
-*/
-    return 0;
+    */
+        return 0;
 }
 
 void CreateRayTracePipelineLayout(
@@ -2150,7 +2155,7 @@ void CreateTLAS(
 
     // Get acceleration structure build size
     VkAccelerationStructureBuildSizesInfoKHR buildSizesInfo    = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR};
-    const uint32_t                           maxPrimitiveCount = 1; // CountU32(instances); //1;
+    const uint32_t                           maxPrimitiveCount = CountU32(instances); // 1;
     fn_vkGetAccelerationStructureBuildSizesKHR(
         pRenderer->Device,
         VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
@@ -2342,6 +2347,31 @@ void CreateAccumTexture(VulkanRenderer* pRenderer, ID3D12Resource** ppBuffer)
         nullptr,                               // pOptimizedClearValue
         IID_PPV_ARGS(ppBuffer)));              // riidResource, ppvResource
 }
+*/
+void CreateAccumTexture(VulkanRenderer* pRenderer, VulkanImage* pBuffer)
+{
+    CHECK_CALL(CreateImage(
+        pRenderer,
+        VK_IMAGE_TYPE_2D,
+        VK_IMAGE_USAGE_STORAGE_BIT,
+        gWindowWidth,
+        gWindowHeight,
+        1,
+        VK_FORMAT_R32G32B32A32_SFLOAT,
+        1,
+        1,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VMA_MEMORY_USAGE_GPU_ONLY,
+        pBuffer));
+
+    CHECK_CALL(TransitionImageLayout(
+        pRenderer,
+        pBuffer->Image,
+        GREX_ALL_SUBRESOURCES,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        RESOURCE_STATE_UNKNOWN,
+        RESOURCE_STATE_COMMON));
+}
 
 void CreateIBLTextures(
     VulkanRenderer*           pRenderer,
@@ -2384,12 +2414,12 @@ void CreateIBLTextures(
             const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
             const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
 
-            std::vector<DxMipOffset> mipOffsets;
+            std::vector<VkMipOffset> mipOffsets;
             uint32_t                 levelOffset = 0;
             uint32_t                 levelWidth  = ibl.baseWidth;
             uint32_t                 levelHeight = ibl.baseHeight;
             for (uint32_t i = 0; i < ibl.numLevels; ++i) {
-                DxMipOffset mipOffset = {};
+                VkMipOffset mipOffset = {};
                 mipOffset.offset      = levelOffset;
                 mipOffset.rowStride   = rowStride;
 
@@ -2400,12 +2430,12 @@ void CreateIBLTextures(
                 levelHeight >>= 1;
             }
 
-            ComPtr<ID3D12Resource> texture;
+            VulkanImage texture;
             CHECK_CALL(CreateTexture(
                 pRenderer,
                 ibl.baseWidth,
                 ibl.baseHeight,
-                DXGI_FORMAT_R32G32B32A32_FLOAT,
+                VK_FORMAT_R32G32B32A32_SFLOAT,
                 mipOffsets,
                 ibl.environmentMap.GetSizeInBytes(),
                 ibl.environmentMap.GetPixels(),
@@ -2420,7 +2450,7 @@ void CreateIBLTextures(
         GREX_LOG_INFO("Loaded " << iblFile);
     }
 }
-
+/*
 void CreateDescriptorHeap(VulkanRenderer* pRenderer, ID3D12DescriptorHeap** ppHeap)
 {
     D3D12_DESCRIPTOR_HEAP_DESC desc = {};

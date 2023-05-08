@@ -945,6 +945,7 @@ VkResult CreateBuffer(
     return VK_SUCCESS;
 }
 
+/*
 VkResult CreateUAVBuffer(
     VulkanRenderer*     pRenderer,
     VkBufferCreateFlags createFlags,
@@ -964,6 +965,51 @@ VkResult CreateUAVBuffer(
     }
 
     return VK_SUCCESS;
+}
+*/
+
+VkResult CreateImage(
+    VulkanRenderer*   pRenderer,
+    VkImageType       imageType,
+    VkImageUsageFlags imageUsage,
+    uint32_t          width,
+    uint32_t          height,
+    uint32_t          depth,
+    VkFormat          format,
+    uint32_t          numMipLevels,
+    uint32_t          numArrayLayers,
+    VkImageLayout     initialLayout,
+    VmaMemoryUsage    memoryUsage,
+    VulkanImage*      pImage)
+{
+    if (IsNull(pImage)) {
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
+    VkImageCreateInfo vkci = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+    vkci.imageType         = imageType;
+    vkci.format            = format;
+    vkci.extent.width      = width;
+    vkci.extent.height     = height;
+    vkci.extent.depth      = depth;
+    vkci.mipLevels         = numMipLevels;
+    vkci.arrayLayers       = numArrayLayers;
+    vkci.usage             = imageUsage;
+    vkci.initialLayout     = initialLayout;
+    vkci.samples           = VK_SAMPLE_COUNT_1_BIT;
+
+    VmaAllocationCreateInfo allocCreateInfo = {};
+    allocCreateInfo.usage                   = memoryUsage;
+
+    VkResult vkres = vmaCreateImage(
+        pRenderer->Allocator,
+        &vkci,
+        &allocCreateInfo,
+        &pImage->Image,
+        &pImage->Allocation,
+        &pImage->AllocationInfo);
+
+    return vkres;
 }
 
 VkResult CreateTexture(
@@ -989,31 +1035,35 @@ VkResult CreateTexture(
         return VK_ERROR_UNKNOWN;
     }
 
-    uint32_t          mipLevels = static_cast<UINT>(mipOffsets.size());
-    VkImageCreateInfo vkci      = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
-    vkci.imageType              = VK_IMAGE_TYPE_2D;
-    vkci.format                 = format;
-    vkci.extent.width           = width;
-    vkci.extent.height          = height;
-    vkci.extent.depth           = 1;
-    vkci.mipLevels              = mipLevels;
-    vkci.arrayLayers            = 1;
-    vkci.usage                  = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-    vkci.initialLayout          = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    vkci.samples                = VK_SAMPLE_COUNT_1_BIT;
+    uint32_t mipLevels = CountU32(mipOffsets);
 
-    VmaAllocationCreateInfo allocCreateInfo = {};
-    allocCreateInfo.usage                   = VMA_MEMORY_USAGE_GPU_ONLY;
-
-    VkResult vkres = vmaCreateImage(
-        pRenderer->Allocator,
-        &vkci,
-        &allocCreateInfo,
-        &pImage->Image,
-        &pImage->Allocation,
-        &pImage->AllocationInfo);
-
+    VkResult vkres = CreateImage(
+        pRenderer,
+        VK_IMAGE_TYPE_2D,
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        width,
+        height,
+        1,
+        format,
+        mipLevels,
+        1,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VMA_MEMORY_USAGE_GPU_ONLY,
+        pImage);
     if (vkres != VK_SUCCESS) {
+        assert(false && "create image failed");
+        return vkres;
+    }
+
+    vkres = TransitionImageLayout(
+        pRenderer,
+        pImage->Image,
+        GREX_ALL_SUBRESOURCES,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        RESOURCE_STATE_UNKNOWN,
+        RESOURCE_STATE_TRANSFER_DST);
+    if (vkres != VK_SUCCESS) {
+        assert(false && "transition image layout failed");
         return vkres;
     }
 
@@ -1070,13 +1120,13 @@ VkResult CreateTexture(
                 VkImageAspectFlagBits aspectFlags     = VK_IMAGE_ASPECT_COLOR_BIT;
                 VkBufferImageCopy     srcRegion       = {};
                 srcRegion.bufferOffset                = mipOffset.offset;
-                srcRegion.bufferRowLength             = mipRowStride;
-                srcRegion.bufferImageHeight           = height;
+                srcRegion.bufferRowLength             = levelWidth;  // Pixels/texels *NOT* row stride
+                srcRegion.bufferImageHeight           = levelHeight; // Pixels/texels
                 srcRegion.imageSubresource.aspectMask = aspectFlags;
                 srcRegion.imageSubresource.layerCount = 1;
                 srcRegion.imageSubresource.mipLevel   = level;
-                srcRegion.imageExtent.width           = width;
-                srcRegion.imageExtent.height          = height;
+                srcRegion.imageExtent.width           = levelWidth;
+                srcRegion.imageExtent.height          = levelHeight;
                 srcRegion.imageExtent.depth           = 1;
 
                 vkCmdCopyBufferToImage(
@@ -1086,35 +1136,6 @@ VkResult CreateTexture(
                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                     1,
                     &srcRegion);
-
-                VkImageMemoryBarrier2 barrier           = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
-                barrier.pNext                           = nullptr;
-                barrier.srcStageMask                    = 0;
-                barrier.srcAccessMask                   = 0;
-                barrier.dstStageMask                    = 0;
-                barrier.dstAccessMask                   = 0;
-                barrier.oldLayout                       = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-                barrier.newLayout                       = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-                barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-                barrier.image                           = pImage->Image;
-                barrier.subresourceRange.aspectMask     = aspectFlags;
-                barrier.subresourceRange.baseMipLevel   = level;
-                barrier.subresourceRange.levelCount     = 1;
-                barrier.subresourceRange.baseArrayLayer = 0;
-                barrier.subresourceRange.layerCount     = 1;
-
-                VkDependencyInfo dependencyInfo         = {VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
-                dependencyInfo.pNext                    = nullptr;
-                dependencyInfo.dependencyFlags          = 0;
-                dependencyInfo.memoryBarrierCount       = 0;
-                dependencyInfo.pMemoryBarriers          = nullptr;
-                dependencyInfo.bufferMemoryBarrierCount = 0;
-                dependencyInfo.pBufferMemoryBarriers    = nullptr;
-                dependencyInfo.imageMemoryBarrierCount  = 1;
-                dependencyInfo.pImageMemoryBarriers     = &barrier;
-
-                vkCmdPipelineBarrier2(cmdBuf.CommandBuffer, &dependencyInfo);
 
                 levelWidth >>= 1;
                 levelHeight >>= 1;
@@ -1169,98 +1190,13 @@ VkResult CreateTexture(
         pImage);
 }
 
-VkResult Create2DImage(
-    VulkanRenderer*   pRenderer,
-    VkImageType       imageType,
-    VkImageUsageFlags imageUsage,
-    uint32_t          width,
-    uint32_t          height,
-    uint32_t          depth,
-    VkFormat          format,
-    VkImageLayout     initialLayout,
-    VmaMemoryUsage    memoryUsage,
-    VulkanImage*      pImage)
-{
-    if (IsNull(pImage)) {
-        return VK_ERROR_INITIALIZATION_FAILED;
-    }
-
-    VkImageCreateInfo vkci = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
-    vkci.imageType         = imageType;
-    vkci.format            = format;
-    vkci.extent.width      = width;
-    vkci.extent.height     = height;
-    vkci.extent.depth      = depth;
-    vkci.mipLevels         = 1;
-    vkci.arrayLayers       = 1;
-    vkci.usage             = imageUsage;
-    vkci.initialLayout     = initialLayout;
-    vkci.samples           = VK_SAMPLE_COUNT_1_BIT;
-
-    VmaAllocationCreateInfo allocCreateInfo = {};
-    allocCreateInfo.usage                   = memoryUsage;
-
-    VkResult vkres = vmaCreateImage(
-        pRenderer->Allocator,
-        &vkci,
-        &allocCreateInfo,
-        &pImage->Image,
-        &pImage->Allocation,
-        &pImage->AllocationInfo);
-
-    return vkres;
-}
-
-VkResult Create2DImage(
-    VulkanRenderer*   pRenderer,
-    VkImageType       imageType,
-    VkImageUsageFlags imageUsage,
-    uint32_t          width,
-    uint32_t          height,
-    uint32_t          depth,
-    VkMipOffset       mipOffset,
-    VkFormat          format,
-    VkImageLayout     initialLayout,
-    VmaMemoryUsage    memoryUsage,
-    VulkanImage*      pImage)
-{
-    if (IsNull(pImage)) {
-        return VK_ERROR_INITIALIZATION_FAILED;
-    }
-
-    VkImageCreateInfo vkci = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
-    vkci.imageType         = imageType;
-    vkci.format            = format;
-    vkci.extent.width      = width;
-    vkci.extent.height     = height;
-    vkci.extent.depth      = depth;
-    vkci.mipLevels         = 1;
-    vkci.arrayLayers       = 1;
-    vkci.usage             = imageUsage;
-    vkci.initialLayout     = initialLayout;
-    vkci.samples           = VK_SAMPLE_COUNT_1_BIT;
-
-    VmaAllocationCreateInfo allocCreateInfo = {};
-    allocCreateInfo.usage                   = memoryUsage;
-
-    VkResult vkres = vmaCreateImage(
-        pRenderer->Allocator,
-        &vkci,
-        &allocCreateInfo,
-        &pImage->Image,
-        &pImage->Allocation,
-        &pImage->AllocationInfo);
-
-    return vkres;
-}
-
 VkResult CreateDSV(
     VulkanRenderer* pRenderer,
     uint32_t        width,
     uint32_t        height,
     VulkanImage*    pImage)
 {
-    return Create2DImage(
+    return CreateImage(
         pRenderer,
         VK_IMAGE_TYPE_2D,
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
@@ -1268,6 +1204,8 @@ VkResult CreateDSV(
         height,
         1,
         GREX_DEFAULT_DSV_FORMAT,
+        1,
+        1,
         VK_IMAGE_LAYOUT_UNDEFINED,
         VMA_MEMORY_USAGE_GPU_ONLY,
         pImage);
@@ -1779,7 +1717,7 @@ HRESULT CompileHLSL(
     const char* pBuffer    = static_cast<const char*>(shaderBinary->GetBufferPointer());
     size_t      bufferSize = static_cast<size_t>(shaderBinary->GetBufferSize());
     size_t      wordCount  = bufferSize / 4;
-    
+
     pSPIRV->resize(wordCount);
     memcpy(pSPIRV->data(), pBuffer, bufferSize);
 

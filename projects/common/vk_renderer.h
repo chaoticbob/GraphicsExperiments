@@ -178,12 +178,27 @@ VkResult CreateBuffer(
     VkDeviceSize       minAlignment, // Use 0 for no alignment
     VulkanBuffer*      pBuffer);
 
+/*
 VkResult CreateUAVBuffer(
     VulkanRenderer*    pRenderer,
     size_t             size,
-    VkBufferUsageFlags usageFlags,
     VkDeviceSize       minAlignment, // Use 0 for no alignment
     VulkanBuffer*      pBuffer);
+*/
+
+VkResult CreateImage(
+    VulkanRenderer*   pRenderer,
+    VkImageType       imageType,
+    VkImageUsageFlags imageUsage,
+    uint32_t          width,
+    uint32_t          height,
+    uint32_t          depth,
+    VkFormat          format,
+    uint32_t          numMipLevels,
+    uint32_t          numArrayLayers,
+    VkImageLayout     initialLayout,
+    VmaMemoryUsage    memoryUsage,
+    VulkanImage*      pImage);
 
 VkResult CreateTexture(
     VulkanRenderer*                 pRenderer,
@@ -203,18 +218,6 @@ VkResult CreateTexture(
     uint64_t        srcSizeBytes,
     const void*     pSrcData,
     VulkanImage*    pImage);
-
-VkResult Create2DImage(
-    VulkanRenderer*   pRenderer,
-    VkImageType       imageType,
-    VkImageUsageFlags imageUsage,
-    uint32_t          width,
-    uint32_t          height,
-    uint32_t          depth,
-    VkFormat          format,
-    VkImageLayout     initialLayout,
-    VmaMemoryUsage    memoryUsage,
-    VulkanImage*      pImage);
 
 VkResult CreateDSV(
     VulkanRenderer* pRenderer,
