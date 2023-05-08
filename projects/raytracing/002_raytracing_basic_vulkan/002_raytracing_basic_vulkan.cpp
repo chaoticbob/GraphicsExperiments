@@ -1111,7 +1111,7 @@ void CreateTLAS(VulkanRenderer* pRenderer, VkAccelerationStructureKHR blas, Vulk
         VkAccelerationStructureGeometryKHR geometry    = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
         geometry.flags                                 = VK_GEOMETRY_OPAQUE_BIT_KHR;
         geometry.geometryType                          = VK_GEOMETRY_TYPE_INSTANCES_KHR;
-        geometry.geometry.triangles.sType              = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+        geometry.geometry.instances.sType              = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
         geometry.geometry.instances.arrayOfPointers    = VK_FALSE;
         geometry.geometry.instances.data.deviceAddress = GetDeviceAddress(pRenderer, &instanceBuffer);
 

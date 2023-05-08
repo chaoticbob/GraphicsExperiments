@@ -132,17 +132,10 @@ void CreateRayTracingPipeline(
     VkShaderModule   rayTraceModule,
     VkPipelineLayout pipelineLayout,
     VkPipeline*      pPipeline);
-/*void CreateRayTracingPipeline(
-    VulkanRenderer*  pRenderer,
-    VkPipelineLayout pipelineLayout,
-    size_t           shadeBinarySize,
-    const void*      pShaderBinary,
-    VkPipeline*      pPipeline);
 void CreateShaderBindingTables(
     VulkanRenderer*                                  pRenderer,
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR& rayTracingProperties,
     VkPipeline                                       pipeline,
-    const VulkanBuffer*                              pSphereBuffer,
     VulkanBuffer*                                    pRayGenSBT,
     VulkanBuffer*                                    pMissSBT,
     VulkanBuffer*                                    pHitGroupSBT);
@@ -154,26 +147,27 @@ void CreateGeometries(
     Geometry&       outTeapotGeometry,
     Geometry&       outBoxGeometry);
 void CreateBLASes(
-    VulkanRenderer*             pRenderer,
-    const Geometry&             sphereGeometry,
-    const Geometry&             knobGeometry,
-    const Geometry&             monkeyGeometry,
-    const Geometry&             teapotGeometry,
-    const Geometry&             boxGeometry,
-    VkAccelerationStructureKHR* pSphereBLAS,
-    VkAccelerationStructureKHR* pKnobBLAS,
-    VkAccelerationStructureKHR* pMonkeyBLAS,
-    VkAccelerationStructureKHR* pTeapotBLAS,
-    VkAccelerationStructureKHR* pBoxBLAS);
+    VulkanRenderer*    pRenderer,
+    const Geometry&    sphereGeometry,
+    const Geometry&    knobGeometry,
+    const Geometry&    monkeyGeometry,
+    const Geometry&    teapotGeometry,
+    const Geometry&    boxGeometry,
+    VulkanAccelStruct* pSphereBLAS,
+    VulkanAccelStruct* pKnobBLAS,
+    VulkanAccelStruct* pMonkeyBLAS,
+    VulkanAccelStruct* pTeapotBLAS,
+    VulkanAccelStruct* pBoxBLAS);
 void CreateTLAS(
     VulkanRenderer*                  pRenderer,
-    VkAccelerationStructureKHR       sphereBLAS,
-    VkAccelerationStructureKHR       knobBLAS,
-    VkAccelerationStructureKHR       monkeyBLAS,
-    VkAccelerationStructureKHR       teapotBLAS,
-    VkAccelerationStructureKHR       boxBLAS,
-    VkAccelerationStructureKHR*      pTLAS,
+    const VulkanAccelStruct&         sphereBLAS,
+    const VulkanAccelStruct&         knobBLAS,
+    const VulkanAccelStruct&         monkeyBLAS,
+    const VulkanAccelStruct&         teapotBLAS,
+    const VulkanAccelStruct&         boxBLAS,
+    VulkanAccelStruct*               pTLAS,
     std::vector<MaterialParameters>& outMaterialParams);
+/*
 void CreateOutputTexture(VulkanRenderer* pRenderer, ID3D12Resource** ppBuffer);
 void CreateAccumTexture(VulkanRenderer* pRenderer, ID3D12Resource** ppBuffer);
 void CreateIBLTextures(
@@ -223,6 +217,16 @@ int main(int argc, char** argv)
 
     if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRayTracing)) {
         return EXIT_FAILURE;
+    }
+
+    // *************************************************************************
+    // Get ray tracing properties
+    // *************************************************************************
+    VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingProperties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR};
+    {
+        VkPhysicalDeviceProperties2 properties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+        properties.pNext                       = &rayTracingProperties;
+        vkGetPhysicalDeviceProperties2(renderer->PhysicalDevice, &properties);
     }
 
     // *************************************************************************
@@ -301,41 +305,27 @@ int main(int argc, char** argv)
         pipelineLayout,
         &pipeline);
 
+    // *************************************************************************
+    // Shader binding tables
+    //
+    // This assumes that there are 3 shader groups in the pipeline:
+    //    1) Ray gen
+    //    2) Miss
+    //    3) Hitgroup
+    //
+    // *************************************************************************
+    VulkanBuffer rgenSBT = {};
+    VulkanBuffer missSBT = {};
+    VulkanBuffer hitgSBT = {};
+    CreateShaderBindingTables(
+        renderer.get(),
+        rayTracingProperties,
+        pipeline,
+        &rgenSBT,
+        &missSBT,
+        &hitgSBT);
+
     /*
-        // *************************************************************************
-        // Global root signature
-        //
-        // This is a root signature that is shared across all raytracing shaders
-        // invoked during a DispatchRays() call.
-        //
-        // *************************************************************************
-        ComPtr<ID3D12RootSignature> globalRootSig;
-        CreateGlobalRootSig(renderer.get(), &globalRootSig);
-
-        // *************************************************************************
-        // Ray tracing pipeline state object
-        // *************************************************************************
-        ComPtr<ID3D12StateObject> stateObject;
-        CreateRayTracingStateObject(
-            renderer.get(),
-            globalRootSig.Get(),
-            rayTraceSpv.size(),
-            rayTraceSpv.data(),
-            &stateObject);
-
-        // *************************************************************************
-        // Shader record tables
-        // *************************************************************************
-        ComPtr<ID3D12Resource> rgenSRT;
-        ComPtr<ID3D12Resource> missSRT;
-        ComPtr<ID3D12Resource> hitgSRT;
-        CreateShaderRecordTables(
-            renderer.get(),
-            stateObject.Get(),
-            &rgenSRT,
-            &missSRT,
-            &hitgSRT);
-
         // *************************************************************************
         // Clear ray gen pipeline
         // *************************************************************************
@@ -382,327 +372,363 @@ int main(int argc, char** argv)
             psoDesc.CS                                = {clearRayGenDxil.data(), clearRayGenDxil.size()};
             CHECK_CALL(renderer->Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&clearRayGenPSO)));
         }
+    */
 
-        // *************************************************************************
-        // Create geometry
-        // *************************************************************************
-        Geometry sphereGeometry;
-        Geometry knobGeometry;
-        Geometry monkeyGeometry;
-        Geometry teapotGeometry;
-        Geometry boxGeometry;
-        CreateGeometries(
-            renderer.get(),
-            sphereGeometry,
-            knobGeometry,
-            monkeyGeometry,
-            teapotGeometry,
-            boxGeometry);
+    // *************************************************************************
+    // Create geometry
+    // *************************************************************************
+    Geometry sphereGeometry = {};
+    Geometry knobGeometry   = {};
+    Geometry monkeyGeometry = {};
+    Geometry teapotGeometry = {};
+    Geometry boxGeometry    = {};
+    CreateGeometries(
+        renderer.get(),
+        sphereGeometry,
+        knobGeometry,
+        monkeyGeometry,
+        teapotGeometry,
+        boxGeometry);
 
-        // *************************************************************************
-        // Bottom level acceleration structure
-        // *************************************************************************
-        VulkanBuffer sphereBLAS;
-        VulkanBuffer knobBLAS;
-        VulkanBuffer monkeyBLAS;
-        VulkanBuffer teapotBLAS;
-        VulkanBuffer boxBLAS;
-        CreateBLASes(
-            renderer.get(),
-            sphereGeometry,
-            knobGeometry,
-            monkeyGeometry,
-            teapotGeometry,
-            boxGeometry,
-            &sphereBLAS,
-            &knobBLAS,
-            &monkeyBLAS,
-            &teapotBLAS,
-            &boxBLAS);
+    // *************************************************************************
+    // Bottom level acceleration structure
+    // *************************************************************************
+    VulkanAccelStruct sphereBLAS = {};
+    VulkanAccelStruct knobBLAS   = {};
+    VulkanAccelStruct monkeyBLAS = {};
+    VulkanAccelStruct teapotBLAS = {};
+    VulkanAccelStruct boxBLAS    = {};
+    CreateBLASes(
+        renderer.get(),
+        sphereGeometry,
+        knobGeometry,
+        monkeyGeometry,
+        teapotGeometry,
+        boxGeometry,
+        &sphereBLAS,
+        &knobBLAS,
+        &monkeyBLAS,
+        &teapotBLAS,
+        &boxBLAS);
 
-        // *************************************************************************
-        // Top level acceleration structure
-        // *************************************************************************
-        ComPtr<ID3D12Resource>          tlasBuffer;
-        std::vector<MaterialParameters> materialParams;
-        CreateTLAS(
-            renderer.get(),
-            sphereBLAS.Get(),
-            knobBLAS.Get(),
-            monkeyBLAS.Get(),
-            teapotBLAS.Get(),
-            boxBLAS.Get(),
-            &tlasBuffer,
-            materialParams);
+    // *************************************************************************
+    // Top level acceleration structure
+    // *************************************************************************
+    VulkanAccelStruct               tlasBuffer;
+    std::vector<MaterialParameters> materialParams;
+    CreateTLAS(
+        renderer.get(),
+        sphereBLAS,
+        knobBLAS,
+        monkeyBLAS,
+        teapotBLAS,
+        boxBLAS,
+        &tlasBuffer,
+        materialParams);
 
-        // *************************************************************************
-        // Output and accumulation texture
-        // *************************************************************************
-        ComPtr<ID3D12Resource> outputTexture;
-        ComPtr<ID3D12Resource> accumTexture;
-        CreateOutputTexture(renderer.get(), &outputTexture);
-        CreateAccumTexture(renderer.get(), &accumTexture);
+    /*
+    // *************************************************************************
+    // Output and accumulation texture
+    // *************************************************************************
+    ComPtr<ID3D12Resource> outputTexture;
+    ComPtr<ID3D12Resource> accumTexture;
+    CreateOutputTexture(renderer.get(), &outputTexture);
+    CreateAccumTexture(renderer.get(), &accumTexture);
 
-        // *************************************************************************
-        // Material params buffer
-        // *************************************************************************
-        ComPtr<ID3D12Resource> materialParamsBuffer;
-        CreateBuffer(
-            renderer.get(),
-            SizeInBytes(materialParams),
-            DataPtr(materialParams),
-            &materialParamsBuffer);
+    // *************************************************************************
+    // Material params buffer
+    // *************************************************************************
+    ComPtr<ID3D12Resource> materialParamsBuffer;
+    CreateBuffer(
+        renderer.get(),
+        SizeInBytes(materialParams),
+        DataPtr(materialParams),
+        &materialParamsBuffer);
 
-        // *************************************************************************
-        // Scene params constant buffer
-        // *************************************************************************
-        ComPtr<ID3D12Resource> sceneParamsBuffer;
-        CHECK_CALL(CreateBuffer(
-            renderer.get(),
-            Align<size_t>(sizeof(SceneParameters), 256),
-            nullptr,
-            &sceneParamsBuffer));
+    // *************************************************************************
+    // Scene params constant buffer
+    // *************************************************************************
+    ComPtr<ID3D12Resource> sceneParamsBuffer;
+    CHECK_CALL(CreateBuffer(
+        renderer.get(),
+        Align<size_t>(sizeof(SceneParameters), 256),
+        nullptr,
+        &sceneParamsBuffer));
 
-        // *************************************************************************
-        // Ray gen samples buffer
-        // *************************************************************************
-        ComPtr<ID3D12Resource> rayGenSamplesBuffer;
-        CHECK_CALL(CreateUAVBuffer(
-            renderer.get(),
-            (gWindowWidth * gWindowHeight * sizeof(uint32_t)),
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            &rayGenSamplesBuffer));
+    // *************************************************************************
+    // Ray gen samples buffer
+    // *************************************************************************
+    ComPtr<ID3D12Resource> rayGenSamplesBuffer;
+    CHECK_CALL(CreateUAVBuffer(
+        renderer.get(),
+        (gWindowWidth * gWindowHeight * sizeof(uint32_t)),
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        &rayGenSamplesBuffer));
 
-        // *************************************************************************
-        // Descriptor heaps
-        // *************************************************************************
-        std::vector<IBLTextures> iblTextures = {};
-        CreateIBLTextures(
-            renderer.get(),
-            iblTextures);
+    // *************************************************************************
+    // Descriptor heaps
+    // *************************************************************************
+    std::vector<IBLTextures> iblTextures = {};
+    CreateIBLTextures(
+        renderer.get(),
+        iblTextures);
 
-        // *************************************************************************
-        // Descriptor heaps
-        // *************************************************************************
-        ComPtr<ID3D12DescriptorHeap> descriptorHeap;
-        CreateDescriptorHeap(renderer.get(), &descriptorHeap);
+    // *************************************************************************
+    // Descriptor heaps
+    // *************************************************************************
+    ComPtr<ID3D12DescriptorHeap> descriptorHeap;
+    CreateDescriptorHeap(renderer.get(), &descriptorHeap);
 
-        // Write descriptor to descriptor heap
-        WriteDescriptors(
-            renderer.get(),
-            descriptorHeap.Get(),
-            outputTexture.Get(),
-            accumTexture.Get(),
-            rayGenSamplesBuffer.Get(),
-            sphereGeometry,
-            knobGeometry,
-            monkeyGeometry,
-            teapotGeometry,
-            boxGeometry,
-            iblTextures);
+    // Write descriptor to descriptor heap
+    WriteDescriptors(
+        renderer.get(),
+        descriptorHeap.Get(),
+        outputTexture.Get(),
+        accumTexture.Get(),
+        rayGenSamplesBuffer.Get(),
+        sphereGeometry,
+        knobGeometry,
+        monkeyGeometry,
+        teapotGeometry,
+        boxGeometry,
+        iblTextures);
 
-        // *************************************************************************
-        // Window
-        // *************************************************************************
-        auto window = Window::Create(gWindowWidth, gWindowHeight, "033_raytracing_path_trace_pbr_d3d12");
-        if (!window) {
-            assert(false && "Window::Create failed");
-            return EXIT_FAILURE;
-        }
-        window->AddMouseMoveCallbacks(MouseMove);
+    // *************************************************************************
+    // Window
+    // *************************************************************************
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "033_raytracing_path_trace_pbr_d3d12");
+    if (!window) {
+        assert(false && "Window::Create failed");
+        return EXIT_FAILURE;
+    }
+    window->AddMouseMoveCallbacks(MouseMove);
 
-        // *************************************************************************
-        // Swapchain
-        // *************************************************************************
-        if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight())) {
-            assert(false && "InitSwapchain failed");
-            return EXIT_FAILURE;
-        }
+    // *************************************************************************
+    // Swapchain
+    // *************************************************************************
+    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight())) {
+        assert(false && "InitSwapchain failed");
+        return EXIT_FAILURE;
+    }
 
-        // *************************************************************************
-        // Imgui
-        // *************************************************************************
-        if (!window->InitImGuiForD3D12(renderer.get())) {
-            assert(false && "Window::InitImGuiForD3D12 failed");
-            return EXIT_FAILURE;
-        }
+    // *************************************************************************
+    // Imgui
+    // *************************************************************************
+    if (!window->InitImGuiForD3D12(renderer.get())) {
+        assert(false && "Window::InitImGuiForD3D12 failed");
+        return EXIT_FAILURE;
+    }
 
-        // *************************************************************************
-        // Command allocator
-        // *************************************************************************
-        ComPtr<ID3D12CommandAllocator> commandAllocator;
-        {
-            CHECK_CALL(renderer->Device->CreateCommandAllocator(
-                D3D12_COMMAND_LIST_TYPE_DIRECT,    // type
-                IID_PPV_ARGS(&commandAllocator))); // ppCommandList
-        }
+    // *************************************************************************
+    // Command allocator
+    // *************************************************************************
+    ComPtr<ID3D12CommandAllocator> commandAllocator;
+    {
+        CHECK_CALL(renderer->Device->CreateCommandAllocator(
+            D3D12_COMMAND_LIST_TYPE_DIRECT,    // type
+            IID_PPV_ARGS(&commandAllocator))); // ppCommandList
+    }
 
-        // *************************************************************************
-        // Command list
-        // *************************************************************************
-        ComPtr<ID3D12GraphicsCommandList5> commandList;
-        {
-            CHECK_CALL(renderer->Device->CreateCommandList1(
-                0,                              // nodeMask
-                D3D12_COMMAND_LIST_TYPE_DIRECT, // type
-                D3D12_COMMAND_LIST_FLAG_NONE,   // flags
-                IID_PPV_ARGS(&commandList)));   // ppCommandList
-        }
+    // *************************************************************************
+    // Command list
+    // *************************************************************************
+    ComPtr<ID3D12GraphicsCommandList5> commandList;
+    {
+        CHECK_CALL(renderer->Device->CreateCommandList1(
+            0,                              // nodeMask
+            D3D12_COMMAND_LIST_TYPE_DIRECT, // type
+            D3D12_COMMAND_LIST_FLAG_NONE,   // flags
+            IID_PPV_ARGS(&commandList)));   // ppCommandList
+    }
 
-        // *************************************************************************
-        // Persistent map scene parameters
-        // *************************************************************************
-        SceneParameters* pSceneParams = nullptr;
-        CHECK_CALL(sceneParamsBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pSceneParams)));
+    // *************************************************************************
+    // Persistent map scene parameters
+    // *************************************************************************
+    SceneParameters* pSceneParams = nullptr;
+    CHECK_CALL(sceneParamsBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pSceneParams)));
 
-        // *************************************************************************
-        // Misc vars
-        // *************************************************************************
-        uint32_t sampleCount = 0;
+    // *************************************************************************
+    // Misc vars
+    // *************************************************************************
+    uint32_t sampleCount = 0;
 
-        // *************************************************************************
-        // Main loop
-        // *************************************************************************
-        while (window->PollEvents()) {
-            window->ImGuiNewFrameD3D12();
+    // *************************************************************************
+    // Main loop
+    // *************************************************************************
+    while (window->PollEvents()) {
+        window->ImGuiNewFrameD3D12();
 
-            if (ImGui::Begin("Scene")) {
-                ImGui::SliderInt("Max Samples Per Pixel", reinterpret_cast<int*>(&gMaxSamples), 1, 16384);
+        if (ImGui::Begin("Scene")) {
+            ImGui::SliderInt("Max Samples Per Pixel", reinterpret_cast<int*>(&gMaxSamples), 1, 16384);
 
-                static const char* currentIBLName = gIBLNames[0].c_str();
-                if (ImGui::BeginCombo("IBL", currentIBLName)) {
-                    for (size_t i = 0; i < gIBLNames.size(); ++i) {
-                        bool isSelected = (currentIBLName == gIBLNames[i]);
-                        if (ImGui::Selectable(gIBLNames[i].c_str(), isSelected)) {
-                            currentIBLName = gIBLNames[i].c_str();
-                            gIBLIndex      = static_cast<uint32_t>(i);
-                        }
-                        if (isSelected) {
-                            ImGui::SetItemDefaultFocus();
-                        }
+            static const char* currentIBLName = gIBLNames[0].c_str();
+            if (ImGui::BeginCombo("IBL", currentIBLName)) {
+                for (size_t i = 0; i < gIBLNames.size(); ++i) {
+                    bool isSelected = (currentIBLName == gIBLNames[i]);
+                    if (ImGui::Selectable(gIBLNames[i].c_str(), isSelected)) {
+                        currentIBLName = gIBLNames[i].c_str();
+                        gIBLIndex      = static_cast<uint32_t>(i);
                     }
-                    ImGui::EndCombo();
+                    if (isSelected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
                 }
-
-                ImGui::Separator();
-
-                float progress = sampleCount / static_cast<float>(gMaxSamples);
-                char  buf[256] = {};
-                sprintf(buf, "%d/%d Samples", sampleCount, gMaxSamples);
-                ImGui::ProgressBar(progress, ImVec2(-1, 0), buf);
+                ImGui::EndCombo();
             }
-            ImGui::End();
 
-            // ---------------------------------------------------------------------
+            ImGui::Separator();
+
+            float progress = sampleCount / static_cast<float>(gMaxSamples);
+            char  buf[256] = {};
+            sprintf(buf, "%d/%d Samples", sampleCount, gMaxSamples);
+            ImGui::ProgressBar(progress, ImVec2(-1, 0), buf);
+        }
+        ImGui::End();
+
+        // ---------------------------------------------------------------------
+
+        CHECK_CALL(commandAllocator->Reset());
+        CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
+
+        if (gCurrentMaxSamples != gMaxSamples) {
+            gCurrentMaxSamples  = gMaxSamples;
+            gResetRayGenSamples = true;
+        }
+
+        if (gCurrentIBLIndex != gIBLIndex) {
+            gCurrentIBLIndex    = gIBLIndex;
+            gResetRayGenSamples = true;
+        }
+
+        // Smooth out the rotation on Y
+        gAngle += (gTargetAngle - gAngle) * 0.1f;
+        // Keep resetting until the angle is somewhat stable
+        if (fabs(gTargetAngle - gAngle) > 0.1f) {
+            gResetRayGenSamples = true;
+        }
+
+        // Camera matrices
+        mat4 transformEyeMat     = glm::rotate(glm::radians(-gAngle), vec3(0, 1, 0));
+        vec3 startingEyePosition = vec3(0, 4.0f, 8.5f);
+        vec3 eyePosition         = transformEyeMat * vec4(startingEyePosition, 1);
+        mat4 viewMat             = glm::lookAt(eyePosition, vec3(0, 3, 0), vec3(0, 1, 0));
+        mat4 projMat             = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+
+        // Set constant buffer values
+        pSceneParams->ViewInverseMatrix       = glm::inverse(viewMat);
+        pSceneParams->ProjectionInverseMatrix = glm::inverse(projMat);
+        pSceneParams->IBLIndex                = gCurrentIBLIndex;
+        pSceneParams->EyePosition             = eyePosition;
+        pSceneParams->MaxSamples              = gCurrentMaxSamples;
+
+        // Reset ray gen samples
+        if (gResetRayGenSamples) {
+            sampleCount = 0;
+
+            commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
+
+            commandList->SetComputeRootSignature(clearRayGenRootSig.Get());
+            commandList->SetPipelineState(clearRayGenPSO.Get());
+
+            D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
+            descriptorTable.ptr += (kOutputResourcesOffset + 1) * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            commandList->SetComputeRootDescriptorTable(0, descriptorTable);
+
+            commandList->Dispatch(gWindowWidth / 8, gWindowHeight / 8, 1);
+            gResetRayGenSamples = false;
+        }
+
+        // Trace rays
+        {
+            commandList->SetComputeRootSignature(globalRootSig.Get());
+            commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
+
+            D3D12_GPU_DESCRIPTOR_HANDLE descriptorHeapStart = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
+            UINT                        descriptorIncSize   = renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+            // Acceleration structure (t0)
+            commandList->SetComputeRootShaderResourceView(0, tlasBuffer->GetGPUVirtualAddress());
+            // Output texture (u1)
+            // Accumulation texture (u2)
+            // Ray generation samples (u3)
+            D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = {descriptorHeapStart.ptr + kOutputResourcesOffset * descriptorIncSize};
+            commandList->SetComputeRootDescriptorTable(1, descriptorHeap->GetGPUDescriptorHandleForHeapStart());
+            // Scene params (b5)
+            commandList->SetComputeRootConstantBufferView(2, sceneParamsBuffer->GetGPUVirtualAddress());
+            //  Index buffer (t20)
+            //  Position buffer (t45)
+            //  Normal buffer (t70)
+            descriptorTable = {descriptorHeapStart.ptr + kGeoBuffersOffset * descriptorIncSize};
+            commandList->SetComputeRootDescriptorTable(3, descriptorTable);
+            // Environment map (t100)
+            descriptorTable = {descriptorHeapStart.ptr + kIBLTextureOffset * descriptorIncSize};
+            commandList->SetComputeRootDescriptorTable(4, descriptorTable);
+            // Material params (t9)
+            commandList->SetComputeRootShaderResourceView(5, materialParamsBuffer->GetGPUVirtualAddress());
+
+            commandList->SetPipelineState1(stateObject.Get());
+
+            D3D12_DISPATCH_RAYS_DESC dispatchDesc               = {};
+            dispatchDesc.RayGenerationShaderRecord.StartAddress = rgenSRT->GetGPUVirtualAddress();
+            dispatchDesc.RayGenerationShaderRecord.SizeInBytes  = rgenSRT->GetDesc().Width;
+            dispatchDesc.MissShaderTable.StartAddress           = missSRT->GetGPUVirtualAddress();
+            dispatchDesc.MissShaderTable.SizeInBytes            = missSRT->GetDesc().Width;
+            dispatchDesc.MissShaderTable.StrideInBytes          = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
+            dispatchDesc.HitGroupTable.StartAddress             = hitgSRT->GetGPUVirtualAddress();
+            dispatchDesc.HitGroupTable.SizeInBytes              = hitgSRT->GetDesc().Width;
+            dispatchDesc.HitGroupTable.StrideInBytes            = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
+            dispatchDesc.Width                                  = gWindowWidth;
+            dispatchDesc.Height                                 = gWindowHeight;
+            dispatchDesc.Depth                                  = 1;
+
+            commandList->DispatchRays(&dispatchDesc);
+
+            commandList->Close();
+
+            ID3D12CommandList* pList = commandList.Get();
+            renderer->Queue->ExecuteCommandLists(1, &pList);
+
+            if (!WaitForGpu(renderer.get())) {
+                assert(false && "WaitForGpu failed");
+                break;
+            }
+        }
+
+        // Copy output texture to swapchain buffer
+        {
+            UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
+
+            ComPtr<ID3D12Resource> swapchainBuffer;
+            CHECK_CALL(renderer->Swapchain->GetBuffer(bufferIndex, IID_PPV_ARGS(&swapchainBuffer)));
 
             CHECK_CALL(commandAllocator->Reset());
             CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
 
-            if (gCurrentMaxSamples != gMaxSamples) {
-                gCurrentMaxSamples  = gMaxSamples;
-                gResetRayGenSamples = true;
+            D3D12_RESOURCE_BARRIER preCopyBarriers[2];
+            preCopyBarriers[0] = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
+            preCopyBarriers[1] = CreateTransition(outputTexture.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+
+            commandList->ResourceBarrier(ARRAYSIZE(preCopyBarriers), preCopyBarriers);
+
+            commandList->CopyResource(swapchainBuffer.Get(), outputTexture.Get());
+
+            D3D12_RESOURCE_BARRIER postCopyBarriers[2];
+            postCopyBarriers[0] = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
+            postCopyBarriers[1] = CreateTransition(outputTexture.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+            commandList->ResourceBarrier(ARRAYSIZE(postCopyBarriers), postCopyBarriers);
+
+            commandList->Close();
+
+            ID3D12CommandList* pList = commandList.Get();
+            renderer->Queue->ExecuteCommandLists(1, &pList);
+
+            if (!WaitForGpu(renderer.get())) {
+                assert(false && "WaitForGpu failed");
+                break;
             }
 
-            if (gCurrentIBLIndex != gIBLIndex) {
-                gCurrentIBLIndex    = gIBLIndex;
-                gResetRayGenSamples = true;
-            }
-
-            // Smooth out the rotation on Y
-            gAngle += (gTargetAngle - gAngle) * 0.1f;
-            // Keep resetting until the angle is somewhat stable
-            if (fabs(gTargetAngle - gAngle) > 0.1f) {
-                gResetRayGenSamples = true;
-            }
-
-            // Camera matrices
-            mat4 transformEyeMat     = glm::rotate(glm::radians(-gAngle), vec3(0, 1, 0));
-            vec3 startingEyePosition = vec3(0, 4.0f, 8.5f);
-            vec3 eyePosition         = transformEyeMat * vec4(startingEyePosition, 1);
-            mat4 viewMat             = glm::lookAt(eyePosition, vec3(0, 3, 0), vec3(0, 1, 0));
-            mat4 projMat             = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
-
-            // Set constant buffer values
-            pSceneParams->ViewInverseMatrix       = glm::inverse(viewMat);
-            pSceneParams->ProjectionInverseMatrix = glm::inverse(projMat);
-            pSceneParams->IBLIndex                = gCurrentIBLIndex;
-            pSceneParams->EyePosition             = eyePosition;
-            pSceneParams->MaxSamples              = gCurrentMaxSamples;
-
-            // Reset ray gen samples
-            if (gResetRayGenSamples) {
-                sampleCount = 0;
-
-                commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
-
-                commandList->SetComputeRootSignature(clearRayGenRootSig.Get());
-                commandList->SetPipelineState(clearRayGenPSO.Get());
-
-                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
-                descriptorTable.ptr += (kOutputResourcesOffset + 1) * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-                commandList->SetComputeRootDescriptorTable(0, descriptorTable);
-
-                commandList->Dispatch(gWindowWidth / 8, gWindowHeight / 8, 1);
-                gResetRayGenSamples = false;
-            }
-
-            // Trace rays
-            {
-                commandList->SetComputeRootSignature(globalRootSig.Get());
-                commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
-
-                D3D12_GPU_DESCRIPTOR_HANDLE descriptorHeapStart = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
-                UINT                        descriptorIncSize   = renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-                // Acceleration structure (t0)
-                commandList->SetComputeRootShaderResourceView(0, tlasBuffer->GetGPUVirtualAddress());
-                // Output texture (u1)
-                // Accumulation texture (u2)
-                // Ray generation samples (u3)
-                D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = {descriptorHeapStart.ptr + kOutputResourcesOffset * descriptorIncSize};
-                commandList->SetComputeRootDescriptorTable(1, descriptorHeap->GetGPUDescriptorHandleForHeapStart());
-                // Scene params (b5)
-                commandList->SetComputeRootConstantBufferView(2, sceneParamsBuffer->GetGPUVirtualAddress());
-                //  Index buffer (t20)
-                //  Position buffer (t45)
-                //  Normal buffer (t70)
-                descriptorTable = {descriptorHeapStart.ptr + kGeoBuffersOffset * descriptorIncSize};
-                commandList->SetComputeRootDescriptorTable(3, descriptorTable);
-                // Environment map (t100)
-                descriptorTable = {descriptorHeapStart.ptr + kIBLTextureOffset * descriptorIncSize};
-                commandList->SetComputeRootDescriptorTable(4, descriptorTable);
-                // Material params (t9)
-                commandList->SetComputeRootShaderResourceView(5, materialParamsBuffer->GetGPUVirtualAddress());
-
-                commandList->SetPipelineState1(stateObject.Get());
-
-                D3D12_DISPATCH_RAYS_DESC dispatchDesc               = {};
-                dispatchDesc.RayGenerationShaderRecord.StartAddress = rgenSRT->GetGPUVirtualAddress();
-                dispatchDesc.RayGenerationShaderRecord.SizeInBytes  = rgenSRT->GetDesc().Width;
-                dispatchDesc.MissShaderTable.StartAddress           = missSRT->GetGPUVirtualAddress();
-                dispatchDesc.MissShaderTable.SizeInBytes            = missSRT->GetDesc().Width;
-                dispatchDesc.MissShaderTable.StrideInBytes          = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
-                dispatchDesc.HitGroupTable.StartAddress             = hitgSRT->GetGPUVirtualAddress();
-                dispatchDesc.HitGroupTable.SizeInBytes              = hitgSRT->GetDesc().Width;
-                dispatchDesc.HitGroupTable.StrideInBytes            = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
-                dispatchDesc.Width                                  = gWindowWidth;
-                dispatchDesc.Height                                 = gWindowHeight;
-                dispatchDesc.Depth                                  = 1;
-
-                commandList->DispatchRays(&dispatchDesc);
-
-                commandList->Close();
-
-                ID3D12CommandList* pList = commandList.Get();
-                renderer->Queue->ExecuteCommandLists(1, &pList);
-
-                if (!WaitForGpu(renderer.get())) {
-                    assert(false && "WaitForGpu failed");
-                    break;
-                }
-            }
-
-            // Copy output texture to swapchain buffer
+            // ImGui
             {
                 UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
 
@@ -712,19 +738,26 @@ int main(int argc, char** argv)
                 CHECK_CALL(commandAllocator->Reset());
                 CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
 
-                D3D12_RESOURCE_BARRIER preCopyBarriers[2];
-                preCopyBarriers[0] = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
-                preCopyBarriers[1] = CreateTransition(outputTexture.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+                D3D12_RESOURCE_BARRIER preRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+                commandList->ResourceBarrier(1, &preRenderBarrier);
+                {
+                    commandList->OMSetRenderTargets(
+                        1,
+                        &renderer->SwapchainRTVDescriptorHandles[bufferIndex],
+                        false,
+                        &renderer->SwapchainDSVDescriptorHandles[bufferIndex]);
 
-                commandList->ResourceBarrier(ARRAYSIZE(preCopyBarriers), preCopyBarriers);
+                    // Viewport and scissor
+                    D3D12_VIEWPORT viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
+                    commandList->RSSetViewports(1, &viewport);
+                    D3D12_RECT scissor = {0, 0, static_cast<long>(gWindowWidth), static_cast<long>(gWindowHeight)};
+                    commandList->RSSetScissorRects(1, &scissor);
 
-                commandList->CopyResource(swapchainBuffer.Get(), outputTexture.Get());
-
-                D3D12_RESOURCE_BARRIER postCopyBarriers[2];
-                postCopyBarriers[0] = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
-                postCopyBarriers[1] = CreateTransition(outputTexture.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-                commandList->ResourceBarrier(ARRAYSIZE(postCopyBarriers), postCopyBarriers);
+                    // Draw ImGui
+                    window->ImGuiRenderDrawData(renderer.get(), commandList.Get());
+                }
+                D3D12_RESOURCE_BARRIER postRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+                commandList->ResourceBarrier(1, &postRenderBarrier);
 
                 commandList->Close();
 
@@ -735,61 +768,20 @@ int main(int argc, char** argv)
                     assert(false && "WaitForGpu failed");
                     break;
                 }
-
-                // ImGui
-                {
-                    UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
-
-                    ComPtr<ID3D12Resource> swapchainBuffer;
-                    CHECK_CALL(renderer->Swapchain->GetBuffer(bufferIndex, IID_PPV_ARGS(&swapchainBuffer)));
-
-                    CHECK_CALL(commandAllocator->Reset());
-                    CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
-
-                    D3D12_RESOURCE_BARRIER preRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-                    commandList->ResourceBarrier(1, &preRenderBarrier);
-                    {
-                        commandList->OMSetRenderTargets(
-                            1,
-                            &renderer->SwapchainRTVDescriptorHandles[bufferIndex],
-                            false,
-                            &renderer->SwapchainDSVDescriptorHandles[bufferIndex]);
-
-                        // Viewport and scissor
-                        D3D12_VIEWPORT viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
-                        commandList->RSSetViewports(1, &viewport);
-                        D3D12_RECT scissor = {0, 0, static_cast<long>(gWindowWidth), static_cast<long>(gWindowHeight)};
-                        commandList->RSSetScissorRects(1, &scissor);
-
-                        // Draw ImGui
-                        window->ImGuiRenderDrawData(renderer.get(), commandList.Get());
-                    }
-                    D3D12_RESOURCE_BARRIER postRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-                    commandList->ResourceBarrier(1, &postRenderBarrier);
-
-                    commandList->Close();
-
-                    ID3D12CommandList* pList = commandList.Get();
-                    renderer->Queue->ExecuteCommandLists(1, &pList);
-
-                    if (!WaitForGpu(renderer.get())) {
-                        assert(false && "WaitForGpu failed");
-                        break;
-                    }
-                }
-            }
-
-            // Update sample count
-            if (sampleCount < gMaxSamples) {
-                ++sampleCount;
-            }
-
-            if (!SwapchainPresent(renderer.get())) {
-                assert(false && "SwapchainPresent failed");
-                break;
             }
         }
-    */
+
+        // Update sample count
+        if (sampleCount < gMaxSamples) {
+            ++sampleCount;
+        }
+
+        if (!SwapchainPresent(renderer.get())) {
+            assert(false && "SwapchainPresent failed");
+            break;
+        }
+    }
+*/
     return 0;
 }
 
@@ -1042,344 +1034,92 @@ void CreateRayTracingPipeline(
         pPipeline));       // pPipelines
 }
 
-/*
-void CreateGlobalRootSig(VulkanRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
+void CreateShaderBindingTables(
+    VulkanRenderer*                                  pRenderer,
+    VkPhysicalDeviceRayTracingPipelinePropertiesKHR& rayTracingProperties,
+    VkPipeline                                       pipeline,
+    VulkanBuffer*                                    pRayGenSBT,
+    VulkanBuffer*                                    pMissSBT,
+    VulkanBuffer*                                    pHitGroupSBT)
 {
-    // Output range
-    D3D12_DESCRIPTOR_RANGE rangeOutput            = {};
-    rangeOutput.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-    rangeOutput.NumDescriptors                    = 3;
-    rangeOutput.BaseShaderRegister                = 1;
-    rangeOutput.RegisterSpace                     = 0;
-    rangeOutput.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    // Hardcoded group count
+    const uint32_t groupCount = 3;
 
-    // Geometry buffers range
-    D3D12_DESCRIPTOR_RANGE rangeGeometryBuffers            = {};
-    rangeGeometryBuffers.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    rangeGeometryBuffers.NumDescriptors                    = 75;
-    rangeGeometryBuffers.BaseShaderRegister                = 20;
-    rangeGeometryBuffers.RegisterSpace                     = 0;
-    rangeGeometryBuffers.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-    // IBLrange
-    D3D12_DESCRIPTOR_RANGE rangeIBL            = {};
-    rangeIBL.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    rangeIBL.NumDescriptors                    = kMaxIBLs;
-    rangeIBL.BaseShaderRegister                = 100;
-    rangeIBL.RegisterSpace                     = 0;
-    rangeIBL.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-    D3D12_ROOT_PARAMETER rootParameters[6];
-    // Accleration structure (t0)
-    rootParameters[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[0].Descriptor.ShaderRegister = 0;
-    rootParameters[0].Descriptor.RegisterSpace  = 0;
-    rootParameters[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // Output texture (u1)
-    // Accumulation texture (u2)
-    // Ray generaiton sampling (u3)
-    rootParameters[1].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[1].DescriptorTable.pDescriptorRanges   = &rangeOutput;
-    rootParameters[1].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-    // Scene params (b5)
-    rootParameters[2].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
-    rootParameters[2].Descriptor.ShaderRegister = 5;
-    rootParameters[2].Descriptor.RegisterSpace  = 0;
-    rootParameters[2].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    //  Index buffers (t20)
-    //  Position buffers (t45)
-    //  Normal buffers (t70)
-    rootParameters[3].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[3].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[3].DescriptorTable.pDescriptorRanges   = &rangeGeometryBuffers;
-    rootParameters[3].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-    // Environment map (t100)
-    rootParameters[4].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[4].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[4].DescriptorTable.pDescriptorRanges   = &rangeIBL;
-    rootParameters[4].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-    // Material params (t9)
-    rootParameters[5].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[5].Descriptor.ShaderRegister = 9;
-    rootParameters[5].Descriptor.RegisterSpace  = 0;
-    rootParameters[5].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
-    // IBLMapSampler (s10)
-    staticSamplers[0].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSamplers[0].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[0].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[0].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[0].MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
-    staticSamplers[0].MaxAnisotropy    = 0;
-    staticSamplers[0].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    staticSamplers[0].MinLOD           = 0;
-    staticSamplers[0].MaxLOD           = D3D12_FLOAT32_MAX;
-    staticSamplers[0].ShaderRegister   = 10;
-    staticSamplers[0].RegisterSpace    = 0;
-    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-    D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-    rootSigDesc.NumParameters             = 6;
-    rootSigDesc.pParameters               = rootParameters;
-    rootSigDesc.NumStaticSamplers         = 1;
-    rootSigDesc.pStaticSamplers           = staticSamplers;
-
-    ComPtr<ID3DBlob> blob;
-    ComPtr<ID3DBlob> error;
-    HRESULT          hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error);
-    if (FAILED(hr)) {
-        std::string errorMsg = std::string(reinterpret_cast<const char*>(error->GetBufferPointer()), error->GetBufferSize());
-
-        std::stringstream ss;
-        ss << "\n"
-           << "D3D12SerializeRootSignature failed: " << errorMsg << "\n";
-        GREX_LOG_ERROR(ss.str().c_str());
-        assert(false);
-    }
-    CHECK_CALL(pRenderer->Device->CreateRootSignature(
-        0,                         // nodeMask
-        blob->GetBufferPointer(),  // pBloblWithRootSignature
-        blob->GetBufferSize(),     // blobLengthInBytes
-        IID_PPV_ARGS(ppRootSig))); // riid, ppvRootSignature
-}
-
-void CreateRayTracingStateObject(
-    VulkanRenderer*      pRenderer,
-    ID3D12RootSignature* pGlobalRootSig,
-    size_t               shadeBinarySize,
-    const void*          pShaderBinary,
-    ID3D12StateObject**  ppStateObject)
-{
-    enum
-    {
-        DXIL_LIBRARY_INDEX       = 0,
-        TRIANGLE_HIT_GROUP_INDEX = 1,
-        SHADER_CONFIG_INDEX      = 2,
-        GLOBAL_ROOT_SIG_INDEX    = 3,
-        PIPELINE_CONFIG_INDEX    = 4,
-        SUBOBJECT_COUNT,
-    };
+    // Handle sizes
+    uint32_t groupHandleSize        = rayTracingProperties.shaderGroupHandleSize;
+    uint32_t groupHandleAlignment   = rayTracingProperties.shaderGroupHandleAlignment;
+    uint32_t alignedGroupHandleSize = Align(groupHandleSize, groupHandleAlignment);
+    uint32_t totalGroupDataSize     = groupCount * groupHandleSize;
 
     //
-    // std::vector can't be used here because the association needs
-    // to refer to a subobject that's found in the subobject list.
+    // This is what the shader group handles look like
+    // in handlesData based on the pipeline. The offsets
+    // are in bytes - assuming handleSize is 32 bytes.
     //
-    D3D12_STATE_SUBOBJECT subobjects[SUBOBJECT_COUNT];
-
-    // ---------------------------------------------------------------------
-    // DXIL Library
+    //  +--------------+
+    //  |  RGEN        | offset = 0
+    //  +--------------+
+    //  |  MISS        | offset = 32
+    //  +--------------+
+    //  |  HITG        | offset = 64
+    //  +--------------+
     //
-    // This contains the shaders and their entrypoints for the state object.
-    // Since shaders are not considered a subobject, they need to be passed
-    // in via DXIL library subobjects.
+    std::vector<char> groupHandlesData(totalGroupDataSize);
+    CHECK_CALL(fn_vkGetRayTracingShaderGroupHandlesKHR(
+        pRenderer->Device,         // device
+        pipeline,                  // pipeline
+        0,                         // firstGroup
+        groupCount,                // groupCount
+        totalGroupDataSize,        // dataSize
+        groupHandlesData.data())); // pData)
+
+    // Usage flags for SBT buffer
+    VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
+
+    char* pShaderGroupHandleRGEN = groupHandlesData.data();
+    char* pShaderGroupHandleMISS = groupHandlesData.data() + groupHandleSize;
+    char* pShaderGroupHandleHITG = groupHandlesData.data() + 2 * groupHandleSize;
+
     //
-    // Define which shader exports to surface from the library.
-    // If no shader exports are defined for a DXIL library subobject, all
-    // shaders will be surfaced.
-    // In this sample, this could be omitted for convenience since the
-    // sample uses all shaders in the library.
+    // Create buffers for each shader group's SBT and copy the
+    // the shader group handles into each buffer.
     //
-    // ---------------------------------------------------------------------
-    D3D12_EXPORT_DESC rgenExport = {};
-    rgenExport.Name              = gRayGenShaderName;
-    rgenExport.ExportToRename    = nullptr;
-    rgenExport.Flags             = D3D12_EXPORT_FLAG_NONE;
-
-    D3D12_EXPORT_DESC missExport = {};
-    missExport.Name              = gMissShaderName;
-    missExport.ExportToRename    = nullptr;
-    missExport.Flags             = D3D12_EXPORT_FLAG_NONE;
-
-    D3D12_EXPORT_DESC chitExport = {};
-    chitExport.Name              = gClosestHitShaderName;
-    chitExport.ExportToRename    = nullptr;
-    chitExport.Flags             = D3D12_EXPORT_FLAG_NONE;
-
-    std::vector<D3D12_EXPORT_DESC> exports;
-    exports.push_back(rgenExport);
-    exports.push_back(missExport);
-    exports.push_back(chitExport);
-
-    D3D12_DXIL_LIBRARY_DESC dxilLibraryDesc = {};
-    dxilLibraryDesc.DXILLibrary             = {pShaderBinary, shadeBinarySize};
-    dxilLibraryDesc.NumExports              = static_cast<UINT>(exports.size());
-    dxilLibraryDesc.pExports                = exports.data();
-
-    D3D12_STATE_SUBOBJECT* pSubobject = &subobjects[DXIL_LIBRARY_INDEX];
-    pSubobject->Type                  = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY;
-    pSubobject->pDesc                 = &dxilLibraryDesc;
-
-    // ---------------------------------------------------------------------
-    // Triangle hit group
+    // The size of the SBT buffers must be aligned to
+    // VkPhysicalDeviceRayTracingPipelinePropertiesKHR::shaderGroupBaseAlignment.
     //
-    // A hit group specifies closest hit, any hit and intersection shaders
-    // to be executed when a ray intersects the geometry's triangle/AABB.
-    // In this sample, we only use triangle geometry with a closest hit
-    // shader, so others are not set.
-    //
-    // ---------------------------------------------------------------------
-    D3D12_HIT_GROUP_DESC hitGroupDesc   = {};
-    hitGroupDesc.HitGroupExport         = gHitGroupName;
-    hitGroupDesc.Type                   = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-    hitGroupDesc.ClosestHitShaderImport = gClosestHitShaderName;
-
-    pSubobject        = &subobjects[TRIANGLE_HIT_GROUP_INDEX];
-    pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
-    pSubobject->pDesc = &hitGroupDesc;
-
-    // ---------------------------------------------------------------------
-    // Shader config
-    //
-    // Defines the maximum sizes in bytes for the ray payload and attribute
-    // structure.
-    //
-    // ---------------------------------------------------------------------
-    D3D12_RAYTRACING_SHADER_CONFIG shaderConfig = {};
-    shaderConfig.MaxPayloadSizeInBytes          = 4 * sizeof(float) + 3 * sizeof(uint32_t); // color, ray depth, sample count, ior
-    shaderConfig.MaxAttributeSizeInBytes        = 2 * sizeof(float);                        // barycentrics
-
-    pSubobject        = &subobjects[SHADER_CONFIG_INDEX];
-    pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG;
-    pSubobject->pDesc = &shaderConfig;
-
-    // ---------------------------------------------------------------------
-    // Global root signature
-    //
-    // This is a root signature that is shared across all raytracing shaders
-    // invoked during a DispatchRays() call.
-    //
-    // ---------------------------------------------------------------------
-    pSubobject        = &subobjects[GLOBAL_ROOT_SIG_INDEX];
-    pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE;
-    pSubobject->pDesc = &pGlobalRootSig;
-
-    // ---------------------------------------------------------------------
-    // Pipeline config
-    //
-    // Defines the maximum TraceRay() recursion depth.
-    //
-    // PERFOMANCE TIP: Set max recursion depth as low as needed
-    // as drivers may apply optimization strategies for low recursion
-    // depths.
-    //
-    // ---------------------------------------------------------------------
-    D3D12_RAYTRACING_PIPELINE_CONFIG pipelineConfigDesc = {};
-    pipelineConfigDesc.MaxTraceRecursionDepth           = 16;
-
-    pSubobject        = &subobjects[PIPELINE_CONFIG_INDEX];
-    pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
-    pSubobject->pDesc = &pipelineConfigDesc;
-
-    // ---------------------------------------------------------------------
-    // Create the state object
-    // ---------------------------------------------------------------------
-    D3D12_STATE_OBJECT_DESC stateObjectDesc = {};
-    stateObjectDesc.Type                    = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
-    stateObjectDesc.NumSubobjects           = SUBOBJECT_COUNT;
-    stateObjectDesc.pSubobjects             = subobjects;
-
-    CHECK_CALL(pRenderer->Device->CreateStateObject(&stateObjectDesc, IID_PPV_ARGS(ppStateObject)));
-}
-
-void CreateShaderRecordTables(
-    VulkanRenderer*    pRenderer,
-    ID3D12StateObject* pStateObject,
-    ID3D12Resource**   ppRayGenSRT,
-    ID3D12Resource**   ppMissSRT,
-    ID3D12Resource**   ppHitGroupSRT)
-{
-    ComPtr<ID3D12StateObjectProperties> stateObjectProperties;
-    CHECK_CALL(pStateObject->QueryInterface(IID_PPV_ARGS(&stateObjectProperties)));
-
-    void* pRayGenShaderIdentifier   = stateObjectProperties->GetShaderIdentifier(gRayGenShaderName);
-    void* pMissShaderIdentifier     = stateObjectProperties->GetShaderIdentifier(gMissShaderName);
-    void* pHitGroupShaderIdentifier = stateObjectProperties->GetShaderIdentifier(gHitGroupName);
-
-    UINT shaderRecordSize = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
-
-    // -------------------------------------------------------------------------
-    // Create buffers for SRTs
-    // -------------------------------------------------------------------------
-    D3D12_RESOURCE_DESC desc = {};
-    desc.Dimension           = D3D12_RESOURCE_DIMENSION_BUFFER;
-    desc.Alignment           = 0;
-    desc.Width               = shaderRecordSize;
-    desc.Height              = 1;
-    desc.DepthOrArraySize    = 1;
-    desc.MipLevels           = 1;
-    desc.Format              = DXGI_FORMAT_UNKNOWN;
-    desc.SampleDesc          = {1, 0};
-    desc.Layout              = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    desc.Flags               = D3D12_RESOURCE_FLAG_NONE;
-
-    D3D12_HEAP_PROPERTIES heapProperties = {};
-    heapProperties.Type                  = D3D12_HEAP_TYPE_UPLOAD;
-
+    const uint32_t shaderGroupBaseAlignment = rayTracingProperties.shaderGroupBaseAlignment;
     // Ray gen
     {
-        CHECK_CALL(pRenderer->Device->CreateCommittedResource(
-            &heapProperties,                   // pHeapProperties
-            D3D12_HEAP_FLAG_NONE,              // HeapFlags
-            &desc,                             // pDesc
-            D3D12_RESOURCE_STATE_GENERIC_READ, // InitialResourceState
-            nullptr,                           // pOptimizedClearValue
-            IID_PPV_ARGS(ppRayGenSRT)));       // riidResource, ppvResource
-
-        // Copy shader identifier
-        {
-            char* pData;
-            CHECK_CALL((*ppRayGenSRT)->Map(0, nullptr, reinterpret_cast<void**>(&pData)));
-
-            memcpy(pData, pRayGenShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-
-            (*ppRayGenSRT)->Unmap(0, nullptr);
-        }
+        CHECK_CALL(CreateBuffer(
+            pRenderer,                // pRenderer
+            groupHandleSize,          // srcSize
+            pShaderGroupHandleRGEN,   // pSrcData
+            usageFlags,               // usageFlags
+            shaderGroupBaseAlignment, // minAlignment
+            pRayGenSBT));             // pBuffer
     }
-
     // Miss
     {
-        CHECK_CALL(pRenderer->Device->CreateCommittedResource(
-            &heapProperties,                   // pHeapProperties
-            D3D12_HEAP_FLAG_NONE,              // HeapFlags
-            &desc,                             // pDesc
-            D3D12_RESOURCE_STATE_GENERIC_READ, // InitialResourceState
-            nullptr,                           // pOptimizedClearValue
-            IID_PPV_ARGS(ppMissSRT)));         // riidResource, ppvResource
-
-        // Copy shader identifier
-        {
-            char* pData;
-            CHECK_CALL((*ppMissSRT)->Map(0, nullptr, reinterpret_cast<void**>(&pData)));
-
-            memcpy(pData, pMissShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-
-            (*ppMissSRT)->Unmap(0, nullptr);
-        }
+        CHECK_CALL(CreateBuffer(
+            pRenderer,                // pRenderer
+            groupHandleSize,          // srcSize
+            pShaderGroupHandleMISS,   // pSrcData
+            usageFlags,               // usageFlags
+            shaderGroupBaseAlignment, // minAlignment
+            pMissSBT));               // pBuffer
     }
-
-    // Hit group
+    // HITG: closest hit
     {
-        CHECK_CALL(pRenderer->Device->CreateCommittedResource(
-            &heapProperties,                   // pHeapProperties
-            D3D12_HEAP_FLAG_NONE,              // HeapFlags
-            &desc,                             // pDesc
-            D3D12_RESOURCE_STATE_GENERIC_READ, // InitialResourceState
-            nullptr,                           // pOptimizedClearValue
-            IID_PPV_ARGS(ppHitGroupSRT)));     // riidResource, ppvResource
-
-        // Copy shader identifier
-        {
-            char* pData;
-            CHECK_CALL((*ppHitGroupSRT)->Map(0, nullptr, reinterpret_cast<void**>(&pData)));
-
-            memcpy(pData, pHitGroupShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-
-            (*ppHitGroupSRT)->Unmap(0, nullptr);
-        }
+        CHECK_CALL(CreateBuffer(
+            pRenderer,                // pRenderer
+            groupHandleSize,          // srcSize
+            pShaderGroupHandleHITG,   // pSrcData
+            usageFlags,               // usageFlags
+            shaderGroupBaseAlignment, // minAlignment
+            pHitGroupSBT));           // pBuffer
     }
 }
+
 void CreateGeometries(
     VulkanRenderer* pRenderer,
     Geometry&       outSphereGeometry,
@@ -1388,6 +1128,11 @@ void CreateGeometries(
     Geometry&       outTeapotGeometry,
     Geometry&       outBoxGeometryy)
 {
+    VkBufferUsageFlags usageFlags =
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+        VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+
     // Sphere
     {
         TriMesh mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
@@ -1398,18 +1143,24 @@ void CreateGeometries(
             pRenderer,
             SizeInBytes(mesh.GetTriangles()),
             DataPtr(mesh.GetTriangles()),
+            usageFlags,
+            0,
             &geo.indexBuffer));
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
             SizeInBytes(mesh.GetPositions()),
             DataPtr(mesh.GetPositions()),
+            usageFlags,
+            0,
             &geo.positionBuffer));
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
             SizeInBytes(mesh.GetNormals()),
             DataPtr(mesh.GetNormals()),
+            usageFlags,
+            0,
             &geo.normalBuffer));
 
         geo.indexCount  = 3 * mesh.GetNumTriangles();
@@ -1435,18 +1186,24 @@ void CreateGeometries(
             pRenderer,
             SizeInBytes(mesh.GetTriangles()),
             DataPtr(mesh.GetTriangles()),
+            usageFlags,
+            0,
             &geo.indexBuffer));
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
             SizeInBytes(mesh.GetPositions()),
             DataPtr(mesh.GetPositions()),
+            usageFlags,
+            0,
             &geo.positionBuffer));
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
             SizeInBytes(mesh.GetNormals()),
             DataPtr(mesh.GetNormals()),
+            usageFlags,
+            0,
             &geo.normalBuffer));
 
         geo.indexCount  = 3 * mesh.GetNumTriangles();
@@ -1470,18 +1227,24 @@ void CreateGeometries(
             pRenderer,
             SizeInBytes(mesh.GetTriangles()),
             DataPtr(mesh.GetTriangles()),
+            usageFlags,
+            0,
             &geo.indexBuffer));
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
             SizeInBytes(mesh.GetPositions()),
             DataPtr(mesh.GetPositions()),
+            usageFlags,
+            0,
             &geo.positionBuffer));
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
             SizeInBytes(mesh.GetNormals()),
             DataPtr(mesh.GetNormals()),
+            usageFlags,
+            0,
             &geo.normalBuffer));
 
         geo.indexCount  = 3 * mesh.GetNumTriangles();
@@ -1507,18 +1270,24 @@ void CreateGeometries(
             pRenderer,
             SizeInBytes(mesh.GetTriangles()),
             DataPtr(mesh.GetTriangles()),
+            usageFlags,
+            0,
             &geo.indexBuffer));
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
             SizeInBytes(mesh.GetPositions()),
             DataPtr(mesh.GetPositions()),
+            usageFlags,
+            0,
             &geo.positionBuffer));
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
             SizeInBytes(mesh.GetNormals()),
             DataPtr(mesh.GetNormals()),
+            usageFlags,
+            0,
             &geo.normalBuffer));
 
         geo.indexCount  = 3 * mesh.GetNumTriangles();
@@ -1541,18 +1310,24 @@ void CreateGeometries(
             pRenderer,
             SizeInBytes(mesh.GetTriangles()),
             DataPtr(mesh.GetTriangles()),
+            usageFlags,
+            0,
             &geo.indexBuffer));
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
             SizeInBytes(mesh.GetPositions()),
             DataPtr(mesh.GetPositions()),
+            usageFlags,
+            0,
             &geo.positionBuffer));
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
             SizeInBytes(mesh.GetNormals()),
             DataPtr(mesh.GetNormals()),
+            usageFlags,
+            0,
             &geo.normalBuffer));
 
         geo.indexCount  = 3 * mesh.GetNumTriangles();
@@ -1561,26 +1336,27 @@ void CreateGeometries(
 }
 
 void CreateBLASes(
-    VulkanRenderer* pRenderer,
-    const Geometry& sphereGeometry,
-    const Geometry& knobGeometry,
-    const Geometry& monkeyGeometry,
-    const Geometry& teapotGeometry,
-    const Geometry& boxGeometry,
-    VulkanBuffer*   pSphereBLAS,
-    VulkanBuffer*   pKnobBLAS,
-    VulkanBuffer*   pMonkeyBLAS,
-    VulkanBuffer*   pTeapotBLAS,
-    VulkanBuffer*   pBoxBLAS)
+    VulkanRenderer*    pRenderer,
+    const Geometry&    sphereGeometry,
+    const Geometry&    knobGeometry,
+    const Geometry&    monkeyGeometry,
+    const Geometry&    teapotGeometry,
+    const Geometry&    boxGeometry,
+    VulkanAccelStruct* pSphereBLAS,
+    VulkanAccelStruct* pKnobBLAS,
+    VulkanAccelStruct* pMonkeyBLAS,
+    VulkanAccelStruct* pTeapotBLAS,
+    VulkanAccelStruct* pBoxBLAS)
 {
-    std::vector<const Geometry*>  geometries = {&sphereGeometry, &knobGeometry, &monkeyGeometry, &teapotGeometry, &boxGeometry};
-    std::vector<ID3D12Resource**> BLASes     = {ppSphereBLAS, ppKnobBLAS, ppMonkeyBLAS, ppTeapotBLAS, ppBoxBLAS};
+    std::vector<const Geometry*>    geometries = {&sphereGeometry, &knobGeometry, &monkeyGeometry, &teapotGeometry, &boxGeometry};
+    std::vector<VulkanAccelStruct*> BLASes     = {pSphereBLAS, pKnobBLAS, pMonkeyBLAS, pTeapotBLAS, pBoxBLAS};
 
     uint32_t n = static_cast<uint32_t>(geometries.size());
     for (uint32_t i = 0; i < n; ++i) {
         auto pGeometry = geometries[i];
-        auto ppBLAS    = BLASes[i];
+        auto pBLAS     = BLASes[i];
 
+        /*
         D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc       = {};
         geometryDesc.Type                                 = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
         geometryDesc.Triangles.IndexFormat                = DXGI_FORMAT_R32_UINT;
@@ -1591,7 +1367,20 @@ void CreateBLASes(
         geometryDesc.Triangles.VertexBuffer.StartAddress  = pGeometry->positionBuffer->GetGPUVirtualAddress();
         geometryDesc.Triangles.VertexBuffer.StrideInBytes = 12;
         geometryDesc.Flags                                = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+        */
+        VkAccelerationStructureGeometryKHR geometry = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
+        //
+        geometry.flags                                       = VK_GEOMETRY_OPAQUE_BIT_KHR;
+        geometry.geometryType                                = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+        geometry.geometry.triangles.sType                    = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+        geometry.geometry.triangles.vertexFormat             = VK_FORMAT_R32G32B32_SFLOAT;
+        geometry.geometry.triangles.vertexData.deviceAddress = GetDeviceAddress(pRenderer, &pGeometry->positionBuffer);
+        geometry.geometry.triangles.vertexStride             = 12;
+        geometry.geometry.triangles.maxVertex                = 3;
+        geometry.geometry.triangles.indexType                = VK_INDEX_TYPE_UINT32;
+        geometry.geometry.triangles.indexData.deviceAddress  = GetDeviceAddress(pRenderer, &pGeometry->indexBuffer);
 
+        /*
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
         //
         inputs.Type           = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
@@ -1599,25 +1388,93 @@ void CreateBLASes(
         inputs.DescsLayout    = D3D12_ELEMENTS_LAYOUT_ARRAY;
         inputs.NumDescs       = 1;
         inputs.pGeometryDescs = &geometryDesc;
+        */
+        VkAccelerationStructureBuildGeometryInfoKHR buildGeometryInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
+        //
+        buildGeometryInfo.type          = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+        buildGeometryInfo.flags         = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+        buildGeometryInfo.mode          = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+        buildGeometryInfo.geometryCount = 1;
+        buildGeometryInfo.pGeometries   = &geometry;
 
+        /*
         D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo = {};
         pRenderer->Device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &prebuildInfo);
+        */
+        VkAccelerationStructureBuildSizesInfoKHR buildSizesInfo    = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR};
+        const uint32_t                           maxPrimitiveCount = 1;
+        fn_vkGetAccelerationStructureBuildSizesKHR(
+            pRenderer->Device,
+            VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+            &buildGeometryInfo,
+            &maxPrimitiveCount,
+            &buildSizesInfo);
 
         // Scratch buffer
+        /*
         ComPtr<ID3D12Resource> scratchBuffer;
         CHECK_CALL(CreateUAVBuffer(
             pRenderer,
             prebuildInfo.ScratchDataSizeInBytes,
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
             &scratchBuffer));
+        */
+        VulkanBuffer scratchBuffer = {};
+        {
+            // Get acceleration structure properties
+            //
+            // Obviously this can be cached if it's accessed frequently.
+            //
+            VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR};
+            VkPhysicalDeviceProperties2                        properties            = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+            properties.pNext                                                         = &accelStructProperties;
+            vkGetPhysicalDeviceProperties2(pRenderer->PhysicalDevice, &properties);
 
+            VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+
+            CHECK_CALL(CreateBuffer(
+                pRenderer,                                                            // pRenderer
+                buildSizesInfo.buildScratchSize,                                      // srcSize
+                usageFlags,                                                           // usageFlags
+                VMA_MEMORY_USAGE_GPU_ONLY,                                            // memoryUsage
+                accelStructProperties.minAccelerationStructureScratchOffsetAlignment, // minAlignment
+                &scratchBuffer));                                                     // pBuffer
+        }
+
+        /*
         // Storage buffer
         CHECK_CALL(CreateUAVBuffer(
             pRenderer,
             prebuildInfo.ResultDataMaxSizeInBytes,
             D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
             ppBLAS));
+        */
+        // Create acceleration structure buffer
+        {
+            VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
 
+            CHECK_CALL(CreateBuffer(
+                pRenderer,
+                buildSizesInfo.accelerationStructureSize,
+                usageFlags,
+                VMA_MEMORY_USAGE_GPU_ONLY,
+                0,
+                &pBLAS->Buffer));
+        }
+
+        // Create accleration structure object
+        {
+            VkAccelerationStructureCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR};
+            createInfo.buffer                               = pBLAS->Buffer.Buffer;
+            createInfo.offset                               = 0;
+            createInfo.size                                 = buildSizesInfo.accelerationStructureSize;
+            createInfo.type                                 = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+            createInfo.deviceAddress                        = 0;
+
+            CHECK_CALL(fn_vkCreateAccelerationStructureKHR(pRenderer->Device, &createInfo, nullptr, &pBLAS->AccelStruct));
+        }
+
+        /*
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildDesc = {};
         //
         buildDesc.Inputs                           = inputs;
@@ -1653,17 +1510,55 @@ void CreateBLASes(
 
         bool waitres = WaitForGpu(pRenderer);
         assert(waitres && "WaitForGpu failed");
+        */
+        // Build acceleration structure
+        //
+        {
+            // Build geometry info
+            VkAccelerationStructureBuildGeometryInfoKHR buildGeometryInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
+            //
+            buildGeometryInfo.type                      = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+            buildGeometryInfo.flags                     = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+            buildGeometryInfo.mode                      = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+            buildGeometryInfo.dstAccelerationStructure  = pBLAS->AccelStruct;
+            buildGeometryInfo.geometryCount             = 1;
+            buildGeometryInfo.pGeometries               = &geometry;
+            buildGeometryInfo.scratchData.deviceAddress = GetDeviceAddress(pRenderer, &scratchBuffer);
+
+            // Build range info
+            VkAccelerationStructureBuildRangeInfoKHR buildRangeInfo = {};
+            buildRangeInfo.primitiveCount                           = 1;
+
+            CommandObjects cmdBuf = {};
+            CHECK_CALL(CreateCommandBuffer(pRenderer, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, &cmdBuf));
+
+            VkCommandBufferBeginInfo vkbi = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+            vkbi.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+            CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
+
+            const VkAccelerationStructureBuildRangeInfoKHR* pBuildRangeInfo = &buildRangeInfo;
+            fn_vkCmdBuildAccelerationStructuresKHR(cmdBuf.CommandBuffer, 1, &buildGeometryInfo, &pBuildRangeInfo);
+
+            CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));
+
+            CHECK_CALL(ExecuteCommandBuffer(pRenderer, &cmdBuf));
+
+            if (!WaitForGpu(pRenderer)) {
+                assert(false && "WaitForGpu failed");
+            }
+        }
     }
 }
 
 void CreateTLAS(
     VulkanRenderer*                  pRenderer,
-    ID3D12Resource*                  pSphereBLAS,
-    ID3D12Resource*                  pKnobBLAS,
-    ID3D12Resource*                  pMonkeyBLAS,
-    ID3D12Resource*                  pTeapotBLAS,
-    ID3D12Resource*                  pBoxBLAS,
-    ID3D12Resource**                 ppTLAS,
+    const VulkanAccelStruct&         sphereBLAS,
+    const VulkanAccelStruct&         knobBLAS,
+    const VulkanAccelStruct&         monkeyBLAS,
+    const VulkanAccelStruct&         teapotBLAS,
+    const VulkanAccelStruct&         boxBLAS,
+    VulkanAccelStruct*               pTLAS,
     std::vector<MaterialParameters>& outMaterialParams)
 {
     // clang-format off
@@ -1971,17 +1866,26 @@ void CreateTLAS(
         }
     }
 
+    /*
     std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
+    */
+    std::vector<VkAccelerationStructureInstanceKHR> instances;
     {
+        /*
         D3D12_RAYTRACING_INSTANCE_DESC instanceDesc = {};
         instanceDesc.InstanceMask                   = 1;
         instanceDesc.Flags                          = D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_OPAQUE;
+        */
+        VkAccelerationStructureInstanceKHR instance = {};
+        instance.mask                               = 1; // 0xFF;
+        instance.flags                              = VK_GEOMETRY_INSTANCE_FORCE_OPAQUE_BIT_KHR;
 
         uint32_t transformIdx = 0;
 
         // ---------------------------------------------------------------------
         // Sphere
         // ---------------------------------------------------------------------
+        /*
         instanceDesc.AccelerationStructure = pSphereBLAS->GetGPUVirtualAddress();
 
         // Rough plastic sphere
@@ -2005,10 +1909,35 @@ void CreateTLAS(
         memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
         instanceDescs.push_back(instanceDesc);
         ++transformIdx;
+        */
+        instance.accelerationStructureReference = GetDeviceAddress(pRenderer, sphereBLAS.AccelStruct);
+
+        // Rough plastic sphere
+        memcpy(&instance.transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instances.push_back(instance);
+        ++transformIdx;
+
+        // Shiny plastic sphere
+        memcpy(&instance.transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instances.push_back(instance);
+        ++transformIdx;
+
+        // Crystal sphere
+        VkAccelerationStructureInstanceKHR thisInstance = instance;
+        thisInstance.flags                              = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR | VK_GEOMETRY_INSTANCE_FORCE_NO_OPAQUE_BIT_KHR;
+        memcpy(&thisInstance.transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instances.push_back(thisInstance);
+        ++transformIdx;
+
+        // Metal sphere
+        memcpy(&instance.transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instances.push_back(instance);
+        ++transformIdx;
 
         // ---------------------------------------------------------------------
         // Knob
         // ---------------------------------------------------------------------
+        /*
         instanceDesc.AccelerationStructure = pKnobBLAS->GetGPUVirtualAddress();
 
         // Rough plastic knob
@@ -2032,10 +1961,35 @@ void CreateTLAS(
         memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
         instanceDescs.push_back(instanceDesc);
         ++transformIdx;
+        */
+        instance.accelerationStructureReference = GetDeviceAddress(pRenderer, knobBLAS.AccelStruct);
+
+        // Rough plastic knob
+        memcpy(&instance.transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instances.push_back(instance);
+        ++transformIdx;
+
+        // Shiny plastic knob
+        memcpy(&instance.transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instances.push_back(instance);
+        ++transformIdx;
+
+        // Glass knob
+        thisInstance       = instance;
+        thisInstance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR | VK_GEOMETRY_INSTANCE_FORCE_NO_OPAQUE_BIT_KHR;
+        memcpy(&thisInstance.transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instances.push_back(thisInstance);
+        ++transformIdx;
+
+        // Metal knob
+        memcpy(&instance.transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instances.push_back(instance);
+        ++transformIdx;
 
         // ---------------------------------------------------------------------
         // Monkey
         // ---------------------------------------------------------------------
+        /*
         instanceDesc.AccelerationStructure = pMonkeyBLAS->GetGPUVirtualAddress();
 
         // Rough plastic monkey
@@ -2059,10 +2013,35 @@ void CreateTLAS(
         memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
         instanceDescs.push_back(instanceDesc);
         ++transformIdx;
+        */
+        instance.accelerationStructureReference = GetDeviceAddress(pRenderer, monkeyBLAS.AccelStruct);
+
+        // Rough plastic monkey
+        memcpy(&instance.transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instances.push_back(instance);
+        ++transformIdx;
+
+        // Shiny plastic monkey
+        memcpy(&instance.transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instances.push_back(instance);
+        ++transformIdx;
+
+        // Diamond monkey
+        thisInstance       = instance;
+        thisInstance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR | VK_GEOMETRY_INSTANCE_FORCE_NO_OPAQUE_BIT_KHR;
+        memcpy(&thisInstance.transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instances.push_back(thisInstance);
+        ++transformIdx;
+
+        // Metal monkey
+        memcpy(&instance.transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instances.push_back(instance);
+        ++transformIdx;
 
         // ---------------------------------------------------------------------
         // Teapot
         // ---------------------------------------------------------------------
+        /*
         instanceDesc.AccelerationStructure = pTeapotBLAS->GetGPUVirtualAddress();
 
         // Rough plastic teapot
@@ -2086,22 +2065,60 @@ void CreateTLAS(
         memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
         instanceDescs.push_back(instanceDesc);
         ++transformIdx;
+        */
+        instance.accelerationStructureReference = GetDeviceAddress(pRenderer, teapotBLAS.AccelStruct);
 
-        // ---------------------------------------------------------------------
-        // Box
-        // ---------------------------------------------------------------------
-        instanceDesc.AccelerationStructure = pMonkeyBLAS->GetGPUVirtualAddress();
+        // Rough plastic teapot
+        memcpy(&instance.transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instances.push_back(instance);
+        ++transformIdx;
 
+        // Shiny plastic teapot
+        memcpy(&instance.transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instances.push_back(instance);
+        ++transformIdx;
+
+        // Glass teapot
+        thisInstance       = instance;
+        thisInstance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR | VK_GEOMETRY_INSTANCE_FORCE_NO_OPAQUE_BIT_KHR;
+        memcpy(&thisInstance.transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instances.push_back(thisInstance);
+        ++transformIdx;
+
+        // Metal teapot
+        memcpy(&instance.transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instances.push_back(instance);
+        ++transformIdx;
+
+        /*
         // Box
         instanceDesc.AccelerationStructure = pBoxBLAS->GetGPUVirtualAddress();
         memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
         instanceDescs.push_back(instanceDesc);
         ++transformIdx;
+        */
+        instance.accelerationStructureReference = GetDeviceAddress(pRenderer, boxBLAS.AccelStruct);
+        memcpy(&instance.transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instances.push_back(instance);
+        ++transformIdx;
     }
 
+    /*
     ComPtr<ID3D12Resource> instanceBuffer;
     CHECK_CALL(CreateBuffer(pRenderer, SizeInBytes(instanceDescs), DataPtr(instanceDescs), &instanceBuffer));
+    */
+    VulkanBuffer instanceBuffer = {};
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(instances),
+        DataPtr(instances),
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+            VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+            VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+        0,
+        &instanceBuffer));
 
+    /*
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
     //
     inputs.Type          = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
@@ -2112,7 +2129,36 @@ void CreateTLAS(
 
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo = {};
     pRenderer->Device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &prebuildInfo);
+    */
 
+    // Geometry
+    VkAccelerationStructureGeometryKHR geometry    = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
+    geometry.flags                                 = VK_GEOMETRY_OPAQUE_BIT_KHR;
+    geometry.geometryType                          = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+    geometry.geometry.instances.sType              = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+    geometry.geometry.instances.arrayOfPointers    = VK_FALSE;
+    geometry.geometry.instances.data.deviceAddress = GetDeviceAddress(pRenderer, &instanceBuffer);
+
+    // Build geometry info - fill out enough to get build sizes
+    VkAccelerationStructureBuildGeometryInfoKHR buildGeometryInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
+    //
+    buildGeometryInfo.type          = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+    buildGeometryInfo.flags         = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+    buildGeometryInfo.mode          = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+    buildGeometryInfo.geometryCount = 1;
+    buildGeometryInfo.pGeometries   = &geometry;
+
+    // Get acceleration structure build size
+    VkAccelerationStructureBuildSizesInfoKHR buildSizesInfo    = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR};
+    const uint32_t                           maxPrimitiveCount = 1; // CountU32(instances); //1;
+    fn_vkGetAccelerationStructureBuildSizesKHR(
+        pRenderer->Device,
+        VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+        &buildGeometryInfo,
+        &maxPrimitiveCount,
+        &buildSizesInfo);
+
+    /*
     // Scratch buffer
     ComPtr<ID3D12Resource> scratchBuffer;
     CHECK_CALL(CreateUAVBuffer(
@@ -2120,14 +2166,64 @@ void CreateTLAS(
         prebuildInfo.ScratchDataSizeInBytes,
         D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         &scratchBuffer));
+    */
+    // Create scratch buffer
+    VulkanBuffer scratchBuffer = {};
+    {
+        // Get acceleration structure properties
+        //
+        // Obviously this can be cached if it's accessed frequently.
+        //
+        VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR};
+        VkPhysicalDeviceProperties2                        properties            = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+        properties.pNext                                                         = &accelStructProperties;
+        vkGetPhysicalDeviceProperties2(pRenderer->PhysicalDevice, &properties);
 
+        VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,                                                            // pRenderer
+            buildSizesInfo.buildScratchSize,                                      // srcSize
+            usageFlags,                                                           // usageFlags
+            VMA_MEMORY_USAGE_GPU_ONLY,                                            // memoryUsage
+            accelStructProperties.minAccelerationStructureScratchOffsetAlignment, // minAlignment
+            &scratchBuffer));                                                     // pBuffer
+    }
+
+    /*
     // Storage buffer
     CHECK_CALL(CreateUAVBuffer(
         pRenderer,
         prebuildInfo.ResultDataMaxSizeInBytes,
         D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
         ppTLAS));
+    */
+    // Create acceleration structure buffer
+    {
+        VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
 
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            buildSizesInfo.accelerationStructureSize,
+            usageFlags,
+            VMA_MEMORY_USAGE_GPU_ONLY,
+            0,
+            &pTLAS->Buffer));
+    }
+
+    // Create accleration structure object
+    {
+        VkAccelerationStructureCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR};
+        createInfo.buffer                               = pTLAS->Buffer.Buffer;
+        createInfo.offset                               = 0;
+        createInfo.size                                 = buildSizesInfo.accelerationStructureSize;
+        createInfo.type                                 = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+        createInfo.deviceAddress                        = 0;
+
+        CHECK_CALL(fn_vkCreateAccelerationStructureKHR(pRenderer->Device, &createInfo, nullptr, &pTLAS->AccelStruct));
+    }
+
+    /*
     // Command allocator
     ComPtr<ID3D12CommandAllocator> commandAllocator;
     {
@@ -2162,8 +2258,39 @@ void CreateTLAS(
 
     bool waitres = WaitForGpu(pRenderer);
     assert(waitres && "WaitForGpu failed");
-}
+    */
+    // Build acceleration structure
+    //
+    {
+        // Build geometry info - update this for build
+        buildGeometryInfo.dstAccelerationStructure  = pTLAS->AccelStruct;
+        buildGeometryInfo.scratchData.deviceAddress = GetDeviceAddress(pRenderer, &scratchBuffer);
 
+        // Build range info
+        VkAccelerationStructureBuildRangeInfoKHR buildRangeInfo = {};
+        buildRangeInfo.primitiveCount                           = 1;
+
+        CommandObjects cmdBuf = {};
+        CHECK_CALL(CreateCommandBuffer(pRenderer, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, &cmdBuf));
+
+        VkCommandBufferBeginInfo vkbi = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        vkbi.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
+
+        const VkAccelerationStructureBuildRangeInfoKHR* pBuildRangeInfo = &buildRangeInfo;
+        fn_vkCmdBuildAccelerationStructuresKHR(cmdBuf.CommandBuffer, 1, &buildGeometryInfo, &pBuildRangeInfo);
+
+        CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));
+
+        CHECK_CALL(ExecuteCommandBuffer(pRenderer, &cmdBuf));
+
+        if (!WaitForGpu(pRenderer)) {
+            assert(false && "WaitForGpu failed");
+        }
+    }
+}
+/*
 void CreateOutputTexture(VulkanRenderer* pRenderer, ID3D12Resource** ppBuffer)
 {
     D3D12_HEAP_PROPERTIES heapProperties = {};

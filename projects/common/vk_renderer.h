@@ -146,6 +146,12 @@ struct VulkanImage
     VmaAllocationInfo AllocationInfo;
 };
 
+struct VulkanAccelStruct
+{
+    VulkanBuffer               Buffer;
+    VkAccelerationStructureKHR AccelStruct;
+};
+
 //! @fn CreateBuffer
 //!
 //! Creates a buffer object with memory allocated and bound.
