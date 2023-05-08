@@ -171,6 +171,24 @@ void CreateAccumTexture(VulkanRenderer* pRenderer, VulkanImage* pBuffer);
 void CreateIBLTextures(
     VulkanRenderer*           pRenderer,
     std::vector<IBLTextures>& outIBLTextures);
+void CreateDescriptorBuffer(
+    VulkanRenderer*       pRenderer,
+    VkDescriptorSetLayout descriptorSetLayout,
+    VulkanBuffer*         pBuffer);
+void WriteDescriptors(
+    VulkanRenderer*                 pRenderer,
+    VkDescriptorSetLayout           descriptorSetLayout,
+    VulkanBuffer*                   pDescriptorBuffer,
+    const VulkanImage&              accumTexture,
+    const VulkanBuffer&             rayGenSamplesBuffer,
+    const Geometry&                 sphereGeometry,
+    const Geometry&                 knobGeometry,
+    const Geometry&                 monkeyGeometry,
+    const Geometry&                 teapotGeometry,
+    const Geometry&                 boxGeometry,
+    const std::vector<IBLTextures>& iblTextures,
+    std::vector<VkImageView>*       pImageViews);
+
 /*
 void CreateIBLTextures(
     VulkanRenderer*           pRenderer,
@@ -207,9 +225,7 @@ void MouseMove(int x, int y, int buttons)
     prevX = x;
     prevY = y;
 }
-/*
-void WriteDescriptors(std::unique_ptr<VulkanRenderer>& renderer, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& descriptorHeap, Microsoft::WRL::ComPtr<ID3D12Resource>& outputTexture, Microsoft::WRL::ComPtr<ID3D12Resource>& accumTexture, Microsoft::WRL::ComPtr<ID3D12Resource>& rayGenSamplesBuffer, Geometry& sphereGeometry, Geometry& boxGeometry, IBLTextures& iblTextures);
-*/
+
 // =============================================================================
 // main()
 // =============================================================================
@@ -442,7 +458,7 @@ int main(int argc, char** argv)
         renderer.get(),
         SizeInBytes(materialParams),
         DataPtr(materialParams),
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         0,
         &materialParamsBuffer);
 
@@ -454,7 +470,7 @@ int main(int argc, char** argv)
         renderer.get(),
         Align<size_t>(sizeof(SceneParameters), 256),
         nullptr,
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         0,
         &sceneParamsBuffer));
 
@@ -465,7 +481,7 @@ int main(int argc, char** argv)
     CHECK_CALL(CreateBuffer(
         renderer.get(),
         (gWindowWidth * gWindowHeight * sizeof(uint32_t)),
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         VMA_MEMORY_USAGE_GPU_ONLY,
         0,
         &rayGenSamplesBuffer));
@@ -477,317 +493,320 @@ int main(int argc, char** argv)
     CreateIBLTextures(
         renderer.get(),
         iblTextures);
-/*
+
     // *************************************************************************
-    // Descriptor heaps
+    // Descriptor buffers
     // *************************************************************************
-    ComPtr<ID3D12DescriptorHeap> descriptorHeap;
-    CreateDescriptorHeap(renderer.get(), &descriptorHeap);
+    VulkanBuffer descriptorBuffer = {};
+    CreateDescriptorBuffer(renderer.get(), descriptorSetLayout, &descriptorBuffer);
 
     // Write descriptor to descriptor heap
+    std::vector<VkImageView> imageViews;
     WriteDescriptors(
         renderer.get(),
-        descriptorHeap.Get(),
-        outputTexture.Get(),
-        accumTexture.Get(),
-        rayGenSamplesBuffer.Get(),
+        descriptorSetLayout,
+        &descriptorBuffer,
+        accumTexture,
+        rayGenSamplesBuffer,
         sphereGeometry,
         knobGeometry,
         monkeyGeometry,
         teapotGeometry,
         boxGeometry,
-        iblTextures);
+        iblTextures,
+        &imageViews);
 
-    // *************************************************************************
-    // Window
-    // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "033_raytracing_path_trace_pbr_d3d12");
-    if (!window) {
-        assert(false && "Window::Create failed");
-        return EXIT_FAILURE;
-    }
-    window->AddMouseMoveCallbacks(MouseMove);
+    /*
+           // *************************************************************************
+           // Window
+           // *************************************************************************
+           auto window = Window::Create(gWindowWidth, gWindowHeight, "033_raytracing_path_trace_pbr_d3d12");
+           if (!window) {
+               assert(false && "Window::Create failed");
+               return EXIT_FAILURE;
+           }
+           window->AddMouseMoveCallbacks(MouseMove);
 
-    // *************************************************************************
-    // Swapchain
-    // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight())) {
-        assert(false && "InitSwapchain failed");
-        return EXIT_FAILURE;
-    }
+           // *************************************************************************
+           // Swapchain
+           // *************************************************************************
+           if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight())) {
+               assert(false && "InitSwapchain failed");
+               return EXIT_FAILURE;
+           }
 
-    // *************************************************************************
-    // Imgui
-    // *************************************************************************
-    if (!window->InitImGuiForD3D12(renderer.get())) {
-        assert(false && "Window::InitImGuiForD3D12 failed");
-        return EXIT_FAILURE;
-    }
+           // *************************************************************************
+           // Imgui
+           // *************************************************************************
+           if (!window->InitImGuiForD3D12(renderer.get())) {
+               assert(false && "Window::InitImGuiForD3D12 failed");
+               return EXIT_FAILURE;
+           }
 
-    // *************************************************************************
-    // Command allocator
-    // *************************************************************************
-    ComPtr<ID3D12CommandAllocator> commandAllocator;
-    {
-        CHECK_CALL(renderer->Device->CreateCommandAllocator(
-            D3D12_COMMAND_LIST_TYPE_DIRECT,    // type
-            IID_PPV_ARGS(&commandAllocator))); // ppCommandList
-    }
+           // *************************************************************************
+           // Command allocator
+           // *************************************************************************
+           ComPtr<ID3D12CommandAllocator> commandAllocator;
+           {
+               CHECK_CALL(renderer->Device->CreateCommandAllocator(
+                   D3D12_COMMAND_LIST_TYPE_DIRECT,    // type
+                   IID_PPV_ARGS(&commandAllocator))); // ppCommandList
+           }
 
-    // *************************************************************************
-    // Command list
-    // *************************************************************************
-    ComPtr<ID3D12GraphicsCommandList5> commandList;
-    {
-        CHECK_CALL(renderer->Device->CreateCommandList1(
-            0,                              // nodeMask
-            D3D12_COMMAND_LIST_TYPE_DIRECT, // type
-            D3D12_COMMAND_LIST_FLAG_NONE,   // flags
-            IID_PPV_ARGS(&commandList)));   // ppCommandList
-    }
+           // *************************************************************************
+           // Command list
+           // *************************************************************************
+           ComPtr<ID3D12GraphicsCommandList5> commandList;
+           {
+               CHECK_CALL(renderer->Device->CreateCommandList1(
+                   0,                              // nodeMask
+                   D3D12_COMMAND_LIST_TYPE_DIRECT, // type
+                   D3D12_COMMAND_LIST_FLAG_NONE,   // flags
+                   IID_PPV_ARGS(&commandList)));   // ppCommandList
+           }
 
-    // *************************************************************************
-    // Persistent map scene parameters
-    // *************************************************************************
-    SceneParameters* pSceneParams = nullptr;
-    CHECK_CALL(sceneParamsBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pSceneParams)));
+           // *************************************************************************
+           // Persistent map scene parameters
+           // *************************************************************************
+           SceneParameters* pSceneParams = nullptr;
+           CHECK_CALL(sceneParamsBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pSceneParams)));
 
-    // *************************************************************************
-    // Misc vars
-    // *************************************************************************
-    uint32_t sampleCount = 0;
+           // *************************************************************************
+           // Misc vars
+           // *************************************************************************
+           uint32_t sampleCount = 0;
 
-    // *************************************************************************
-    // Main loop
-    // *************************************************************************
-    while (window->PollEvents()) {
-        window->ImGuiNewFrameD3D12();
+           // *************************************************************************
+           // Main loop
+           // *************************************************************************
+           while (window->PollEvents()) {
+               window->ImGuiNewFrameD3D12();
 
-        if (ImGui::Begin("Scene")) {
-            ImGui::SliderInt("Max Samples Per Pixel", reinterpret_cast<int*>(&gMaxSamples), 1, 16384);
+               if (ImGui::Begin("Scene")) {
+                   ImGui::SliderInt("Max Samples Per Pixel", reinterpret_cast<int*>(&gMaxSamples), 1, 16384);
 
-            static const char* currentIBLName = gIBLNames[0].c_str();
-            if (ImGui::BeginCombo("IBL", currentIBLName)) {
-                for (size_t i = 0; i < gIBLNames.size(); ++i) {
-                    bool isSelected = (currentIBLName == gIBLNames[i]);
-                    if (ImGui::Selectable(gIBLNames[i].c_str(), isSelected)) {
-                        currentIBLName = gIBLNames[i].c_str();
-                        gIBLIndex      = static_cast<uint32_t>(i);
-                    }
-                    if (isSelected) {
-                        ImGui::SetItemDefaultFocus();
-                    }
-                }
-                ImGui::EndCombo();
-            }
+                   static const char* currentIBLName = gIBLNames[0].c_str();
+                   if (ImGui::BeginCombo("IBL", currentIBLName)) {
+                       for (size_t i = 0; i < gIBLNames.size(); ++i) {
+                           bool isSelected = (currentIBLName == gIBLNames[i]);
+                           if (ImGui::Selectable(gIBLNames[i].c_str(), isSelected)) {
+                               currentIBLName = gIBLNames[i].c_str();
+                               gIBLIndex      = static_cast<uint32_t>(i);
+                           }
+                           if (isSelected) {
+                               ImGui::SetItemDefaultFocus();
+                           }
+                       }
+                       ImGui::EndCombo();
+                   }
 
-            ImGui::Separator();
+                   ImGui::Separator();
 
-            float progress = sampleCount / static_cast<float>(gMaxSamples);
-            char  buf[256] = {};
-            sprintf(buf, "%d/%d Samples", sampleCount, gMaxSamples);
-            ImGui::ProgressBar(progress, ImVec2(-1, 0), buf);
-        }
-        ImGui::End();
+                   float progress = sampleCount / static_cast<float>(gMaxSamples);
+                   char  buf[256] = {};
+                   sprintf(buf, "%d/%d Samples", sampleCount, gMaxSamples);
+                   ImGui::ProgressBar(progress, ImVec2(-1, 0), buf);
+               }
+               ImGui::End();
 
-        // ---------------------------------------------------------------------
+               // ---------------------------------------------------------------------
 
-        CHECK_CALL(commandAllocator->Reset());
-        CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
+               CHECK_CALL(commandAllocator->Reset());
+               CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
 
-        if (gCurrentMaxSamples != gMaxSamples) {
-            gCurrentMaxSamples  = gMaxSamples;
-            gResetRayGenSamples = true;
-        }
+               if (gCurrentMaxSamples != gMaxSamples) {
+                   gCurrentMaxSamples  = gMaxSamples;
+                   gResetRayGenSamples = true;
+               }
 
-        if (gCurrentIBLIndex != gIBLIndex) {
-            gCurrentIBLIndex    = gIBLIndex;
-            gResetRayGenSamples = true;
-        }
+               if (gCurrentIBLIndex != gIBLIndex) {
+                   gCurrentIBLIndex    = gIBLIndex;
+                   gResetRayGenSamples = true;
+               }
 
-        // Smooth out the rotation on Y
-        gAngle += (gTargetAngle - gAngle) * 0.1f;
-        // Keep resetting until the angle is somewhat stable
-        if (fabs(gTargetAngle - gAngle) > 0.1f) {
-            gResetRayGenSamples = true;
-        }
+               // Smooth out the rotation on Y
+               gAngle += (gTargetAngle - gAngle) * 0.1f;
+               // Keep resetting until the angle is somewhat stable
+               if (fabs(gTargetAngle - gAngle) > 0.1f) {
+                   gResetRayGenSamples = true;
+               }
 
-        // Camera matrices
-        mat4 transformEyeMat     = glm::rotate(glm::radians(-gAngle), vec3(0, 1, 0));
-        vec3 startingEyePosition = vec3(0, 4.0f, 8.5f);
-        vec3 eyePosition         = transformEyeMat * vec4(startingEyePosition, 1);
-        mat4 viewMat             = glm::lookAt(eyePosition, vec3(0, 3, 0), vec3(0, 1, 0));
-        mat4 projMat             = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+               // Camera matrices
+               mat4 transformEyeMat     = glm::rotate(glm::radians(-gAngle), vec3(0, 1, 0));
+               vec3 startingEyePosition = vec3(0, 4.0f, 8.5f);
+               vec3 eyePosition         = transformEyeMat * vec4(startingEyePosition, 1);
+               mat4 viewMat             = glm::lookAt(eyePosition, vec3(0, 3, 0), vec3(0, 1, 0));
+               mat4 projMat             = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
 
-        // Set constant buffer values
-        pSceneParams->ViewInverseMatrix       = glm::inverse(viewMat);
-        pSceneParams->ProjectionInverseMatrix = glm::inverse(projMat);
-        pSceneParams->IBLIndex                = gCurrentIBLIndex;
-        pSceneParams->EyePosition             = eyePosition;
-        pSceneParams->MaxSamples              = gCurrentMaxSamples;
+               // Set constant buffer values
+               pSceneParams->ViewInverseMatrix       = glm::inverse(viewMat);
+               pSceneParams->ProjectionInverseMatrix = glm::inverse(projMat);
+               pSceneParams->IBLIndex                = gCurrentIBLIndex;
+               pSceneParams->EyePosition             = eyePosition;
+               pSceneParams->MaxSamples              = gCurrentMaxSamples;
 
-        // Reset ray gen samples
-        if (gResetRayGenSamples) {
-            sampleCount = 0;
+               // Reset ray gen samples
+               if (gResetRayGenSamples) {
+                   sampleCount = 0;
 
-            commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
+                   commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
 
-            commandList->SetComputeRootSignature(clearRayGenRootSig.Get());
-            commandList->SetPipelineState(clearRayGenPSO.Get());
+                   commandList->SetComputeRootSignature(clearRayGenRootSig.Get());
+                   commandList->SetPipelineState(clearRayGenPSO.Get());
 
-            D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
-            descriptorTable.ptr += (kOutputResourcesOffset + 1) * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            commandList->SetComputeRootDescriptorTable(0, descriptorTable);
+                   D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
+                   descriptorTable.ptr += (kOutputResourcesOffset + 1) * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                   commandList->SetComputeRootDescriptorTable(0, descriptorTable);
 
-            commandList->Dispatch(gWindowWidth / 8, gWindowHeight / 8, 1);
-            gResetRayGenSamples = false;
-        }
+                   commandList->Dispatch(gWindowWidth / 8, gWindowHeight / 8, 1);
+                   gResetRayGenSamples = false;
+               }
 
-        // Trace rays
-        {
-            commandList->SetComputeRootSignature(globalRootSig.Get());
-            commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
+               // Trace rays
+               {
+                   commandList->SetComputeRootSignature(globalRootSig.Get());
+                   commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
 
-            D3D12_GPU_DESCRIPTOR_HANDLE descriptorHeapStart = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
-            UINT                        descriptorIncSize   = renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                   D3D12_GPU_DESCRIPTOR_HANDLE descriptorHeapStart = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
+                   UINT                        descriptorIncSize   = renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-            // Acceleration structure (t0)
-            commandList->SetComputeRootShaderResourceView(0, tlasBuffer->GetGPUVirtualAddress());
-            // Output texture (u1)
-            // Accumulation texture (u2)
-            // Ray generation samples (u3)
-            D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = {descriptorHeapStart.ptr + kOutputResourcesOffset * descriptorIncSize};
-            commandList->SetComputeRootDescriptorTable(1, descriptorHeap->GetGPUDescriptorHandleForHeapStart());
-            // Scene params (b5)
-            commandList->SetComputeRootConstantBufferView(2, sceneParamsBuffer->GetGPUVirtualAddress());
-            //  Index buffer (t20)
-            //  Position buffer (t45)
-            //  Normal buffer (t70)
-            descriptorTable = {descriptorHeapStart.ptr + kGeoBuffersOffset * descriptorIncSize};
-            commandList->SetComputeRootDescriptorTable(3, descriptorTable);
-            // Environment map (t100)
-            descriptorTable = {descriptorHeapStart.ptr + kIBLTextureOffset * descriptorIncSize};
-            commandList->SetComputeRootDescriptorTable(4, descriptorTable);
-            // Material params (t9)
-            commandList->SetComputeRootShaderResourceView(5, materialParamsBuffer->GetGPUVirtualAddress());
+                   // Acceleration structure (t0)
+                   commandList->SetComputeRootShaderResourceView(0, tlasBuffer->GetGPUVirtualAddress());
+                   // Output texture (u1)
+                   // Accumulation texture (u2)
+                   // Ray generation samples (u3)
+                   D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = {descriptorHeapStart.ptr + kOutputResourcesOffset * descriptorIncSize};
+                   commandList->SetComputeRootDescriptorTable(1, descriptorHeap->GetGPUDescriptorHandleForHeapStart());
+                   // Scene params (b5)
+                   commandList->SetComputeRootConstantBufferView(2, sceneParamsBuffer->GetGPUVirtualAddress());
+                   //  Index buffer (t20)
+                   //  Position buffer (t45)
+                   //  Normal buffer (t70)
+                   descriptorTable = {descriptorHeapStart.ptr + kGeoBuffersOffset * descriptorIncSize};
+                   commandList->SetComputeRootDescriptorTable(3, descriptorTable);
+                   // Environment map (t100)
+                   descriptorTable = {descriptorHeapStart.ptr + kIBLTextureOffset * descriptorIncSize};
+                   commandList->SetComputeRootDescriptorTable(4, descriptorTable);
+                   // Material params (t9)
+                   commandList->SetComputeRootShaderResourceView(5, materialParamsBuffer->GetGPUVirtualAddress());
 
-            commandList->SetPipelineState1(stateObject.Get());
+                   commandList->SetPipelineState1(stateObject.Get());
 
-            D3D12_DISPATCH_RAYS_DESC dispatchDesc               = {};
-            dispatchDesc.RayGenerationShaderRecord.StartAddress = rgenSRT->GetGPUVirtualAddress();
-            dispatchDesc.RayGenerationShaderRecord.SizeInBytes  = rgenSRT->GetDesc().Width;
-            dispatchDesc.MissShaderTable.StartAddress           = missSRT->GetGPUVirtualAddress();
-            dispatchDesc.MissShaderTable.SizeInBytes            = missSRT->GetDesc().Width;
-            dispatchDesc.MissShaderTable.StrideInBytes          = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
-            dispatchDesc.HitGroupTable.StartAddress             = hitgSRT->GetGPUVirtualAddress();
-            dispatchDesc.HitGroupTable.SizeInBytes              = hitgSRT->GetDesc().Width;
-            dispatchDesc.HitGroupTable.StrideInBytes            = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
-            dispatchDesc.Width                                  = gWindowWidth;
-            dispatchDesc.Height                                 = gWindowHeight;
-            dispatchDesc.Depth                                  = 1;
+                   D3D12_DISPATCH_RAYS_DESC dispatchDesc               = {};
+                   dispatchDesc.RayGenerationShaderRecord.StartAddress = rgenSRT->GetGPUVirtualAddress();
+                   dispatchDesc.RayGenerationShaderRecord.SizeInBytes  = rgenSRT->GetDesc().Width;
+                   dispatchDesc.MissShaderTable.StartAddress           = missSRT->GetGPUVirtualAddress();
+                   dispatchDesc.MissShaderTable.SizeInBytes            = missSRT->GetDesc().Width;
+                   dispatchDesc.MissShaderTable.StrideInBytes          = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
+                   dispatchDesc.HitGroupTable.StartAddress             = hitgSRT->GetGPUVirtualAddress();
+                   dispatchDesc.HitGroupTable.SizeInBytes              = hitgSRT->GetDesc().Width;
+                   dispatchDesc.HitGroupTable.StrideInBytes            = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
+                   dispatchDesc.Width                                  = gWindowWidth;
+                   dispatchDesc.Height                                 = gWindowHeight;
+                   dispatchDesc.Depth                                  = 1;
 
-            commandList->DispatchRays(&dispatchDesc);
+                   commandList->DispatchRays(&dispatchDesc);
 
-            commandList->Close();
+                   commandList->Close();
 
-            ID3D12CommandList* pList = commandList.Get();
-            renderer->Queue->ExecuteCommandLists(1, &pList);
+                   ID3D12CommandList* pList = commandList.Get();
+                   renderer->Queue->ExecuteCommandLists(1, &pList);
 
-            if (!WaitForGpu(renderer.get())) {
-                assert(false && "WaitForGpu failed");
-                break;
-            }
-        }
+                   if (!WaitForGpu(renderer.get())) {
+                       assert(false && "WaitForGpu failed");
+                       break;
+                   }
+               }
 
-        // Copy output texture to swapchain buffer
-        {
-            UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
+               // Copy output texture to swapchain buffer
+               {
+                   UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
 
-            ComPtr<ID3D12Resource> swapchainBuffer;
-            CHECK_CALL(renderer->Swapchain->GetBuffer(bufferIndex, IID_PPV_ARGS(&swapchainBuffer)));
+                   ComPtr<ID3D12Resource> swapchainBuffer;
+                   CHECK_CALL(renderer->Swapchain->GetBuffer(bufferIndex, IID_PPV_ARGS(&swapchainBuffer)));
 
-            CHECK_CALL(commandAllocator->Reset());
-            CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
+                   CHECK_CALL(commandAllocator->Reset());
+                   CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
 
-            D3D12_RESOURCE_BARRIER preCopyBarriers[2];
-            preCopyBarriers[0] = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
-            preCopyBarriers[1] = CreateTransition(outputTexture.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+                   D3D12_RESOURCE_BARRIER preCopyBarriers[2];
+                   preCopyBarriers[0] = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
+                   preCopyBarriers[1] = CreateTransition(outputTexture.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
 
-            commandList->ResourceBarrier(ARRAYSIZE(preCopyBarriers), preCopyBarriers);
+                   commandList->ResourceBarrier(ARRAYSIZE(preCopyBarriers), preCopyBarriers);
 
-            commandList->CopyResource(swapchainBuffer.Get(), outputTexture.Get());
+                   commandList->CopyResource(swapchainBuffer.Get(), outputTexture.Get());
 
-            D3D12_RESOURCE_BARRIER postCopyBarriers[2];
-            postCopyBarriers[0] = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
-            postCopyBarriers[1] = CreateTransition(outputTexture.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                   D3D12_RESOURCE_BARRIER postCopyBarriers[2];
+                   postCopyBarriers[0] = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
+                   postCopyBarriers[1] = CreateTransition(outputTexture.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-            commandList->ResourceBarrier(ARRAYSIZE(postCopyBarriers), postCopyBarriers);
+                   commandList->ResourceBarrier(ARRAYSIZE(postCopyBarriers), postCopyBarriers);
 
-            commandList->Close();
+                   commandList->Close();
 
-            ID3D12CommandList* pList = commandList.Get();
-            renderer->Queue->ExecuteCommandLists(1, &pList);
+                   ID3D12CommandList* pList = commandList.Get();
+                   renderer->Queue->ExecuteCommandLists(1, &pList);
 
-            if (!WaitForGpu(renderer.get())) {
-                assert(false && "WaitForGpu failed");
-                break;
-            }
+                   if (!WaitForGpu(renderer.get())) {
+                       assert(false && "WaitForGpu failed");
+                       break;
+                   }
 
-            // ImGui
-            {
-                UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
+                   // ImGui
+                   {
+                       UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
 
-                ComPtr<ID3D12Resource> swapchainBuffer;
-                CHECK_CALL(renderer->Swapchain->GetBuffer(bufferIndex, IID_PPV_ARGS(&swapchainBuffer)));
+                       ComPtr<ID3D12Resource> swapchainBuffer;
+                       CHECK_CALL(renderer->Swapchain->GetBuffer(bufferIndex, IID_PPV_ARGS(&swapchainBuffer)));
 
-                CHECK_CALL(commandAllocator->Reset());
-                CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
+                       CHECK_CALL(commandAllocator->Reset());
+                       CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
 
-                D3D12_RESOURCE_BARRIER preRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-                commandList->ResourceBarrier(1, &preRenderBarrier);
-                {
-                    commandList->OMSetRenderTargets(
-                        1,
-                        &renderer->SwapchainRTVDescriptorHandles[bufferIndex],
-                        false,
-                        &renderer->SwapchainDSVDescriptorHandles[bufferIndex]);
+                       D3D12_RESOURCE_BARRIER preRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+                       commandList->ResourceBarrier(1, &preRenderBarrier);
+                       {
+                           commandList->OMSetRenderTargets(
+                               1,
+                               &renderer->SwapchainRTVDescriptorHandles[bufferIndex],
+                               false,
+                               &renderer->SwapchainDSVDescriptorHandles[bufferIndex]);
 
-                    // Viewport and scissor
-                    D3D12_VIEWPORT viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
-                    commandList->RSSetViewports(1, &viewport);
-                    D3D12_RECT scissor = {0, 0, static_cast<long>(gWindowWidth), static_cast<long>(gWindowHeight)};
-                    commandList->RSSetScissorRects(1, &scissor);
+                           // Viewport and scissor
+                           D3D12_VIEWPORT viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
+                           commandList->RSSetViewports(1, &viewport);
+                           D3D12_RECT scissor = {0, 0, static_cast<long>(gWindowWidth), static_cast<long>(gWindowHeight)};
+                           commandList->RSSetScissorRects(1, &scissor);
 
-                    // Draw ImGui
-                    window->ImGuiRenderDrawData(renderer.get(), commandList.Get());
-                }
-                D3D12_RESOURCE_BARRIER postRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-                commandList->ResourceBarrier(1, &postRenderBarrier);
+                           // Draw ImGui
+                           window->ImGuiRenderDrawData(renderer.get(), commandList.Get());
+                       }
+                       D3D12_RESOURCE_BARRIER postRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+                       commandList->ResourceBarrier(1, &postRenderBarrier);
 
-                commandList->Close();
+                       commandList->Close();
 
-                ID3D12CommandList* pList = commandList.Get();
-                renderer->Queue->ExecuteCommandLists(1, &pList);
+                       ID3D12CommandList* pList = commandList.Get();
+                       renderer->Queue->ExecuteCommandLists(1, &pList);
 
-                if (!WaitForGpu(renderer.get())) {
-                    assert(false && "WaitForGpu failed");
-                    break;
-                }
-            }
-        }
+                       if (!WaitForGpu(renderer.get())) {
+                           assert(false && "WaitForGpu failed");
+                           break;
+                       }
+                   }
+               }
 
-        // Update sample count
-        if (sampleCount < gMaxSamples) {
-            ++sampleCount;
-        }
+               // Update sample count
+               if (sampleCount < gMaxSamples) {
+                   ++sampleCount;
+               }
 
-        if (!SwapchainPresent(renderer.get())) {
-            assert(false && "SwapchainPresent failed");
-            break;
-        }
-    }
-    */
-        return 0;
+               if (!SwapchainPresent(renderer.get())) {
+                   assert(false && "SwapchainPresent failed");
+                   break;
+               }
+           }
+           */
+    return 0;
 }
 
 void CreateRayTracePipelineLayout(
@@ -2295,59 +2314,7 @@ void CreateTLAS(
         }
     }
 }
-/*
-void CreateOutputTexture(VulkanRenderer* pRenderer, ID3D12Resource** ppBuffer)
-{
-    D3D12_HEAP_PROPERTIES heapProperties = {};
-    heapProperties.Type                  = D3D12_HEAP_TYPE_DEFAULT;
 
-    D3D12_RESOURCE_DESC desc = {};
-    desc.Dimension           = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    desc.Alignment           = 0;
-    desc.Width               = gWindowWidth;
-    desc.Height              = gWindowHeight;
-    desc.DepthOrArraySize    = 1;
-    desc.MipLevels           = 1;
-    desc.Format              = DXGI_FORMAT_B8G8R8A8_UNORM;
-    desc.SampleDesc          = {1, 0};
-    desc.Layout              = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    desc.Flags               = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-
-    CHECK_CALL(pRenderer->Device->CreateCommittedResource(
-        &heapProperties,                       // pHeapProperties
-        D3D12_HEAP_FLAG_NONE,                  // HeapFlags
-        &desc,                                 // pDesc
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS, // InitialResourceState
-        nullptr,                               // pOptimizedClearValue
-        IID_PPV_ARGS(ppBuffer)));              // riidResource, ppvResource
-}
-
-void CreateAccumTexture(VulkanRenderer* pRenderer, ID3D12Resource** ppBuffer)
-{
-    D3D12_HEAP_PROPERTIES heapProperties = {};
-    heapProperties.Type                  = D3D12_HEAP_TYPE_DEFAULT;
-
-    D3D12_RESOURCE_DESC desc = {};
-    desc.Dimension           = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    desc.Alignment           = 0;
-    desc.Width               = gWindowWidth;
-    desc.Height              = gWindowHeight;
-    desc.DepthOrArraySize    = 1;
-    desc.MipLevels           = 1;
-    desc.Format              = DXGI_FORMAT_R32G32B32A32_FLOAT;
-    desc.SampleDesc          = {1, 0};
-    desc.Layout              = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    desc.Flags               = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-
-    CHECK_CALL(pRenderer->Device->CreateCommittedResource(
-        &heapProperties,                       // pHeapProperties
-        D3D12_HEAP_FLAG_NONE,                  // HeapFlags
-        &desc,                                 // pDesc
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS, // InitialResourceState
-        nullptr,                               // pOptimizedClearValue
-        IID_PPV_ARGS(ppBuffer)));              // riidResource, ppvResource
-}
-*/
 void CreateAccumTexture(VulkanRenderer* pRenderer, VulkanImage* pBuffer)
 {
     CHECK_CALL(CreateImage(
@@ -2395,7 +2362,7 @@ void CreateIBLTextures(
         }
     }
 
-    size_t maxEntries = std::min<size_t>(kMaxIBLs, iblFiles.size());
+    size_t maxEntries = 1; // std::min<size_t>(kMaxIBLs, iblFiles.size());
     for (size_t i = 0; i < maxEntries; ++i) {
         std::filesystem::path iblFile = iblFiles[i];
 
@@ -2450,66 +2417,109 @@ void CreateIBLTextures(
         GREX_LOG_INFO("Loaded " << iblFile);
     }
 }
-/*
-void CreateDescriptorHeap(VulkanRenderer* pRenderer, ID3D12DescriptorHeap** ppHeap)
-{
-    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-    desc.NumDescriptors             = 256;
-    desc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    desc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 
-    CHECK_CALL(pRenderer->Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(ppHeap)));
+void CreateDescriptorBuffer(
+    VulkanRenderer*       pRenderer,
+    VkDescriptorSetLayout descriptorSetLayout,
+    VulkanBuffer*         pBuffer)
+{
+    VkDeviceSize size = 0;
+    fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
+
+    VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+
+    CHECK_CALL(CreateBuffer(
+        pRenderer,  // pRenderer
+        size,       // srcSize
+        nullptr,    // pSrcData
+        usageFlags, // usageFlags
+        0,          // minAlignment
+        pBuffer));  // pBuffer
 }
 
 void WriteDescriptors(
     VulkanRenderer*                 pRenderer,
-    ID3D12DescriptorHeap*           pDescriptorHeap,
-    ID3D12Resource*                 pOutputTexture,
-    ID3D12Resource*                 pAccumTexture,
-    ID3D12Resource*                 pRayGenSamplesBuffer,
+    VkDescriptorSetLayout           descriptorSetLayout,
+    VulkanBuffer*                   pDescriptorBuffer,
+    const VulkanImage&              accumTexture,
+    const VulkanBuffer&             rayGenSamplesBuffer,
     const Geometry&                 sphereGeometry,
     const Geometry&                 knobGeometry,
     const Geometry&                 monkeyGeometry,
     const Geometry&                 teapotGeometry,
     const Geometry&                 boxGeometry,
-    const std::vector<IBLTextures>& iblTextures)
+    const std::vector<IBLTextures>& iblTextures,
+    std::vector<VkImageView>*       pImageViews)
 {
+    /*
     const D3D12_CPU_DESCRIPTOR_HANDLE kBaseDescriptor = pDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
     const UINT                        kIncrementSize  = pRenderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    */
+    char* pDescriptorBufferStartAddress = nullptr;
+    CHECK_CALL(vmaMapMemory(
+        pRenderer->Allocator,
+        pDescriptorBuffer->Allocation,
+        reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
 
-    // Outputs resources
+    // Accumulation texture (u2)
     {
-        D3D12_CPU_DESCRIPTOR_HANDLE descriptor = pDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-        descriptor.ptr += kOutputResourcesOffset * kIncrementSize;
+        /*
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
 
-        // Output texture (u1)
-        {
-            D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+        uavDesc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM;
+        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+        pRenderer->Device->CreateUnorderedAccessView(pOutputTexture, nullptr, &uavDesc, descriptor);
+        descriptor.ptr += kIncrementSize;
 
-            uavDesc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM;
-            uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-            pRenderer->Device->CreateUnorderedAccessView(pOutputTexture, nullptr, &uavDesc, descriptor);
-            descriptor.ptr += kIncrementSize;
 
-            uavDesc.Format        = DXGI_FORMAT_R32G32B32A32_FLOAT;
-            uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-            pRenderer->Device->CreateUnorderedAccessView(pAccumTexture, nullptr, &uavDesc, descriptor);
-            descriptor.ptr += kIncrementSize;
-        }
+        uavDesc.Format        = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+        pRenderer->Device->CreateUnorderedAccessView(pAccumTexture, nullptr, &uavDesc, descriptor);
+        descriptor.ptr += kIncrementSize;
+        */
 
-        // Ray generation samples (u3)
-        {
-            D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-            uavDesc.ViewDimension                    = D3D12_UAV_DIMENSION_BUFFER;
-            uavDesc.Buffer.FirstElement              = 0;
-            uavDesc.Buffer.NumElements               = gWindowWidth * gWindowHeight;
-            uavDesc.Buffer.StructureByteStride       = sizeof(uint32_t);
-            uavDesc.Buffer.CounterOffsetInBytes      = 0;
-            uavDesc.Buffer.Flags                     = D3D12_BUFFER_UAV_FLAG_NONE;
+        VkImageView imageView = VK_NULL_HANDLE;
+        CHECK_CALL(CreateImageView(
+            pRenderer,
+            &accumTexture,
+            VK_IMAGE_VIEW_TYPE_2D,
+            VK_FORMAT_R32G32B32A32_SFLOAT,
+            GREX_ALL_SUBRESOURCES,
+            &imageView));
+        pImageViews->push_back(imageView);
+        WriteDescriptor(
+            pRenderer,
+            pDescriptorBufferStartAddress,
+            descriptorSetLayout,
+            2, // binding
+            0, // arrayElement
+            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            imageView,
+            VK_IMAGE_LAYOUT_GENERAL);
+    }
 
-            pRenderer->Device->CreateUnorderedAccessView(pRayGenSamplesBuffer, nullptr, &uavDesc, descriptor);
-            descriptor.ptr += kIncrementSize;
-        }
+    // Ray generation samples (u3)
+    {
+        /*
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+        uavDesc.ViewDimension                    = D3D12_UAV_DIMENSION_BUFFER;
+        uavDesc.Buffer.FirstElement              = 0;
+        uavDesc.Buffer.NumElements               = gWindowWidth * gWindowHeight;
+        uavDesc.Buffer.StructureByteStride       = sizeof(uint32_t);
+        uavDesc.Buffer.CounterOffsetInBytes      = 0;
+        uavDesc.Buffer.Flags                     = D3D12_BUFFER_UAV_FLAG_NONE;
+
+        pRenderer->Device->CreateUnorderedAccessView(pRayGenSamplesBuffer, nullptr, &uavDesc, descriptor);
+        descriptor.ptr += kIncrementSize;
+        */
+        WriteDescriptor(
+            pRenderer,
+            pDescriptorBufferStartAddress,
+            descriptorSetLayout,
+            3, // binding
+            0, // arrayElement
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            &rayGenSamplesBuffer);
     }
 
     // Geometry
@@ -2524,8 +2534,15 @@ void WriteDescriptors(
         uint32_t positionBufferOffset = kGeoBuffersOffset + kPositionBufferIndex * kBuffersStride;
         uint32_t normalBufferOffset   = kGeoBuffersOffset + kNormalBufferIndex * kBuffersStride;
 
+        const uint32_t kIndexBufferBinding    = 20; // Index buffer (t20)
+        const uint32_t kPositionBufferBinding = 45; // Position buffer (t45)
+        const uint32_t kNormalBufferBinding   = 70; // Normal buffer (t70)
+
+        uint32_t arrayElement = 0;
+
         // Spheres
-        for (uint32_t i = 0; i < kNumInstances; ++i) {
+        for (uint32_t i = 0; i < kNumInstances; ++i, ++arrayElement) {
+            /*
             D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
 
             // Index buffer (t20)
@@ -2542,10 +2559,39 @@ void WriteDescriptors(
             descriptor = {kBaseDescriptor.ptr + normalBufferOffset * kIncrementSize};
             CreateDescriptoBufferSRV(pRenderer, 0, sphereGeometry.vertexCount, 4, sphereGeometry.normalBuffer.Get(), descriptor);
             ++normalBufferOffset;
+            */
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                kIndexBufferBinding,
+                arrayElement,
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &sphereGeometry.indexBuffer);
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                kPositionBufferBinding,
+                arrayElement,
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &sphereGeometry.positionBuffer);
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                kNormalBufferBinding,
+                arrayElement,
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &sphereGeometry.normalBuffer);
         }
 
         // Knob
-        for (uint32_t i = 0; i < kNumInstances; ++i) {
+        for (uint32_t i = 0; i < kNumInstances; ++i, ++arrayElement) {
+            /*
             D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
 
             // Index buffer (t20)
@@ -2562,10 +2608,39 @@ void WriteDescriptors(
             descriptor = {kBaseDescriptor.ptr + normalBufferOffset * kIncrementSize};
             CreateDescriptoBufferSRV(pRenderer, 0, knobGeometry.vertexCount, 4, knobGeometry.normalBuffer.Get(), descriptor);
             ++normalBufferOffset;
+            */
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                kIndexBufferBinding,
+                arrayElement,
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &knobGeometry.indexBuffer);
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                kPositionBufferBinding,
+                arrayElement,
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &knobGeometry.positionBuffer);
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                kNormalBufferBinding,
+                arrayElement,
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &knobGeometry.normalBuffer);
         }
 
         // Monkey
-        for (uint32_t i = 0; i < kNumInstances; ++i) {
+        for (uint32_t i = 0; i < kNumInstances; ++i, ++arrayElement) {
+            /*
             D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
 
             // Index buffer (t20)
@@ -2582,10 +2657,39 @@ void WriteDescriptors(
             descriptor = {kBaseDescriptor.ptr + normalBufferOffset * kIncrementSize};
             CreateDescriptoBufferSRV(pRenderer, 0, monkeyGeometry.vertexCount, 4, monkeyGeometry.normalBuffer.Get(), descriptor);
             ++normalBufferOffset;
+            */
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                kIndexBufferBinding,
+                arrayElement,
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &monkeyGeometry.indexBuffer);
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                kPositionBufferBinding,
+                arrayElement,
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &monkeyGeometry.positionBuffer);
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                kNormalBufferBinding,
+                arrayElement,
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &monkeyGeometry.normalBuffer);
         }
 
         // Teapot
-        for (uint32_t i = 0; i < kNumInstances; ++i) {
+        for (uint32_t i = 0; i < kNumInstances; ++i, ++arrayElement) {
+            /*
             D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
 
             // Index buffer (t20)
@@ -2602,11 +2706,40 @@ void WriteDescriptors(
             descriptor = {kBaseDescriptor.ptr + normalBufferOffset * kIncrementSize};
             CreateDescriptoBufferSRV(pRenderer, 0, teapotGeometry.vertexCount, 4, teapotGeometry.normalBuffer.Get(), descriptor);
             ++normalBufferOffset;
+            */
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                kIndexBufferBinding,
+                arrayElement,
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &teapotGeometry.indexBuffer);
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                kPositionBufferBinding,
+                arrayElement,
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &teapotGeometry.positionBuffer);
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                kNormalBufferBinding,
+                arrayElement,
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &teapotGeometry.normalBuffer);
         }
 
         // Box
         uint32_t instanceStride = 0 * kNumInstances;
         {
+            /*
             D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
 
             // Index buffer (t20)
@@ -2623,15 +2756,75 @@ void WriteDescriptors(
             descriptor = {kBaseDescriptor.ptr + normalBufferOffset * kIncrementSize};
             CreateDescriptoBufferSRV(pRenderer, 0, boxGeometry.vertexCount, 4, boxGeometry.normalBuffer.Get(), descriptor);
             ++normalBufferOffset;
+            */
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                kIndexBufferBinding,
+                arrayElement,
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &boxGeometry.indexBuffer);
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                kPositionBufferBinding,
+                arrayElement,
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &boxGeometry.positionBuffer);
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                kNormalBufferBinding,
+                arrayElement,
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &boxGeometry.normalBuffer);
         }
     }
 
-    // IBL Textures
-    for (uint32_t i = 0; i < iblTextures.size(); ++i) {
-        auto& iblTexture = iblTextures[i];
+    // IBL environment textures (t100)
+    {
+        uint32_t arrayElement = 0;
+        for (uint32_t i = 0; i < iblTextures.size(); ++i, ++arrayElement) {
+            /*
+            auto& iblTexture = iblTextures[i];
 
-        D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {kBaseDescriptor.ptr + ((kIBLTextureOffset + i) * kIncrementSize)};
-        CreateDescriptorTexture2D(pRenderer, iblTexture.envTexture.Get(), descriptor, 0, iblTexture.envNumLevels);
+            D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {kBaseDescriptor.ptr + ((kIBLTextureOffset + i) * kIncrementSize)};
+            CreateDescriptorTexture2D(pRenderer, iblTexture.envTexture.Get(), descriptor, 0, iblTexture.envNumLevels);
+            */
+            
+            auto& iblTexture = iblTextures[i];
+
+            VkImageView imageView = VK_NULL_HANDLE;
+            CHECK_CALL(CreateImageView(
+                pRenderer,
+                &iblTexture.envTexture,
+                VK_IMAGE_VIEW_TYPE_2D,
+                VK_FORMAT_R32G32B32A32_SFLOAT,
+                0,
+                iblTexture.envNumLevels,
+                0,
+                1,
+                &imageView));
+            pImageViews->push_back(imageView);
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                100,
+                arrayElement,
+                VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                imageView,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+        }
     }
+
+    vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
 }
-*/

@@ -137,6 +137,7 @@ struct VulkanBuffer
     VkBuffer          Buffer;
     VmaAllocation     Allocation;
     VmaAllocationInfo AllocationInfo;
+    VkDeviceSize      Size;
 };
 
 struct VulkanImage
@@ -219,6 +220,17 @@ VkResult CreateTexture(
     const void*     pSrcData,
     VulkanImage*    pImage);
 
+VkResult CreateImageView(
+    VulkanRenderer*    pRenderer,
+    const VulkanImage* pImage,
+    VkImageViewType    viewType,
+    VkFormat           format,
+    uint32_t           firstMipLevel,
+    uint32_t           numMipLevels,
+    uint32_t           firstArrayLayer,
+    uint32_t           numArrayLayers,
+    VkImageView*       pImageView);
+
 VkResult CreateDSV(
     VulkanRenderer* pRenderer,
     uint32_t        width,
@@ -229,6 +241,7 @@ void DestroyBuffer(VulkanRenderer* pRenderer, const VulkanBuffer* pBuffer);
 
 VkDeviceAddress GetDeviceAddress(VulkanRenderer* pRenderer, const VulkanBuffer* pBuffer);
 VkDeviceAddress GetDeviceAddress(VulkanRenderer* pRenderer, VkAccelerationStructureKHR accelStruct);
+VkDeviceAddress GetDeviceAddress(VulkanRenderer* pRenderer, const VulkanAccelStruct* pAccelStruct);
 
 VkResult CreateDrawVertexColorPipeline(
     VulkanRenderer*  pRenderer,
@@ -254,6 +267,36 @@ HRESULT CompileHLSL(
     const std::string&     profile,
     std::vector<uint32_t>* pSPIRV,
     std::string*           pErrorMsg);
+
+// Buffer
+void WriteDescriptor(
+    VulkanRenderer*       pRenderer,
+    void*                 pDescriptorBufferStartAddress,
+    VkDescriptorSetLayout descriptorSetLayout,
+    uint32_t              binding,
+    uint32_t              arrayElement,
+    VkDescriptorType      descriptorType,
+    const VulkanBuffer*   pBuffer);
+
+// Acceleration structure
+void WriteDescriptor(
+    VulkanRenderer*          pRenderer,
+    void*                    pDescriptorBufferStartAddress,
+    VkDescriptorSetLayout    descriptorSetLayout,
+    uint32_t                 binding,
+    uint32_t                 arrayElement,
+    const VulkanAccelStruct* pAccelStruct);
+
+// Image view
+void WriteDescriptor(
+    VulkanRenderer*       pRenderer,
+    void*                 pDescriptorBufferStartAddress,
+    VkDescriptorSetLayout descriptorSetLayout,
+    uint32_t              binding,
+    uint32_t              arrayElement,
+    VkDescriptorType      descriptorType,
+    VkImageView           imageView,
+    VkImageLayout         imageLayout);
 
 // Loaded funtions
 extern PFN_vkCreateRayTracingPipelinesKHR             fn_vkCreateRayTracingPipelinesKHR;

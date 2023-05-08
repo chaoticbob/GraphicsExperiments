@@ -197,8 +197,6 @@ void MouseMove(int x, int y, int buttons)
     prevY = y;
 }
 
-void WriteDescriptors(std::unique_ptr<DxRenderer>& renderer, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& descriptorHeap, Microsoft::WRL::ComPtr<ID3D12Resource>& outputTexture, Microsoft::WRL::ComPtr<ID3D12Resource>& accumTexture, Microsoft::WRL::ComPtr<ID3D12Resource>& rayGenSamplesBuffer, Geometry& sphereGeometry, Geometry& boxGeometry, IBLTextures& iblTextures);
-
 // =============================================================================
 // main()
 // =============================================================================
@@ -2028,6 +2026,7 @@ void WriteDescriptors(
         descriptor.ptr += kOutputResourcesOffset * kIncrementSize;
 
         // Output texture (u1)
+        // Accumulation texture (u2)
         {
             D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
 

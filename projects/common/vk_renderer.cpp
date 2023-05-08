@@ -908,6 +908,8 @@ VkResult CreateBuffer(
         }
     }
 
+    pBuffer->Size = srcSize;
+
     return VK_SUCCESS;
 }
 
@@ -1190,6 +1192,41 @@ VkResult CreateTexture(
         pImage);
 }
 
+VkResult CreateImageView(
+    VulkanRenderer*    pRenderer,
+    const VulkanImage* pImage,
+    VkImageViewType    viewType,
+    VkFormat           format,
+    uint32_t           firstMipLevel,
+    uint32_t           numMipLevels,
+    uint32_t           firstArrayLayer,
+    uint32_t           numArrayLayers,
+    VkImageView*       pImageView)
+{
+    VkImageViewCreateInfo createInfo           = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+    createInfo.pNext                           = nullptr;
+    createInfo.flags                           = 0;
+    createInfo.image                           = pImage->Image;
+    createInfo.viewType                        = viewType;
+    createInfo.format                          = format;
+    createInfo.components.r                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.components.g                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.components.b                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.components.a                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+    createInfo.subresourceRange.baseMipLevel   = firstMipLevel;
+    createInfo.subresourceRange.levelCount     = numMipLevels;
+    createInfo.subresourceRange.baseArrayLayer = firstArrayLayer;
+    createInfo.subresourceRange.layerCount     = numArrayLayers;
+
+    VkResult vkres = vkCreateImageView(
+        pRenderer->Device,
+        &createInfo,
+        nullptr,
+        pImageView);
+    return vkres;
+}
+
 VkResult CreateDSV(
     VulkanRenderer* pRenderer,
     uint32_t        width,
@@ -1218,6 +1255,8 @@ void DestroyBuffer(VulkanRenderer* pRenderer, const VulkanBuffer* pBuffer)
 
 VkDeviceAddress GetDeviceAddress(VulkanRenderer* pRenderer, const VulkanBuffer* pBuffer)
 {
+    assert((pBuffer != nullptr) && "pBuffer is NULL");
+
     VkBufferDeviceAddressInfo address_info = {VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO};
     address_info.pNext                     = nullptr;
     address_info.buffer                    = pBuffer->Buffer;
@@ -1240,6 +1279,12 @@ VkDeviceAddress GetDeviceAddress(VulkanRenderer* pRenderer, VkAccelerationStruct
         &addressInfo);
 
     return address;
+}
+
+VkDeviceAddress GetDeviceAddress(VulkanRenderer* pRenderer, const VulkanAccelStruct* pAccelStruct)
+{
+    assert((pAccelStruct != nullptr) && "pAccelStruct is NULL");
+    return GetDeviceAddress(pRenderer, pAccelStruct->AccelStruct);
 }
 
 VkResult CreateDrawVertexColorPipeline(
@@ -1722,6 +1767,179 @@ HRESULT CompileHLSL(
     memcpy(pSPIRV->data(), pBuffer, bufferSize);
 
     return S_OK;
+}
+
+void WriteDescriptor(
+    VulkanRenderer*       pRenderer,
+    void*                 pDescriptorBufferStartAddress,
+    VkDescriptorSetLayout descriptorSetLayout,
+    uint32_t              binding,
+    uint32_t              arrayElement,
+    VkDescriptorType      descriptorType,
+    const VulkanBuffer*   pBuffer)
+{
+    // Get the descriptor buffer properties so we can look up the descriptor size
+    VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT};
+    VkPhysicalDeviceProperties2                   properties                 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+    properties.pNext                                                         = &descriptorBufferProperties;
+    vkGetPhysicalDeviceProperties2(pRenderer->PhysicalDevice, &properties);
+
+    // Address info
+    VkDescriptorAddressInfoEXT addressInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT};
+    addressInfo.address                    = GetDeviceAddress(pRenderer, pBuffer);
+    addressInfo.range                      = pBuffer->AllocationInfo.size;
+
+    // Get buffer device address for acceleration structure
+    VkDescriptorGetInfoEXT descriptorInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT};
+    descriptorInfo.type                   = descriptorType;
+
+    // Set address info and figure out descriptor size
+    VkDeviceSize descriptorSize = 0;
+    switch (descriptorType) {
+        default: break;
+
+        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: {
+            descriptorInfo.data.pUniformBuffer = &addressInfo;
+            descriptorSize                     = static_cast<VkDeviceSize>(descriptorBufferProperties.uniformBufferDescriptorSize);
+        } break;
+
+        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: {
+            descriptorInfo.data.pStorageBuffer = &addressInfo;
+            descriptorSize                     = static_cast<VkDeviceSize>(descriptorBufferProperties.storageBufferDescriptorSize);
+        } break;
+    }
+
+    // Get the offset for the binding
+    VkDeviceSize bindingOffset = 0;
+    fn_vkGetDescriptorSetLayoutBindingOffsetEXT(
+        pRenderer->Device,
+        descriptorSetLayout,
+        binding,
+        &bindingOffset);
+
+    // Calculate array element offset
+    VkDeviceSize arrayElementOffset = arrayElement * descriptorSize;
+
+    // Descriptor location
+    VkDeviceSize location = bindingOffset + arrayElementOffset;
+
+    // Write the descriptor
+    char* pDescriptor = static_cast<char*>(pDescriptorBufferStartAddress) + location;
+    fn_vkGetDescriptorEXT(
+        pRenderer->Device, // device
+        &descriptorInfo,   // pDescriptorInfo
+        descriptorSize,    // dataSize
+        pDescriptor);      // pDescriptor
+}
+
+void WriteDescriptor(
+    VulkanRenderer*          pRenderer,
+    void*                    pDescriptorBufferStartAddress,
+    VkDescriptorSetLayout    descriptorSetLayout,
+    uint32_t                 binding,
+    uint32_t                 arrayElement,
+    const VulkanAccelStruct* pAccelStruct)
+{
+    // Get the descriptor buffer properties so we can look up the descriptor size
+    VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT};
+    VkPhysicalDeviceProperties2                   properties                 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+    properties.pNext                                                         = &descriptorBufferProperties;
+    vkGetPhysicalDeviceProperties2(pRenderer->PhysicalDevice, &properties);
+
+
+    // Get buffer device address for acceleration structure
+    VkDescriptorGetInfoEXT descriptorInfo     = {VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT};
+    descriptorInfo.type                       = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+    descriptorInfo.data.accelerationStructure = GetDeviceAddress(pRenderer, pAccelStruct);
+
+    // Descriptor size
+    VkDeviceSize descriptorSize = static_cast<uint32_t>(descriptorBufferProperties.accelerationStructureDescriptorSize);
+
+    // Get the offset for the binding
+    VkDeviceSize bindingOffset = 0;
+    fn_vkGetDescriptorSetLayoutBindingOffsetEXT(
+        pRenderer->Device,
+        descriptorSetLayout,
+        binding,
+        &bindingOffset);
+
+    // Calculate array element offset
+    VkDeviceSize arrayElementOffset = arrayElement * descriptorSize;
+
+    // Descriptor location
+    VkDeviceSize location = bindingOffset + arrayElementOffset;
+
+    // Write the descriptor
+    char* pDescriptor = static_cast<char*>(pDescriptorBufferStartAddress) + location;
+    fn_vkGetDescriptorEXT(
+        pRenderer->Device, // device
+        &descriptorInfo,   // pDescriptorInfo
+        descriptorSize,    // dataSize
+        pDescriptor);      // pDescriptor
+}
+
+void WriteDescriptor(
+    VulkanRenderer*       pRenderer,
+    void*                 pDescriptorBufferStartAddress,
+    VkDescriptorSetLayout descriptorSetLayout,
+    uint32_t              binding,
+    uint32_t              arrayElement,
+    VkDescriptorType      descriptorType,
+    VkImageView           imageView,
+    VkImageLayout         imageLayout)
+{
+    // Get the descriptor buffer properties so we can look up the descriptor size
+    VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT};
+    VkPhysicalDeviceProperties2                   properties                 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+    properties.pNext                                                         = &descriptorBufferProperties;
+    vkGetPhysicalDeviceProperties2(pRenderer->PhysicalDevice, &properties);
+
+    // Address info
+    VkDescriptorImageInfo imageInfo = {};
+    imageInfo.imageView             = imageView;
+    imageInfo.imageLayout           = imageLayout;
+
+    // Get buffer device address for acceleration structure
+    VkDescriptorGetInfoEXT descriptorInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT};
+    descriptorInfo.type                   = descriptorType;
+
+    // Set address info and Figure out descriptor size
+    VkDeviceSize descriptorSize = 0;
+    switch (descriptorType) {
+        default: break;
+
+        case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE: {
+            descriptorInfo.data.pSampledImage = &imageInfo;
+            descriptorSize                    = static_cast<VkDeviceSize>(descriptorBufferProperties.sampledImageDescriptorSize);
+        } break;
+
+        case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE: {
+            descriptorInfo.data.pSampledImage = &imageInfo;
+            descriptorSize                    = static_cast<VkDeviceSize>(descriptorBufferProperties.storageImageDescriptorSize);
+        } break;
+    }
+    
+    // Get the offset for the binding
+    VkDeviceSize bindingOffset = 0;
+    fn_vkGetDescriptorSetLayoutBindingOffsetEXT(
+        pRenderer->Device,
+        descriptorSetLayout,
+        binding,
+        &bindingOffset);
+
+    // Calculate array element offset
+    VkDeviceSize arrayElementOffset = arrayElement * descriptorSize;
+
+    // Descriptor location
+    VkDeviceSize location = bindingOffset + arrayElementOffset;
+
+    // Write the descriptor
+    char* pDescriptor = static_cast<char*>(pDescriptorBufferStartAddress) + location;
+    fn_vkGetDescriptorEXT(
+        pRenderer->Device, // device
+        &descriptorInfo,   // pDescriptorInfo
+        descriptorSize,    // dataSize
+        pDescriptor);      // pDescriptor
 }
 
 uint32_t BitsPerPixel(VkFormat fmt)
