@@ -1695,11 +1695,11 @@ static std::wstring AsciiToUTF16(const std::string& ascii)
 }
 
 HRESULT CompileHLSL(
-    const std::string& shaderSource,
-    const std::string& entryPoint,
-    const std::string& profile,
-    std::vector<char>* pSpirv,
-    std::string*       pErrorMsg)
+    const std::string&     shaderSource,
+    const std::string&     entryPoint,
+    const std::string&     profile,
+    std::vector<uint32_t>* pSPIRV,
+    std::string*           pErrorMsg)
 {
     // Check source
     if (shaderSource.empty()) {
@@ -1717,7 +1717,7 @@ HRESULT CompileHLSL(
         return E_INVALIDARG;
     }
     // Check output
-    if (IsNull(pSpirv)) {
+    if (IsNull(pSPIRV)) {
         assert(false && "DXIL output arg is null");
         return E_INVALIDARG;
     }
@@ -1778,7 +1778,10 @@ HRESULT CompileHLSL(
 
     const char* pBuffer    = static_cast<const char*>(shaderBinary->GetBufferPointer());
     size_t      bufferSize = static_cast<size_t>(shaderBinary->GetBufferSize());
-    *pSpirv                = std::vector<char>(pBuffer, pBuffer + bufferSize);
+    size_t      wordCount  = bufferSize / 4;
+    
+    pSPIRV->resize(wordCount);
+    memcpy(pSPIRV->data(), pBuffer, bufferSize);
 
     return S_OK;
 }

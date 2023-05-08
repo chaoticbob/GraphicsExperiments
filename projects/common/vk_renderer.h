@@ -240,11 +240,11 @@ CompileResult CompileGLSL(
     std::string*           pErrorMsg);
 
 HRESULT CompileHLSL(
-    const std::string& shaderSource,
-    const std::string& entryPoint,
-    const std::string& profile,
-    std::vector<char>* pSpirv,
-    std::string*       pErrorMsg);
+    const std::string&     shaderSource,
+    const std::string&     entryPoint,
+    const std::string&     profile,
+    std::vector<uint32_t>* pSPIRV,
+    std::string*           pErrorMsg);
 
 // Loaded funtions
 extern PFN_vkCreateRayTracingPipelinesKHR             fn_vkCreateRayTracingPipelinesKHR;

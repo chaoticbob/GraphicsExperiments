@@ -30,6 +30,7 @@ const uint32_t kOutputResourcesOffset = 0;
 const uint32_t kGeoBuffersOffset      = 20;
 const uint32_t kIBLTextureOffset      = 100;
 const uint32_t kMaxIBLs               = 100;
+const uint32_t kMaxGeometries         = 75;
 
 // =============================================================================
 // Shader code
@@ -757,7 +758,7 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     // Geometry buffers range
     D3D12_DESCRIPTOR_RANGE rangeGeometryBuffers            = {};
     rangeGeometryBuffers.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    rangeGeometryBuffers.NumDescriptors                    = 75;
+    rangeGeometryBuffers.NumDescriptors                    = kMaxGeometries;
     rangeGeometryBuffers.BaseShaderRegister                = 20;
     rangeGeometryBuffers.RegisterSpace                     = 0;
     rangeGeometryBuffers.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;

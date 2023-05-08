@@ -9,6 +9,8 @@
 #include <glm/gtx/transform.hpp>
 using namespace glm;
 
+#include <fstream>
+
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
@@ -30,6 +32,7 @@ const uint32_t kOutputResourcesOffset = 0;
 const uint32_t kGeoBuffersOffset      = 20;
 const uint32_t kIBLTextureOffset      = 100;
 const uint32_t kMaxIBLs               = 100;
+const uint32_t kMaxGeometries         = 25;
 
 // =============================================================================
 // Shader code
@@ -58,10 +61,9 @@ static bool     gEnableDebug        = true;
 static bool     gEnableRayTracing   = true;
 static uint32_t gUniformmBufferSize = 256;
 
-static LPCWSTR gHitGroupName         = L"MyHitGroup";
-static LPCWSTR gRayGenShaderName     = L"MyRaygenShader";
-static LPCWSTR gMissShaderName       = L"MyMissShader";
-static LPCWSTR gClosestHitShaderName = L"MyClosestHitShader";
+static const char* gRayGenShaderName     = "MyRaygenShader";
+static const char* gMissShaderName       = "MyMissShader";
+static const char* gClosestHitShaderName = "MyClosestHitShader";
 
 static float gTargetAngle = 0.0f;
 static float gAngle       = 0.0f;
@@ -125,6 +127,11 @@ void CreateRayTracePipelineLayout(
     VkSampler*             pImmutableSampler,
     VkDescriptorSetLayout* pDescriptorSetLayout,
     VkPipelineLayout*      pPipelineLayout);
+void CreateRayTracingPipeline(
+    VulkanRenderer*  pRenderer,
+    VkShaderModule   rayTraceModule,
+    VkPipelineLayout pipelineLayout,
+    VkPipeline*      pPipeline);
 /*void CreateRayTracingPipeline(
     VulkanRenderer*  pRenderer,
     VkPipelineLayout pipelineLayout,
@@ -221,7 +228,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Compile shaders
     // *************************************************************************
-    std::vector<char> rayTraceSpv;
+    std::vector<uint32_t> rayTraceSpv;
     {
         auto source = LoadString("projects/033_raytracing_path_trace_pbr_d3d12/shaders.hlsl");
         assert((!source.empty()) && "no shader source!");
@@ -236,9 +243,12 @@ int main(int argc, char** argv)
             assert(false);
             return EXIT_FAILURE;
         }
+
+        std::ofstream os("rayTrace.spv", std::ios::binary);
+        os.write((const char*)rayTraceSpv.data(), SizeInBytes(rayTraceSpv));
     }
 
-    std::vector<char> clearRayGenDxil;
+    std::vector<uint32_t> clearRayGenDxil;
     {
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(gClearRayGenSamplesShader, "csmain", "cs_6_5", &clearRayGenDxil, &errorMsg);
@@ -253,7 +263,7 @@ int main(int argc, char** argv)
     }
 
     // *************************************************************************
-    // Descriptor set and pipeline layout for ray tracing
+    // Ray tracing descriptor set and pipeline layout
     //
     // This is used for pipeline creation and setting the descriptor buffer(s).
     //
@@ -262,6 +272,34 @@ int main(int argc, char** argv)
     VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
     VkPipelineLayout      pipelineLayout      = VK_NULL_HANDLE;
     CreateRayTracePipelineLayout(renderer.get(), &immutableSampler, &descriptorSetLayout, &pipelineLayout);
+
+    // *************************************************************************
+    // Ray tracing Shader module
+    // *************************************************************************
+    VkShaderModule rayTraceShaderModule = VK_NULL_HANDLE;
+    {
+        VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+        createInfo.codeSize                 = SizeInBytes(rayTraceSpv);
+        createInfo.pCode                    = DataPtr(rayTraceSpv);
+
+        CHECK_CALL(vkCreateShaderModule(renderer->Device, &createInfo, nullptr, &rayTraceShaderModule));
+    }
+
+    // *************************************************************************
+    // Ray tracing pipeline
+    //
+    // The pipeline is created with 3 shader groups:
+    //    1) Ray gen
+    //    2) Miss
+    //    3) Hitgroup
+    //
+    // *************************************************************************
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    CreateRayTracingPipeline(
+        renderer.get(),
+        rayTraceShaderModule,
+        pipelineLayout,
+        &pipeline);
 
     /*
         // *************************************************************************
@@ -754,6 +792,7 @@ int main(int argc, char** argv)
     */
     return 0;
 }
+
 void CreateRayTracePipelineLayout(
     VulkanRenderer*        pRenderer,
     VkSampler*             pImmutableSampler,
@@ -763,7 +802,92 @@ void CreateRayTracePipelineLayout(
     // Descriptor set layout
     {
         std::vector<VkDescriptorSetLayoutBinding> bindings = {};
-        {}
+        // Acceleration structure (t0)
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 0;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+            binding.descriptorCount              = 1;
+            binding.stageFlags                   = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+            bindings.push_back(binding);
+        }
+        // Output texture (u1)
+        // Accumulation texture (u2)
+        // Ray generaiton sampling (u3)
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 1;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            binding.descriptorCount              = 1;
+            binding.stageFlags                   = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+            bindings.push_back(binding);
+
+            binding                 = {};
+            binding.binding         = 2;
+            binding.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            binding.descriptorCount = 1;
+            binding.stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+            bindings.push_back(binding);
+
+            binding                 = {};
+            binding.binding         = 3;
+            binding.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            binding.descriptorCount = 1;
+            binding.stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+            bindings.push_back(binding);
+        }
+        // Scene params (b5)
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 5;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            binding.descriptorCount              = 1;
+            binding.stageFlags                   = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR;
+            bindings.push_back(binding);
+        }
+        //  Index buffers (t20)
+        //  Position buffers (t45)
+        //  Normal buffers (t70)
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 20;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            binding.descriptorCount              = kMaxGeometries;
+            binding.stageFlags                   = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+            bindings.push_back(binding);
+
+            binding                 = {};
+            binding.binding         = 45;
+            binding.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            binding.descriptorCount = kMaxGeometries;
+            binding.stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+            bindings.push_back(binding);
+
+            binding                 = {};
+            binding.binding         = 70;
+            binding.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            binding.descriptorCount = kMaxGeometries;
+            binding.stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+            bindings.push_back(binding);
+        }
+        // Environment map (t100)
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 100;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+            binding.descriptorCount              = kMaxIBLs;
+            binding.stageFlags                   = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR;
+            bindings.push_back(binding);
+        }
+        // Material params (t9)
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 9;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            binding.descriptorCount              = 1;
+            binding.stageFlags                   = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+            bindings.push_back(binding);
+        }
 
         // IBLMapSampler (s10)
         {
@@ -797,7 +921,6 @@ void CreateRayTracePipelineLayout(
             binding.descriptorCount              = 1;
             binding.stageFlags                   = VK_SHADER_STAGE_ALL;
             binding.pImmutableSamplers           = pImmutableSampler;
-
             bindings.push_back(binding);
         }
 
@@ -825,6 +948,98 @@ void CreateRayTracePipelineLayout(
             nullptr,
             pPipelineLayout));
     }
+}
+
+void CreateRayTracingPipeline(
+    VulkanRenderer*  pRenderer,
+    VkShaderModule   rayTraceModule,
+    VkPipelineLayout pipelineLayout,
+    VkPipeline*      pPipeline)
+{
+    // Shader stages
+    std::vector<VkPipelineShaderStageCreateInfo> shaderStages = {};
+    // Ray gen
+    {
+        VkPipelineShaderStageCreateInfo createInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        createInfo.stage                           = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+        createInfo.module                          = rayTraceModule;
+        createInfo.pName                           = gRayGenShaderName;
+
+        shaderStages.push_back(createInfo);
+    }
+    // Miss
+    {
+        VkPipelineShaderStageCreateInfo createInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        createInfo.stage                           = VK_SHADER_STAGE_MISS_BIT_KHR;
+        createInfo.module                          = rayTraceModule;
+        createInfo.pName                           = gMissShaderName;
+
+        shaderStages.push_back(createInfo);
+    }
+    // Closest hit
+    {
+        VkPipelineShaderStageCreateInfo createInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        createInfo.stage                           = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+        createInfo.module                          = rayTraceModule;
+        createInfo.pName                           = gClosestHitShaderName;
+
+        shaderStages.push_back(createInfo);
+    }
+    // Shader groups
+    std::vector<VkRayTracingShaderGroupCreateInfoKHR> shaderGroups = {};
+    // Ray gen
+    {
+        VkRayTracingShaderGroupCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR};
+        createInfo.type                                 = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+        createInfo.generalShader                        = 0; // shaderStages[0]
+        createInfo.closestHitShader                     = VK_SHADER_UNUSED_KHR;
+        createInfo.anyHitShader                         = VK_SHADER_UNUSED_KHR;
+        createInfo.intersectionShader                   = VK_SHADER_UNUSED_KHR;
+
+        shaderGroups.push_back(createInfo);
+    }
+    // Miss
+    {
+        VkRayTracingShaderGroupCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR};
+        createInfo.type                                 = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+        createInfo.generalShader                        = 1; // shaderStages[1]
+        createInfo.closestHitShader                     = VK_SHADER_UNUSED_KHR;
+        createInfo.anyHitShader                         = VK_SHADER_UNUSED_KHR;
+        createInfo.intersectionShader                   = VK_SHADER_UNUSED_KHR;
+
+        shaderGroups.push_back(createInfo);
+    }
+    // Closest hit
+    {
+        VkRayTracingShaderGroupCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR};
+        createInfo.type                                 = VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR;
+        createInfo.generalShader                        = VK_SHADER_UNUSED_KHR;
+        createInfo.closestHitShader                     = 2; // shaderStages[2]
+        createInfo.anyHitShader                         = VK_SHADER_UNUSED_KHR;
+        createInfo.intersectionShader                   = VK_SHADER_UNUSED_KHR;
+
+        shaderGroups.push_back(createInfo);
+    }
+
+    VkRayTracingPipelineCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR};
+    createInfo.flags                             = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    createInfo.stageCount                        = CountU32(shaderStages);
+    createInfo.pStages                           = DataPtr(shaderStages);
+    createInfo.groupCount                        = CountU32(shaderGroups);
+    createInfo.pGroups                           = DataPtr(shaderGroups);
+    createInfo.maxPipelineRayRecursionDepth      = 5;
+    createInfo.layout                            = pipelineLayout;
+    createInfo.basePipelineHandle                = VK_NULL_HANDLE;
+    createInfo.basePipelineIndex                 = -1;
+
+    CHECK_CALL(fn_vkCreateRayTracingPipelinesKHR(
+        pRenderer->Device, // device
+        VK_NULL_HANDLE,    // deferredOperation
+        VK_NULL_HANDLE,    // pipelineCache
+        1,                 // createInfoCount
+        &createInfo,       // pCreateInfos
+        nullptr,           // pAllocator
+        pPipeline));       // pPipelines
 }
 
 /*
