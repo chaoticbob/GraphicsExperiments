@@ -661,37 +661,37 @@ bool ResourceStateToBarrierInfo(
         case RESOURCE_STATE_VERTEX_SHADER_RESOURCE: {
             stage_mask  = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
             access_mask = VK_ACCESS_2_SHADER_READ_BIT;
-            layout      = VK_IMAGE_LAYOUT_UNDEFINED;
+            layout      = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         } break;
 
         case RESOURCE_STATE_HULL_SHADER_RESOURCE: {
             stage_mask  = VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT;
             access_mask = VK_ACCESS_2_SHADER_READ_BIT;
-            layout      = VK_IMAGE_LAYOUT_UNDEFINED;
+            layout      = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         } break;
 
         case RESOURCE_STATE_DOMAIN_SHADER_RESOURCE: {
             stage_mask  = VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT;
             access_mask = VK_ACCESS_2_SHADER_READ_BIT;
-            layout      = VK_IMAGE_LAYOUT_UNDEFINED;
+            layout      = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         } break;
 
         case RESOURCE_STATE_GEOMETRY_SHADER_RESOURCE: {
             stage_mask  = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;
             access_mask = VK_ACCESS_2_SHADER_READ_BIT;
-            layout      = VK_IMAGE_LAYOUT_UNDEFINED;
+            layout      = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         } break;
 
         case RESOURCE_STATE_PIXEL_SHADER_RESOURCE: {
             stage_mask  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
             access_mask = VK_ACCESS_2_SHADER_READ_BIT;
-            layout      = VK_IMAGE_LAYOUT_UNDEFINED;
+            layout      = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         } break;
 
         case RESOURCE_STATE_COMPUTE_SHADER_RESOURCE: {
             stage_mask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
             access_mask = VK_ACCESS_2_SHADER_READ_BIT;
-            layout      = VK_IMAGE_LAYOUT_UNDEFINED;
+            layout      = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         } break;
 
         case RESOURCE_STATE_VERTEX_UNORDERED_ACCESS: {
@@ -1165,6 +1165,18 @@ VkResult CreateTexture(
         }
 
         DestroyBuffer(pRenderer, &stagingBuffer);
+    }
+
+    vkres = TransitionImageLayout(
+        pRenderer,
+        pImage->Image,
+        GREX_ALL_SUBRESOURCES,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        RESOURCE_STATE_TRANSFER_DST,
+        RESOURCE_STATE_COMPUTE_SHADER_RESOURCE);
+    if (vkres != VK_SUCCESS) {
+        assert(false && "transition image layout failed");
+        return vkres;
     }
 
     return VK_SUCCESS;

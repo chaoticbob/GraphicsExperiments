@@ -355,38 +355,7 @@ void MyRaygenShader()
     finalColor = ACESFilm(finalColor); 
 
     RenderTarget[rayIndex2] = float4(pow(finalColor, 1 / 2.2), 0);
-    RayGenSamples[rayIndex] = sampleCount;
-
-/*
-	const float2 pixelCenter = (float2)DispatchRaysIndex() + float2(0.5, 0.5);
-	const float2 inUV = pixelCenter/(float2)DispatchRaysDimensions();
-	float2 d = inUV * 2.0 - 1.0;
-    d.y = -d.y;
-
-	float4 origin = mul(SceneParams.ViewInverseMatrix, float4(0,0,0,1));
-	float4 target = mul(SceneParams.ProjectionInverseMatrix, float4(d.x, d.y, 1, 1));
-	float4 direction = mul(SceneParams.ViewInverseMatrix, float4(normalize(target.xyz), 0));
-
-    RayDesc ray;
-    ray.Origin = origin.xyz;
-    ray.Direction = direction.xyz;
-    ray.TMin = 0.001;
-    ray.TMax = 10000.0;
-
-    RayPayload payload = {float4(0, 0, 0, 0), 0, 0, 0};
-
-    TraceRay(
-        Scene,                 // AccelerationStructure
-        RAY_FLAG_FORCE_OPAQUE, // RayFlags
-        ~0,                    // InstanceInclusionMask
-        0,                     // RayContributionToHitGroupIndex
-        1,                     // MultiplierForGeometryContributionToHitGroupIndex
-        0,                     // MissShaderIndex
-        ray,                   // Ray
-        payload);              // Payload
-
-    RenderTarget[DispatchRaysIndex().xy] = payload.color;
-*/	
+    RayGenSamples[rayIndex] = sampleCount;	
 }
 
 [shader("miss")]
