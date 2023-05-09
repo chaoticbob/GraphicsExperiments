@@ -1262,6 +1262,93 @@ VkResult CreateDSV(
         pImage);
 }
 
+VkResult CreateRenderPass(
+    VulkanRenderer*                          pRenderer,
+    const std::vector<VulkanAttachmentInfo>& colorInfos,
+    const VulkanAttachmentInfo&              depthStencilInfo,
+    VulkanRenderPass*                        pRenderPass)
+{
+    bool hasDepthStencil = (depthStencilInfo.Format != VK_FORMAT_UNDEFINED);
+
+    // Render pass
+    {
+        std::vector<VkAttachmentDescription> attachmentDescs;
+        std::vector<VkAttachmentReference>   colorAttachmentRefs;
+        for (uint32_t i = 0; i < CountU32(colorInfos); ++i) {
+            VkAttachmentDescription desc = {};
+            desc.flags                   = 0;
+            desc.format                  = colorInfos[i].Format;
+            desc.samples                 = VK_SAMPLE_COUNT_1_BIT;
+            desc.loadOp                  = colorInfos[i].LoadOp;
+            desc.storeOp                 = colorInfos[i].StoreOp;
+            desc.stencilLoadOp           = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            desc.stencilStoreOp          = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            desc.initialLayout           = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            desc.finalLayout             = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            attachmentDescs.push_back(desc);
+
+            VkAttachmentReference attachmentRef = {};
+            attachmentRef.attachment            = CountU32(attachmentDescs) - 1;
+            attachmentRef.layout                = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            colorAttachmentRefs.push_back(attachmentRef);
+        }
+
+        VkAttachmentReference depthStencilAttachmentRef = {};
+        if (hasDepthStencil) {
+            VkAttachmentDescription desc = {};
+            desc.flags                   = 0;
+            desc.format                  = depthStencilInfo.Format;
+            desc.samples                 = VK_SAMPLE_COUNT_1_BIT;
+            desc.loadOp                  = depthStencilInfo.LoadOp;
+            desc.storeOp                 = depthStencilInfo.StoreOp;
+            desc.stencilLoadOp           = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            desc.stencilStoreOp          = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            desc.initialLayout           = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            desc.finalLayout             = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            attachmentDescs.push_back(desc);
+
+            depthStencilAttachmentRef.attachment = CountU32(attachmentDescs) - 1;
+            depthStencilAttachmentRef.layout     = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        }
+
+        VkSubpassDescription subpassDesc    = {};
+        subpassDesc.flags                   = 0;
+        subpassDesc.pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpassDesc.colorAttachmentCount    = CountU32(colorAttachmentRefs);
+        subpassDesc.pColorAttachments       = DataPtr(colorAttachmentRefs);
+        subpassDesc.pDepthStencilAttachment = hasDepthStencil ? &depthStencilAttachmentRef : nullptr;
+
+        VkSubpassDependency subpassDep = {};
+        subpassDep.srcSubpass          = VK_SUBPASS_EXTERNAL;
+        subpassDep.dstSubpass          = 0;
+        subpassDep.srcStageMask        = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+        subpassDep.dstStageMask        = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        subpassDep.srcAccessMask       = 0;
+        subpassDep.dstAccessMask       = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        subpassDep.dependencyFlags     = 0;
+
+        VkRenderPassCreateInfo createInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
+        createInfo.flags                  = 0;
+        createInfo.attachmentCount        = CountU32(attachmentDescs);
+        createInfo.pAttachments           = DataPtr(attachmentDescs);
+        createInfo.subpassCount           = 1;
+        createInfo.pSubpasses             = &subpassDesc;
+        createInfo.dependencyCount        = 1;
+        createInfo.pDependencies          = &subpassDep;
+
+        VkResult vkres = vkCreateRenderPass(
+            pRenderer->Device,
+            &createInfo,
+            nullptr,
+            &pRenderPass->RenderPass);
+        if (vkres != VK_SUCCESS) {
+            return vkres;
+        }
+    }
+
+    return VK_SUCCESS;
+}
+
 void DestroyBuffer(VulkanRenderer* pRenderer, const VulkanBuffer* pBuffer)
 {
     vmaDestroyBuffer(pRenderer->Allocator, pBuffer->Buffer, pBuffer->Allocation);
@@ -1861,7 +1948,6 @@ void WriteDescriptor(
     properties.pNext                                                         = &descriptorBufferProperties;
     vkGetPhysicalDeviceProperties2(pRenderer->PhysicalDevice, &properties);
 
-
     // Get buffer device address for acceleration structure
     VkDescriptorGetInfoEXT descriptorInfo     = {VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT};
     descriptorInfo.type                       = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
@@ -1933,7 +2019,7 @@ void WriteDescriptor(
             descriptorSize                    = static_cast<VkDeviceSize>(descriptorBufferProperties.storageImageDescriptorSize);
         } break;
     }
-    
+
     // Get the offset for the binding
     VkDeviceSize bindingOffset = 0;
     fn_vkGetDescriptorSetLayoutBindingOffsetEXT(

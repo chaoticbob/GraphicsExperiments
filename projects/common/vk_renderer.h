@@ -159,6 +159,20 @@ struct VulkanAccelStruct
     VkAccelerationStructureKHR AccelStruct;
 };
 
+struct VulkanAttachmentInfo
+{
+    VkFormat            Format;
+    VkAttachmentLoadOp  LoadOp;
+    VkAttachmentStoreOp StoreOp;
+};
+
+// Simple render pass and framebuffer
+struct VulkanRenderPass
+{
+    VkRenderPass  RenderPass;
+    VkFramebuffer Framebuffer;
+};
+
 //! @fn CreateBuffer
 //!
 //! Creates a buffer object with memory allocated and bound.
@@ -242,6 +256,12 @@ VkResult CreateDSV(
     uint32_t        width,
     uint32_t        height,
     VulkanImage*    pImage);
+
+VkResult CreateRenderPass(
+    VulkanRenderer*                          pRenderer,
+    const std::vector<VulkanAttachmentInfo>& colorInfos,
+    const VulkanAttachmentInfo&              depthStencilInfo,
+    VulkanRenderPass*                        pRenderPass);
 
 void DestroyBuffer(VulkanRenderer* pRenderer, const VulkanBuffer* pBuffer);
 
