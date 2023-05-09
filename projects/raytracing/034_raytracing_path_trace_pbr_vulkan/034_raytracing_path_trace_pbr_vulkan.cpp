@@ -573,6 +573,7 @@ int main(int argc, char** argv)
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
     }
+    window->AddMouseMoveCallbacks(MouseMove);
 
     // *************************************************************************
     // Swapchain
@@ -2529,7 +2530,7 @@ void WriteDescriptors(
         descriptorSetLayout,
         9, // binding
         0, // arrayElement
-        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
         &materialParamsBuffer);
 
     // IBL environment textures (t100)

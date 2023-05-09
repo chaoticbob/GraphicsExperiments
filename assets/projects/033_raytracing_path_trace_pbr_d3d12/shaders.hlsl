@@ -311,7 +311,6 @@ struct RayPayload
 [shader("raygeneration")]
 void MyRaygenShader()
 {
-/*
     uint2 rayIndex2 = DispatchRaysIndex().xy;
     uint  rayIndex = rayIndex2.y * 1920 + rayIndex2.x;
     uint  sampleCount = RayGenSamples[rayIndex];
@@ -357,8 +356,8 @@ void MyRaygenShader()
 
     RenderTarget[rayIndex2] = float4(pow(finalColor, 1 / 2.2), 0);
     RayGenSamples[rayIndex] = sampleCount;
-*/
 
+/*
 	const float2 pixelCenter = (float2)DispatchRaysIndex() + float2(0.5, 0.5);
 	const float2 inUV = pixelCenter/(float2)DispatchRaysDimensions();
 	float2 d = inUV * 2.0 - 1.0;
@@ -386,7 +385,8 @@ void MyRaygenShader()
         ray,                   // Ray
         payload);              // Payload
 
-    RenderTarget[DispatchRaysIndex().xy] = payload.color;	
+    RenderTarget[DispatchRaysIndex().xy] = payload.color;
+*/	
 }
 
 [shader("miss")]
@@ -395,15 +395,11 @@ void MyMissShader(inout RayPayload payload)
     float3 dir = WorldRayDirection();
     float3 color = GetIBLEnvironment(dir, 0);
     payload.color = float4(color, 1);
-    payload.color = float4(0, 0, 1, 1);
 }
 
 [shader("closesthit")]
 void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
 {
-    payload.color = float4(1, 0, 0, 1);
-
-/*
     uint instIdx = InstanceIndex();
     uint primIdx = PrimitiveIndex();
     Triangle tri = Triangles[instIdx][primIdx];
@@ -579,5 +575,4 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
 
     float3 finalColor = (reflection * kr) + (refraction * kt) + emission;
     payload.color += float4(finalColor, 0);
-*/	
 }
