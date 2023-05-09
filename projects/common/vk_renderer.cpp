@@ -251,7 +251,11 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
         bufferDeviceAddressFeatures.pNext                                       = pRenderer->RayTracingEnabled ? &rayTracingPipelineFeatures : nullptr;
         bufferDeviceAddressFeatures.bufferDeviceAddress                         = VK_TRUE;
 
-        VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeatures         = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES, &bufferDeviceAddressFeatures};
+        VkPhysicalDeviceImagelessFramebufferFeatures imagelessFramebufferFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGELESS_FRAMEBUFFER_FEATURES};
+        imagelessFramebufferFeatures.pNext                                        = &bufferDeviceAddressFeatures;
+        imagelessFramebufferFeatures.imagelessFramebuffer                         = VK_TRUE;
+
+        VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeatures         = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES, &imagelessFramebufferFeatures};
         descriptorIndexingFeatures.shaderInputAttachmentArrayDynamicIndexing          = VK_TRUE;
         descriptorIndexingFeatures.shaderUniformTexelBufferArrayDynamicIndexing       = VK_TRUE;
         descriptorIndexingFeatures.shaderStorageTexelBufferArrayDynamicIndexing       = VK_TRUE;
@@ -396,6 +400,7 @@ bool InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_
         }
 
         pRenderer->SwapchainImageCount = imageCount;
+        pRenderer->SwapchainImageUsage = vkci.imageUsage;
     }
 
     // Transition image layouts to present
@@ -782,6 +787,50 @@ bool ResourceStateToBarrierInfo(
     return true;
 }
 
+void CmdTransitionImageLayout(
+    VkCommandBuffer    cmdBuf,
+    VkImage            image,
+    uint32_t           firstMip,
+    uint32_t           mipCount,
+    uint32_t           firstLayer,
+    uint32_t           layerCount,
+    VkImageAspectFlags aspectFlags,
+    ResourceState      stateBefore,
+    ResourceState      stateAfter)
+{
+    VkImageMemoryBarrier2 barrier           = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
+    barrier.pNext                           = nullptr;
+    barrier.srcStageMask                    = 0;
+    barrier.srcAccessMask                   = 0;
+    barrier.dstStageMask                    = 0;
+    barrier.dstAccessMask                   = 0;
+    barrier.oldLayout                       = VK_IMAGE_LAYOUT_UNDEFINED;
+    barrier.newLayout                       = VK_IMAGE_LAYOUT_UNDEFINED;
+    barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image                           = image;
+    barrier.subresourceRange.aspectMask     = aspectFlags;
+    barrier.subresourceRange.baseMipLevel   = firstMip;
+    barrier.subresourceRange.levelCount     = mipCount;
+    barrier.subresourceRange.baseArrayLayer = firstLayer;
+    barrier.subresourceRange.layerCount     = layerCount;
+
+    ResourceStateToBarrierInfo(stateBefore, false, &barrier.srcStageMask, &barrier.srcAccessMask, &barrier.oldLayout);
+    ResourceStateToBarrierInfo(stateAfter, true, &barrier.dstStageMask, &barrier.dstAccessMask, &barrier.newLayout);
+
+    VkDependencyInfo dependencyInfo         = {VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+    dependencyInfo.pNext                    = nullptr;
+    dependencyInfo.dependencyFlags          = 0;
+    dependencyInfo.memoryBarrierCount       = 0;
+    dependencyInfo.pMemoryBarriers          = nullptr;
+    dependencyInfo.bufferMemoryBarrierCount = 0;
+    dependencyInfo.pBufferMemoryBarriers    = nullptr;
+    dependencyInfo.imageMemoryBarrierCount  = 1;
+    dependencyInfo.pImageMemoryBarriers     = &barrier;
+
+    vkCmdPipelineBarrier2(cmdBuf, &dependencyInfo);
+}
+
 VkResult TransitionImageLayout(
     VulkanRenderer*    pRenderer,
     VkImage            image,
@@ -809,6 +858,18 @@ VkResult TransitionImageLayout(
         return vkres;
     }
 
+    CmdTransitionImageLayout(
+        cmdBuf.CommandBuffer,
+        image,
+        firstMip,
+        mipCount,
+        firstLayer,
+        layerCount,
+        aspectFlags,
+        stateBefore,
+        stateAfter);
+
+    /*
     VkImageMemoryBarrier2 barrier           = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
     barrier.pNext                           = nullptr;
     barrier.srcStageMask                    = 0;
@@ -840,6 +901,7 @@ VkResult TransitionImageLayout(
     dependencyInfo.pImageMemoryBarriers     = &barrier;
 
     vkCmdPipelineBarrier2(cmdBuf.CommandBuffer, &dependencyInfo);
+    */
 
     vkres = vkEndCommandBuffer(cmdBuf.CommandBuffer);
     if (vkres != VK_SUCCESS) {
@@ -1266,6 +1328,8 @@ VkResult CreateRenderPass(
     VulkanRenderer*                          pRenderer,
     const std::vector<VulkanAttachmentInfo>& colorInfos,
     const VulkanAttachmentInfo&              depthStencilInfo,
+    uint32_t                                 width,
+    uint32_t                                 height,
     VulkanRenderPass*                        pRenderPass)
 {
     bool hasDepthStencil = (depthStencilInfo.Format != VK_FORMAT_UNDEFINED);
@@ -1341,6 +1405,65 @@ VkResult CreateRenderPass(
             &createInfo,
             nullptr,
             &pRenderPass->RenderPass);
+        if (vkres != VK_SUCCESS) {
+            return vkres;
+        }
+    }
+
+    // Framebuffer
+    {
+        std::vector<VkFormat> formats;
+        for (uint32_t i = 0; i < CountU32(colorInfos); ++i) {
+            formats.push_back(colorInfos[i].Format);
+        }
+        if (hasDepthStencil) {
+            formats.push_back(depthStencilInfo.Format);
+        }
+
+        std::vector<VkFramebufferAttachmentImageInfo> attachmentImageInfos;
+        for (uint32_t i = 0; i < CountU32(colorInfos); ++i) {
+            VkFramebufferAttachmentImageInfo attachmentImageInfo = {VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO};
+            attachmentImageInfo.pNext                            = nullptr;
+            attachmentImageInfo.flags                            = 0;
+            attachmentImageInfo.usage                            = colorInfos[i].ImageUsage;
+            attachmentImageInfo.width                            = width;
+            attachmentImageInfo.height                           = height;
+            attachmentImageInfo.layerCount                       = 1;
+            attachmentImageInfo.viewFormatCount                  = 1;
+            attachmentImageInfo.pViewFormats                     = &formats[i];
+            attachmentImageInfos.push_back(attachmentImageInfo);
+        }
+        if (hasDepthStencil) {
+            VkFramebufferAttachmentImageInfo attachmentImageInfo = {VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO};
+            attachmentImageInfo.pNext                            = nullptr;
+            attachmentImageInfo.flags                            = 0;
+            attachmentImageInfo.usage                            = depthStencilInfo.ImageUsage;
+            attachmentImageInfo.width                            = width;
+            attachmentImageInfo.height                           = height;
+            attachmentImageInfo.layerCount                       = 1;
+            attachmentImageInfo.viewFormatCount                  = 1;
+            attachmentImageInfo.pViewFormats                     = &formats[formats.size() - 1];
+            attachmentImageInfos.push_back(attachmentImageInfo);
+        }
+
+        VkFramebufferAttachmentsCreateInfo attachmentCreateInfo = {VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENTS_CREATE_INFO};
+        attachmentCreateInfo.attachmentImageInfoCount           = CountU32(attachmentImageInfos);
+        attachmentCreateInfo.pAttachmentImageInfos              = DataPtr(attachmentImageInfos);
+
+        VkFramebufferCreateInfo createInfo = {VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+        createInfo.pNext                   = &attachmentCreateInfo;
+        createInfo.flags                   = VK_FRAMEBUFFER_CREATE_IMAGELESS_BIT;
+        createInfo.renderPass              = pRenderPass->RenderPass;
+        createInfo.attachmentCount         = CountU32(colorInfos) + (hasDepthStencil ? 1 : 0);
+        createInfo.width                   = width;
+        createInfo.height                  = height;
+        createInfo.layers                  = 1;
+
+        VkResult vkres = vkCreateFramebuffer(
+            pRenderer->Device,
+            &createInfo,
+            nullptr,
+            &pRenderPass->Framebuffer);
         if (vkres != VK_SUCCESS) {
             return vkres;
         }

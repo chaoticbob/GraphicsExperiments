@@ -587,12 +587,12 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain image views
     // *************************************************************************
-    std::vector<VkImageView> imageViews;
+    std::vector<VkImage>     swapchainImages;
+    std::vector<VkImageView> swapchainImageViews;
     {
-        std::vector<VkImage> images;
-        CHECK_CALL(GetSwapchainImages(renderer.get(), images));
+        CHECK_CALL(GetSwapchainImages(renderer.get(), swapchainImages));
 
-        for (auto& image : images) {
+        for (auto& image : swapchainImages) {
             VkImageViewCreateInfo createInfo           = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
             createInfo.image                           = image;
             createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
@@ -607,19 +607,28 @@ int main(int argc, char** argv)
             VkImageView imageView = VK_NULL_HANDLE;
             CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &imageView));
 
-            imageViews.push_back(imageView);
+            swapchainImageViews.push_back(imageView);
         }
     }
 
-    /*
+    // *************************************************************************
+    // Render pass to draw ImGui
+    // *************************************************************************
+    std::vector<VulkanAttachmentInfo> colorAttachmentInfos = {
+        {VK_FORMAT_B8G8R8A8_UNORM, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE, renderer->SwapchainImageUsage}
+    };
+
+    VulkanRenderPass renderPass = {};
+    CHECK_CALL(CreateRenderPass(renderer.get(), colorAttachmentInfos, {}, gWindowWidth, gWindowHeight, &renderPass));
+
     // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForD3D12(renderer.get())) {
+    if (!window->InitImGuiForVulkan(renderer.get(), renderPass.RenderPass)) {
         assert(false && "Window::InitImGuiForD3D12 failed");
         return EXIT_FAILURE;
     }
-    */
+
     // *************************************************************************
     // Command buffer
     // *************************************************************************
@@ -652,8 +661,7 @@ int main(int argc, char** argv)
     // Main loop
     // *************************************************************************
     while (window->PollEvents()) {
-        /*
-        window->ImGuiNewFrameD3D12();
+        window->ImGuiNewFrameVulkan();
 
         if (ImGui::Begin("Scene")) {
             ImGui::SliderInt("Max Samples Per Pixel", reinterpret_cast<int*>(&gMaxSamples), 1, 16384);
@@ -681,7 +689,6 @@ int main(int argc, char** argv)
             ImGui::ProgressBar(progress, ImVec2(-1, 0), buf);
         }
         ImGui::End();
-        */
 
         // ---------------------------------------------------------------------
 
@@ -737,7 +744,7 @@ int main(int argc, char** argv)
             1, // binding
             0, // arrayElement
             VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            imageViews[imageIndex],
+            swapchainImageViews[imageIndex],
             VK_IMAGE_LAYOUT_GENERAL);
 
         // ---------------------------------------------------------------------
@@ -777,6 +784,14 @@ int main(int argc, char** argv)
 
         // Trace rays
         {
+            CmdTransitionImageLayout(
+                cmdBuf.CommandBuffer,
+                swapchainImages[imageIndex],
+                GREX_ALL_SUBRESOURCES,
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                RESOURCE_STATE_PRESENT,
+                RESOURCE_STATE_COMPUTE_UNORDERED_ACCESS);
+
             vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rayTracePipeline);
 
             VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
@@ -829,49 +844,52 @@ int main(int argc, char** argv)
                 1);
         }
 
-        /*
         // ImGui
         {
-            UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
+            CmdTransitionImageLayout(
+                cmdBuf.CommandBuffer,
+                swapchainImages[imageIndex],
+                GREX_ALL_SUBRESOURCES,
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                RESOURCE_STATE_COMPUTE_UNORDERED_ACCESS,
+                RESOURCE_STATE_RENDER_TARGET);
 
-            ComPtr<ID3D12Resource> swapchainBuffer;
-            CHECK_CALL(renderer->Swapchain->GetBuffer(bufferIndex, IID_PPV_ARGS(&swapchainBuffer)));
+            VkRenderPassAttachmentBeginInfo attachmentBeginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO};
+            attachmentBeginInfo.pNext                           = 0;
+            attachmentBeginInfo.attachmentCount                 = 1;
+            attachmentBeginInfo.pAttachments                    = &swapchainImageViews[imageIndex];
 
-            CHECK_CALL(commandAllocator->Reset());
-            CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
+            VkRect2D renderArea = {
+                {0,            0            },
+                {gWindowWidth, gWindowHeight}
+            };
 
-            D3D12_RESOURCE_BARRIER preRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-            commandList->ResourceBarrier(1, &preRenderBarrier);
-            {
-                commandList->OMSetRenderTargets(
-                    1,
-                    &renderer->SwapchainRTVDescriptorHandles[bufferIndex],
-                    false,
-                    &renderer->SwapchainDSVDescriptorHandles[bufferIndex]);
+            VkRenderPassBeginInfo beginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+            beginInfo.pNext                 = &attachmentBeginInfo;
+            beginInfo.renderPass            = renderPass.RenderPass;
+            beginInfo.framebuffer           = renderPass.Framebuffer;
+            beginInfo.renderArea            = renderArea;
 
-                // Viewport and scissor
-                D3D12_VIEWPORT viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
-                commandList->RSSetViewports(1, &viewport);
-                D3D12_RECT scissor = {0, 0, static_cast<long>(gWindowWidth), static_cast<long>(gWindowHeight)};
-                commandList->RSSetScissorRects(1, &scissor);
+            vkCmdBeginRenderPass(cmdBuf.CommandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-                // Draw ImGui
-                window->ImGuiRenderDrawData(renderer.get(), commandList.Get());
-            }
-            D3D12_RESOURCE_BARRIER postRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-            commandList->ResourceBarrier(1, &postRenderBarrier);
+            VkViewport viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
+            vkCmdSetViewport(cmdBuf.CommandBuffer, 0, 1, &viewport);
 
-            commandList->Close();
+            vkCmdSetScissor(cmdBuf.CommandBuffer, 0, 1, &renderArea);
 
-            ID3D12CommandList* pList = commandList.Get();
-            renderer->Queue->ExecuteCommandLists(1, &pList);
+            // Draw ImGui
+            window->ImGuiRenderDrawData(renderer.get(), cmdBuf.CommandBuffer);
 
-            if (!WaitForGpu(renderer.get())) {
-                assert(false && "WaitForGpu failed");
-                break;
-            }
+            vkCmdEndRenderPass(cmdBuf.CommandBuffer);
+
+            CmdTransitionImageLayout(
+                cmdBuf.CommandBuffer,
+                swapchainImages[imageIndex],
+                GREX_ALL_SUBRESOURCES,
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                RESOURCE_STATE_RENDER_TARGET,
+                RESOURCE_STATE_PRESENT);
         }
-        */
 
         CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));
 

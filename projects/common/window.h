@@ -28,9 +28,6 @@ namespace fs = std::filesystem;
 #endif // defined(ENABLE_IMGUI_D3D12)
 
 #if defined(ENABLE_IMGUI_VULKAN)
-
-#    error "Vulkan ImGui support not available yet"
-
 #    include "vk_renderer.h"
 #    include "backends/imgui_impl_glfw.h"
 #    include "backends/imgui_impl_vulkan.h"
@@ -81,7 +78,9 @@ public:
 #endif // defined(ENABLE_IMGUI_D3D12)
 
 #if defined(ENABLE_IMGUI_VULKAN)
-    bool InitImGuiForVulkan(VulkanRenderer* pRenderer);
+    bool InitImGuiForVulkan(VulkanRenderer* pRenderer, VkRenderPass renderPass);
+    void ImGuiNewFrameVulkan();
+    void ImGuiRenderDrawData(VulkanRenderer* pRenderer, VkCommandBuffer cmdBuf);
 #endif // defined(ENABLE_IMGUI_VULKAN)
 
 private:
@@ -113,6 +112,10 @@ private:
     void MouseScrollEvent(float xoffset, float yoffset);
     void KeyDownEvent(int key);
     void KeyUpEvent(int key);
+
+#if defined(ENABLE_IMGUI_VULKAN)
+    VkDescriptorPool mDescriptorPool = VK_NULL_HANDLE;
+#endif // defined(ENABLE_IMGUI_VULKAN)
 };
 
 fs::path GetExecutablePath();

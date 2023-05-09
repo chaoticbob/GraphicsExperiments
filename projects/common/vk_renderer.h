@@ -79,22 +79,23 @@ struct VkMipOffset
 
 struct VulkanRenderer
 {
-    bool             DebugEnabled             = true;
-    bool             RayTracingEnabled        = false;
-    VkInstance       Instance                 = VK_NULL_HANDLE;
-    VkPhysicalDevice PhysicalDevice           = VK_NULL_HANDLE;
-    VkDevice         Device                   = VK_NULL_HANDLE;
-    VmaAllocator     Allocator                = VK_NULL_HANDLE;
-    VkSemaphore      DeviceFence              = VK_NULL_HANDLE;
-    uint64_t         DeviceFenceValue         = 0;
-    uint32_t         GraphicsQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    VkQueue          Queue                    = VK_NULL_HANDLE;
-    VkSurfaceKHR     Surface                  = VK_NULL_HANDLE;
-    VkSwapchainKHR   Swapchain                = VK_NULL_HANDLE;
-    uint32_t         SwapchainImageCount      = 0;
-    VkSemaphore      ImageReadySemaphore      = VK_NULL_HANDLE;
-    VkFence          ImageReadyFence          = VK_NULL_HANDLE;
-    VkSemaphore      PresentReadySemaphore    = VK_NULL_HANDLE;
+    bool              DebugEnabled             = true;
+    bool              RayTracingEnabled        = false;
+    VkInstance        Instance                 = VK_NULL_HANDLE;
+    VkPhysicalDevice  PhysicalDevice           = VK_NULL_HANDLE;
+    VkDevice          Device                   = VK_NULL_HANDLE;
+    VmaAllocator      Allocator                = VK_NULL_HANDLE;
+    VkSemaphore       DeviceFence              = VK_NULL_HANDLE;
+    uint64_t          DeviceFenceValue         = 0;
+    uint32_t          GraphicsQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    VkQueue           Queue                    = VK_NULL_HANDLE;
+    VkSurfaceKHR      Surface                  = VK_NULL_HANDLE;
+    VkSwapchainKHR    Swapchain                = VK_NULL_HANDLE;
+    uint32_t          SwapchainImageCount      = 0;
+    VkImageUsageFlags SwapchainImageUsage      = 0;
+    VkSemaphore       ImageReadySemaphore      = VK_NULL_HANDLE;
+    VkFence           ImageReadyFence          = VK_NULL_HANDLE;
+    VkSemaphore       PresentReadySemaphore    = VK_NULL_HANDLE;
 
     VulkanRenderer();
     ~VulkanRenderer();
@@ -119,6 +120,17 @@ bool     SwapchainPresent(VulkanRenderer* pRenderer, uint32_t imageIndex);
 
 VkResult CreateCommandBuffer(VulkanRenderer* pRenderer, VkCommandPoolCreateFlags poolCreateFlags, CommandObjects* pCmdBuf);
 VkResult ExecuteCommandBuffer(VulkanRenderer* pRenderer, const CommandObjects* pCmdBuf);
+
+void CmdTransitionImageLayout(
+    VkCommandBuffer    cmdBuf,
+    VkImage            image,
+    uint32_t           firstMip,
+    uint32_t           mipCount,
+    uint32_t           firstLayer,
+    uint32_t           layerCount,
+    VkImageAspectFlags aspectFlags,
+    ResourceState      stateBefore,
+    ResourceState      stateAfter);
 
 // This is slow
 VkResult TransitionImageLayout(
@@ -164,6 +176,7 @@ struct VulkanAttachmentInfo
     VkFormat            Format;
     VkAttachmentLoadOp  LoadOp;
     VkAttachmentStoreOp StoreOp;
+    VkImageUsageFlags   ImageUsage;
 };
 
 // Simple render pass and framebuffer
@@ -261,6 +274,8 @@ VkResult CreateRenderPass(
     VulkanRenderer*                          pRenderer,
     const std::vector<VulkanAttachmentInfo>& colorInfos,
     const VulkanAttachmentInfo&              depthStencilInfo,
+    uint32_t                                 width,
+    uint32_t                                 height,
     VulkanRenderPass*                        pRenderPass);
 
 void DestroyBuffer(VulkanRenderer* pRenderer, const VulkanBuffer* pBuffer);

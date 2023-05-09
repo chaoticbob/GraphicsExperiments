@@ -262,7 +262,7 @@ void Window::WindowResizeEvent(int width, int height)
 
 void Window::MouseDownEvent(int x, int y, int buttons)
 {
-#if defined(ENABLE_IMGUI_D3D12)
+#if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN)
     if (mImGuiEnabled) {
         ImGuiIO& io = ImGui::GetIO();
         if (io.WantCaptureMouse) {
@@ -278,7 +278,7 @@ void Window::MouseDownEvent(int x, int y, int buttons)
 
 void Window::MouseUpEvent(int x, int y, int buttons)
 {
-#if defined(ENABLE_IMGUI_D3D12)
+#if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN)
     if (mImGuiEnabled) {
         ImGuiIO& io = ImGui::GetIO();
         if (io.WantCaptureMouse) {
@@ -294,7 +294,7 @@ void Window::MouseUpEvent(int x, int y, int buttons)
 
 void Window::MouseMoveEvent(int x, int y, int buttons)
 {
-#if defined(ENABLE_IMGUI_D3D12)
+#if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN)
     if (mImGuiEnabled) {
         ImGuiIO& io = ImGui::GetIO();
         if (io.WantCaptureMouse) {
@@ -451,9 +451,157 @@ static void CheckVkResult(VkResult err)
         abort();
 }
 
-bool Window::InitImGuiForVulkan(VulkanRenderer* pRenderer)
+bool Window::InitImGuiForVulkan(VulkanRenderer* pRenderer, VkRenderPass renderPass)
 {
-    return false;
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+
+    bool res = ImGui_ImplGlfw_InitForVulkan(mWindow, true);
+    if (res == false) {
+        assert(false && "ImGui init GLFW for Vulkan failed!");
+        return false;
+    }
+
+    // Create descriptor pool
+    {
+        VkDescriptorPoolSize poolSizes[] = {
+            {VK_DESCRIPTOR_TYPE_SAMPLER,                1000},
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
+            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,          1000},
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          1000},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,   1000},
+            {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,   1000},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1000},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         1000},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
+            {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,       1000}
+        };
+
+        VkDescriptorPoolCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+        createInfo.sType                      = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        createInfo.flags                      = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        createInfo.maxSets                    = 1000 * IM_ARRAYSIZE(poolSizes);
+        createInfo.poolSizeCount              = (uint32_t)IM_ARRAYSIZE(poolSizes);
+        createInfo.pPoolSizes                 = poolSizes;
+
+        VkResult vkres = vkCreateDescriptorPool(pRenderer->Device, &createInfo, nullptr, &mDescriptorPool);
+        if (vkres != VK_SUCCESS) {
+            assert(false && "Create descriptor pool for ImGui failed!");
+            return false;
+        }
+    }
+
+    ImGui_ImplVulkan_InitInfo initInfo = {};
+    initInfo.Instance                  = pRenderer->Instance;
+    initInfo.PhysicalDevice            = pRenderer->PhysicalDevice;
+    initInfo.Device                    = pRenderer->Device;
+    initInfo.QueueFamily               = pRenderer->GraphicsQueueFamilyIndex;
+    initInfo.Queue                     = pRenderer->Queue;
+    initInfo.PipelineCache             = VK_NULL_HANDLE;
+    initInfo.DescriptorPool            = mDescriptorPool;
+    initInfo.Subpass                   = 0;
+    initInfo.MinImageCount             = pRenderer->SwapchainImageCount;
+    initInfo.ImageCount                = pRenderer->SwapchainImageCount;
+    initInfo.MSAASamples               = VK_SAMPLE_COUNT_1_BIT;
+    initInfo.Allocator                 = nullptr;
+    initInfo.CheckVkResultFn           = CheckVkResult;
+
+    res = ImGui_ImplVulkan_Init(&initInfo, renderPass);
+    if (res == false) {
+        assert(false && "ImGui init Vulkan failed!");
+        return false;
+    }
+
+    // Upload Fonts
+    {
+        VkCommandPool   commandPool = VK_NULL_HANDLE;
+        VkCommandBuffer commandBuf  = VK_NULL_HANDLE;
+        {
+            VkCommandPoolCreateInfo createInfo = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+            createInfo.flags                   = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+            createInfo.queueFamilyIndex        = pRenderer->GraphicsQueueFamilyIndex;
+
+            VkResult vkres = vkCreateCommandPool(
+                pRenderer->Device,
+                &createInfo,
+                nullptr,
+                &commandPool);
+            if (vkres != VK_SUCCESS) {
+                assert(false && "vkCreateCommandPool failed!");
+                return false;
+            }
+
+            VkCommandBufferAllocateInfo allocInfo = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+            allocInfo.commandPool                 = commandPool;
+            allocInfo.level                       = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            allocInfo.commandBufferCount          = 1;
+
+            vkres = vkAllocateCommandBuffers(
+                pRenderer->Device,
+                &allocInfo,
+                &commandBuf);
+            if (vkres != VK_SUCCESS) {
+                assert(false && "vkAllocateCommandBuffers failed!");
+                return false;
+            }
+        }
+
+        VkCommandBufferBeginInfo beginInfo = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        beginInfo.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        VkResult vkres = vkBeginCommandBuffer(commandBuf, &beginInfo);
+        if (vkres != VK_SUCCESS) {
+            assert(false && "vkBeginCommandBuffer failed!");
+            return false;
+        }
+
+        ImGui_ImplVulkan_CreateFontsTexture(commandBuf);
+
+        vkres = vkEndCommandBuffer(commandBuf);
+        if (vkres != VK_SUCCESS) {
+            assert(false && "vkEndCommandBuffer failed!");
+            return false;
+        }
+
+        VkSubmitInfo submitInfo       = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers    = &commandBuf;
+
+        vkres = vkQueueSubmit(pRenderer->Queue, 1, &submitInfo, VK_NULL_HANDLE);
+        if (vkres != VK_SUCCESS) {
+            assert(false && "vkQueueSubmit failed!");
+            return false;
+        }
+
+        vkres = vkDeviceWaitIdle(pRenderer->Device);
+        if (vkres != VK_SUCCESS) {
+            assert(false && "vkDeviceWaitIdle failed!");
+            return false;
+        }
+
+        ImGui_ImplVulkan_DestroyFontUploadObjects();
+
+        vkFreeCommandBuffers(pRenderer->Device, commandPool, 1, &commandBuf);
+        vkDestroyCommandPool(pRenderer->Device, commandPool, nullptr);
+    }
+
+    mImGuiEnabled = true;
+
+    return true;
+}
+
+void Window::ImGuiNewFrameVulkan()
+{
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+}
+
+void Window::ImGuiRenderDrawData(VulkanRenderer* pRenderer, VkCommandBuffer cmdBuf)
+{
+    ImGui::Render();
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuf);
 }
 #endif // defined(ENABLE_IMGUI_VULKAN)
 
