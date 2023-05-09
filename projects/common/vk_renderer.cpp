@@ -1722,7 +1722,8 @@ HRESULT CompileHLSL(
 
     std::vector<LPCWSTR> args = {
         L"-spirv",
-        L"-fspv-target-env=vulkan1.3"};
+        L"-fspv-target-env=vulkan1.1spirv1.4",
+        L"-fvk-use-dx-layout"};
 
     args.push_back(L"-E");
     args.push_back(entryPointUTF16.c_str());

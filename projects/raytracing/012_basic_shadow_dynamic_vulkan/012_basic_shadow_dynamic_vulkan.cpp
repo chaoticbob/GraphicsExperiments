@@ -1333,7 +1333,6 @@ void CreateBLAS(
         createInfo.offset                               = 0;
         createInfo.size                                 = buildSizesInfo.accelerationStructureSize;
         createInfo.type                                 = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-        createInfo.deviceAddress                        = 0;
 
         CHECK_CALL(fn_vkCreateAccelerationStructureKHR(pRenderer->Device, &createInfo, nullptr, pBLAS));
     }
