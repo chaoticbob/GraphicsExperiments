@@ -132,6 +132,12 @@ VkResult TransitionImageLayout(
     ResourceState      stateBefore,
     ResourceState      stateAfter);
 
+struct VulkanPipelineLayout
+{
+    VkDescriptorSetLayout DescriptorSetLayout;
+    VkPipelineLayout      PipelineLayout;
+};
+
 struct VulkanBuffer
 {
     VkBuffer          Buffer;

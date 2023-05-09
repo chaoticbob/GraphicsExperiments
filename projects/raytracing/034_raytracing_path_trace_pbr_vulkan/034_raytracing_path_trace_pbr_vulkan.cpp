@@ -391,6 +391,72 @@ int main(int argc, char** argv)
             CHECK_CALL(renderer->Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&clearRayGenPSO)));
         }
     */
+    // *************************************************************************
+    // Clear ray gen pipeline
+    // *************************************************************************
+    VulkanPipelineLayout clearRayGenPipelineLayout = {};
+    VkPipeline           clearRayGenPipeline       = VK_NULL_HANDLE;
+    {
+        // Descriptor set layout
+        {
+            std::vector<VkDescriptorSetLayoutBinding> bindings = {
+                {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,  1, VK_SHADER_STAGE_COMPUTE_BIT},
+                {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT},
+            };
+
+            VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+            createInfo.flags                           = 0;
+            createInfo.bindingCount                    = CountU32(bindings);
+            createInfo.pBindings                       = DataPtr(bindings);
+
+            CHECK_CALL(vkCreateDescriptorSetLayout(renderer->Device, &createInfo, nullptr, &clearRayGenPipelineLayout.DescriptorSetLayout));
+        }
+
+        // Pipeline layout
+        {
+            VkPipelineLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+            createInfo.flags                      = 0;
+            createInfo.setLayoutCount             = 1;
+            createInfo.pSetLayouts                = &clearRayGenPipelineLayout.DescriptorSetLayout;
+
+            CHECK_CALL(vkCreatePipelineLayout(renderer->Device, &createInfo, nullptr, &clearRayGenPipelineLayout.PipelineLayout));
+        }
+
+        // Shader module
+        VkShaderModule shaderModule = VK_NULL_HANDLE;
+        {
+            VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+            createInfo.flags                    = 0;
+            createInfo.codeSize                 = SizeInBytes(clearRayGenDxil);
+            createInfo.pCode                    = DataPtr(clearRayGenDxil);
+
+            CHECK_CALL(vkCreateShaderModule(
+                renderer->Device,
+                &createInfo,
+                nullptr,
+                &shaderModule));
+        }
+
+        // Pipeline
+        {
+            VkComputePipelineCreateInfo createInfo = {VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+            createInfo.flags                       = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+            createInfo.stage                       = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+            createInfo.stage.flags                 = 0;
+            createInfo.stage.stage                 = VK_SHADER_STAGE_COMPUTE_BIT;
+            createInfo.stage.module                = shaderModule;
+            createInfo.stage.pName                 = "csmain";
+            createInfo.layout                      = clearRayGenPipelineLayout.PipelineLayout;
+
+            CHECK_CALL(vkCreateComputePipelines(
+                renderer->Device,
+                VK_NULL_HANDLE,
+                1,
+                &createInfo,
+                nullptr,
+                &clearRayGenPipeline));
+        }
+    }
 
     // *************************************************************************
     // Create geometry
@@ -501,7 +567,7 @@ int main(int argc, char** argv)
     CreateDescriptorBuffer(renderer.get(), descriptorSetLayout, &descriptorBuffer);
 
     // Write descriptor to descriptor heap
-    std::vector<VkImageView> imageViews;
+    std::vector<VkImageView> iblImageViews;
     WriteDescriptors(
         renderer.get(),
         descriptorSetLayout,
@@ -514,298 +580,447 @@ int main(int argc, char** argv)
         teapotGeometry,
         boxGeometry,
         iblTextures,
-        &imageViews);
+        &iblImageViews);
 
     /*
-           // *************************************************************************
-           // Window
-           // *************************************************************************
-           auto window = Window::Create(gWindowWidth, gWindowHeight, "033_raytracing_path_trace_pbr_d3d12");
-           if (!window) {
-               assert(false && "Window::Create failed");
-               return EXIT_FAILURE;
-           }
-           window->AddMouseMoveCallbacks(MouseMove);
+    // *************************************************************************
+    // Window
+    // *************************************************************************
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "033_raytracing_path_trace_pbr_d3d12");
+    if (!window) {
+        assert(false && "Window::Create failed");
+        return EXIT_FAILURE;
+    }
+    window->AddMouseMoveCallbacks(MouseMove);
 
-           // *************************************************************************
-           // Swapchain
-           // *************************************************************************
-           if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight())) {
-               assert(false && "InitSwapchain failed");
-               return EXIT_FAILURE;
-           }
+    // *************************************************************************
+    // Swapchain
+    // *************************************************************************
+    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight())) {
+        assert(false && "InitSwapchain failed");
+        return EXIT_FAILURE;
+    }
+    */
 
-           // *************************************************************************
-           // Imgui
-           // *************************************************************************
-           if (!window->InitImGuiForD3D12(renderer.get())) {
-               assert(false && "Window::InitImGuiForD3D12 failed");
-               return EXIT_FAILURE;
-           }
+    // *************************************************************************
+    // Window
+    // *************************************************************************
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "002_raytracing_basic_vulkan");
+    if (!window) {
+        assert(false && "Window::Create failed");
+        return EXIT_FAILURE;
+    }
 
-           // *************************************************************************
-           // Command allocator
-           // *************************************************************************
-           ComPtr<ID3D12CommandAllocator> commandAllocator;
-           {
-               CHECK_CALL(renderer->Device->CreateCommandAllocator(
-                   D3D12_COMMAND_LIST_TYPE_DIRECT,    // type
-                   IID_PPV_ARGS(&commandAllocator))); // ppCommandList
-           }
+    // *************************************************************************
+    // Swapchain
+    // *************************************************************************
+    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight())) {
+        assert(false && "InitSwapchain failed");
+        return EXIT_FAILURE;
+    }
 
-           // *************************************************************************
-           // Command list
-           // *************************************************************************
-           ComPtr<ID3D12GraphicsCommandList5> commandList;
-           {
-               CHECK_CALL(renderer->Device->CreateCommandList1(
-                   0,                              // nodeMask
-                   D3D12_COMMAND_LIST_TYPE_DIRECT, // type
-                   D3D12_COMMAND_LIST_FLAG_NONE,   // flags
-                   IID_PPV_ARGS(&commandList)));   // ppCommandList
-           }
+    // *************************************************************************
+    // Swapchain image views
+    // *************************************************************************
+    std::vector<VkImageView> imageViews;
+    {
+        std::vector<VkImage> images;
+        CHECK_CALL(GetSwapchainImages(renderer.get(), images));
 
-           // *************************************************************************
-           // Persistent map scene parameters
-           // *************************************************************************
-           SceneParameters* pSceneParams = nullptr;
-           CHECK_CALL(sceneParamsBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pSceneParams)));
+        for (auto& image : images) {
+            VkImageViewCreateInfo createInfo           = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+            createInfo.image                           = image;
+            createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+            createInfo.format                          = VK_FORMAT_B8G8R8A8_UNORM; // VK_FORMAT_R8G8B8A8_UNORM;
+            createInfo.components                      = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A};
+            createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+            createInfo.subresourceRange.baseMipLevel   = 0;
+            createInfo.subresourceRange.levelCount     = 1;
+            createInfo.subresourceRange.baseArrayLayer = 0;
+            createInfo.subresourceRange.layerCount     = 1;
 
-           // *************************************************************************
-           // Misc vars
-           // *************************************************************************
-           uint32_t sampleCount = 0;
+            VkImageView imageView = VK_NULL_HANDLE;
+            CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &imageView));
 
-           // *************************************************************************
-           // Main loop
-           // *************************************************************************
-           while (window->PollEvents()) {
-               window->ImGuiNewFrameD3D12();
+            imageViews.push_back(imageView);
+        }
+    }
 
-               if (ImGui::Begin("Scene")) {
-                   ImGui::SliderInt("Max Samples Per Pixel", reinterpret_cast<int*>(&gMaxSamples), 1, 16384);
+    /*
+    // *************************************************************************
+    // Imgui
+    // *************************************************************************
+    if (!window->InitImGuiForD3D12(renderer.get())) {
+        assert(false && "Window::InitImGuiForD3D12 failed");
+        return EXIT_FAILURE;
+    }
 
-                   static const char* currentIBLName = gIBLNames[0].c_str();
-                   if (ImGui::BeginCombo("IBL", currentIBLName)) {
-                       for (size_t i = 0; i < gIBLNames.size(); ++i) {
-                           bool isSelected = (currentIBLName == gIBLNames[i]);
-                           if (ImGui::Selectable(gIBLNames[i].c_str(), isSelected)) {
-                               currentIBLName = gIBLNames[i].c_str();
-                               gIBLIndex      = static_cast<uint32_t>(i);
-                           }
-                           if (isSelected) {
-                               ImGui::SetItemDefaultFocus();
-                           }
-                       }
-                       ImGui::EndCombo();
-                   }
+    // *************************************************************************
+    // Command allocator
+    // *************************************************************************
+    ComPtr<ID3D12CommandAllocator> commandAllocator;
+    {
+        CHECK_CALL(renderer->Device->CreateCommandAllocator(
+            D3D12_COMMAND_LIST_TYPE_DIRECT,    // type
+            IID_PPV_ARGS(&commandAllocator))); // ppCommandList
+    }
 
-                   ImGui::Separator();
+    // *************************************************************************
+    // Command list
+    // *************************************************************************
+    ComPtr<ID3D12GraphicsCommandList5> commandList;
+    {
+        CHECK_CALL(renderer->Device->CreateCommandList1(
+            0,                              // nodeMask
+            D3D12_COMMAND_LIST_TYPE_DIRECT, // type
+            D3D12_COMMAND_LIST_FLAG_NONE,   // flags
+            IID_PPV_ARGS(&commandList)));   // ppCommandList
+    }
+    */
+    // *************************************************************************
+    // Command buffer
+    // *************************************************************************
+    CommandObjects cmdBuf = {};
+    {
+        CHECK_CALL(CreateCommandBuffer(renderer.get(), 0, &cmdBuf));
+    }
 
-                   float progress = sampleCount / static_cast<float>(gMaxSamples);
-                   char  buf[256] = {};
-                   sprintf(buf, "%d/%d Samples", sampleCount, gMaxSamples);
-                   ImGui::ProgressBar(progress, ImVec2(-1, 0), buf);
-               }
-               ImGui::End();
+    // *************************************************************************
+    // Persistent map scene parameters
+    // *************************************************************************
+    /*
+    SceneParameters* pSceneParams = nullptr;
+    CHECK_CALL(sceneParamsBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pSceneParams)));
+    */
+    SceneParameters* pSceneParams = nullptr;
+    CHECK_CALL(vmaMapMemory(renderer->Allocator, sceneParamsBuffer.Allocation, reinterpret_cast<void**>(&pSceneParams)));
 
-               // ---------------------------------------------------------------------
+    // *************************************************************************
+    // Persistent map descriptor buffer
+    // *************************************************************************
+    char* pDescriptorBuffeStartAddress = nullptr;
+    CHECK_CALL(vmaMapMemory(renderer->Allocator, descriptorBuffer.Allocation, reinterpret_cast<void**>(&pDescriptorBuffeStartAddress)));
 
-               CHECK_CALL(commandAllocator->Reset());
-               CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
+    // *************************************************************************
+    // Misc vars
+    // *************************************************************************
+    uint32_t sampleCount = 0;
 
-               if (gCurrentMaxSamples != gMaxSamples) {
-                   gCurrentMaxSamples  = gMaxSamples;
-                   gResetRayGenSamples = true;
-               }
+    // *************************************************************************
+    // Main loop
+    // *************************************************************************
+    while (window->PollEvents()) {
+        /*
+        window->ImGuiNewFrameD3D12();
 
-               if (gCurrentIBLIndex != gIBLIndex) {
-                   gCurrentIBLIndex    = gIBLIndex;
-                   gResetRayGenSamples = true;
-               }
+        if (ImGui::Begin("Scene")) {
+            ImGui::SliderInt("Max Samples Per Pixel", reinterpret_cast<int*>(&gMaxSamples), 1, 16384);
 
-               // Smooth out the rotation on Y
-               gAngle += (gTargetAngle - gAngle) * 0.1f;
-               // Keep resetting until the angle is somewhat stable
-               if (fabs(gTargetAngle - gAngle) > 0.1f) {
-                   gResetRayGenSamples = true;
-               }
+            static const char* currentIBLName = gIBLNames[0].c_str();
+            if (ImGui::BeginCombo("IBL", currentIBLName)) {
+                for (size_t i = 0; i < gIBLNames.size(); ++i) {
+                    bool isSelected = (currentIBLName == gIBLNames[i]);
+                    if (ImGui::Selectable(gIBLNames[i].c_str(), isSelected)) {
+                        currentIBLName = gIBLNames[i].c_str();
+                        gIBLIndex      = static_cast<uint32_t>(i);
+                    }
+                    if (isSelected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
 
-               // Camera matrices
-               mat4 transformEyeMat     = glm::rotate(glm::radians(-gAngle), vec3(0, 1, 0));
-               vec3 startingEyePosition = vec3(0, 4.0f, 8.5f);
-               vec3 eyePosition         = transformEyeMat * vec4(startingEyePosition, 1);
-               mat4 viewMat             = glm::lookAt(eyePosition, vec3(0, 3, 0), vec3(0, 1, 0));
-               mat4 projMat             = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+            ImGui::Separator();
 
-               // Set constant buffer values
-               pSceneParams->ViewInverseMatrix       = glm::inverse(viewMat);
-               pSceneParams->ProjectionInverseMatrix = glm::inverse(projMat);
-               pSceneParams->IBLIndex                = gCurrentIBLIndex;
-               pSceneParams->EyePosition             = eyePosition;
-               pSceneParams->MaxSamples              = gCurrentMaxSamples;
+            float progress = sampleCount / static_cast<float>(gMaxSamples);
+            char  buf[256] = {};
+            sprintf(buf, "%d/%d Samples", sampleCount, gMaxSamples);
+            ImGui::ProgressBar(progress, ImVec2(-1, 0), buf);
+        }
+        ImGui::End();
+        */
 
-               // Reset ray gen samples
-               if (gResetRayGenSamples) {
-                   sampleCount = 0;
+        // ---------------------------------------------------------------------
 
-                   commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
+        /*
+        CHECK_CALL(commandAllocator->Reset());
+        CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
+        */
 
-                   commandList->SetComputeRootSignature(clearRayGenRootSig.Get());
-                   commandList->SetPipelineState(clearRayGenPSO.Get());
+        if (gCurrentMaxSamples != gMaxSamples) {
+            gCurrentMaxSamples  = gMaxSamples;
+            gResetRayGenSamples = true;
+        }
 
-                   D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
-                   descriptorTable.ptr += (kOutputResourcesOffset + 1) * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-                   commandList->SetComputeRootDescriptorTable(0, descriptorTable);
+        if (gCurrentIBLIndex != gIBLIndex) {
+            gCurrentIBLIndex    = gIBLIndex;
+            gResetRayGenSamples = true;
+        }
 
-                   commandList->Dispatch(gWindowWidth / 8, gWindowHeight / 8, 1);
-                   gResetRayGenSamples = false;
-               }
+        // Smooth out the rotation on Y
+        gAngle += (gTargetAngle - gAngle) * 0.1f;
+        // Keep resetting until the angle is somewhat stable
+        if (fabs(gTargetAngle - gAngle) > 0.1f) {
+            gResetRayGenSamples = true;
+        }
 
-               // Trace rays
-               {
-                   commandList->SetComputeRootSignature(globalRootSig.Get());
-                   commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
+        // Camera matrices
+        mat4 transformEyeMat     = glm::rotate(glm::radians(-gAngle), vec3(0, 1, 0));
+        vec3 startingEyePosition = vec3(0, 4.0f, 8.5f);
+        vec3 eyePosition         = transformEyeMat * vec4(startingEyePosition, 1);
+        mat4 viewMat             = glm::lookAt(eyePosition, vec3(0, 3, 0), vec3(0, 1, 0));
+        mat4 projMat             = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
 
-                   D3D12_GPU_DESCRIPTOR_HANDLE descriptorHeapStart = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
-                   UINT                        descriptorIncSize   = renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        // Set constant buffer values
+        pSceneParams->ViewInverseMatrix       = glm::inverse(viewMat);
+        pSceneParams->ProjectionInverseMatrix = glm::inverse(projMat);
+        pSceneParams->IBLIndex                = gCurrentIBLIndex;
+        pSceneParams->EyePosition             = eyePosition;
+        pSceneParams->MaxSamples              = gCurrentMaxSamples;
 
-                   // Acceleration structure (t0)
-                   commandList->SetComputeRootShaderResourceView(0, tlasBuffer->GetGPUVirtualAddress());
-                   // Output texture (u1)
-                   // Accumulation texture (u2)
-                   // Ray generation samples (u3)
-                   D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = {descriptorHeapStart.ptr + kOutputResourcesOffset * descriptorIncSize};
-                   commandList->SetComputeRootDescriptorTable(1, descriptorHeap->GetGPUDescriptorHandleForHeapStart());
-                   // Scene params (b5)
-                   commandList->SetComputeRootConstantBufferView(2, sceneParamsBuffer->GetGPUVirtualAddress());
-                   //  Index buffer (t20)
-                   //  Position buffer (t45)
-                   //  Normal buffer (t70)
-                   descriptorTable = {descriptorHeapStart.ptr + kGeoBuffersOffset * descriptorIncSize};
-                   commandList->SetComputeRootDescriptorTable(3, descriptorTable);
-                   // Environment map (t100)
-                   descriptorTable = {descriptorHeapStart.ptr + kIBLTextureOffset * descriptorIncSize};
-                   commandList->SetComputeRootDescriptorTable(4, descriptorTable);
-                   // Material params (t9)
-                   commandList->SetComputeRootShaderResourceView(5, materialParamsBuffer->GetGPUVirtualAddress());
+        // ---------------------------------------------------------------------
+        // Acquire swapchain image
+        // ---------------------------------------------------------------------
+        uint32_t imageIndex = 0;
+        if (AcquireNextImage(renderer.get(), &imageIndex)) {
+            assert(false && "AcquireNextImage failed");
+            break;
+        }
 
-                   commandList->SetPipelineState1(stateObject.Get());
+        //
+        // Storage image (binding = 1)
+        //
+        // Most Vulkan implementations support STORAGE_IMAGE so we can
+        // write directly to the image and skip a copy.
+        //
+        WriteDescriptor(
+            renderer.get(),
+            pDescriptorBuffeStartAddress,
+            descriptorSetLayout,
+            1, // binding
+            0, // arrayElement
+            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            imageViews[imageIndex],
+            VK_IMAGE_LAYOUT_GENERAL);
 
-                   D3D12_DISPATCH_RAYS_DESC dispatchDesc               = {};
-                   dispatchDesc.RayGenerationShaderRecord.StartAddress = rgenSRT->GetGPUVirtualAddress();
-                   dispatchDesc.RayGenerationShaderRecord.SizeInBytes  = rgenSRT->GetDesc().Width;
-                   dispatchDesc.MissShaderTable.StartAddress           = missSRT->GetGPUVirtualAddress();
-                   dispatchDesc.MissShaderTable.SizeInBytes            = missSRT->GetDesc().Width;
-                   dispatchDesc.MissShaderTable.StrideInBytes          = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
-                   dispatchDesc.HitGroupTable.StartAddress             = hitgSRT->GetGPUVirtualAddress();
-                   dispatchDesc.HitGroupTable.SizeInBytes              = hitgSRT->GetDesc().Width;
-                   dispatchDesc.HitGroupTable.StrideInBytes            = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
-                   dispatchDesc.Width                                  = gWindowWidth;
-                   dispatchDesc.Height                                 = gWindowHeight;
-                   dispatchDesc.Depth                                  = 1;
+        // ---------------------------------------------------------------------
+        // Build command buffer to trace rays
+        // ---------------------------------------------------------------------
+        VkCommandBufferBeginInfo vkbi = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        vkbi.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
 
-                   commandList->DispatchRays(&dispatchDesc);
+        /*
+        // Reset ray gen samples
+        if (gResetRayGenSamples) {
+            sampleCount = 0;
 
-                   commandList->Close();
+            commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
 
-                   ID3D12CommandList* pList = commandList.Get();
-                   renderer->Queue->ExecuteCommandLists(1, &pList);
+            commandList->SetComputeRootSignature(clearRayGenRootSig.Get());
+            commandList->SetPipelineState(clearRayGenPSO.Get());
 
-                   if (!WaitForGpu(renderer.get())) {
-                       assert(false && "WaitForGpu failed");
-                       break;
-                   }
-               }
+            D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
+            descriptorTable.ptr += (kOutputResourcesOffset + 1) * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            commandList->SetComputeRootDescriptorTable(0, descriptorTable);
 
-               // Copy output texture to swapchain buffer
-               {
-                   UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
+            commandList->Dispatch(gWindowWidth / 8, gWindowHeight / 8, 1);
+            gResetRayGenSamples = false;
+        }
+        */
+        // Reset ray gen samples
+        if (gResetRayGenSamples) {
+            sampleCount = 0;
 
-                   ComPtr<ID3D12Resource> swapchainBuffer;
-                   CHECK_CALL(renderer->Swapchain->GetBuffer(bufferIndex, IID_PPV_ARGS(&swapchainBuffer)));
+            vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, clearRayGenPipeline);
 
-                   CHECK_CALL(commandAllocator->Reset());
-                   CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
+            VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
+            descriptorBufferBindingInfo.pNext                            = nullptr;
+            descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &descriptorBuffer);
+            descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+            fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
 
-                   D3D12_RESOURCE_BARRIER preCopyBarriers[2];
-                   preCopyBarriers[0] = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
-                   preCopyBarriers[1] = CreateTransition(outputTexture.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+            uint32_t     bufferIndices           = 0;
+            VkDeviceSize descriptorBufferOffsets = 0;
+            fn_vkCmdSetDescriptorBufferOffsetsEXT(
+                cmdBuf.CommandBuffer,
+                VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+                pipelineLayout,
+                0,
+                1,
+                &bufferIndices,
+                &descriptorBufferOffsets);
 
-                   commandList->ResourceBarrier(ARRAYSIZE(preCopyBarriers), preCopyBarriers);
+            vkCmdDispatch(cmdBuf.CommandBuffer, gWindowWidth / 8, gWindowHeight / 8, 1);
 
-                   commandList->CopyResource(swapchainBuffer.Get(), outputTexture.Get());
+            gResetRayGenSamples = false;
+        }
 
-                   D3D12_RESOURCE_BARRIER postCopyBarriers[2];
-                   postCopyBarriers[0] = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
-                   postCopyBarriers[1] = CreateTransition(outputTexture.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        /*
+        // Trace rays
+        {
+            commandList->SetComputeRootSignature(globalRootSig.Get());
+            commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
 
-                   commandList->ResourceBarrier(ARRAYSIZE(postCopyBarriers), postCopyBarriers);
+            D3D12_GPU_DESCRIPTOR_HANDLE descriptorHeapStart = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
+            UINT                        descriptorIncSize   = renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-                   commandList->Close();
+            // Acceleration structure (t0)
+            commandList->SetComputeRootShaderResourceView(0, tlasBuffer->GetGPUVirtualAddress());
+            // Output texture (u1)
+            // Accumulation texture (u2)
+            // Ray generation samples (u3)
+            D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = {descriptorHeapStart.ptr + kOutputResourcesOffset * descriptorIncSize};
+            commandList->SetComputeRootDescriptorTable(1, descriptorHeap->GetGPUDescriptorHandleForHeapStart());
+            // Scene params (b5)
+            commandList->SetComputeRootConstantBufferView(2, sceneParamsBuffer->GetGPUVirtualAddress());
+            //  Index buffer (t20)
+            //  Position buffer (t45)
+            //  Normal buffer (t70)
+            descriptorTable = {descriptorHeapStart.ptr + kGeoBuffersOffset * descriptorIncSize};
+            commandList->SetComputeRootDescriptorTable(3, descriptorTable);
+            // Environment map (t100)
+            descriptorTable = {descriptorHeapStart.ptr + kIBLTextureOffset * descriptorIncSize};
+            commandList->SetComputeRootDescriptorTable(4, descriptorTable);
+            // Material params (t9)
+            commandList->SetComputeRootShaderResourceView(5, materialParamsBuffer->GetGPUVirtualAddress());
 
-                   ID3D12CommandList* pList = commandList.Get();
-                   renderer->Queue->ExecuteCommandLists(1, &pList);
+            commandList->SetPipelineState1(stateObject.Get());
 
-                   if (!WaitForGpu(renderer.get())) {
-                       assert(false && "WaitForGpu failed");
-                       break;
-                   }
+            D3D12_DISPATCH_RAYS_DESC dispatchDesc               = {};
+            dispatchDesc.RayGenerationShaderRecord.StartAddress = rgenSRT->GetGPUVirtualAddress();
+            dispatchDesc.RayGenerationShaderRecord.SizeInBytes  = rgenSRT->GetDesc().Width;
+            dispatchDesc.MissShaderTable.StartAddress           = missSRT->GetGPUVirtualAddress();
+            dispatchDesc.MissShaderTable.SizeInBytes            = missSRT->GetDesc().Width;
+            dispatchDesc.MissShaderTable.StrideInBytes          = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
+            dispatchDesc.HitGroupTable.StartAddress             = hitgSRT->GetGPUVirtualAddress();
+            dispatchDesc.HitGroupTable.SizeInBytes              = hitgSRT->GetDesc().Width;
+            dispatchDesc.HitGroupTable.StrideInBytes            = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
+            dispatchDesc.Width                                  = gWindowWidth;
+            dispatchDesc.Height                                 = gWindowHeight;
+            dispatchDesc.Depth                                  = 1;
 
-                   // ImGui
-                   {
-                       UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
+            commandList->DispatchRays(&dispatchDesc);
 
-                       ComPtr<ID3D12Resource> swapchainBuffer;
-                       CHECK_CALL(renderer->Swapchain->GetBuffer(bufferIndex, IID_PPV_ARGS(&swapchainBuffer)));
+            commandList->Close();
 
-                       CHECK_CALL(commandAllocator->Reset());
-                       CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
+            ID3D12CommandList* pList = commandList.Get();
+            renderer->Queue->ExecuteCommandLists(1, &pList);
 
-                       D3D12_RESOURCE_BARRIER preRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-                       commandList->ResourceBarrier(1, &preRenderBarrier);
-                       {
-                           commandList->OMSetRenderTargets(
-                               1,
-                               &renderer->SwapchainRTVDescriptorHandles[bufferIndex],
-                               false,
-                               &renderer->SwapchainDSVDescriptorHandles[bufferIndex]);
+            if (!WaitForGpu(renderer.get())) {
+                assert(false && "WaitForGpu failed");
+                break;
+            }
+        }
+        */
 
-                           // Viewport and scissor
-                           D3D12_VIEWPORT viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
-                           commandList->RSSetViewports(1, &viewport);
-                           D3D12_RECT scissor = {0, 0, static_cast<long>(gWindowWidth), static_cast<long>(gWindowHeight)};
-                           commandList->RSSetScissorRects(1, &scissor);
+        /*
+        // Copy output texture to swapchain buffer
+        {
+            UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
 
-                           // Draw ImGui
-                           window->ImGuiRenderDrawData(renderer.get(), commandList.Get());
-                       }
-                       D3D12_RESOURCE_BARRIER postRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-                       commandList->ResourceBarrier(1, &postRenderBarrier);
+            ComPtr<ID3D12Resource> swapchainBuffer;
+            CHECK_CALL(renderer->Swapchain->GetBuffer(bufferIndex, IID_PPV_ARGS(&swapchainBuffer)));
 
-                       commandList->Close();
+            CHECK_CALL(commandAllocator->Reset());
+            CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
 
-                       ID3D12CommandList* pList = commandList.Get();
-                       renderer->Queue->ExecuteCommandLists(1, &pList);
+            D3D12_RESOURCE_BARRIER preCopyBarriers[2];
+            preCopyBarriers[0] = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST);
+            preCopyBarriers[1] = CreateTransition(outputTexture.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
 
-                       if (!WaitForGpu(renderer.get())) {
-                           assert(false && "WaitForGpu failed");
-                           break;
-                       }
-                   }
-               }
+            commandList->ResourceBarrier(ARRAYSIZE(preCopyBarriers), preCopyBarriers);
 
-               // Update sample count
-               if (sampleCount < gMaxSamples) {
-                   ++sampleCount;
-               }
+            commandList->CopyResource(swapchainBuffer.Get(), outputTexture.Get());
 
-               if (!SwapchainPresent(renderer.get())) {
-                   assert(false && "SwapchainPresent failed");
-                   break;
-               }
-           }
-           */
+            D3D12_RESOURCE_BARRIER postCopyBarriers[2];
+            postCopyBarriers[0] = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
+            postCopyBarriers[1] = CreateTransition(outputTexture.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+            commandList->ResourceBarrier(ARRAYSIZE(postCopyBarriers), postCopyBarriers);
+
+            commandList->Close();
+
+            ID3D12CommandList* pList = commandList.Get();
+            renderer->Queue->ExecuteCommandLists(1, &pList);
+
+            if (!WaitForGpu(renderer.get())) {
+                assert(false && "WaitForGpu failed");
+                break;
+            }
+
+            // ImGui
+            {
+                UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
+
+                ComPtr<ID3D12Resource> swapchainBuffer;
+                CHECK_CALL(renderer->Swapchain->GetBuffer(bufferIndex, IID_PPV_ARGS(&swapchainBuffer)));
+
+                CHECK_CALL(commandAllocator->Reset());
+                CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
+
+                D3D12_RESOURCE_BARRIER preRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+                commandList->ResourceBarrier(1, &preRenderBarrier);
+                {
+                    commandList->OMSetRenderTargets(
+                        1,
+                        &renderer->SwapchainRTVDescriptorHandles[bufferIndex],
+                        false,
+                        &renderer->SwapchainDSVDescriptorHandles[bufferIndex]);
+
+                    // Viewport and scissor
+                    D3D12_VIEWPORT viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
+                    commandList->RSSetViewports(1, &viewport);
+                    D3D12_RECT scissor = {0, 0, static_cast<long>(gWindowWidth), static_cast<long>(gWindowHeight)};
+                    commandList->RSSetScissorRects(1, &scissor);
+
+                    // Draw ImGui
+                    window->ImGuiRenderDrawData(renderer.get(), commandList.Get());
+                }
+                D3D12_RESOURCE_BARRIER postRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+                commandList->ResourceBarrier(1, &postRenderBarrier);
+
+                commandList->Close();
+
+                ID3D12CommandList* pList = commandList.Get();
+                renderer->Queue->ExecuteCommandLists(1, &pList);
+
+                if (!WaitForGpu(renderer.get())) {
+                    assert(false && "WaitForGpu failed");
+                    break;
+                }
+            }
+        }
+        */
+
+        CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));
+
+        // Execute command buffer
+        CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
+
+        // Update sample count
+        if (sampleCount < gMaxSamples) {
+            ++sampleCount;
+        }
+
+        /*
+        if (!SwapchainPresent(renderer.get())) {
+            assert(false && "SwapchainPresent failed");
+            break;
+        }
+        */
+        // Wait for the GPU to finish the work
+        if (!WaitForGpu(renderer.get())) {
+            assert(false && "WaitForGpu failed");
+        }
+
+        if (!SwapchainPresent(renderer.get(), imageIndex)) {
+            assert(false && "SwapchainPresent failed");
+            break;
+        }
+    }
+
     return 0;
 }
 
@@ -2797,7 +3012,7 @@ void WriteDescriptors(
             D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {kBaseDescriptor.ptr + ((kIBLTextureOffset + i) * kIncrementSize)};
             CreateDescriptorTexture2D(pRenderer, iblTexture.envTexture.Get(), descriptor, 0, iblTexture.envNumLevels);
             */
-            
+
             auto& iblTexture = iblTextures[i];
 
             VkImageView imageView = VK_NULL_HANDLE;
@@ -2822,7 +3037,6 @@ void WriteDescriptors(
                 VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                 imageView,
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
         }
     }
 

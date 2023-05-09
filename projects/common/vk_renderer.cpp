@@ -944,6 +944,8 @@ VkResult CreateBuffer(
         vmaUnmapMemory(pRenderer->Allocator, pBuffer->Allocation);
     }
 
+    pBuffer->Size = srcSize;
+
     return VK_SUCCESS;
 }
 
@@ -1787,7 +1789,7 @@ void WriteDescriptor(
     // Address info
     VkDescriptorAddressInfoEXT addressInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT};
     addressInfo.address                    = GetDeviceAddress(pRenderer, pBuffer);
-    addressInfo.range                      = pBuffer->AllocationInfo.size;
+    addressInfo.range                      = pBuffer->Size;
 
     // Get buffer device address for acceleration structure
     VkDescriptorGetInfoEXT descriptorInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT};
