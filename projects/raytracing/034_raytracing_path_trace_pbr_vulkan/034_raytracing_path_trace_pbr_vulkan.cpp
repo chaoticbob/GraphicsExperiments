@@ -724,10 +724,10 @@ int main(int argc, char** argv)
         pSceneParams->MaxSamples              = gCurrentMaxSamples;
 
         // ---------------------------------------------------------------------
-        // Acquire swapchain image
+        // Acquire swapchain image index
         // ---------------------------------------------------------------------
-        uint32_t imageIndex = 0;
-        if (AcquireNextImage(renderer.get(), &imageIndex)) {
+        uint32_t swapchainImageIndex = 0;
+        if (AcquireNextImage(renderer.get(), &swapchainImageIndex)) {
             assert(false && "AcquireNextImage failed");
             break;
         }
@@ -744,7 +744,7 @@ int main(int argc, char** argv)
             1, // binding
             0, // arrayElement
             VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            swapchainImageViews[imageIndex],
+            swapchainImageViews[swapchainImageIndex],
             VK_IMAGE_LAYOUT_GENERAL);
 
         // ---------------------------------------------------------------------
@@ -786,7 +786,7 @@ int main(int argc, char** argv)
         {
             CmdTransitionImageLayout(
                 cmdBuf.CommandBuffer,
-                swapchainImages[imageIndex],
+                swapchainImages[swapchainImageIndex],
                 GREX_ALL_SUBRESOURCES,
                 VK_IMAGE_ASPECT_COLOR_BIT,
                 RESOURCE_STATE_PRESENT,
@@ -848,7 +848,7 @@ int main(int argc, char** argv)
         {
             CmdTransitionImageLayout(
                 cmdBuf.CommandBuffer,
-                swapchainImages[imageIndex],
+                swapchainImages[swapchainImageIndex],
                 GREX_ALL_SUBRESOURCES,
                 VK_IMAGE_ASPECT_COLOR_BIT,
                 RESOURCE_STATE_COMPUTE_UNORDERED_ACCESS,
@@ -857,7 +857,7 @@ int main(int argc, char** argv)
             VkRenderPassAttachmentBeginInfo attachmentBeginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO};
             attachmentBeginInfo.pNext                           = 0;
             attachmentBeginInfo.attachmentCount                 = 1;
-            attachmentBeginInfo.pAttachments                    = &swapchainImageViews[imageIndex];
+            attachmentBeginInfo.pAttachments                    = &swapchainImageViews[swapchainImageIndex];
 
             VkRect2D renderArea = {
                 {0,            0            },
@@ -884,7 +884,7 @@ int main(int argc, char** argv)
 
             CmdTransitionImageLayout(
                 cmdBuf.CommandBuffer,
-                swapchainImages[imageIndex],
+                swapchainImages[swapchainImageIndex],
                 GREX_ALL_SUBRESOURCES,
                 VK_IMAGE_ASPECT_COLOR_BIT,
                 RESOURCE_STATE_RENDER_TARGET,
@@ -906,7 +906,7 @@ int main(int argc, char** argv)
             assert(false && "WaitForGpu failed");
         }
 
-        if (!SwapchainPresent(renderer.get(), imageIndex)) {
+        if (!SwapchainPresent(renderer.get(), swapchainImageIndex)) {
             assert(false && "SwapchainPresent failed");
             break;
         }
