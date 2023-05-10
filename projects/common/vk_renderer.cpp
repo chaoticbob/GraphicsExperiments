@@ -252,8 +252,7 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
         bufferDeviceAddressFeatures.pNext                                       = pRenderer->RayTracingEnabled ? &rayTracingPipelineFeatures : nullptr;
         bufferDeviceAddressFeatures.bufferDeviceAddress                         = VK_TRUE;
 
-        VkPhysicalDeviceImagelessFramebufferFeatures imagelessFramebufferFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGELESS_FRAMEBUFFER_FEATURES};
-        imagelessFramebufferFeatures.pNext                                        = &bufferDeviceAddressFeatures;
+        VkPhysicalDeviceImagelessFramebufferFeatures imagelessFramebufferFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGELESS_FRAMEBUFFER_FEATURES, &bufferDeviceAddressFeatures};
         imagelessFramebufferFeatures.imagelessFramebuffer                         = VK_TRUE;
 
         VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeatures         = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES, &imagelessFramebufferFeatures};
@@ -281,8 +280,7 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
         VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES, &descriptorIndexingFeatures};
         dynamicRenderingFeatures.dynamicRendering                         = VK_TRUE;
 
-        VkPhysicalDeviceSynchronization2Features synchronization2Features = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES};
-        synchronization2Features.pNext                                    = &dynamicRenderingFeatures;
+        VkPhysicalDeviceSynchronization2Features synchronization2Features = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES, &dynamicRenderingFeatures};
         synchronization2Features.synchronization2                         = VK_TRUE;
 
         VkPhysicalDeviceTimelineSemaphoreFeatures timelineSemaphoreFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES, &synchronization2Features};
@@ -291,10 +289,13 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
         VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptorBufferFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT, &timelineSemaphoreFeatures};
         descriptorBufferFeatures.descriptorBuffer                            = VK_TRUE;
 
+        VkPhysicalDeviceScalarBlockLayoutFeatures scalarBlockLayoutFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES, &descriptorBufferFeatures};
+        scalarBlockLayoutFeatures.scalarBlockLayout                         = VK_TRUE;
+
         VkPhysicalDeviceFeatures enabledFeatures = {};
 
         VkDeviceCreateInfo vkci      = {VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
-        vkci.pNext                   = &descriptorBufferFeatures;
+        vkci.pNext                   = &scalarBlockLayoutFeatures;
         vkci.flags                   = 0;
         vkci.queueCreateInfoCount    = 1;
         vkci.pQueueCreateInfos       = &queueCreateInfo;

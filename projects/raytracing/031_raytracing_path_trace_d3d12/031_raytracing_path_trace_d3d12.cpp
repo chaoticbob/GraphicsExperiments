@@ -202,7 +202,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     std::vector<char> rayTraceDxil;
     {
-        auto source = LoadString("projects/031_raytracing_path_trace_d3d12/shaders.hlsl");
+        auto source = LoadString("projects/031_032_raytracing_path_trace/shaders.hlsl");
         assert((!source.empty()) && "no shader source!");
 
         std::string errorMsg;
@@ -468,7 +468,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Misc vars
     // *************************************************************************
-    uint32_t sampleCount = 0;
+    uint32_t sampleCount     = 0;
+    float    rayGenStartTime = 0;
 
     // *************************************************************************
     // Main loop
@@ -485,6 +486,16 @@ int main(int argc, char** argv)
             char  buf[256] = {};
             sprintf(buf, "%d/%d Samples", sampleCount, gMaxSamples);
             ImGui::ProgressBar(progress, ImVec2(-1, 0), buf);
+
+            ImGui::Separator();
+
+            static float elapsedTime = 0;
+            if (sampleCount <  gMaxSamples) {
+                float currentTime = static_cast<float>(glfwGetTime());
+                elapsedTime       = currentTime - rayGenStartTime;
+            }
+
+            ImGui::Text("Render time: %0.3f seconds", elapsedTime);
         }
         ImGui::End();
 
@@ -521,6 +532,7 @@ int main(int argc, char** argv)
         // Reset ray gen samples
         if (gResetRayGenSamples) {
             sampleCount = 0;
+            rayGenStartTime = static_cast<float>(glfwGetTime());
 
             commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
 
@@ -905,7 +917,7 @@ void CreateRayTracingStateObject(
     //
     // ---------------------------------------------------------------------
     D3D12_RAYTRACING_PIPELINE_CONFIG pipelineConfigDesc = {};
-    pipelineConfigDesc.MaxTraceRecursionDepth           = 8;
+    pipelineConfigDesc.MaxTraceRecursionDepth           = 5;
 
     pSubobject        = &subobjects[PIPELINE_CONFIG_INDEX];
     pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
@@ -1030,27 +1042,27 @@ void CreateGeometries(
         TriMesh mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
 
         //// Material knob
-        //TriMesh::Options options   = {.enableNormals = true};
-        //options.applyTransform     = true;
-        //options.transformRotate.y  = glm::radians(180.0f);
-        //TriMesh mesh;
-        //bool    res = TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh);
-        //if (!res) {
-        //    assert(false && "failed to load model");
-        //}
-        //mesh.ScaleToFit(1.25f);
+        // TriMesh::Options options   = {.enableNormals = true};
+        // options.applyTransform     = true;
+        // options.transformRotate.y  = glm::radians(180.0f);
+        // TriMesh mesh;
+        // bool    res = TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh);
+        // if (!res) {
+        //     assert(false && "failed to load model");
+        // }
+        // mesh.ScaleToFit(1.25f);
 
         //// Material knob
-        //TriMesh::Options options   = {.enableNormals = true};
-        //options.applyTransform     = true;
-        //options.transformRotate.y  = glm::radians(135.0f);
-        //options.transformTranslate = vec3(0, -2.1f, 0);
-        //TriMesh mesh;
-        //bool    res = TriMesh::LoadOBJ(GetAssetPath("models/teapot.obj").string(), "", options, &mesh);
-        //if (!res) {
-        //    assert(false && "failed to load model");
-        //}
-        //mesh.ScaleToFit(1.25f);
+        // TriMesh::Options options   = {.enableNormals = true};
+        // options.applyTransform     = true;
+        // options.transformRotate.y  = glm::radians(135.0f);
+        // options.transformTranslate = vec3(0, -2.1f, 0);
+        // TriMesh mesh;
+        // bool    res = TriMesh::LoadOBJ(GetAssetPath("models/teapot.obj").string(), "", options, &mesh);
+        // if (!res) {
+        //     assert(false && "failed to load model");
+        // }
+        // mesh.ScaleToFit(1.25f);
 
         Geometry& geo = outSphereGeometry;
 
