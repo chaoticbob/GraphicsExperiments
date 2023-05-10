@@ -467,6 +467,7 @@ int main(int argc, char** argv)
         SizeInBytes(materialParams),
         DataPtr(materialParams),
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY,
         0,
         &materialParamsBuffer);
 
@@ -2234,7 +2235,7 @@ void CreateIBLTextures(
         }
     }
 
-    size_t maxEntries = 1; // std::min<size_t>(kMaxIBLs, iblFiles.size());
+    size_t maxEntries = std::min<size_t>(kMaxIBLs, iblFiles.size());
     for (size_t i = 0; i < maxEntries; ++i) {
         std::filesystem::path iblFile = iblFiles[i];
 
