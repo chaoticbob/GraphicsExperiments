@@ -456,7 +456,7 @@ int main(int argc, char** argv)
         iblTextures);
 
     // *************************************************************************
-    // Sampler
+    // IBL Sampler
     // *************************************************************************
     VkSamplerCreateInfo createInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
     createInfo.flags                   = 0;
@@ -999,7 +999,7 @@ void CreateRayTracePipelineLayout(
             binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
             binding.descriptorCount              = 1;
             binding.stageFlags                   = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR;
-            binding.pImmutableSamplers           = nullptr; // pImmutableSampler;
+            binding.pImmutableSamplers           = nullptr;
             bindings.push_back(binding);
         }
 

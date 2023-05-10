@@ -544,8 +544,11 @@ int main(int argc, char** argv)
 
             ImGui::Separator();
 
-            float currentTime = static_cast<float>(glfwGetTime());
-            float elapsedTime = currentTime - rayGenStartTime;
+            static float elapsedTime = 0;
+            if (sampleCount <  gMaxSamples) {
+                float currentTime = static_cast<float>(glfwGetTime());
+                elapsedTime       = currentTime - rayGenStartTime;
+            }
 
             ImGui::Text("Render time: %0.3f seconds", elapsedTime);
         }
@@ -567,7 +570,7 @@ int main(int argc, char** argv)
         }
 
         // Smooth out the rotation on Y
-        gAngle += (gTargetAngle - gAngle) * 0.1f;
+        gAngle += (gTargetAngle - gAngle) * 0.25f;
         // Keep resetting until the angle is somewhat stable
         if (fabs(gTargetAngle - gAngle) > 0.1f) {
             gResetRayGenSamples = true;

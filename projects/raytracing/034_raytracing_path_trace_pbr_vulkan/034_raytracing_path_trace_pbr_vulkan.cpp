@@ -28,11 +28,8 @@ using namespace glm;
 // =============================================================================
 // Macros, enums, and constants
 // =============================================================================
-const uint32_t kOutputResourcesOffset = 0;
-const uint32_t kGeoBuffersOffset      = 20;
-const uint32_t kIBLTextureOffset      = 100;
-const uint32_t kMaxIBLs               = 100;
-const uint32_t kMaxGeometries         = 25;
+const uint32_t kMaxIBLs       = 100;
+const uint32_t kMaxGeometries = 25;
 
 // =============================================================================
 // Shader code
@@ -57,7 +54,7 @@ void csmain(uint3 tid : SV_DispatchThreadId)
 // =============================================================================
 static uint32_t gWindowWidth        = 1920;
 static uint32_t gWindowHeight       = 1080;
-static bool     gEnableDebug        = false;
+static bool     gEnableDebug        = true;
 static bool     gEnableRayTracing   = true;
 static uint32_t gUniformmBufferSize = 256;
 
@@ -124,7 +121,6 @@ struct MaterialParameters
 
 void CreateRayTracePipelineLayout(
     VulkanRenderer*       pRenderer,
-    VkSampler*            pImmutableSampler,
     VulkanPipelineLayout* pPipelineLayout);
 void CreateRayTracingPipeline(
     VulkanRenderer*             pRenderer,
@@ -189,6 +185,7 @@ void WriteDescriptors(
     const Geometry&                 boxGeometry,
     const VulkanBuffer&             materialParamsBuffer,
     const std::vector<IBLTextures>& iblTextures,
+    VkSampler                       iblSampler,
     VkImageView*                    pAccumImageView,
     std::vector<VkImageView>*       pIBLImageViews);
 
@@ -261,10 +258,10 @@ int main(int argc, char** argv)
         }
     }
 
-    std::vector<uint32_t> clearRayGenDxil;
+    std::vector<uint32_t> clearRayGenSpv;
     {
         std::string errorMsg;
-        HRESULT     hr = CompileHLSL(gClearRayGenSamplesShader, "csmain", "cs_6_5", &clearRayGenDxil, &errorMsg);
+        HRESULT     hr = CompileHLSL(gClearRayGenSamplesShader, "csmain", "cs_6_5", &clearRayGenSpv, &errorMsg);
         if (FAILED(hr)) {
             std::stringstream ss;
             ss << "\n"
@@ -281,9 +278,8 @@ int main(int argc, char** argv)
     // This is used for pipeline creation and setting the descriptor buffer(s).
     //
     // *************************************************************************
-    VkSampler            immutableSampler       = VK_NULL_HANDLE;
     VulkanPipelineLayout rayTracePipelineLayout = {};
-    CreateRayTracePipelineLayout(renderer.get(), &immutableSampler, &rayTracePipelineLayout);
+    CreateRayTracePipelineLayout(renderer.get(), &rayTracePipelineLayout);
 
     // *************************************************************************
     // Ray tracing Shader module
@@ -369,8 +365,8 @@ int main(int argc, char** argv)
         {
             VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
             createInfo.flags                    = 0;
-            createInfo.codeSize                 = SizeInBytes(clearRayGenDxil);
-            createInfo.pCode                    = DataPtr(clearRayGenDxil);
+            createInfo.codeSize                 = SizeInBytes(clearRayGenSpv);
+            createInfo.pCode                    = DataPtr(clearRayGenSpv);
 
             CHECK_CALL(vkCreateShaderModule(
                 renderer->Device,
@@ -504,6 +500,34 @@ int main(int argc, char** argv)
         iblTextures);
 
     // *************************************************************************
+    // IBL Sampler
+    // *************************************************************************
+    VkSamplerCreateInfo createInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+    createInfo.flags                   = 0;
+    createInfo.magFilter               = VK_FILTER_LINEAR;
+    createInfo.minFilter               = VK_FILTER_LINEAR;
+    createInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    createInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    createInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    createInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    createInfo.mipLodBias              = 0;
+    createInfo.anisotropyEnable        = VK_FALSE;
+    createInfo.maxAnisotropy           = 0;
+    createInfo.compareEnable           = VK_TRUE;
+    createInfo.compareOp               = VK_COMPARE_OP_LESS_OR_EQUAL;
+    createInfo.minLod                  = 0;
+    createInfo.maxLod                  = FLT_MAX;
+    createInfo.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+    createInfo.unnormalizedCoordinates = VK_FALSE;
+
+    VkSampler iblSampler = VK_NULL_HANDLE;
+    CHECK_CALL(vkCreateSampler(
+        renderer->Device,
+        &createInfo,
+        nullptr,
+        &iblSampler));
+
+    // *************************************************************************
     // Descriptor buffers
     // *************************************************************************
     VulkanBuffer rayTraceDescriptorBuffer = {};
@@ -527,6 +551,7 @@ int main(int argc, char** argv)
         boxGeometry,
         materialParamsBuffer,
         iblTextures,
+        iblSampler,
         &accumImageView,
         &iblImageViews);
 
@@ -689,8 +714,11 @@ int main(int argc, char** argv)
 
             ImGui::Separator();
 
-            float currentTime = static_cast<float>(glfwGetTime());
-            float elapsedTime = currentTime - rayGenStartTime;
+            static float elapsedTime = 0;
+            if (sampleCount < gMaxSamples) {
+                float currentTime = static_cast<float>(glfwGetTime());
+                elapsedTime       = currentTime - rayGenStartTime;
+            }
 
             ImGui::Text("Render time: %0.3f seconds", elapsedTime);
         }
@@ -709,7 +737,7 @@ int main(int argc, char** argv)
         }
 
         // Smooth out the rotation on Y
-        gAngle += (gTargetAngle - gAngle) * 0.1f;
+        gAngle += (gTargetAngle - gAngle) * 0.25f;
         // Keep resetting until the angle is somewhat stable
         if (fabs(gTargetAngle - gAngle) > 0.1f) {
             gResetRayGenSamples = true;
@@ -937,7 +965,6 @@ int main(int argc, char** argv)
 
 void CreateRayTracePipelineLayout(
     VulkanRenderer*       pRenderer,
-    VkSampler*            pImmutableSampler,
     VulkanPipelineLayout* pPipelineLayout)
 {
     // Descriptor set layout
@@ -1032,36 +1059,12 @@ void CreateRayTracePipelineLayout(
 
         // IBLMapSampler (s10)
         {
-            VkSamplerCreateInfo createInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-            createInfo.flags                   = 0;
-            createInfo.magFilter               = VK_FILTER_LINEAR;
-            createInfo.minFilter               = VK_FILTER_LINEAR;
-            createInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-            createInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-            createInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            createInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            createInfo.mipLodBias              = 0;
-            createInfo.anisotropyEnable        = VK_FALSE;
-            createInfo.maxAnisotropy           = 0;
-            createInfo.compareEnable           = VK_TRUE;
-            createInfo.compareOp               = VK_COMPARE_OP_LESS_OR_EQUAL;
-            createInfo.minLod                  = 0;
-            createInfo.maxLod                  = FLT_MAX;
-            createInfo.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-            createInfo.unnormalizedCoordinates = VK_FALSE;
-
-            CHECK_CALL(vkCreateSampler(
-                pRenderer->Device,
-                &createInfo,
-                nullptr,
-                pImmutableSampler));
-
             VkDescriptorSetLayoutBinding binding = {};
             binding.binding                      = 10;
             binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
             binding.descriptorCount              = 1;
             binding.stageFlags                   = VK_SHADER_STAGE_ALL;
-            binding.pImmutableSamplers           = pImmutableSampler;
+            binding.pImmutableSamplers           = nullptr;
             bindings.push_back(binding);
         }
 
@@ -1513,15 +1516,15 @@ void CreateBLASes(
 
         VkAccelerationStructureGeometryKHR geometry = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
         //
-        geometry.flags                                          = VK_GEOMETRY_OPAQUE_BIT_KHR;
-        geometry.geometryType                                   = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-        geometry.geometry.triangles.sType                       = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-        geometry.geometry.triangles.vertexFormat                = VK_FORMAT_R32G32B32_SFLOAT;
-        geometry.geometry.triangles.vertexData.deviceAddress    = GetDeviceAddress(pRenderer, &pGeometry->positionBuffer);
-        geometry.geometry.triangles.vertexStride                = 12;
-        geometry.geometry.triangles.maxVertex                   = pGeometry->vertexCount;
-        geometry.geometry.triangles.indexType                   = VK_INDEX_TYPE_UINT32;
-        geometry.geometry.triangles.indexData.deviceAddress     = GetDeviceAddress(pRenderer, &pGeometry->indexBuffer);
+        geometry.flags                                       = VK_GEOMETRY_OPAQUE_BIT_KHR;
+        geometry.geometryType                                = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+        geometry.geometry.triangles.sType                    = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+        geometry.geometry.triangles.vertexFormat             = VK_FORMAT_R32G32B32_SFLOAT;
+        geometry.geometry.triangles.vertexData.deviceAddress = GetDeviceAddress(pRenderer, &pGeometry->positionBuffer);
+        geometry.geometry.triangles.vertexStride             = 12;
+        geometry.geometry.triangles.maxVertex                = pGeometry->vertexCount;
+        geometry.geometry.triangles.indexType                = VK_INDEX_TYPE_UINT32;
+        geometry.geometry.triangles.indexData.deviceAddress  = GetDeviceAddress(pRenderer, &pGeometry->indexBuffer);
 
         VkAccelerationStructureBuildGeometryInfoKHR buildGeometryInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
         //
@@ -1945,8 +1948,9 @@ void CreateTLAS(
     std::vector<VkAccelerationStructureInstanceKHR> instances;
     {
         VkAccelerationStructureInstanceKHR instance = {};
-        instance.mask                               = 1;;
-        instance.flags                              = VK_GEOMETRY_INSTANCE_FORCE_OPAQUE_BIT_KHR;
+        instance.mask                               = 1;
+        ;
+        instance.flags = VK_GEOMETRY_INSTANCE_FORCE_OPAQUE_BIT_KHR;
 
         uint32_t transformIdx = 0;
 
@@ -2325,6 +2329,7 @@ void WriteDescriptors(
     const Geometry&                 boxGeometry,
     const VulkanBuffer&             materialParamsBuffer,
     const std::vector<IBLTextures>& iblTextures,
+    VkSampler                       iblSampler,
     VkImageView*                    pAccumImageView,
     std::vector<VkImageView>*       pIBLImageViews)
 {
@@ -2591,6 +2596,15 @@ void WriteDescriptors(
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         }
     }
+
+    // IBL sampler (s10)
+    WriteDescriptor(
+        pRenderer,
+        pDescriptorBufferStartAddress,
+        descriptorSetLayout,
+        10, // binding
+        0,  // arrayElement
+        iblSampler);
 
     vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
 }
