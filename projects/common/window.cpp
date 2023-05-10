@@ -574,7 +574,7 @@ bool Window::InitImGuiForVulkan(VulkanRenderer* pRenderer, VkRenderPass renderPa
             return false;
         }
 
-        vkres = vkDeviceWaitIdle(pRenderer->Device);
+        vkres = vkQueueWaitIdle(pRenderer->Queue);
         if (vkres != VK_SUCCESS) {
             assert(false && "vkDeviceWaitIdle failed!");
             return false;

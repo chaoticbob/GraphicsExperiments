@@ -223,7 +223,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     std::vector<char> rayTraceDxil;
     {
-        auto source = LoadString("projects/033_raytracing_path_trace_pbr_d3d12/shaders.hlsl");
+        auto source = LoadString("projects/033_034_raytracing_path_trace_pbr/shaders.hlsl");
         assert((!source.empty()) && "no shader source!");
 
         std::string errorMsg;
@@ -508,7 +508,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Misc vars
     // *************************************************************************
-    uint32_t sampleCount = 0;
+    uint32_t sampleCount     = 0;
+    float    rayGenStartTime = 0;
 
     // *************************************************************************
     // Main loop
@@ -540,6 +541,13 @@ int main(int argc, char** argv)
             char  buf[256] = {};
             sprintf(buf, "%d/%d Samples", sampleCount, gMaxSamples);
             ImGui::ProgressBar(progress, ImVec2(-1, 0), buf);
+
+            ImGui::Separator();
+
+            float currentTime = static_cast<float>(glfwGetTime());
+            float elapsedTime = currentTime - rayGenStartTime;
+
+            ImGui::Text("Render time: %0.3f seconds", elapsedTime);
         }
         ImGui::End();
 
@@ -582,6 +590,7 @@ int main(int argc, char** argv)
         // Reset ray gen samples
         if (gResetRayGenSamples) {
             sampleCount = 0;
+            rayGenStartTime = static_cast<float>(glfwGetTime());
 
             commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
 

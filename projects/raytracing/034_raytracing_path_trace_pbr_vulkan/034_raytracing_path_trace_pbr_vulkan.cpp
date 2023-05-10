@@ -246,7 +246,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     std::vector<uint32_t> rayTraceSpv;
     {
-        auto source = LoadString("projects/033_raytracing_path_trace_pbr_d3d12/shaders.hlsl");
+        auto source = LoadString("projects/033_034_raytracing_path_trace_pbr/shaders.hlsl");
         assert((!source.empty()) && "no shader source!");
 
         std::string errorMsg;
@@ -579,7 +579,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight())) {
+    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight(), 3)) {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -630,7 +630,7 @@ int main(int argc, char** argv)
     }
 
     // *************************************************************************
-    // Command buffer
+    // Command buffer and fence
     // *************************************************************************
     CommandObjects cmdBuf = {};
     {
@@ -655,7 +655,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Misc vars
     // *************************************************************************
-    uint32_t sampleCount = 0;
+    uint32_t sampleCount     = 0;
+    float    rayGenStartTime = 0;
 
     // *************************************************************************
     // Main loop
@@ -687,6 +688,13 @@ int main(int argc, char** argv)
             char  buf[256] = {};
             sprintf(buf, "%d/%d Samples", sampleCount, gMaxSamples);
             ImGui::ProgressBar(progress, ImVec2(-1, 0), buf);
+
+            ImGui::Separator();
+
+            float currentTime = static_cast<float>(glfwGetTime());
+            float elapsedTime = currentTime - rayGenStartTime;
+
+            ImGui::Text("Render time: %0.3f seconds", elapsedTime);
         }
         ImGui::End();
 
@@ -751,12 +759,13 @@ int main(int argc, char** argv)
         // Build command buffer to trace rays
         // ---------------------------------------------------------------------
         VkCommandBufferBeginInfo vkbi = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-        vkbi.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vkbi.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
         CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
 
         // Reset ray gen samples
         if (gResetRayGenSamples) {
-            sampleCount = 0;
+            sampleCount     = 0;
+            rayGenStartTime = static_cast<float>(glfwGetTime());
 
             vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, clearRayGenPipeline);
 
@@ -842,7 +851,20 @@ int main(int argc, char** argv)
                 gWindowWidth,
                 gWindowHeight,
                 1);
+
+            CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));
+
+            // Execute command buffer
+            CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
+
+            // Wait for the GPU to finish the work
+            if (!WaitForGpu(renderer.get())) {
+                assert(false && "WaitForGpu failed");
+            }
         }
+
+        // Reset command buffer to render ImGui
+        CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
 
         // ImGui
         {
@@ -889,21 +911,21 @@ int main(int argc, char** argv)
                 VK_IMAGE_ASPECT_COLOR_BIT,
                 RESOURCE_STATE_RENDER_TARGET,
                 RESOURCE_STATE_PRESENT);
+
+            CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));
+
+            // Execute command buffer
+            CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
+
+            // Wait for the GPU to finish the work
+            if (!WaitForGpu(renderer.get())) {
+                assert(false && "WaitForGpu failed");
+            }
         }
-
-        CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));
-
-        // Execute command buffer
-        CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
 
         // Update sample count
         if (sampleCount < gMaxSamples) {
             ++sampleCount;
-        }
-
-        // Wait for the GPU to finish the work
-        if (!WaitForGpu(renderer.get())) {
-            assert(false && "WaitForGpu failed");
         }
 
         if (!SwapchainPresent(renderer.get(), swapchainImageIndex)) {
@@ -1618,7 +1640,11 @@ void CreateBLASes(
                 assert(false && "WaitForGpu failed");
             }
         }
+
+        DestroyBuffer(pRenderer, &scratchBuffer);
     }
+
+    DestroyBuffer(pRenderer, &transformBuffer);
 }
 
 void CreateTLAS(
@@ -2177,6 +2203,9 @@ void CreateTLAS(
             assert(false && "WaitForGpu failed");
         }
     }
+
+    DestroyBuffer(pRenderer, &instanceBuffer);
+    DestroyBuffer(pRenderer, &scratchBuffer);
 }
 
 void CreateAccumTexture(VulkanRenderer* pRenderer, VulkanImage* pBuffer)
@@ -2226,7 +2255,7 @@ void CreateIBLTextures(
         }
     }
 
-    size_t maxEntries = 1; // std::min<size_t>(kMaxIBLs, iblFiles.size());
+    size_t maxEntries = std::min<size_t>(kMaxIBLs, iblFiles.size());
     for (size_t i = 0; i < maxEntries; ++i) {
         std::filesystem::path iblFile = iblFiles[i];
 

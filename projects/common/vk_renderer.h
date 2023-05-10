@@ -114,12 +114,14 @@ struct CommandObjects
 bool     InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTracing, uint32_t apiVersion = VK_API_VERSION_1_3);
 bool     InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t height, uint32_t imageCount = 2);
 bool     WaitForGpu(VulkanRenderer* pRenderer);
+bool     WaitForFence(VulkanRenderer* pRenderer, VkFence fence);
 VkResult GetSwapchainImages(VulkanRenderer* pRenderer, std::vector<VkImage>& images);
 VkResult AcquireNextImage(VulkanRenderer* pRenderer, uint32_t* pImageIndex);
 bool     SwapchainPresent(VulkanRenderer* pRenderer, uint32_t imageIndex);
 
 VkResult CreateCommandBuffer(VulkanRenderer* pRenderer, VkCommandPoolCreateFlags poolCreateFlags, CommandObjects* pCmdBuf);
-VkResult ExecuteCommandBuffer(VulkanRenderer* pRenderer, const CommandObjects* pCmdBuf);
+void     DestroyCommandBuffer(VulkanRenderer* pRenderer, CommandObjects* pCmdBuf);
+VkResult ExecuteCommandBuffer(VulkanRenderer* pRenderer, const CommandObjects* pCmdBuf, VkFence fence = VK_NULL_HANDLE);
 
 void CmdTransitionImageLayout(
     VkCommandBuffer    cmdBuf,
@@ -212,6 +214,21 @@ VkResult CreateBuffer(
     VkDeviceSize       minAlignment, // Use 0 for no alignment
     VulkanBuffer*      pBuffer);
 
+//! @fn CreateBuffer
+//!
+//! Creates a buffer object with memory allocated and bound that
+//! is based on memoryUsage. Source data is copied to buffer if pSrcData
+//! is not NULL.
+//!
+VkResult CreateBuffer(
+    VulkanRenderer*    pRenderer,
+    size_t             srcSize,
+    const void*        pSrcData, // [OPTIONAL] NULL if no data
+    VkBufferUsageFlags usageFlags,
+    VmaMemoryUsage     memoryUsage,
+    VkDeviceSize       minAlignment, // Use 0 for no alignment
+    VulkanBuffer*      pBuffer);
+
 /*
 VkResult CreateUAVBuffer(
     VulkanRenderer*    pRenderer,
@@ -278,7 +295,7 @@ VkResult CreateRenderPass(
     uint32_t                                 height,
     VulkanRenderPass*                        pRenderPass);
 
-void DestroyBuffer(VulkanRenderer* pRenderer, const VulkanBuffer* pBuffer);
+void DestroyBuffer(VulkanRenderer* pRenderer, VulkanBuffer* pBuffer);
 
 VkDeviceAddress GetDeviceAddress(VulkanRenderer* pRenderer, const VulkanBuffer* pBuffer);
 VkDeviceAddress GetDeviceAddress(VulkanRenderer* pRenderer, VkAccelerationStructureKHR accelStruct);

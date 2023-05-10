@@ -467,6 +467,23 @@ bool WaitForGpu(VulkanRenderer* pRenderer)
     return true;
 }
 
+bool WaitForFence(VulkanRenderer* pRenderer, VkFence fence)
+{
+    VkResult vkres = vkWaitForFences(pRenderer->Device, 1, &fence, VK_TRUE, UINT64_MAX);
+    if (vkres != VK_SUCCESS) {
+        assert(false && "vkWaitForFences failed");
+        return false;
+    }
+
+    vkres = vkResetFences(pRenderer->Device, 1, &fence);
+    if (vkres != VK_SUCCESS) {
+        assert(false && "vkWaitForFences failed");
+        return false;
+    }
+
+    return true;
+}
+
 VkResult GetSwapchainImages(VulkanRenderer* pRenderer, std::vector<VkImage>& images)
 {
     uint32_t count = 0;
@@ -559,7 +576,23 @@ VkResult CreateCommandBuffer(VulkanRenderer* pRenderer, VkCommandPoolCreateFlags
     return VK_SUCCESS;
 }
 
-VkResult ExecuteCommandBuffer(VulkanRenderer* pRenderer, const CommandObjects* pCmdBuf)
+void DestroyCommandBuffer(VulkanRenderer* pRenderer, CommandObjects* pCmdBuf)
+{
+    vkFreeCommandBuffers(
+        pRenderer->Device,
+        pCmdBuf->CommandPool,
+        1,
+        &pCmdBuf->CommandBuffer);
+    pCmdBuf->CommandBuffer = VK_NULL_HANDLE;
+
+    vkDestroyCommandPool(
+        pRenderer->Device,
+        pCmdBuf->CommandPool,
+        nullptr);
+    pCmdBuf->CommandPool = VK_NULL_HANDLE;
+}
+
+VkResult ExecuteCommandBuffer(VulkanRenderer* pRenderer, const CommandObjects* pCmdBuf, VkFence fence)
 {
     if (IsNull(pCmdBuf)) {
         return VK_ERROR_INITIALIZATION_FAILED;
@@ -584,7 +617,7 @@ VkResult ExecuteCommandBuffer(VulkanRenderer* pRenderer, const CommandObjects* p
         pRenderer->Queue,
         1,
         &submitInfo,
-        VK_NULL_HANDLE);
+        fence);
     if (vkres != VK_SUCCESS) {
         assert(false && "vkEndCommandBuffer failed");
         return vkres;
@@ -869,40 +902,6 @@ VkResult TransitionImageLayout(
         stateBefore,
         stateAfter);
 
-    /*
-    VkImageMemoryBarrier2 barrier           = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
-    barrier.pNext                           = nullptr;
-    barrier.srcStageMask                    = 0;
-    barrier.srcAccessMask                   = 0;
-    barrier.dstStageMask                    = 0;
-    barrier.dstAccessMask                   = 0;
-    barrier.oldLayout                       = VK_IMAGE_LAYOUT_UNDEFINED;
-    barrier.newLayout                       = VK_IMAGE_LAYOUT_UNDEFINED;
-    barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image                           = image;
-    barrier.subresourceRange.aspectMask     = aspectFlags;
-    barrier.subresourceRange.baseMipLevel   = firstMip;
-    barrier.subresourceRange.levelCount     = mipCount;
-    barrier.subresourceRange.baseArrayLayer = firstLayer;
-    barrier.subresourceRange.layerCount     = layerCount;
-
-    ResourceStateToBarrierInfo(stateBefore, false, &barrier.srcStageMask, &barrier.srcAccessMask, &barrier.oldLayout);
-    ResourceStateToBarrierInfo(stateAfter, true, &barrier.dstStageMask, &barrier.dstAccessMask, &barrier.newLayout);
-
-    VkDependencyInfo dependencyInfo         = {VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
-    dependencyInfo.pNext                    = nullptr;
-    dependencyInfo.dependencyFlags          = 0;
-    dependencyInfo.memoryBarrierCount       = 0;
-    dependencyInfo.pMemoryBarriers          = nullptr;
-    dependencyInfo.bufferMemoryBarrierCount = 0;
-    dependencyInfo.pBufferMemoryBarriers    = nullptr;
-    dependencyInfo.imageMemoryBarrierCount  = 1;
-    dependencyInfo.pImageMemoryBarriers     = &barrier;
-
-    vkCmdPipelineBarrier2(cmdBuf.CommandBuffer, &dependencyInfo);
-    */
-
     vkres = vkEndCommandBuffer(cmdBuf.CommandBuffer);
     if (vkres != VK_SUCCESS) {
         assert(false && "vkEndCommandBuffer failed");
@@ -920,6 +919,8 @@ VkResult TransitionImageLayout(
         assert(false && "vkQueueWaitIdle failed");
         return vkres;
     }
+
+    DestroyCommandBuffer(pRenderer, &cmdBuf);
 
     return VK_SUCCESS;
 }
@@ -1011,28 +1012,93 @@ VkResult CreateBuffer(
     return VK_SUCCESS;
 }
 
-/*
-VkResult CreateUAVBuffer(
-    VulkanRenderer*     pRenderer,
-    VkBufferCreateFlags createFlags,
-    size_t              size,
-    VkDeviceSize        minAlignment,
-    VulkanBuffer*       pBuffer)
+VkResult CreateBuffer(
+    VulkanRenderer*    pRenderer,
+    size_t             srcSize,
+    const void*        pSrcData, // [OPTIONAL] NULL if no data
+    VkBufferUsageFlags usageFlags,
+    VmaMemoryUsage     memoryUsage,
+    VkDeviceSize       minAlignment, // Use 0 for no alignment
+    VulkanBuffer*      pBuffer)
 {
     VkResult vkres = CreateBuffer(
         pRenderer,
-        size,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-        VMA_MEMORY_USAGE_GPU_ONLY,
+        srcSize,
+        usageFlags | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        memoryUsage,
         minAlignment,
         pBuffer);
     if (vkres != VK_SUCCESS) {
         return vkres;
     }
 
+    if ((srcSize > 0) && !IsNull(pSrcData)) {
+        VulkanBuffer stagingBuffer = {};
+        //
+        vkres = CreateBuffer(
+            pRenderer,
+            srcSize,
+            pSrcData,
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            0,
+            &stagingBuffer);
+        if (vkres != VK_SUCCESS) {
+            assert(false && "create staging buffer failed");
+            return vkres;
+        }
+
+        CommandObjects cmdBuf = {};
+        VkResult       vkres  = CreateCommandBuffer(pRenderer, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, &cmdBuf);
+        if (vkres != VK_SUCCESS) {
+            assert(false && "CreateCommandBuffer failed");
+            return vkres;
+        }
+
+        VkCommandBufferBeginInfo vkbi = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        vkbi.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        vkres = vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi);
+        if (vkres != VK_SUCCESS) {
+            assert(false && "vkBeginCommandBuffer failed");
+            return vkres;
+        }
+
+        VkBufferCopy region = {};
+        region.srcOffset    = 0;
+        region.dstOffset    = 0;
+        region.size         = srcSize;
+
+        vkCmdCopyBuffer(
+            cmdBuf.CommandBuffer,
+            stagingBuffer.Buffer,
+            pBuffer->Buffer,
+            1,
+            &region);
+
+        vkres = vkEndCommandBuffer(cmdBuf.CommandBuffer);
+        if (vkres != VK_SUCCESS) {
+            assert(false && "vkEndCommandBuffer failed");
+            return vkres;
+        }
+
+        vkres = ExecuteCommandBuffer(pRenderer, &cmdBuf);
+        if (vkres != VK_SUCCESS) {
+            assert(false && "ExecuteCommandBuffer failed");
+            return vkres;
+        }
+
+        vkres = vkQueueWaitIdle(pRenderer->Queue);
+        if (vkres != VK_SUCCESS) {
+            assert(false && "vkQueueWaitIdle failed");
+            return vkres;
+        }
+
+        DestroyCommandBuffer(pRenderer, &cmdBuf);
+        DestroyBuffer(pRenderer, &stagingBuffer);
+    }
+
     return VK_SUCCESS;
 }
-*/
 
 VkResult CreateImage(
     VulkanRenderer*   pRenderer,
@@ -1133,7 +1199,7 @@ VkResult CreateTexture(
         return vkres;
     }
 
-    if (!IsNull(pSrcData)) {
+    if ((srcSizeBytes > 0) && !IsNull(pSrcData)) {
         const uint32_t rowStride = width * PixelStride(format);
         // Calculate the total number of rows for all mip maps
         uint32_t numRows = 0;
@@ -1226,6 +1292,7 @@ VkResult CreateTexture(
             return vkres;
         }
 
+        DestroyCommandBuffer(pRenderer, &cmdBuf);
         DestroyBuffer(pRenderer, &stagingBuffer);
     }
 
@@ -1472,9 +1539,10 @@ VkResult CreateRenderPass(
     return VK_SUCCESS;
 }
 
-void DestroyBuffer(VulkanRenderer* pRenderer, const VulkanBuffer* pBuffer)
+void DestroyBuffer(VulkanRenderer* pRenderer, VulkanBuffer* pBuffer)
 {
     vmaDestroyBuffer(pRenderer->Allocator, pBuffer->Buffer, pBuffer->Allocation);
+    *pBuffer = {};
 }
 
 VkDeviceAddress GetDeviceAddress(VulkanRenderer* pRenderer, const VulkanBuffer* pBuffer)
