@@ -194,7 +194,7 @@ struct VulkanRenderPass
 //!
 VkResult CreateBuffer(
     VulkanRenderer*    pRenderer,
-    size_t             srcSize,
+    size_t             size,
     VkBufferUsageFlags usageFlags,
     VmaMemoryUsage     memoryUsage,
     VkDeviceSize       minAlignment, // Use 0 for no alignment

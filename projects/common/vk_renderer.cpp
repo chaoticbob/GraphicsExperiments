@@ -927,7 +927,7 @@ VkResult TransitionImageLayout(
 
 VkResult CreateBuffer(
     VulkanRenderer*    pRenderer,
-    size_t             srcSize,
+    size_t             size,
     VkBufferUsageFlags usageFlags,
     VmaMemoryUsage     memoryUsage,
     VkDeviceSize       minAlignment,
@@ -939,7 +939,7 @@ VkResult CreateBuffer(
 
     VkBufferCreateInfo vkci = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     vkci.pNext              = nullptr;
-    vkci.size               = srcSize;
+    vkci.size               = size;
     vkci.usage              = usageFlags;
 
     VmaAllocationCreateInfo allocCreateInfo = {};
@@ -971,7 +971,7 @@ VkResult CreateBuffer(
         }
     }
 
-    pBuffer->Size = srcSize;
+    pBuffer->Size = size;
 
     return VK_SUCCESS;
 }

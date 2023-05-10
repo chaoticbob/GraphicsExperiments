@@ -1505,27 +1505,6 @@ void CreateBLASes(
     std::vector<const Geometry*>    geometries = {&sphereGeometry, &knobGeometry, &monkeyGeometry, &teapotGeometry, &boxGeometry};
     std::vector<VulkanAccelStruct*> BLASes     = {pSphereBLAS, pKnobBLAS, pMonkeyBLAS, pTeapotBLAS, pBoxBLAS};
 
-    // clang-format off
-	VkTransformMatrixKHR transformMatrix = {
-		1.0f, 0.0f, 0.0f, 0.0f,
-		0.0f, 1.0f, 0.0f, 0.0f,
-		0.0f, 0.0f, 1.0f, 0.0f
-	};
-    // clang-format on
-
-    VulkanBuffer transformBuffer;
-    {
-        VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
-
-        CHECK_CALL(CreateBuffer(
-            pRenderer,               // pRenderer
-            sizeof(transformMatrix), // srcSize
-            &transformMatrix,        // pSrcData
-            usageFlags,              // usageFlags
-            0,                       // minAlignment
-            &transformBuffer));      // pBuffer
-    }
-
     uint32_t n = static_cast<uint32_t>(geometries.size());
     for (uint32_t i = 0; i < n; ++i) {
         auto pGeometry = geometries[i];
@@ -1542,7 +1521,6 @@ void CreateBLASes(
         geometry.geometry.triangles.maxVertex                   = pGeometry->vertexCount;
         geometry.geometry.triangles.indexType                   = VK_INDEX_TYPE_UINT32;
         geometry.geometry.triangles.indexData.deviceAddress     = GetDeviceAddress(pRenderer, &pGeometry->indexBuffer);
-        geometry.geometry.triangles.transformData.deviceAddress = GetDeviceAddress(pRenderer, &transformBuffer);
 
         VkAccelerationStructureBuildGeometryInfoKHR buildGeometryInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
         //
@@ -1646,8 +1624,6 @@ void CreateBLASes(
 
         DestroyBuffer(pRenderer, &scratchBuffer);
     }
-
-    DestroyBuffer(pRenderer, &transformBuffer);
 }
 
 void CreateTLAS(
@@ -1968,7 +1944,7 @@ void CreateTLAS(
     std::vector<VkAccelerationStructureInstanceKHR> instances;
     {
         VkAccelerationStructureInstanceKHR instance = {};
-        instance.mask                               = 0xFF;
+        instance.mask                               = 1;;
         instance.flags                              = VK_GEOMETRY_INSTANCE_FORCE_OPAQUE_BIT_KHR;
 
         uint32_t transformIdx = 0;
@@ -2258,7 +2234,7 @@ void CreateIBLTextures(
         }
     }
 
-    size_t maxEntries = std::min<size_t>(kMaxIBLs, iblFiles.size());
+    size_t maxEntries = 1; // std::min<size_t>(kMaxIBLs, iblFiles.size());
     for (size_t i = 0; i < maxEntries; ++i) {
         std::filesystem::path iblFile = iblFiles[i];
 
@@ -2325,12 +2301,12 @@ void CreateDescriptorBuffer(
     VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
     CHECK_CALL(CreateBuffer(
-        pRenderer,  // pRenderer
-        size,       // srcSize
-        nullptr,    // pSrcData
-        usageFlags, // usageFlags
-        0,          // minAlignment
-        pBuffer));  // pBuffer
+        pRenderer,                   // pRenderer
+        size,                        // srcSize
+        usageFlags,                  // usageFlags
+        VMA_MEMORY_USAGE_CPU_TO_GPU, // memoryUsage
+        0,                           // minAlignment
+        pBuffer));                   // pBuffer
 }
 
 void WriteDescriptors(
