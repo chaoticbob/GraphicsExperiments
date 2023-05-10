@@ -2236,6 +2236,51 @@ void WriteDescriptor(
         pDescriptor);      // pDescriptor
 }
 
+void WriteDescriptor(
+    VulkanRenderer*       pRenderer,
+    void*                 pDescriptorBufferStartAddress,
+    VkDescriptorSetLayout descriptorSetLayout,
+    uint32_t              binding,
+    uint32_t              arrayElement,
+    VkSampler             sampler)
+{
+    // Get the descriptor buffer properties so we can look up the descriptor size
+    VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT};
+    VkPhysicalDeviceProperties2                   properties                 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+    properties.pNext                                                         = &descriptorBufferProperties;
+    vkGetPhysicalDeviceProperties2(pRenderer->PhysicalDevice, &properties);
+
+    // Get buffer device address for acceleration structure
+    VkDescriptorGetInfoEXT descriptorInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT};
+    descriptorInfo.type                   = VK_DESCRIPTOR_TYPE_SAMPLER;
+    descriptorInfo.data.pSampler          = &sampler;
+
+    // Descriptor size
+    VkDeviceSize descriptorSize = static_cast<uint32_t>(descriptorBufferProperties.samplerDescriptorSize);
+
+    // Get the offset for the binding
+    VkDeviceSize bindingOffset = 0;
+    fn_vkGetDescriptorSetLayoutBindingOffsetEXT(
+        pRenderer->Device,
+        descriptorSetLayout,
+        binding,
+        &bindingOffset);
+
+    // Calculate array element offset
+    VkDeviceSize arrayElementOffset = arrayElement * descriptorSize;
+
+    // Descriptor location
+    VkDeviceSize location = bindingOffset + arrayElementOffset;
+
+    // Write the descriptor
+    char* pDescriptor = static_cast<char*>(pDescriptorBufferStartAddress) + location;
+    fn_vkGetDescriptorEXT(
+        pRenderer->Device, // device
+        &descriptorInfo,   // pDescriptorInfo
+        descriptorSize,    // dataSize
+        pDescriptor);      // pDescriptor
+}
+
 uint32_t BitsPerPixel(VkFormat fmt)
 {
     switch (fmt) {

@@ -318,9 +318,6 @@ void MyMissShader(inout RayPayload payload)
 [shader("closesthit")]
 void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
 {
-/*
-	payload.color = float4(1, 0, 0, 1);
-
     uint instIdx = InstanceIndex();
     uint primIdx = PrimitiveIndex();
     Triangle tri = Triangles[instIdx][primIdx];
@@ -479,6 +476,5 @@ void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr)
     
     float3 finalColor = (reflection * kr * baseColor) + (refraction * kt);
     
-    payload.color = float4(finalColor, 0);	
-*/	
+    payload.color = float4(finalColor, 0);
 }

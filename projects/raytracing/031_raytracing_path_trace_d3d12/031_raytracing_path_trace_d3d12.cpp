@@ -510,7 +510,7 @@ int main(int argc, char** argv)
         }
 
         // Smooth out the rotation on Y
-        gAngle += (gTargetAngle - gAngle) * 0.1f;
+        gAngle += (gTargetAngle - gAngle) * 0.25f;
         // Keep resetting until the angle is somewhat stable
         if (fabs(gTargetAngle - gAngle) > 0.1f) {
             gResetRayGenSamples = true;
@@ -518,7 +518,7 @@ int main(int argc, char** argv)
 
         // Camera matrices
         mat4 transformEyeMat     = glm::rotate(glm::radians(-gAngle), vec3(0, 1, 0));
-        vec3 startingEyePosition = vec3(0, 3.5f, 6.0f);
+        vec3 startingEyePosition = vec3(0, 4.0f, 8.5f);
         vec3 eyePosition         = transformEyeMat * vec4(startingEyePosition, 1);
         mat4 viewMat             = glm::lookAt(eyePosition, vec3(0, 3, 0), vec3(0, 1, 0));
         mat4 projMat             = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
@@ -917,7 +917,7 @@ void CreateRayTracingStateObject(
     //
     // ---------------------------------------------------------------------
     D3D12_RAYTRACING_PIPELINE_CONFIG pipelineConfigDesc = {};
-    pipelineConfigDesc.MaxTraceRecursionDepth           = 5;
+    pipelineConfigDesc.MaxTraceRecursionDepth           = 8;
 
     pSubobject        = &subobjects[PIPELINE_CONFIG_INDEX];
     pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;

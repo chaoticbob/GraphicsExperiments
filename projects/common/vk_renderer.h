@@ -356,6 +356,15 @@ void WriteDescriptor(
     VkImageView           imageView,
     VkImageLayout         imageLayout);
 
+// Image view
+void WriteDescriptor(
+    VulkanRenderer*       pRenderer,
+    void*                 pDescriptorBufferStartAddress,
+    VkDescriptorSetLayout descriptorSetLayout,
+    uint32_t              binding,
+    uint32_t              arrayElement,
+    VkSampler             sampler);
+
 // Loaded funtions
 extern PFN_vkCreateRayTracingPipelinesKHR             fn_vkCreateRayTracingPipelinesKHR;
 extern PFN_vkGetRayTracingShaderGroupHandlesKHR       fn_vkGetRayTracingShaderGroupHandlesKHR;
