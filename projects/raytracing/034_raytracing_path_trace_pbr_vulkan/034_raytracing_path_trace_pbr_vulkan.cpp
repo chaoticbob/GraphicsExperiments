@@ -57,7 +57,7 @@ void csmain(uint3 tid : SV_DispatchThreadId)
 // =============================================================================
 static uint32_t gWindowWidth        = 1920;
 static uint32_t gWindowHeight       = 1080;
-static bool     gEnableDebug        = true;
+static bool     gEnableDebug        = false;
 static bool     gEnableRayTracing   = true;
 static uint32_t gUniformmBufferSize = 256;
 
@@ -259,9 +259,6 @@ int main(int argc, char** argv)
             assert(false);
             return EXIT_FAILURE;
         }
-
-        std::ofstream os("rayTrace.spv", std::ios::binary);
-        os.write((const char*)rayTraceSpv.data(), SizeInBytes(rayTraceSpv));
     }
 
     std::vector<uint32_t> clearRayGenDxil;
@@ -759,7 +756,7 @@ int main(int argc, char** argv)
         // Build command buffer to trace rays
         // ---------------------------------------------------------------------
         VkCommandBufferBeginInfo vkbi = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-        vkbi.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+        vkbi.flags                    = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
         CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
 
         // Reset ray gen samples
@@ -1164,6 +1161,11 @@ void CreateRayTracingPipeline(
         shaderGroups.push_back(createInfo);
     }
 
+    VkRayTracingPipelineInterfaceCreateInfoKHR pipelineInterfaceCreateInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_INTERFACE_CREATE_INFO_KHR};
+    //
+    pipelineInterfaceCreateInfo.maxPipelineRayPayloadSize      = 4 * sizeof(float) + 3 * sizeof(uint32_t); // color, ray depth, sample count, ior;
+    pipelineInterfaceCreateInfo.maxPipelineRayHitAttributeSize = 2 * sizeof(float);                        // barycentrics;
+
     VkRayTracingPipelineCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR};
     createInfo.flags                             = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
     createInfo.stageCount                        = CountU32(shaderStages);
@@ -1171,6 +1173,7 @@ void CreateRayTracingPipeline(
     createInfo.groupCount                        = CountU32(shaderGroups);
     createInfo.pGroups                           = DataPtr(shaderGroups);
     createInfo.maxPipelineRayRecursionDepth      = 16;
+    createInfo.pLibraryInterface                 = &pipelineInterfaceCreateInfo;
     createInfo.layout                            = pipelineLayout.PipelineLayout;
     createInfo.basePipelineHandle                = VK_NULL_HANDLE;
     createInfo.basePipelineIndex                 = -1;

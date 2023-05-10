@@ -988,7 +988,7 @@ VkResult CreateBuffer(
         pRenderer,
         srcSize,
         usageFlags,
-        VMA_MEMORY_USAGE_CPU_ONLY,
+        VMA_MEMORY_USAGE_CPU_TO_GPU,
         minAlignment,
         pBuffer);
     if (vkres != VK_SUCCESS) {
