@@ -107,7 +107,6 @@ struct MaterialParameters
 
 void CreateRayTracePipelineLayout(
     VulkanRenderer*       pRenderer,
-    VkSampler*            pImmutableSampler,
     VulkanPipelineLayout* pPipelineLayout);
 void CreateRayTracingPipeline(
     VulkanRenderer*             pRenderer,
@@ -251,9 +250,8 @@ int main(int argc, char** argv)
     // This is used for pipeline creation and setting the descriptor buffer(s).
     //
     // *************************************************************************
-    VkSampler            immutableSampler       = VK_NULL_HANDLE;
     VulkanPipelineLayout rayTracePipelineLayout = {};
-    CreateRayTracePipelineLayout(renderer.get(), &immutableSampler, &rayTracePipelineLayout);
+    CreateRayTracePipelineLayout(renderer.get(), &rayTracePipelineLayout);
 
     // *************************************************************************
     // Ray tracing Shader module
@@ -900,7 +898,6 @@ int main(int argc, char** argv)
 
 void CreateRayTracePipelineLayout(
     VulkanRenderer*       pRenderer,
-    VkSampler*            pImmutableSampler,
     VulkanPipelineLayout* pPipelineLayout)
 {
     // Descriptor set layout
