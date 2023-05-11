@@ -161,7 +161,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     ComPtr<ID3D12Resource> BLAS;
     CreateBLAS(
-        renderer.get(), 
+        renderer.get(),
         indexCount,
         indexBuffer.Get(),
         vertexCount,
@@ -379,7 +379,6 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     rootParameters[5].Descriptor.ShaderRegister = 5;
     rootParameters[5].Descriptor.RegisterSpace  = 0;
     rootParameters[5].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-
 
     D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
     rootSigDesc.NumParameters             = 6;
@@ -740,7 +739,8 @@ void CreateBLAS(
     ID3D12CommandList* pList = commandList.Get();
     pRenderer->Queue->ExecuteCommandLists(1, &pList);
 
-    assert(WaitForGpu(pRenderer));
+    bool waitres = WaitForGpu(pRenderer);
+    assert(waitres && "WaitForGpu failed");
 }
 
 void CreateTLAS(DxRenderer* pRenderer, ID3D12Resource* pBLAS, ID3D12Resource** ppTLAS)
@@ -819,7 +819,8 @@ void CreateTLAS(DxRenderer* pRenderer, ID3D12Resource* pBLAS, ID3D12Resource** p
     ID3D12CommandList* pList = commandList.Get();
     pRenderer->Queue->ExecuteCommandLists(1, &pList);
 
-    assert(WaitForGpu(pRenderer));
+    bool waitres = WaitForGpu(pRenderer);
+    assert(waitres && "WaitForGpu failed");
 }
 
 void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)

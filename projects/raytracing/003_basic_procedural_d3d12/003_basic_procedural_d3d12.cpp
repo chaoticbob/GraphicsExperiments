@@ -726,7 +726,7 @@ void CreateShaderRecordTables(
 
     // Hit group
     {
-        // 
+        //
         // NOTE: A single identifier is used for all the shaders in the hit group.
         //       This is why there is not separate shader records for the closest hit
         //       shader and the intersection shader.
@@ -831,7 +831,8 @@ void CreateBLAS(DxRenderer* pRenderer, ID3D12Resource** ppBLAS)
     ID3D12CommandList* pList = commandList.Get();
     pRenderer->Queue->ExecuteCommandLists(1, &pList);
 
-    assert(WaitForGpu(pRenderer));
+    bool waitres = WaitForGpu(pRenderer);
+    assert(waitres && "WaitForGpu failed");
 }
 
 void CreateTLAS(DxRenderer* pRenderer, ID3D12Resource* pBLAS, ID3D12Resource** ppTLAS)
@@ -910,7 +911,8 @@ void CreateTLAS(DxRenderer* pRenderer, ID3D12Resource* pBLAS, ID3D12Resource** p
     ID3D12CommandList* pList = commandList.Get();
     pRenderer->Queue->ExecuteCommandLists(1, &pList);
 
-    assert(WaitForGpu(pRenderer));
+    bool waitres = WaitForGpu(pRenderer);
+    assert(waitres && "WaitForGpu failed");
 }
 
 void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)

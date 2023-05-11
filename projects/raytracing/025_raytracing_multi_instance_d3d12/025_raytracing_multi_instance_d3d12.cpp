@@ -837,7 +837,8 @@ void CreateBLASes(
         ID3D12CommandList* pList = commandList.Get();
         pRenderer->Queue->ExecuteCommandLists(1, &pList);
 
-        assert(WaitForGpu(pRenderer));
+        bool waitres = WaitForGpu(pRenderer);
+        assert(waitres && "WaitForGpu failed");
 
         outBLASes.push_back(BLAS);
     }
@@ -875,7 +876,7 @@ void CreateTLAS(
         instanceDesc.AccelerationStructure = BLASes[i]->GetGPUVirtualAddress();
         memcpy(
             instanceDesc.Transform,
-            reinterpret_cast<char *>(transformMatrices)  + i * kTransform3x4Size,
+            reinterpret_cast<char*>(transformMatrices) + i * kTransform3x4Size,
             kTransform3x4Size);
 
         instanceDescs.push_back(instanceDesc);

@@ -964,13 +964,13 @@ void CreateShaderRecordTables(
 
     // Miss
     {
-        // 
-        // There are two shader records for the miss shader record table. 
+        //
+        // There are two shader records for the miss shader record table.
         // First is the regular miss shader.
-        // Second is the miss shadow shader. 
+        // Second is the miss shadow shader.
         //
         // Miss SRT (offset uses shader record size of 32)
-        // 
+        //
         //  +---------------------+
         //  | MyMissShader        | offset = 0
         //  +---------------------+
@@ -994,14 +994,14 @@ void CreateShaderRecordTables(
             CHECK_CALL((*ppMissSRT)->Map(0, nullptr, reinterpret_cast<void**>(&pData)));
 
             // MyMissShader
-            // 
+            //
             // Corresponds to TraceRay function call with MissShaderIndex=0 (lighting) in MyClosestHitShader
             //
             memcpy(pData, pMissShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
             pData += shaderRecordSize;
 
             // MyMissShadowShader
-            // 
+            //
             // Corresponds to TraceRay function call with MissShaderIndex=1 (shadow) in MyClosestHitShader
             //
             memcpy(pData, pMissShadowShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
@@ -1012,7 +1012,7 @@ void CreateShaderRecordTables(
 
     // Hit group
     {
-        // 
+        //
         // This hit group's shader record size is 64 since we need space after
         // the shader identifier to store the virtual address for the sphere buffer.
         //
@@ -1117,7 +1117,8 @@ void CreateBLAS(
     ID3D12CommandList* pList = commandList.Get();
     pRenderer->Queue->ExecuteCommandLists(1, &pList);
 
-    assert(WaitForGpu(pRenderer));
+    bool waitres = WaitForGpu(pRenderer);
+    assert(waitres && "WaitForGpu failed");
 }
 
 void CreateTLAS(DxRenderer* pRenderer, ID3D12Resource* pBLAS, ID3D12Resource** ppTLAS)
@@ -1196,7 +1197,8 @@ void CreateTLAS(DxRenderer* pRenderer, ID3D12Resource* pBLAS, ID3D12Resource** p
     ID3D12CommandList* pList = commandList.Get();
     pRenderer->Queue->ExecuteCommandLists(1, &pList);
 
-    assert(WaitForGpu(pRenderer));
+    bool waitres = WaitForGpu(pRenderer);
+    assert(waitres && "WaitForGpu failed");
 }
 
 void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)
