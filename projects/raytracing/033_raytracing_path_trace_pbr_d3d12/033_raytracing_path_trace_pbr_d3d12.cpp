@@ -45,7 +45,7 @@ void csmain(uint3 tid : SV_DispatchThreadId)
 {
     AccumTarget[tid.xy] = float4(0, 0, 0, 0);
 
-    uint idx = tid.y * 1920 + tid.x;
+    uint idx = tid.y * 1280 + tid.x;
     RayGenSamples[idx] = 0;    
 }
 )";
@@ -53,8 +53,8 @@ void csmain(uint3 tid : SV_DispatchThreadId)
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth  = 1920;
-static uint32_t gWindowHeight = 1080;
+static uint32_t gWindowWidth  = 1280;
+static uint32_t gWindowHeight = 720;
 static bool     gEnableDebug  = true;
 
 static LPCWSTR gHitGroupName         = L"MyHitGroup";

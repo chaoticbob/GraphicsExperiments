@@ -30,6 +30,7 @@ target_link_libraries(
     PUBLIC glfw
            glslang
            SPIRV
+           dxcompiler
 )
 
 if(WIN32)

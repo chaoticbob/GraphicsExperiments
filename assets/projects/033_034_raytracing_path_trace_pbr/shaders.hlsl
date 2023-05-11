@@ -312,7 +312,7 @@ struct RayPayload
 void MyRaygenShader()
 {
     uint2 rayIndex2 = DispatchRaysIndex().xy;
-    uint  rayIndex = rayIndex2.y * 1920 + rayIndex2.x;
+    uint  rayIndex = rayIndex2.y * DispatchRaysDimensions().x + rayIndex2.x;
     uint  sampleCount = RayGenSamples[rayIndex];
     uint  rngState = sampleCount + rayIndex * 1943006372;
 
