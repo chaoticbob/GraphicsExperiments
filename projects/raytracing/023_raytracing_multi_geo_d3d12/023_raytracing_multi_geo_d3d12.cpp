@@ -93,7 +93,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     std::vector<char> dxil;
     {
-        auto source = LoadString("projects/023_raytracing_multi_geo_d3d12/shaders.hlsl");
+        auto source = LoadString("projects/023_024_raytracing_multi_geo/shaders.hlsl");
         assert((!source.empty()) && "no shader source!");
 
         std::string errorMsg;
@@ -153,17 +153,17 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Bottom level acceleration structure
     // *************************************************************************
-    ComPtr<ID3D12Resource> blasBuffer;
+    ComPtr<ID3D12Resource> BLAS;
     CreateBLAS(
         renderer.get(),
         geometries,
-        &blasBuffer);
+        &BLAS);
 
     // *************************************************************************
     // Top level acceleration structure
     // *************************************************************************
-    ComPtr<ID3D12Resource> tlasBuffer;
-    CreateTLAS(renderer.get(), blasBuffer.Get(), &tlasBuffer);
+    ComPtr<ID3D12Resource> TLAS;
+    CreateTLAS(renderer.get(), BLAS.Get(), &TLAS);
 
     // *************************************************************************
     // Output texture
@@ -276,7 +276,7 @@ int main(int argc, char** argv)
             commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
 
             // Acceleration structure (t0)
-            commandList->SetComputeRootShaderResourceView(0, tlasBuffer->GetGPUVirtualAddress());
+            commandList->SetComputeRootShaderResourceView(0, TLAS->GetGPUVirtualAddress());
             // Output texture (u1)
             commandList->SetComputeRootDescriptorTable(1, descriptorHeap->GetGPUDescriptorHandleForHeapStart());
             // Constant buffer (b2)

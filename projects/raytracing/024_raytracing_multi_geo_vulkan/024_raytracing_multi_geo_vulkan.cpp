@@ -33,6 +33,15 @@ static const char* gRayGenShaderName     = "MyRaygenShader";
 static const char* gMissShaderName       = "MyMissShader";
 static const char* gClosestHitShaderName = "MyClosestHitShader";
 
+struct Geometry
+{
+    uint32_t     indexCount;
+    VulkanBuffer indexBuffer;
+    uint32_t     vertexCount;
+    VulkanBuffer positionBuffer;
+    VulkanBuffer normalBuffer;
+};
+
 void CreateRayTracePipelineLayout(
     VulkanRenderer*       pRenderer,
     VulkanPipelineLayout* pPipelineLayout);
@@ -48,20 +57,13 @@ void CreateShaderBindingTables(
     VulkanBuffer*                                    pRayGenSBT,
     VulkanBuffer*                                    pMissSBT,
     VulkanBuffer*                                    pHitGroupSBT);
-void CreateGeometry(
-    VulkanRenderer* pRenderer,
-    uint32_t*       pIndexCount,
-    VulkanBuffer*   pIndexBuffer,
-    uint32_t*       pVertexCount,
-    VulkanBuffer*   pPositionBuffer,
-    VulkanBuffer*   pNormalBuffer);
+void CreateGeometries(
+    VulkanRenderer*        pRenderer,
+    std::vector<Geometry>& outGeometries);
 void CreateBLAS(
-    VulkanRenderer*     pRenderer,
-    uint32_t            indexCount,
-    const VulkanBuffer& indexBuffer,
-    uint32_t            vertexCount,
-    const VulkanBuffer& positionBuffer,
-    VulkanAccelStruct*  pBLAS);
+    VulkanRenderer*              pRenderer,
+    const std::vector<Geometry>& geometries,
+    VulkanAccelStruct*           pBLAS);
 void CreateTLAS(VulkanRenderer* pRenderer, const VulkanAccelStruct& BLAS, VulkanAccelStruct* pTLAS);
 void CreateConstantBuffer(VulkanRenderer* pRenderer, VulkanBuffer* pConstantBuffer);
 void CreateDescriptorBuffer(
@@ -95,7 +97,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     std::vector<uint32_t> rayTraceSpv;
     {
-        auto source = LoadString("projects/021_022_raytracing_triangles/shaders.hlsl");
+        auto source = LoadString("projects/023_024_raytracing_multi_geo/shaders.hlsl");
         assert((!source.empty()) && "no shader source!");
 
         std::string errorMsg;
@@ -170,18 +172,10 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Create geometry
     // *************************************************************************
-    uint32_t     indexCount     = 0;
-    uint32_t     vertexCount    = 0;
-    VulkanBuffer indexBuffer    = {};
-    VulkanBuffer positionBuffer = {};
-    VulkanBuffer normalBuffer   = {};
-    CreateGeometry(
+    std::vector<Geometry> geometries;
+    CreateGeometries(
         renderer.get(),
-        &indexCount,
-        &indexBuffer,
-        &vertexCount,
-        &positionBuffer,
-        &normalBuffer);
+        geometries);
 
     // *************************************************************************
     // Bottom level acceleration structure
@@ -189,10 +183,7 @@ int main(int argc, char** argv)
     VulkanAccelStruct BLAS = {};
     CreateBLAS(
         renderer.get(),
-        indexCount,
-        indexBuffer,
-        vertexCount,
-        positionBuffer,
+        geometries,
         &BLAS);
 
     // *************************************************************************
@@ -200,6 +191,26 @@ int main(int argc, char** argv)
     // *************************************************************************
     VulkanAccelStruct TLAS;
     CreateTLAS(renderer.get(), BLAS, &TLAS);
+
+    // *************************************************************************
+    // Material buffer
+    // *************************************************************************
+    VulkanBuffer materialBuffer = {};
+    {
+        std::vector<glm::vec3> materials = {
+            glm::vec3(1, 0, 0), // Red cube
+            glm::vec3(0, 1, 0), // Green sphere
+            glm::vec3(0, 0, 1), // Blue cone
+        };
+        CreateBuffer(
+            renderer.get(),
+            SizeInBytes(materials),
+            DataPtr(materials),
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            0,
+            &materialBuffer);
+    }
 
     // *************************************************************************
     // Constant buffer
@@ -241,41 +252,53 @@ int main(int argc, char** argv)
             VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             &constantBuffer);
 
-        // Index buffer (t3)
+        // Material colors (t3)
         WriteDescriptor(
             renderer.get(),
             pRayTraceDescriptorBuffeStartAddress,
             rayTracePipelineLayout.DescriptorSetLayout,
-            3,
-            0,
+            3, // binding
+            0, // arrayElement
             VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            &indexBuffer);
+            &materialBuffer);
 
-        // Position buffer (t4)
-        WriteDescriptor(
-            renderer.get(),
-            pRayTraceDescriptorBuffeStartAddress,
-            rayTracePipelineLayout.DescriptorSetLayout,
-            4,
-            0,
-            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            &positionBuffer);
+        for (uint32_t i = 0; i < geometries.size(); ++i) {
+            // Index buffer (t4)
+            WriteDescriptor(
+                renderer.get(),
+                pRayTraceDescriptorBuffeStartAddress,
+                rayTracePipelineLayout.DescriptorSetLayout,
+                4, // binding
+                i, // arrayElement
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &geometries[i].indexBuffer);
 
-        // Normal buffer (t5)
-        WriteDescriptor(
-            renderer.get(),
-            pRayTraceDescriptorBuffeStartAddress,
-            rayTracePipelineLayout.DescriptorSetLayout,
-            5,
-            0,
-            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            &normalBuffer);
+            // Position buffer (t7)
+            WriteDescriptor(
+                renderer.get(),
+                pRayTraceDescriptorBuffeStartAddress,
+                rayTracePipelineLayout.DescriptorSetLayout,
+                7, // binding
+                i, // arrayElement
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &geometries[i].positionBuffer);
+
+            // Normal buffer (t10)
+            WriteDescriptor(
+                renderer.get(),
+                pRayTraceDescriptorBuffeStartAddress,
+                rayTracePipelineLayout.DescriptorSetLayout,
+                10, // binding
+                i, // arrayElement
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &geometries[i].normalBuffer);
+        }
     }
 
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "022_raytracing_triangles_vulkan");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "024_raytracing_multi_geo_vulkan");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -483,9 +506,7 @@ void CreateRayTracePipelineLayout(
             bindings.push_back(binding);
         }
 
-        //  Index buffers (t3)
-        //  Position buffers (t4)
-        //  Normal buffers (t5)
+        // Material colors (t3)
         {
             VkDescriptorSetLayoutBinding binding = {};
             binding.binding                      = 3;
@@ -493,18 +514,30 @@ void CreateRayTracePipelineLayout(
             binding.descriptorCount              = 1;
             binding.stageFlags                   = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
             bindings.push_back(binding);
+        }
+
+        //  Index buffers (t4)
+        //  Position buffers (t7)
+        //  Normal buffers (t10)
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 4;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            binding.descriptorCount              = 2;
+            binding.stageFlags                   = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+            bindings.push_back(binding);
 
             binding                 = {};
-            binding.binding         = 4;
+            binding.binding         = 7;
             binding.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-            binding.descriptorCount = 1;
+            binding.descriptorCount = 2;
             binding.stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
             bindings.push_back(binding);
 
             binding                 = {};
-            binding.binding         = 5;
+            binding.binding         = 10;
             binding.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-            binding.descriptorCount = 1;
+            binding.descriptorCount = 2;
             binding.stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
             bindings.push_back(binding);
         }
@@ -719,68 +752,176 @@ void CreateShaderBindingTables(
             pHitGroupSBT));           // pBuffer
     }
 }
-void CreateGeometry(
-    VulkanRenderer* pRenderer,
-    uint32_t*       pIndexCount,
-    VulkanBuffer*   pIndexBuffer,
-    uint32_t*       pVertexCount,
-    VulkanBuffer*   pPositionBuffer,
-    VulkanBuffer*   pNormalBuffer)
+
+void CreateGeometries(
+    VulkanRenderer*        pRenderer,
+    std::vector<Geometry>& outGeometries)
 {
     VkBufferUsageFlags usageFlags =
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
         VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
         VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
 
-    TriMesh mesh = TriMesh::Sphere(1.0f, 16, 8, {.enableNormals = true});
+    // Cube
+    {
+        TriMesh  mesh = TriMesh::Cube(glm::vec3(1), false, {.enableNormals = true});
+        Geometry geo  = {};
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTriangles()),
-        DataPtr(mesh.GetTriangles()),
-        usageFlags,
-        0,
-        pIndexBuffer));
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTriangles()),
+            DataPtr(mesh.GetTriangles()),
+            usageFlags,
+            0,
+            &geo.indexBuffer));
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetPositions()),
-        DataPtr(mesh.GetPositions()),
-        usageFlags,
-        0,
-        pPositionBuffer));
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetPositions()),
+            DataPtr(mesh.GetPositions()),
+            usageFlags,
+            0,
+            &geo.positionBuffer));
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetNormals()),
-        DataPtr(mesh.GetNormals()),
-        usageFlags,
-        0,
-        pNormalBuffer));
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetNormals()),
+            DataPtr(mesh.GetNormals()),
+            usageFlags,
+            0,
+            &geo.normalBuffer));
 
-    *pIndexCount  = 3 * mesh.GetNumTriangles();
-    *pVertexCount = mesh.GetNumVertices();
+        geo.indexCount  = 3 * mesh.GetNumTriangles();
+        geo.vertexCount = mesh.GetNumVertices();
+
+        outGeometries.push_back(geo);
+    }
+
+    // Sphere
+    {
+        TriMesh  mesh = TriMesh::Sphere(0.5f, 16, 8, {.enableNormals = true});
+        Geometry geo  = {};
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTriangles()),
+            DataPtr(mesh.GetTriangles()),
+            usageFlags,
+            0,
+            &geo.indexBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetPositions()),
+            DataPtr(mesh.GetPositions()),
+            usageFlags,
+            0,
+            &geo.positionBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetNormals()),
+            DataPtr(mesh.GetNormals()),
+            usageFlags,
+            0,
+            &geo.normalBuffer));
+
+        geo.indexCount  = 3 * mesh.GetNumTriangles();
+        geo.vertexCount = mesh.GetNumVertices();
+
+        outGeometries.push_back(geo);
+    }
+
+    // Cone
+    {
+        TriMesh  mesh = TriMesh::Cone(1.0f, 0.5f, 16, {.enableNormals = true});
+        Geometry geo  = {};
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTriangles()),
+            DataPtr(mesh.GetTriangles()),
+            usageFlags,
+            0,
+            &geo.indexBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetPositions()),
+            DataPtr(mesh.GetPositions()),
+            usageFlags,
+            0,
+            &geo.positionBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetNormals()),
+            DataPtr(mesh.GetNormals()),
+            usageFlags,
+            0,
+            &geo.normalBuffer));
+
+        geo.indexCount  = 3 * mesh.GetNumTriangles();
+        geo.vertexCount = mesh.GetNumVertices();
+
+        outGeometries.push_back(geo);
+    }
 }
 
 void CreateBLAS(
-    VulkanRenderer*     pRenderer,
-    uint32_t            indexCount,
-    const VulkanBuffer& indexBuffer,
-    uint32_t            vertexCount,
-    const VulkanBuffer& positionBuffer,
-    VulkanAccelStruct*  pBLAS)
+    VulkanRenderer*              pRenderer,
+    const std::vector<Geometry>& geometries,
+    VulkanAccelStruct*           pBLAS)
 {
-    VkAccelerationStructureGeometryKHR geometry = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
-    //
-    geometry.flags                                       = VK_GEOMETRY_OPAQUE_BIT_KHR;
-    geometry.geometryType                                = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-    geometry.geometry.triangles.sType                    = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-    geometry.geometry.triangles.vertexFormat             = VK_FORMAT_R32G32B32_SFLOAT;
-    geometry.geometry.triangles.vertexData.deviceAddress = GetDeviceAddress(pRenderer, &positionBuffer);
-    geometry.geometry.triangles.vertexStride             = 12;
-    geometry.geometry.triangles.maxVertex                = vertexCount;
-    geometry.geometry.triangles.indexType                = VK_INDEX_TYPE_UINT32;
-    geometry.geometry.triangles.indexData.deviceAddress  = GetDeviceAddress(pRenderer, &indexBuffer);
+    const size_t kTransform3x4Size = 12 * sizeof(float);
+
+    // clang-format off
+	float transformMatrices[9][4] = {
+        // Cube
+        {1.0f, 0.0f, 0.0f, -1.5f},
+        {0.0f, 1.0f, 0.0f,  0.0f},
+        {0.0f, 0.0f, 1.0f,  0.0f},
+        // Sphere
+        {1.0f, 0.0f, 0.0f, 0.0f},
+        {0.0f, 1.0f, 0.0f, 0.0f},
+        {0.0f, 0.0f, 1.0f, 0.0f},
+        // Cone
+        {1.0f, 0.0f, 0.0f, 1.5f},
+        {0.0f, 1.0f, 0.0f, -0.5f},
+        {0.0f, 0.0f, 1.0f, 0.0f},
+    };
+    // clang-format on
+
+    VulkanBuffer transformBuffer = {};
+    CreateBuffer(
+        pRenderer,
+        3 * kTransform3x4Size,
+        transformMatrices,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+            VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+            VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+        0,
+        &transformBuffer);
+
+    std::vector<VkAccelerationStructureGeometryKHR> geometryDescs;
+    std::vector<uint32_t>                           numTriangles;
+    for (uint32_t i = 0; i < geometries.size(); ++i) {
+        VkAccelerationStructureGeometryKHR geometryDesc = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
+        //
+        geometryDesc.flags                                          = VK_GEOMETRY_OPAQUE_BIT_KHR;
+        geometryDesc.geometryType                                   = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+        geometryDesc.geometry.triangles.sType                       = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+        geometryDesc.geometry.triangles.vertexFormat                = VK_FORMAT_R32G32B32_SFLOAT;
+        geometryDesc.geometry.triangles.vertexData.deviceAddress    = GetDeviceAddress(pRenderer, &geometries[i].positionBuffer);
+        geometryDesc.geometry.triangles.vertexStride                = 12;
+        geometryDesc.geometry.triangles.maxVertex                   = geometries[i].vertexCount;
+        geometryDesc.geometry.triangles.indexType                   = VK_INDEX_TYPE_UINT32;
+        geometryDesc.geometry.triangles.indexData.deviceAddress     = GetDeviceAddress(pRenderer, &geometries[i].indexBuffer);
+        geometryDesc.geometry.triangles.transformData.deviceAddress = GetDeviceAddress(pRenderer, &transformBuffer) + i * kTransform3x4Size;
+
+        geometryDescs.push_back(geometryDesc);
+        numTriangles.push_back(geometries[i].indexCount / 3);
+    }
 
     // Fill out enough to get build size info
     VkAccelerationStructureBuildGeometryInfoKHR buildGeometryInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
@@ -788,16 +929,15 @@ void CreateBLAS(
     buildGeometryInfo.type          = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
     buildGeometryInfo.flags         = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
     buildGeometryInfo.mode          = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-    buildGeometryInfo.geometryCount = 1;
-    buildGeometryInfo.pGeometries   = &geometry;
+    buildGeometryInfo.geometryCount = CountU32(geometryDescs);
+    buildGeometryInfo.pGeometries   = DataPtr(geometryDescs);
 
     VkAccelerationStructureBuildSizesInfoKHR buildSizesInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR};
-    const uint32_t                           numTriangles   = indexCount / 3;
     fn_vkGetAccelerationStructureBuildSizesKHR(
         pRenderer->Device,
         VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
         &buildGeometryInfo,
-        &numTriangles,
+        DataPtr(numTriangles),
         &buildSizesInfo);
 
     // Scratch buffer
@@ -848,19 +988,25 @@ void CreateBLAS(
     //
     {
         // Fill out for building acceleration structure
-        VkAccelerationStructureBuildGeometryInfoKHR buildGeometryInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
+        buildGeometryInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
         //
         buildGeometryInfo.type                      = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
         buildGeometryInfo.flags                     = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
         buildGeometryInfo.mode                      = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
         buildGeometryInfo.dstAccelerationStructure  = pBLAS->AccelStruct;
-        buildGeometryInfo.geometryCount             = 1;
-        buildGeometryInfo.pGeometries               = &geometry;
+        buildGeometryInfo.geometryCount             = CountU32(geometryDescs);
+        buildGeometryInfo.pGeometries               = DataPtr(geometryDescs);
         buildGeometryInfo.scratchData.deviceAddress = GetDeviceAddress(pRenderer, &scratchBuffer);
 
-        // Build range info
-        VkAccelerationStructureBuildRangeInfoKHR buildRangeInfo = {};
-        buildRangeInfo.primitiveCount                           = numTriangles;
+        // Build range infos
+        std::vector<VkAccelerationStructureBuildRangeInfoKHR> buildRangeInfos;
+        for (uint32_t i = 0; i < numTriangles.size(); ++i) {
+            VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
+            //
+            rangeInfo.primitiveCount = numTriangles[i];
+
+            buildRangeInfos.push_back(rangeInfo);
+        }
 
         CommandObjects cmdBuf = {};
         CHECK_CALL(CreateCommandBuffer(pRenderer, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, &cmdBuf));
@@ -870,7 +1016,7 @@ void CreateBLAS(
 
         CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
 
-        const VkAccelerationStructureBuildRangeInfoKHR* pBuildRangeInfo = &buildRangeInfo;
+        const VkAccelerationStructureBuildRangeInfoKHR* pBuildRangeInfo = DataPtr(buildRangeInfos);
         fn_vkCmdBuildAccelerationStructuresKHR(cmdBuf.CommandBuffer, 1, &buildGeometryInfo, &pBuildRangeInfo);
 
         CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));
@@ -882,6 +1028,7 @@ void CreateBLAS(
         }
     }
     DestroyBuffer(pRenderer, &scratchBuffer);
+    DestroyBuffer(pRenderer, &transformBuffer);
 }
 
 void CreateTLAS(VulkanRenderer* pRenderer, const VulkanAccelStruct& BLAS, VulkanAccelStruct* pTLAS)
@@ -1028,7 +1175,7 @@ void CreateConstantBuffer(VulkanRenderer* pRenderer, VulkanBuffer* pConstantBuff
 
     Camera camera      = {};
     camera.projInverse = glm::inverse(glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 512.0f));
-    camera.viewInverse = glm::inverse(glm::translate(glm::mat4(1), glm::vec3(0.0f, 0.0f, -2.5f)));
+    camera.viewInverse = glm::inverse(glm::translate(glm::mat4(1), glm::vec3(0.0f, 0.0f, -3.0f)));
 
     CHECK_CALL(CreateBuffer(
         pRenderer,                                                                      // pRenderer
