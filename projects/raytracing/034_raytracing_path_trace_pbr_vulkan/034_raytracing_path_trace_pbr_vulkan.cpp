@@ -9,7 +9,6 @@
 #include <glm/gtx/transform.hpp>
 using namespace glm;
 
-#include <fstream>
 
 #define CHECK_CALL(FN)                               \
     {                                                \
@@ -656,9 +655,7 @@ int main(int argc, char** argv)
     // Command buffer and fence
     // *************************************************************************
     CommandObjects cmdBuf = {};
-    {
-        CHECK_CALL(CreateCommandBuffer(renderer.get(), 0, &cmdBuf));
-    }
+    CHECK_CALL(CreateCommandBuffer(renderer.get(), 0, &cmdBuf));
 
     // *************************************************************************
     // Persistent map scene parameters

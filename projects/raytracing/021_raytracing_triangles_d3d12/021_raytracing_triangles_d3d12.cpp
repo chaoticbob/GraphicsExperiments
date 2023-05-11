@@ -62,7 +62,7 @@ void CreateBLAS(
     ID3D12Resource** ppBLAS);
 void CreateTLAS(DxRenderer* pRenderer, ID3D12Resource* pBLAS, ID3D12Resource** ppTLAS);
 void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer);
-void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource* pRayGenSRT, ID3D12Resource** ppConstantBuffer);
+void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource** ppConstantBuffer);
 void CreateDescriptorHeap(DxRenderer* pRenderer, ID3D12DescriptorHeap** ppHeap);
 
 // =============================================================================
@@ -91,7 +91,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     std::vector<char> dxil;
     {
-        auto source = LoadString("projects/021_raytracing_triangles_d3d12/shaders.hlsl");
+        auto source = LoadString("projects/021_022_raytracing_triangles/shaders.hlsl");
         assert((!source.empty()) && "no shader source!");
 
         std::string errorMsg;
@@ -159,20 +159,20 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Bottom level acceleration structure
     // *************************************************************************
-    ComPtr<ID3D12Resource> blasBuffer;
+    ComPtr<ID3D12Resource> BLAS;
     CreateBLAS(
         renderer.get(), 
         indexCount,
         indexBuffer.Get(),
         vertexCount,
         positionBuffer.Get(),
-        &blasBuffer);
+        &BLAS);
 
     // *************************************************************************
     // Top level acceleration structure
     // *************************************************************************
-    ComPtr<ID3D12Resource> tlasBuffer;
-    CreateTLAS(renderer.get(), blasBuffer.Get(), &tlasBuffer);
+    ComPtr<ID3D12Resource> TLAS;
+    CreateTLAS(renderer.get(), BLAS.Get(), &TLAS);
 
     // *************************************************************************
     // Output texture
@@ -184,7 +184,7 @@ int main(int argc, char** argv)
     // Constant buffer
     // *************************************************************************
     ComPtr<ID3D12Resource> constantBuffer;
-    CreateConstantBuffer(renderer.get(), rgenSRT.Get(), &constantBuffer);
+    CreateConstantBuffer(renderer.get(), &constantBuffer);
 
     // *************************************************************************
     // Descriptor heaps
@@ -255,7 +255,7 @@ int main(int argc, char** argv)
             commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
 
             // Acceleration structure (t0)
-            commandList->SetComputeRootShaderResourceView(0, tlasBuffer->GetGPUVirtualAddress());
+            commandList->SetComputeRootShaderResourceView(0, TLAS->GetGPUVirtualAddress());
             // Output texture (u1)
             commandList->SetComputeRootDescriptorTable(1, descriptorHeap->GetGPUDescriptorHandleForHeapStart());
             // Constant buffer (b2)
@@ -848,7 +848,7 @@ void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)
         IID_PPV_ARGS(ppBuffer)));              // riidResource, ppvResource
 }
 
-void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource* pRayGenSRT, ID3D12Resource** ppConstantBuffer)
+void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource** ppConstantBuffer)
 {
     struct Camera
     {

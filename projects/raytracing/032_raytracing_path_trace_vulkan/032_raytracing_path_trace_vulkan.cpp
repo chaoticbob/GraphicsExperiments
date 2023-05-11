@@ -9,8 +9,6 @@
 #include <glm/gtx/transform.hpp>
 using namespace glm;
 
-#include <fstream>
-
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
@@ -610,9 +608,7 @@ int main(int argc, char** argv)
     // Command buffer
     // *************************************************************************
     CommandObjects cmdBuf = {};
-    {
-        CHECK_CALL(CreateCommandBuffer(renderer.get(), 0, &cmdBuf));
-    }
+    CHECK_CALL(CreateCommandBuffer(renderer.get(), 0, &cmdBuf));
 
     // *************************************************************************
     // Persistent map scene parameters
@@ -1908,7 +1904,7 @@ void WriteDescriptors(
                 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                 &sphereGeometry.positionBuffer);
 
-            // Normal buffer t(30)
+            // Normal buffer (t30)
             WriteDescriptor(
                 pRenderer,
                 pDescriptorBufferStartAddress,
@@ -1941,7 +1937,7 @@ void WriteDescriptors(
                 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                 &boxGeometry.positionBuffer);
 
-            // Normal buffer t(30)
+            // Normal buffer (t30)
             WriteDescriptor(
                 pRenderer,
                 pDescriptorBufferStartAddress,
