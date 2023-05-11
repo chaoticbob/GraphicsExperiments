@@ -96,7 +96,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     std::vector<char> dxil;
     {
-        auto source = LoadString("projects/025_raytracing_multi_instance_d3d12/shaders.hlsl");
+        auto source = LoadString("projects/025_026_raytracing_multi_instance/shaders.hlsl");
         assert((!source.empty()) && "no shader source!");
 
         std::string errorMsg;
