@@ -15,4 +15,4 @@ lib/
 **/*.vcxproj.user
 **/*.dir
 **/cmake_install.cmake
-
+**/imgui.ini
