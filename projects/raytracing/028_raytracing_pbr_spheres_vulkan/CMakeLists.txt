@@ -16,15 +16,9 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/tri_mesh.cpp
     ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/resource_limits_c.cpp
     ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/ResourceLimits.cpp
-    ${IMGUI_VULKAN_FILES}
 )
 
 set_target_properties(028_raytracing_pbr_spheres_vulkan PROPERTIES FOLDER "raytracing")
-
-target_compile_definitions(
-    028_raytracing_pbr_spheres_vulkan
-    PUBLIC ENABLE_IMGUI_VULKAN
-)
 
 target_include_directories(
     028_raytracing_pbr_spheres_vulkan
@@ -35,7 +29,6 @@ target_include_directories(
            ${GREX_THIRD_PARTY_DIR}/glm
            ${GREX_THIRD_PARTY_DIR}/tinyobjloader
            ${GREX_THIRD_PARTY_DIR}/stb
-           ${IMGUI_INC_DIR}
 )
 
 target_link_libraries(
