@@ -33,8 +33,8 @@ const uint32_t kIBLTextureOffset      = 3;
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth  = 1920;
-static uint32_t gWindowHeight = 1080;
+static uint32_t gWindowWidth  = 1280;
+static uint32_t gWindowHeight = 720;
 static bool     gEnableDebug  = true;
 static bool     gEnableRayTracing = true;
 
