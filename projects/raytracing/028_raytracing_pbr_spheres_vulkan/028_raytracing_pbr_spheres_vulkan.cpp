@@ -300,14 +300,13 @@ int main(int argc, char** argv)
    // *************************************************************************
    ModelParameters modelParams = {};
    VulkanBuffer modelParamsBuffer = {};
-   CreateBuffer(
+   CHECK_CALL(CreateBuffer(
       renderer.get(),
       sizeof(ModelParameters),
       &modelParams,
-      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-      VMA_MEMORY_USAGE_GPU_ONLY,
+      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
       0,
-      &modelParamsBuffer);
+      &modelParamsBuffer));
 
    // *************************************************************************
    // Scene params constant buffer
@@ -448,6 +447,9 @@ int main(int argc, char** argv)
    SceneParameters* pSceneParams = nullptr;
    CHECK_CALL(vmaMapMemory(renderer->Allocator, sceneParamsBuffer.Allocation, reinterpret_cast<void**>(&pSceneParams)));
 
+   ModelParameters* pModelParams = nullptr;
+   CHECK_CALL(vmaMapMemory(renderer->Allocator, modelParamsBuffer.Allocation, reinterpret_cast<void**>(&pModelParams)));
+
    // *************************************************************************
    // Persistent map ray trace descriptor buffer
    // *************************************************************************
@@ -501,8 +503,8 @@ int main(int argc, char** argv)
          VK_IMAGE_LAYOUT_GENERAL);
 
       // Update model params
-      modelParams.InverseModelMatrix= invRotMat;
-      modelParams.ModelMatrix = rotMat;
+      pModelParams->InverseModelMatrix= invRotMat;
+      pModelParams->ModelMatrix = rotMat;
 
       // ---------------------------------------------------------------------
       // Build command buffer to trace rays
@@ -651,7 +653,7 @@ void CreateRayTracePipelineLayout(
          binding.binding                      = 9;
          binding.descriptorType               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
          binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR;
+         binding.stageFlags                   = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
          bindings.push_back(binding);
       }
 
@@ -1424,7 +1426,6 @@ void WriteDescriptors(
 
    // Geometry
    {
-      const uint32_t kNumSpheres          = 3;
       const uint32_t kIndexBufferIndex    = 4;
       const uint32_t kPositionBufferIndex = 5;
       const uint32_t kNormalBufferIndex   = 6;
