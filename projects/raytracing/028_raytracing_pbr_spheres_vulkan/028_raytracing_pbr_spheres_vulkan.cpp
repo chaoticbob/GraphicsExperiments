@@ -1425,9 +1425,9 @@ void WriteDescriptors(
    // Geometry
    {
       const uint32_t kNumSpheres          = 3;
-      const uint32_t kIndexBufferIndex    = 20;
-      const uint32_t kPositionBufferIndex = 25;
-      const uint32_t kNormalBufferIndex   = 30;
+      const uint32_t kIndexBufferIndex    = 4;
+      const uint32_t kPositionBufferIndex = 5;
+      const uint32_t kNormalBufferIndex   = 6;
 
       uint32_t arrayElement = 0;
 
