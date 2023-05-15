@@ -60,7 +60,7 @@ struct MaterialTextures
     ComPtr<ID3D12Resource> baseColorTexture;
     ComPtr<ID3D12Resource> normalTexture;
     ComPtr<ID3D12Resource> roughnessTexture;
-    ComPtr<ID3D12Resource> metalnessTexture;
+    ComPtr<ID3D12Resource> metallicTexture;
     ComPtr<ID3D12Resource> aoTexture;
 };
 
@@ -344,7 +344,7 @@ int main(int argc, char** argv)
             CreateDescriptorTexture2D(renderer.get(), materialTextures.roughnessTexture.Get(), descriptor);
             descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             // Metalness
-            CreateDescriptorTexture2D(renderer.get(), materialTextures.metalnessTexture.Get(), descriptor);
+            CreateDescriptorTexture2D(renderer.get(), materialTextures.metallicTexture.Get(), descriptor);
             descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             // Ambient Occlusion
             CreateDescriptorTexture2D(renderer.get(), materialTextures.aoTexture.Get(), descriptor);
@@ -803,7 +803,7 @@ void CreateCameraMaterials(
         CHECK_CALL(CreateTexture(pRenderer, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &purplePixel, &outDefaultMaterialTextures.baseColorTexture));
         CHECK_CALL(CreateTexture(pRenderer, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &blackPixel, &outDefaultMaterialTextures.normalTexture));
         CHECK_CALL(CreateTexture(pRenderer, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &blackPixel, &outDefaultMaterialTextures.roughnessTexture));
-        CHECK_CALL(CreateTexture(pRenderer, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &blackPixel, &outDefaultMaterialTextures.metalnessTexture));
+        CHECK_CALL(CreateTexture(pRenderer, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &blackPixel, &outDefaultMaterialTextures.metallicTexture));
         CHECK_CALL(CreateTexture(pRenderer, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &whitePixel, &outDefaultMaterialTextures.aoTexture));
     }
 
@@ -875,7 +875,7 @@ void CreateCameraMaterials(
                 DXGI_FORMAT_R8G8B8A8_UNORM,
                 bitmap.GetSizeInBytes(),
                 bitmap.GetPixels(),
-                &materialTextures.metalnessTexture));
+                &materialTextures.metallicTexture));
         }
         if (!material.aoTexture.empty()) {
             BitmapRGBA8u bitmap = LoadImage8u(textureDir / material.aoTexture);
