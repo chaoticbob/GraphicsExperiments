@@ -28,5 +28,5 @@ Names for material and rendering variables. These names are a guideline not a ru
 |`Rd`        |`float3`|| Diffuse bidirectional reflectance|
 |`Rs`        |`float3`|| Specular bidirectional reflectance|
 |`Cd`        |`float3`|| Diffuse color remapped from `baseColor` (or `albedo`): `Cd = baseColor * (1 - metallic)`|
-|`F0`        |`float3`|| Fresnel at 0 degrees: `F0 = (specular * specular * (1 - metallic)) + (baseColor * metallic)`|
-|`roughness2`|`float` || Remapped `roughness` (or `perceptualRoughness`) from material: `roughness2 = roughness * roughness`|
+|`F0`        |`float3`|| Fresnel at 0 degrees: `F0 = (0.16 * specular * specular * (1 - metallic)) + (baseColor * metallic)`|
+|`alpha`     |`float` || Squared value of  `roughness` (or `perceptualRoughness`) from material: `alpha = roughness * roughness`|
