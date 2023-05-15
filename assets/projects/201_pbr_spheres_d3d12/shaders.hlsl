@@ -235,10 +235,8 @@ float4 psmain(VSOutput input) : SV_TARGET
     // Indirect lighting
     float3 indirectLighting = (float3)0;
     {
-        float cosTheta = saturate(dot(N, V));
-
         // Diffuse IBL component
-        float3 F = Fresnel_SchlickRoughness(cosTheta, F0, alpha);
+        float3 F = Fresnel_SchlickRoughness(NoV, F0, alpha);
         float3 Kd = (1 - F) * dielectric;
         float3 irradiance = GetIBLIrradiance(N);
         float3 Rd = irradiance * diffuseColor / PI;
