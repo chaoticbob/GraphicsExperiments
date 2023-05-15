@@ -6,8 +6,8 @@ add_executable(
     104_cornell_box_vulkan
     104_cornell_box_vulkan.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
-    ${GREX_PROJECTS_COMMON_DIR}/dx_renderer.h
-    ${GREX_PROJECTS_COMMON_DIR}/dx_renderer.cpp
+    ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.h
+    ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.cpp
     ${GREX_PROJECTS_COMMON_DIR}/window.h
     ${GREX_PROJECTS_COMMON_DIR}/window.cpp
     ${GREX_PROJECTS_COMMON_DIR}/tri_mesh.h

@@ -1719,15 +1719,15 @@ VkResult CreateDrawVertexColorPipeline(
 }
 
 HRESULT CreateDrawNormalPipeline(
-   VulkanRenderer*            pRenderer,
-   VkPipelineLayout*          pipelineLayout,
-   const std::vector<char>&   vsShaderBytecode,
-   const std::vector<char>&   psShaderBytecode,
-   VkFormat                   rtvFormat,
-   VkFormat                   dsvFormat,
-   VkPipeline*                pPipeline,
-   bool                       enableTangents = false,
-   VkCullModeFlagBits         cullMode = VK_CULL_MODE_BACK_BIT)
+   VulkanRenderer*      pRenderer,
+   VkPipelineLayout     pipelineLayout,
+   VkShaderModule       vsShaderModule,
+   VkShaderModule       fsShaderModule,
+   VkFormat             rtvFormat,
+   VkFormat             dsvFormat,
+   VkPipeline*          pPipeline,
+   bool                 enableTangents,
+   VkCullModeFlagBits   cullMode)
 {
    VkFormat                      rtv_format                     = GREX_DEFAULT_RTV_FORMAT;
    VkPipelineRenderingCreateInfo pipeline_rendering_create_info = { VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
@@ -1738,11 +1738,11 @@ HRESULT CreateDrawNormalPipeline(
    VkPipelineShaderStageCreateInfo shader_stages[2] = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
    shader_stages[0].stage                           = VK_SHADER_STAGE_VERTEX_BIT;
    shader_stages[0].module                          = vsShaderModule;
-   shader_stages[0].pName                           = "vsmain";
+   shader_stages[0].pName                           = "main";
    shader_stages[1].sType                           = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
    shader_stages[1].stage                           = VK_SHADER_STAGE_FRAGMENT_BIT;
    shader_stages[1].module                          = fsShaderModule;
-   shader_stages[1].pName                           = "psmain";
+   shader_stages[1].pName                           = "main";
 
    VkVertexInputBindingDescription vertex_binding_desc[2] = {};
    vertex_binding_desc[0].binding   = 0;
@@ -1863,7 +1863,7 @@ HRESULT CreateDrawNormalPipeline(
    pipeline_info.pDepthStencilState           = &depth_stencil_state;
    pipeline_info.pColorBlendState             = &color_blend_state;
    pipeline_info.pDynamicState                = &dynamic_state;
-   pipeline_info.layout                       = pipeline_layout;
+   pipeline_info.layout                       = pipelineLayout;
    pipeline_info.renderPass                   = VK_NULL_HANDLE;
    pipeline_info.subpass                      = 0;
    pipeline_info.basePipelineHandle           = VK_NULL_HANDLE;

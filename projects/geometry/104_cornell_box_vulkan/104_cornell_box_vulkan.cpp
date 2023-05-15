@@ -25,9 +25,9 @@ using namespace glm;
 
 struct DrawParameters
 {
-    uint32_t               materialIndex = 0;
-    uint32_t               numIndices    = 0;
-    ComPtr<ID3D12Resource> indexBuffer   = nullptr;
+    uint32_t      materialIndex = 0;
+    uint32_t      numIndices    = 0;
+    VulkanBuffer  indexBuffer;
 };
 
 struct Material
@@ -53,64 +53,69 @@ struct MaterialParameters
 const char* gShadersVS = R"(
 #version 460
 
-struct CameraProperties {
-   mat4 MVP;
-   vec3 LightPosition;
-};
-
-layout(binding=0, CameraProperties) uniform buffer Camera;
-
-in vec3 PositionOS;
-in vec3 Normal;
-
-out vec3 PositionOS;
-out vec3 Normal;
-
-VSOutput main()
+layout(binding=0) uniform CameraProperties
 {
-   gl_Position = mul(Camera.MVP, float4(PositionOS, 1));
-   PositionOS = PositionOS;
-   Normal = Normal;
-}
-)";
-const char* gShadersFS = R"(
-
-struct CameraProperties {
    mat4 MVP;
    vec3 LightPosition;
-};
-
-struct MaterialParameters {
-   uint MaterialIndex;
-};
-
-struct Material {
-   vec3 Albedo;
-   uint recieveLight;
-};
-
-layout(binding=0, CameraProperties> uniform buffer Camera;
-layout(binding=1, MaterialParameters> uniform buffer MaterialParams;
-layout(binding=2, Material> uinform storageBuffer Materials;
+} Camera;
 
 in vec3 PositionOS;
 in vec3 Normal;
+
+out vec3 outPositionOS;
+out vec3 outNormal;
 
 void main()
 {
-    vec3 lightDir = normalize(Camera.LightPosition - PositionOS);
-    float diffuse = 0.7 * saturate(dot(lightDir, Normal));
-
-    Material material = Materials[MaterialParams.MaterialIndex];
-    float3 color = material.Albedo;
-    if (material.recieveLight) {
-        color = (0.3 + diffuse) * material.Albedo;
-    }
-
-    FragColor = vec4(color, 1);
+   gl_Position = Camera.MVP * vec4(PositionOS, 1);
+   outPositionOS = PositionOS;
+   outNormal = Normal;
 }
 )";
+const char* gShadersFS = R"(
+#version 460
 
+layout(binding=0) uniform CameraProperties
+{
+   mat4 MVP;
+   vec3 LightPosition;
+} Camera;
+
+layout(binding=1) uniform MaterialParameters
+{
+   uint MaterialIndex;
+} MaterialParams;
+
+struct Material
+{
+   vec3 Albedo;
+   uint receiveLight;
+};
+
+layout(binding=2) buffer Material Materials;
+
+in vec3 PositionOS;
+in vec3 Normal;
+
+out vec4 FragColor;
+
+void main()
+{
+   vec3 lightDir = normalize(Camera.LightPosition - PositionOS);
+   float diffuse = 0.7 * clamp(dot(lightDir, Normal), 0, 1);
+
+   uint materialIndex = MaterialParams.MaterialIndex;
+   vec3 albedo = Materials[materialIndex].Albedo;
+   uint receiveLight = Materials[materialIndex].receiveLight;
+
+   vec3 color = albedo;
+   if (receiveLight) {
+       color = (0.3 + diffuse) * albedo;
+   }
+
+   FragColor = vec4(color, 1);
+}
+)";
 
 // =============================================================================
 // Globals
@@ -118,8 +123,9 @@ void main()
 static uint32_t gWindowWidth  = 1280;
 static uint32_t gWindowHeight = 720;
 static bool     gEnableDebug  = true;
+static bool     gEnableRayTracing = false;
 
-void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout *pPipelineLayout);
+void CreatePipelineLayout(VulkanRenderer* pRenderer, VkPipelineLayout *pLayout);
 void CreateShaderModules(
    VulkanRenderer*               pRenderer,
    const std::vector<uint32_t>&  spirvVS,
@@ -141,19 +147,19 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    if (!InitDx(renderer.get(), gEnableDebug)) {
+    if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRayTracing)) {
         return EXIT_FAILURE;
     }
 
     // *************************************************************************
     // Compile shaders
     // *************************************************************************
-    std::vector<uint32_t> sprivVS;
-    std::vector<uint32_t> spirvPS;
+    std::vector<uint32_t> spirvVS;
+    std::vector<uint32_t> spirvFS;
     {
         std::string errorMsg;
-        HRESULT     hr = CompileGLSL(gShadersVS, "main", VK_SHADER_STAGE_VERTEX_BIT, {}, &sprivVS, &errorMsg);
-        if (FAILED(hr)) {
+        CompileResult vkRes = CompileGLSL(gShadersVS, "main", VK_SHADER_STAGE_VERTEX_BIT, {}, &spirvVS, &errorMsg);
+        if (vkRes != COMPILE_SUCCESS) {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
@@ -162,8 +168,8 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        hr = CompileGLSL(gShadersFS, "main", VK_SHADER_STAGE_FRAGMENT_BIT, {}, &spirvPS, &errorMsg);
-        if (FAILED(hr)) {
+        vkRes = CompileGLSL(gShadersFS, "main", VK_SHADER_STAGE_FRAGMENT_BIT, {}, &spirvFS, &errorMsg);
+        if (vkRes != COMPILE_SUCCESS) {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (PS): " << errorMsg << "\n";
@@ -197,15 +203,15 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Graphics pipeline state object
     // *************************************************************************
-    VkPipeline pipelineState = VK_NULL_HANDLE;
+    VkPipeline pipeline = VK_NULL_HANDLE;
     CHECK_CALL(CreateDrawNormalPipeline(
        renderer.get(),
-       rootSig.Get(),
-       sprivVS,
-       spirvPS,
+       pipelineLayout,
+       moduleVS,
+       moduleFS,
        GREX_DEFAULT_RTV_FORMAT,
        GREX_DEFAULT_DSV_FORMAT,
-       &pipelineState));
+       &pipeline));
 
     // *************************************************************************
     // Geometry data
@@ -271,10 +277,10 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain image views, depth buffers/views
     // *************************************************************************
+    std::vector<VkImage>     images;
     std::vector<VkImageView> imageViews;
     std::vector<VkImageView> depthViews;
     {
-        std::vector<VkImage> images;
         CHECK_CALL(GetSwapchainImages(renderer.get(), images));
 
         for (auto& image : images) {
@@ -341,7 +347,7 @@ int main(int argc, char** argv)
     // Persistent map draw parameters
     // *************************************************************************
     DrawParameters* pMaterialParams = nullptr;
-    CHECK_CALL(vmaMapMemory(renderer->Allocator, drawParamsBuffer.Allocation, reinterpret_cast<void**>(&pMaterialParams)));
+    CHECK_CALL(vmaMapMemory(renderer->Allocator, materialParamsBuffer.Allocation, reinterpret_cast<void**>(&pMaterialParams)));
 
     // *************************************************************************
     // Main loop
@@ -365,21 +371,21 @@ int main(int argc, char** argv)
         {
            CmdTransitionImageLayout(
               cmdBuf.CommandBuffer,
-              swapchainImages[swapchainImageIndex],
+              images[bufferIndex],
               GREX_ALL_SUBRESOURCES,
               VK_IMAGE_ASPECT_COLOR_BIT,
               RESOURCE_STATE_PRESENT,
               RESOURCE_STATE_COMPUTE_UNORDERED_ACCESS);
 
            VkRenderingAttachmentInfo colorAttachment  = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
-           colorAttachment.imageView                  = imageViews[imageIndex];
+           colorAttachment.imageView                  = imageViews[bufferIndex];
            colorAttachment.imageLayout                = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
            colorAttachment.loadOp                     = VK_ATTACHMENT_LOAD_OP_CLEAR;
            colorAttachment.storeOp                    = VK_ATTACHMENT_STORE_OP_STORE;
            colorAttachment.clearValue                 = clearValues[0];
 
            VkRenderingAttachmentInfo depthAttachment  = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
-           depthAttachment.imageView                  = depthViews[imageIndex];
+           depthAttachment.imageView                  = depthViews[bufferIndex];
            depthAttachment.imageLayout                = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
            depthAttachment.loadOp                     = VK_ATTACHMENT_LOAD_OP_CLEAR;
            depthAttachment.storeOp                    = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -402,9 +408,7 @@ int main(int argc, char** argv)
            // Bind the VS/FS Graphics Pipeline
            vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-           // Bind the mesh vertex/index buffers
-           vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, indexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
-
+           // Bind the Vertex Buffer
            VkBuffer vertexBuffers[] = { positionBuffer.Buffer, normalBuffer.Buffer };
            VkDeviceSize offsets[] = { 0, 0 };
            vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 2, vertexBuffers, offsets);
@@ -417,49 +421,19 @@ int main(int argc, char** argv)
             pCamParams->mvp           = mvpMat;
             pCamParams->lightPosition = lightPosition;
 
-            commandList->SetGraphicsRootSignature(rootSig.Get());
-
-            // Camera (b0)
-            commandList->SetGraphicsRoot32BitConstants(0, 19, &cam, 0);
-            // Materials (t2)
-            commandList->SetGraphicsRootShaderResourceView(2, materialBuffer->GetGPUVirtualAddress());
-
-            D3D12_VERTEX_BUFFER_VIEW vbvs[2] = {};
-            vbvs[0].BufferLocation           = positionBuffer->GetGPUVirtualAddress();
-            vbvs[0].SizeInBytes              = static_cast<UINT>(positionBuffer->GetDesc().Width);
-            vbvs[0].StrideInBytes            = 12;
-            vbvs[1].BufferLocation           = normalBuffer->GetGPUVirtualAddress();
-            vbvs[1].SizeInBytes              = static_cast<UINT>(normalBuffer->GetDesc().Width);
-            vbvs[1].StrideInBytes            = 12;
-
-            commandList->IASetVertexBuffers(0, 2, vbvs);
-
-            commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-            D3D12_VIEWPORT viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
-            commandList->RSSetViewports(1, &viewport);
-
-            D3D12_RECT scissor = {0, 0, static_cast<long>(gWindowWidth), static_cast<long>(gWindowHeight)};
-            commandList->RSSetScissorRects(1, &scissor);
-
-            commandList->SetPipelineState(pipelineState.Get());
-
             for (auto& draw : drawParams) {
-                D3D12_INDEX_BUFFER_VIEW ibv = {};
-                ibv.BufferLocation          = draw.indexBuffer->GetGPUVirtualAddress();
-                ibv.SizeInBytes             = static_cast<UINT>(draw.indexBuffer->GetDesc().Width);
-                ibv.Format                  = DXGI_FORMAT_R32_UINT;
-                commandList->IASetIndexBuffer(&ibv);
+               // Bind the index buffer for this draw
+               vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, draw.indexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
 
-                // MaterialParams (b1)
-                pMaterialParams->materialIndex= draw.materialIndex;
+               // Setup the MaterialParams (b1) for this draw
+               pMaterialParams->materialIndex= draw.materialIndex;
 
-                commandList->DrawIndexedInstanced(draw.numIndices, 1, 0, 0, 0);
+               vkCmdDrawIndexed(cmdBuf.CommandBuffer, draw.numIndices, 1, 0, 0, 0);
             }
 
             CmdTransitionImageLayout(
                cmdBuf.CommandBuffer,
-               swapchainImages[swapchainImageIndex],
+               images[bufferIndex],
                GREX_ALL_SUBRESOURCES,
                VK_IMAGE_ASPECT_COLOR_BIT,
                RESOURCE_STATE_COMPUTE_UNORDERED_ACCESS,
@@ -479,7 +453,7 @@ int main(int argc, char** argv)
         }
 
         // Present
-        if (!SwapchainPresent(renderer.get())) {
+        if (!SwapchainPresent(renderer.get(), bufferIndex)) {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -488,9 +462,10 @@ int main(int argc, char** argv)
     return 0;
 }
 
-void CreatePipelineLayout(VulkanRenderer* pRenderer, VkPiplineLayout* pLayout)
+void CreatePipelineLayout(VulkanRenderer* pRenderer, VkPipelineLayout* pLayout)
 {
    // Descriptor set layout
+   VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
    {
       std::vector<VkDescriptorSetLayoutBinding> bindings = {};
       // ConstantBuffer<CameraProperties> Camera     : register(b0);
@@ -530,20 +505,20 @@ void CreatePipelineLayout(VulkanRenderer* pRenderer, VkPiplineLayout* pLayout)
          pRenderer->Device,
          &createInfo,
          nullptr,
-         &pPipelineLayout->DescriptorSetLayout));
+         &descriptorSetLayout));
    }
 
    // Pipeline layout
    {
       VkPipelineLayoutCreateInfo createInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
       createInfo.setLayoutCount             = 1;
-      createInfo.pSetLayouts                = &pPipelineLayout->DescriptorSetLayout;
+      createInfo.pSetLayouts                = &descriptorSetLayout;
 
       CHECK_CALL(vkCreatePipelineLayout(
          pRenderer->Device,
          &createInfo,
          nullptr,
-         &pPipelineLayout->PipelineLayout));
+         pLayout));
    }
 }
 
@@ -621,7 +596,7 @@ void CreateGeometryBuffers(
       DataPtr(materials),
       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
       VMA_MEMORY_USAGE_GPU_ONLY,
-      0
+      0,
       pMaterialBuffer));
 
    CHECK_CALL(CreateBuffer(
