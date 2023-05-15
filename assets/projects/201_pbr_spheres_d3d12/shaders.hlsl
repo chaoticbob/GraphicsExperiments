@@ -193,15 +193,15 @@ float4 psmain(VSOutput input) : SV_TARGET
     float3 baseColor = MaterialParams.baseColor;
     float  roughness = MaterialParams.roughness;
     float  metallic = MaterialParams.metallic;
-    float  dieletric = 1 - metallic;
+    float  dielectric = 1 - metallic;
 
     // Remap
-    float3 diffuseColor = baseColor * dieletric;
+    float3 diffuseColor = baseColor * dielectric;
     float alpha = roughness * roughness;
 
     // Calculate F0
     float specular = 0.5;
-    float3 F0 = (0.16 * specular * specular * dieletric) + (baseColor * metallic);
+    float3 F0 = (0.16 * specular * specular * dielectric) + (baseColor * metallic);
     
     // Direct lighting
     float3 directLighting = (float3)0;
@@ -215,7 +215,7 @@ float4 psmain(VSOutput input) : SV_TARGET
         float3 radiance = Lc * Ls;
         float  NoL = saturate(dot(N, L));
 
-        float3 Rd = diffuseColor / PI * radiance;
+        float3 Rd = diffuseColor / PI;
 
         float  cosTheta = saturate(dot(H, V));
         float  D = Distribution_GGX(N, H, alpha);
@@ -226,10 +226,10 @@ float4 psmain(VSOutput input) : SV_TARGET
         float3 Rs = (D * F * G) / max(0.0001, (4.0 * NoV * NoL));
     
         // Combine diffuse and specular
-        float3 Kd = (1.0 - F) * dieletric;
+        float3 Kd = (1.0 - F) * dielectric;
         float3 BRDF = Kd * Rd + Rs;
 
-        directLighting += BRDF * NoL;
+        directLighting += BRDF * radiance * NoL;
     }
 
     // Indirect lighting
@@ -239,7 +239,7 @@ float4 psmain(VSOutput input) : SV_TARGET
 
         // Diffuse IBL component
         float3 F = Fresnel_SchlickRoughness(cosTheta, F0, alpha);
-        float3 Kd = (1 - F) * dieletric;
+        float3 Kd = (1 - F) * dielectric;
         float3 irradiance = GetIBLIrradiance(N);
         float3 Rd = irradiance * diffuseColor / PI;
         

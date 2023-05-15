@@ -52,13 +52,12 @@ struct DrawParameters
 
 struct MaterialParameters
 {
-    vec3     F0;
     uint32_t UseGeometricNormal;
 };
 
 struct MaterialTextures
 {
-    ComPtr<ID3D12Resource> albedoTexture;
+    ComPtr<ID3D12Resource> baseColorTexture;
     ComPtr<ID3D12Resource> normalTexture;
     ComPtr<ID3D12Resource> roughnessTexture;
     ComPtr<ID3D12Resource> metalnessTexture;
@@ -260,8 +259,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Load mesh
     // *************************************************************************
-    const fs::path modelDir = "models/camera";
-    const fs::path modelFile = modelDir / "camera.obj";
+    const fs::path           modelDir  = "models/camera";
+    const fs::path           modelFile = modelDir / "camera.obj";
     std::unique_ptr<TriMesh> mesh;
     {
         TriMesh::Options options = {};
@@ -336,7 +335,7 @@ int main(int argc, char** argv)
         // Material textures
         for (auto& materialTextures : materialTexturesSets) {
             // Albedo
-            CreateDescriptorTexture2D(renderer.get(), materialTextures.albedoTexture.Get(), descriptor);
+            CreateDescriptorTexture2D(renderer.get(), materialTextures.baseColorTexture.Get(), descriptor);
             descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             // Normal
             CreateDescriptorTexture2D(renderer.get(), materialTextures.normalTexture.Get(), descriptor);
@@ -801,7 +800,7 @@ void CreateCameraMaterials(
         PixelRGBA8u blackPixel  = {0, 0, 0, 255};
         PixelRGBA8u whitePixel  = {255, 255, 255, 255};
 
-        CHECK_CALL(CreateTexture(pRenderer, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &purplePixel, &outDefaultMaterialTextures.albedoTexture));
+        CHECK_CALL(CreateTexture(pRenderer, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &purplePixel, &outDefaultMaterialTextures.baseColorTexture));
         CHECK_CALL(CreateTexture(pRenderer, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &blackPixel, &outDefaultMaterialTextures.normalTexture));
         CHECK_CALL(CreateTexture(pRenderer, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &blackPixel, &outDefaultMaterialTextures.roughnessTexture));
         CHECK_CALL(CreateTexture(pRenderer, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &blackPixel, &outDefaultMaterialTextures.metalnessTexture));
@@ -815,9 +814,7 @@ void CreateCameraMaterials(
 
         // Material params
         MaterialParameters materialParams = {};
-        materialParams.F0                 = F0_DiletricPlastic;
         if (material.name == "LensMaterial") {
-            materialParams.F0                 = F0_DiletricGlass;
             materialParams.UseGeometricNormal = 1;
         }
         materialParamsList.push_back(materialParams);
@@ -836,7 +833,7 @@ void CreateCameraMaterials(
                 DXGI_FORMAT_R8G8B8A8_UNORM,
                 bitmap.GetSizeInBytes(),
                 bitmap.GetPixels(),
-                &materialTextures.albedoTexture));
+                &materialTextures.baseColorTexture));
         }
         if (!material.normalTexture.empty()) {
             BitmapRGBA8u bitmap = LoadImage8u(textureDir / material.normalTexture);
