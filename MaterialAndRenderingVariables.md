@@ -17,7 +17,12 @@
 |`E`        |`float3`|| Eye position|
 |`V`        |`float3`|| Normalized view vector: `V = normalize(E - P)` |
 |`I`        |`float3`|| Normalized incident vector: `I = -V`|
-|`R`        |`float3`|| Total bidirectional reflectance: `R = Rd + Rs` |
+|`R`        |`float3`|| Normalized reflection vector: `R = reflect(-V, N)`|
+|`H`        |`float3`|| Normalized half vector: `normalize(L + V)`|
+|`L`        |`float3`|| Normalized light vector: `L = normalized(Lp - P)`|
+|`Lp`       |`float3`|| Light position|
+|`Lc`       |`float3`|| Light color|
+|`Ls`       |`float3`|| Light intensity|
 |`Rd`       |`float3`|| Diffuse bidirectional reflectance|
 |`Rs`       |`float3`|| Specular bidirectional reflectance|
 |`Cd`       |`float3`|| Diffuse color remapped from `baseColor`: `Cd = baseColor * (1 - metallic)`|
