@@ -7,7 +7,7 @@ Names for material and rendering variables. These names are a guideline not a ru
 |-----------|--------|--------|------------|
 |`baseColor`|`float3`| | Base color of material, aka `albedo`|
 |`roughness`|`float` | [0, 1] | Roughness for both dielectric and metals, aka `perceptualRoughness`|
-|`metallic` |`float` | [0, 1] | 0 = dielectric, 1 = metal|
+|`metallic` |`float` | [0, 1] | 1 = metal material, 0 = dielectric material |
 |`specular` |`float` | [0, 1] | Specular reflection strength for rough dielectric materials, use `0.5` if in doubt|
 |`ior` |`float` || Index of refraction|
 
@@ -27,6 +27,7 @@ Names for material and rendering variables. These names are a guideline not a ru
 |`Ls`        |`float` || Light intensity|
 |`Rd`        |`float3`|| Diffuse bidirectional reflectance|
 |`Rs`        |`float3`|| Specular bidirectional reflectance|
-|`Cd`        |`float3`|| Diffuse color remapped from `baseColor` (or `albedo`): `Cd = baseColor * (1 - metallic)`|
-|`F0`        |`float3`|| Fresnel at 0 degrees: `F0 = (0.16 * specular * specular * (1 - metallic)) + (baseColor * metallic)`|
+|`Cd`        |`float3`|| Diffuse color remapped from `baseColor` (or `albedo`): `Cd = baseColor * dieletric`|
+|`F0`        |`float3`|| Fresnel at 0 degrees: `F0 = (0.16 * specular * specular * dieletric) + (baseColor * metallic)`|
 |`alpha`     |`float` || Squared value of  `roughness` (or `perceptualRoughness`) from material: `alpha = roughness * roughness`|
+|`dieletric` |`float` || 1 = dielectric material, 0 = metal material: `dielectric = (1 = metallic)`|
