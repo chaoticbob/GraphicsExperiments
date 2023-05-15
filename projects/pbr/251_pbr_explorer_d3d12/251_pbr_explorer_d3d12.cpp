@@ -33,15 +33,17 @@ using namespace glm;
 #define FRESNEL_COOK_TORRANCE     2
 #define FRESNEL_NONE              3
 
-#define GEOMETRY_SMITHS        0
-#define GEOMETRY_IMPLICIT      1
-#define GEOMETRY_NEUMANN       2
-#define GEOMETRY_COOK_TORRANCE 3
-#define GEOMETRY_KELEMEN       4
-#define GEOMETRY_BECKMANN      5
-#define GEOMETRY_GGX1          6
-#define GEOMETRY_GGX2          7
-#define GEOMETRY_SCHLICK_GGX   8
+#define GEOMETRY_SMITH                 0
+#define GEOMETRY_IMPLICIT              1
+#define GEOMETRY_NEUMANN               2
+#define GEOMETRY_COOK_TORRANCE         3
+#define GEOMETRY_KELEMEN               4
+#define GEOMETRY_BECKMANN              5
+#define GEOMETRY_GGX1                  6
+#define GEOMETRY_GGX2                  7
+#define GEOMETRY_SCHLICK_GGX           8
+#define GEOMETRY_SMITH_CORRELATED      9
+#define GEOMETRY_SMITH_CORRELATED_FAST 10
 
 // This will be passed in via constant buffer
 struct Light
@@ -108,7 +110,7 @@ const std::vector<std::string> gFresnelNames = {
 };
 
 const std::vector<std::string> gGeometryNames = {
-    "Smiths",
+    "Smith",
     "Implicit",
     "Neumann",
     "Cook-Torrance",
@@ -117,6 +119,8 @@ const std::vector<std::string> gGeometryNames = {
     "GGX1",
     "GGX2",
     "SchlickGGX",
+    "Smith Correlated",
+    "Smith Correlated Fast",
 };
 
 const std::vector<std::string> gDirectComponentModeNames = {
@@ -1268,7 +1272,7 @@ void CreateIBLTextures(
         }
     }
 
-    size_t maxEntries = std::min<size_t>(gMaxIBLs, iblFiles.size());
+    size_t maxEntries = 1; //std::min<size_t>(gMaxIBLs, iblFiles.size());
     for (size_t i = 0; i < maxEntries; ++i) {
         auto& iblFile = iblFiles[i];
 
