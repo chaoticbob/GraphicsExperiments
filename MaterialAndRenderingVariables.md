@@ -22,7 +22,7 @@
 |`L`        |`float3`|| Normalized light vector: `L = normalized(Lp - P)`|
 |`Lp`       |`float3`|| Light position|
 |`Lc`       |`float3`|| Light color|
-|`Ls`       |`float3`|| Light intensity|
+|`Ls`       |`float` || Light intensity|
 |`Rd`       |`float3`|| Diffuse bidirectional reflectance|
 |`Rs`       |`float3`|| Specular bidirectional reflectance|
 |`Cd`       |`float3`|| Diffuse color remapped from `baseColor`: `Cd = baseColor * (1 - metallic)`|
