@@ -43,10 +43,9 @@ struct SceneParameters
 
 struct MaterialParameters
 {
-    vec3  albedo;
+    vec3  baseColor;
     float roughness;
-    float metalness;
-    vec3  F0;
+    float metallic;
 };
 
 struct PBRImplementationInfo
@@ -486,10 +485,9 @@ int main(int argc, char** argv)
                 commandList->SetPipelineState(pbrPipelineState.Get());
 
                 MaterialParameters materialParams = {};
-                materialParams.albedo             = vec3(0.8f, 0.8f, 0.9f);
+                materialParams.baseColor          = vec3(0.8f, 0.8f, 0.9f);
                 materialParams.roughness          = 0;
-                materialParams.metalness          = 0;
-                materialParams.F0                 = F0_Generic;
+                materialParams.metallic           = 0;
 
                 uint32_t numSlotsX     = 10;
                 uint32_t numSlotsY     = 10;
@@ -502,7 +500,7 @@ int main(int argc, char** argv)
                 float    metalnessStep = 1.0f / (numSlotsY - 1);
 
                 for (uint32_t i = 0; i < numSlotsY; ++i) {
-                    materialParams.metalness = 0;
+                    materialParams.metallic = 0;
 
                     for (uint32_t j = 0; j < numSlotsX; ++j) {
                         float x = -halfSpanX + j * slotSize;
@@ -520,7 +518,7 @@ int main(int argc, char** argv)
 
                         commandList->DrawIndexedInstanced(materialSphereNumIndices, 1, 0, 0, 0);
 
-                        materialParams.metalness += roughnessStep;
+                        materialParams.metallic += metalnessStep;
                     }
                     materialParams.roughness += metalnessStep;
                 }
@@ -605,7 +603,7 @@ void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     staticSamplers[1].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[1].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[1].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].MipLODBias       = 0.5f; //D3D12_DEFAULT_MIP_LOD_BIAS;
+    staticSamplers[1].MipLODBias       = 0.5f; // D3D12_DEFAULT_MIP_LOD_BIAS;
     staticSamplers[1].MaxAnisotropy    = 0;
     staticSamplers[1].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     staticSamplers[1].MinLOD           = 0;
@@ -662,7 +660,7 @@ void CreateEnvironmentRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRoo
     staticSampler.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSampler.MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
     staticSampler.MaxAnisotropy    = 0;
-    staticSampler.ComparisonFunc   = D3D12_COMPARISON_FUNC_NEVER   ;
+    staticSampler.ComparisonFunc   = D3D12_COMPARISON_FUNC_NEVER;
     staticSampler.MinLOD           = 0;
     staticSampler.MaxLOD           = D3D12_FLOAT32_MAX;
     staticSampler.ShaderRegister   = 1;

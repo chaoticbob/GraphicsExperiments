@@ -21,10 +21,9 @@ struct DrawParameters {
 };
 
 struct MaterialParameters {
-    float3 albedo;
+    float3 baseColor;
     float  roughness;
-    float  metalness;
-    float3 F0;
+    float  metallic;
 };
 
 ConstantBuffer<SceneParameters>    SceneParams           : register(b0);
@@ -64,11 +63,11 @@ VSOutput vsmain(
 //
 // =================================================================================================
 
-float Distribution_GGX(float3 N, float3 H, float roughness)
+float Distribution_GGX(float3 N, float3 H, float alpha)
 {
     float NoH    = saturate(dot(N, H));
     float NoH2   = NoH * NoH;
-    float alpha2 = max(roughness * roughness, EPSILON);
+    float alpha2 = max(alpha * alpha, EPSILON);
     float A      = NoH2 * (alpha2 - 1) + 1;
 	return alpha2 / (PI * A * A);
 }
@@ -78,9 +77,9 @@ float Geometry_SchlickBeckman(float NoV, float k)
 	return NoV / (NoV * (1 - k) + k);
 }
 
-float Geometry_Smiths(float3 N, float3 V, float3 L,  float roughness)
+float Geometry_Smiths(float3 N, float3 V, float3 L,  float alpha)
 {    
-    float k   = pow(roughness + 1, 2) / 8.0; 
+    float k   = pow(alpha + 1, 2) / 8.0; 
     float NoL = saturate(dot(N, L));
     float NoV = saturate(dot(N, V));    
     float G1  = Geometry_SchlickBeckman(NoV, k);
@@ -88,9 +87,9 @@ float Geometry_Smiths(float3 N, float3 V, float3 L,  float roughness)
     return G1 * G2;
 }
 
-float3 Fresnel_SchlickRoughness(float cosTheta, float3 F0, float roughness)
+float3 Fresnel_SchlickRoughness(float cosTheta, float3 F0, float alpha)
 {
-    float3 r = (float3)(1 - roughness);
+    float3 r = (float3)(1 - alpha);
     return F0 + (max(r, F0) - F0) * pow(1 - cosTheta, 5);
 }
 
@@ -166,9 +165,9 @@ float3 GetIBLEnvironment(float3 dir, float lod)
     return color;
 }
 
-float2 GetBRDFIntegrationMap(float roughness, float NoV)
+float2 GetBRDFIntegrationMap(float alpha, float NoV)
 {
-    float2 tc = float2(saturate(roughness), saturate(NoV));
+    float2 tc = float2(saturate(alpha), saturate(NoV));
     float2 brdf = IBLIntegrationLUT.Sample(IBLIntegrationSampler, tc).xy;
     return brdf;
 }
@@ -191,16 +190,18 @@ float4 psmain(VSOutput input) : SV_TARGET
     float  NoV = saturate(dot(N, V));
 
     // Material variables
-    float3 albedo = MaterialParams.albedo;
+    float3 baseColor = MaterialParams.baseColor;
     float  roughness = MaterialParams.roughness;
-    float  metalness = MaterialParams.metalness;
-    float3 F0 = MaterialParams.F0;
+    float  metallic = MaterialParams.metallic;
+    float  dieletric = 1 - metallic;
 
     // Remap
-    roughness = roughness * roughness;
+    float3 diffuseColor = baseColor * dieletric;
+    float alpha = roughness * roughness;
 
-    // Use albedo as the tint color
-    F0 = lerp(F0, albedo, metalness);
+    // Calculate F0
+    float specular = 0.5;
+    float3 F0 = (0.16 * specular * specular * dieletric) + (baseColor * metallic);
     
     // Direct lighting
     float3 directLighting = (float3)0;
@@ -211,24 +212,24 @@ float4 psmain(VSOutput input) : SV_TARGET
         float3 H  = normalize(L + V);
         float3 Lc = light.Color;
         float  Ls = light.Intensity;
-        float NoL = saturate(dot(N, L));
-
-        float3 diffuse = albedo / PI;
         float3 radiance = Lc * Ls;
+        float  NoL = saturate(dot(N, L));
+
+        float3 Rd = diffuseColor / PI * radiance;
 
         float  cosTheta = saturate(dot(H, V));
-        float  D = Distribution_GGX(N, H, roughness);
-        float3 F = Fresnel_SchlickRoughness(cosTheta, F0, roughness);
-        float  G = Geometry_Smiths(N, V, L, roughness);
+        float  D = Distribution_GGX(N, H, alpha);
+        float3 F = Fresnel_SchlickRoughness(cosTheta, F0, alpha);
+        float  G = Geometry_Smiths(N, V, L, alpha);
 
         // Specular reflectance
-        float3 specular = (D * F * G) / max(0.0001, (4.0 * NoV * NoL));
+        float3 Rs = (D * F * G) / max(0.0001, (4.0 * NoV * NoL));
     
         // Combine diffuse and specular
-        float3 kD = (1.0 - F) * (1.0 - metalness);
-        float3 BRDF = kD  * diffuse + specular;
+        float3 Kd = (1.0 - F) * dieletric;
+        float3 BRDF = Kd * Rd + Rs;
 
-        directLighting += BRDF * radiance * NoL;
+        directLighting += BRDF * NoL;
     }
 
     // Indirect lighting
@@ -237,18 +238,18 @@ float4 psmain(VSOutput input) : SV_TARGET
         float cosTheta = saturate(dot(N, V));
 
         // Diffuse IBL component
-        float3 F = Fresnel_SchlickRoughness(cosTheta, F0, roughness);
-        float3 kD = (1.0 - F) * (1.0 - metalness);
+        float3 F = Fresnel_SchlickRoughness(cosTheta, F0, alpha);
+        float3 Kd = (1 - F) * dieletric;
         float3 irradiance = GetIBLIrradiance(N);
-        float3 diffuse = irradiance * albedo / PI;
+        float3 Rd = irradiance * diffuseColor / PI;
         
         // Specular IBL component
-        float lod = roughness * (SceneParams.IBLEnvironmentNumLevels - 1);
+        float lod = alpha * (SceneParams.IBLEnvironmentNumLevels - 1);
         float3 prefilteredColor = GetIBLEnvironment(R, lod);
-        float2 envBRDF = GetBRDFIntegrationMap(roughness, NoV);
-        float3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
+        float2 envBRDF = GetBRDFIntegrationMap(alpha, NoV);
+        float3 Rs = prefilteredColor * (F * envBRDF.x + envBRDF.y);
 
-        indirectLighting = kD * diffuse + specular;
+        indirectLighting = Kd * Rd + Rs;
     }
 
     float3 finalColor = directLighting + indirectLighting;
