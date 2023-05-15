@@ -250,8 +250,6 @@ float4 psmain(VSOutput input) : SV_TARGET
         float3 Rs = prefilteredColor * (F * envBRDF.x + envBRDF.y);
 
         indirectLighting = Kd * Rd + Rs;
-
-        //indirectLighting = irradiance;
     }
 
     float3 finalColor = directLighting + indirectLighting;
