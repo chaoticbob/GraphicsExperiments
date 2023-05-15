@@ -1,6 +1,6 @@
 # Material Rendering Variable Names
 
-Variable and paramter names for materials and shaders. These names are a guideline not a rule.
+Names for material and rendering variables. These names are a guideline not a rule.
 
 ## Material Variables
 | Name      | Type   | Range  | Description|
