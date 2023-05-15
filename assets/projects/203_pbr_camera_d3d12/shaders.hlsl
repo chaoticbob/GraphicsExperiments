@@ -80,11 +80,11 @@ VSOutput vsmain(
 //
 // =================================================================================================
 
-float Distribution_GGX(float3 N, float3 H, float alpha)
+float Distribution_GGX(float3 N, float3 H, float roughness)
 {
     float NoH    = saturate(dot(N, H));
     float NoH2   = NoH * NoH;
-    float alpha2 = max(alpha * alpha, EPSILON);
+    float alpha2 = max(roughness * roughness, EPSILON);
     float A      = NoH2 * (alpha2 - 1) + 1;
 	return alpha2 / (PI * A * A);
 }
@@ -94,9 +94,9 @@ float Geometry_SchlickBeckman(float NoV, float k)
 	return NoV / (NoV * (1 - k) + k);
 }
 
-float Geometry_Smiths(float3 N, float3 V, float3 L,  float alpha)
+float Geometry_Smith(float3 N, float3 V, float3 L,  float roughness)
 {    
-    float k   = pow(alpha + 1, 2) / 8.0; 
+    float k   = pow(roughness + 1, 2) / 8.0; 
     float NoL = saturate(dot(N, L));
     float NoV = saturate(dot(N, V));    
     float G1  = Geometry_SchlickBeckman(NoV, k);
@@ -104,9 +104,9 @@ float Geometry_Smiths(float3 N, float3 V, float3 L,  float alpha)
     return G1 * G2;
 }
 
-float3 Fresnel_SchlickRoughness(float cosTheta, float3 F0, float alpha)
+float3 Fresnel_SchlickRoughness(float cosTheta, float3 F0, float roughness)
 {
-    float3 r = (float3)(1 - alpha);
+    float3 r = (float3)(1 - roughness);
     return F0 + (max(r, F0) - F0) * pow(1 - cosTheta, 5);
 }
 
@@ -215,7 +215,7 @@ float4 psmain(VSOutput input) : SV_TARGET
     
     // Calculate normal
     float3 vNt = normal;
-    float3 vN  = mul(DrawParams.ModelMatrix, float4(input.Normal, 0)).xyz;
+    float3 vN  = normalize(mul(DrawParams.ModelMatrix, float4(input.Normal, 0)).xyz);
     float3 vT  = mul(DrawParams.ModelMatrix, float4(input.Tangent.xyz, 0)).xyz;
     float3 vB  = mul(DrawParams.ModelMatrix, float4(input.Bitangent.xyz, 0)).xyz;
     float3 N   = normalize(vNt.x * vT + vNt.y * vB + vNt.z * vN);
@@ -267,7 +267,7 @@ float4 psmain(VSOutput input) : SV_TARGET
         float  cosTheta = saturate(dot(H, V));
         float  D = Distribution_GGX(N, H, alpha);
         float3 F = Fresnel_SchlickRoughness(cosTheta, F0, alpha);
-        float  G = Geometry_Smiths(N, V, L, alpha);
+        float  G = Geometry_Smith(N, V, L, alpha);
 
         // Specular reflectance
         float3 Rs = (D * F * G) / max(0.0001, (4.0 * NoV * NoL));
