@@ -102,7 +102,7 @@ float Geometry_SchlickBeckman(float NoV, float k)
 	return NoV / (NoV * (1 - k) + k);
 }
 
-float Geometry_Smiths(float3 N, float3 V, float3 L,  float roughness)
+float Geometry_Smith(float3 N, float3 V, float3 L,  float roughness)
 {    
     float k   = pow(roughness + 1, 2) / 8.0; 
     float NoL = saturate(dot(N, L));
@@ -317,7 +317,7 @@ float4 psmain(VSOutput input) : SV_TARGET
         if (anisotropy == 0.0) 
         {
             D = Distribution_GGX(N, H, alpha);
-            G = Geometry_Smiths(N, V, L, alpha);
+            G = Geometry_Smith(N, V, L, alpha);
             Vis = G / max(0.0001, (4.0 * NoV * NoL));
         }
         else {
@@ -360,7 +360,7 @@ float4 psmain(VSOutput input) : SV_TARGET
         if (clearCoat > 0) {
             D = Distribution_GGX(N, H, clearCoatAlpha);
             F = Fresnel_SchlickRoughness(cosTheta, 0.04, clearCoatAlpha);
-            G = Geometry_Smiths(N, V, L, clearCoatAlpha);
+            G = Geometry_Smith(N, V, L, clearCoatAlpha);
             Vis = G;
             float3 Rs_clearCoat = (D * F * Vis);            
             BRDF = (BRDF * (1.0 - (clearCoat * F))) + (clearCoat * Rs_clearCoat);
