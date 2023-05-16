@@ -68,9 +68,9 @@ struct SceneParameters
 
 struct MaterialParameters
 {
-    vec3     albedo;
+    vec3     baseColor;
     float    roughness;
-    float    metalness;
+    float    metallic;
     float    specular;
     uint     directComponentMode;
     uint32_t D_Func;
@@ -651,9 +651,9 @@ int main(int argc, char** argv)
                     }
 
                     ImGui::SliderFloat("Roughness", &(pMaterialParams[matIdx].roughness), 0.0f, 1.0f);
-                    ImGui::SliderFloat("Metalness", &(pMaterialParams[matIdx].metalness), 0.0f, 1.0f);
+                    ImGui::SliderFloat("Metallic", &(pMaterialParams[matIdx].metallic), 0.0f, 1.0f);
                     ImGui::SliderFloat("Specular", &(pMaterialParams[matIdx].specular), 0.0f, 1.0f);
-                    ImGui::ColorPicker3("Albedo", reinterpret_cast<float*>(&(pMaterialParams[matIdx].albedo)), ImGuiColorEditFlags_NoInputs);
+                    ImGui::ColorPicker3("Albedo", reinterpret_cast<float*>(&(pMaterialParams[matIdx].baseColor)), ImGuiColorEditFlags_NoInputs);
 
                     ImGui::TreePop();
                 }
@@ -1272,7 +1272,7 @@ void CreateIBLTextures(
         }
     }
 
-    size_t maxEntries = 1; //std::min<size_t>(gMaxIBLs, iblFiles.size());
+    size_t maxEntries = std::min<size_t>(gMaxIBLs, iblFiles.size());
     for (size_t i = 0; i < maxEntries; ++i) {
         auto& iblFile = iblFiles[i];
 
