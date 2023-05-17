@@ -53,8 +53,6 @@ struct SceneParameters
     Light    lights[8];
     uint32_t iblNumEnvLevels;
     uint32_t iblIndex;
-    float    iblDiffuseStrength;
-    float    iblSpecularStrength;
     uint     multiscatter;
     uint     colorCorrect;
 };
@@ -113,8 +111,6 @@ static uint32_t                 gNumLights           = 4;
 static const uint32_t           gMaxIBLs             = 32;
 static uint32_t                 gIBLIndex            = 0;
 static std::vector<std::string> gIBLNames            = {};
-static float                    gIBLDiffuseStrength  = 1.0f;
-static float                    gIBLSpecularStrength = 1.0f;
 static uint32_t                 gModelIndex          = 0;
 
 void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
@@ -465,8 +461,6 @@ int main(int argc, char** argv)
     pSceneParams->lights[3].intensity = 0.5f;
     pSceneParams->iblNumEnvLevels     = envNumLevels[gIBLIndex];
     pSceneParams->iblIndex            = gIBLIndex;
-    pSceneParams->iblDiffuseStrength  = 1.0f;
-    pSceneParams->iblSpecularStrength = 1.0f;
     pSceneParams->colorCorrect        = 0;
 
     // *************************************************************************
@@ -510,8 +504,6 @@ int main(int argc, char** argv)
 
             ImGui::Separator();
 
-            ImGui::SliderFloat("IBL Diffuse Strength", &pSceneParams->iblDiffuseStrength, 0.0f, 5.0f);
-            ImGui::SliderFloat("IBL Specular Strength", &pSceneParams->iblSpecularStrength, 0.0f, 5.0f);
             ImGui::Checkbox("Multiscatter", reinterpret_cast<bool*>(&pSceneParams->multiscatter));
 
             ImGui::Separator();
@@ -1458,13 +1450,16 @@ void CreateIBLTextures(
         }
     }
 
-    size_t maxEntries = std::min<size_t>(gMaxIBLs, iblFiles.size());
+    //iblFiles = {iblDir / "skylit_garage_4k.ibl"};
+    
+    size_t maxEntries = 1; //std::min<size_t>(gMaxIBLs, iblFiles.size());
     for (size_t i = 0; i < maxEntries; ++i) {
         std::filesystem::path iblFile = iblFiles[i];
 
         IBLMaps ibl = {};
         if (!LoadIBLMaps32f(iblFile, &ibl)) {
             GREX_LOG_ERROR("failed to load: " << iblFile);
+            assert(false && "IBL maps load failed failed");
             return;
         }
 

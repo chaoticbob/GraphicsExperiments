@@ -2,4 +2,4 @@ basecolor diffuse.jpg
 metallic metallic.png
 normal normal_gl.png
 roughness roughness.png
-specular 0.40
+specular 0
