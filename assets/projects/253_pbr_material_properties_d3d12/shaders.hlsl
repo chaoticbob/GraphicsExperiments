@@ -357,6 +357,7 @@ float4 psmain(VSOutput input) : SV_TARGET
         float3 Kd = (1 - F) * dielectric;
         float3 BRDF = Kd * Rd + Rs;
 
+        // Clear coat
         if (clearCoat > 0) {
             D = Distribution_GGX(N, H, clearCoatAlpha);
             F = Fresnel_SchlickRoughness(cosTheta, 0.04, clearCoatAlpha);
@@ -385,7 +386,7 @@ float4 psmain(VSOutput input) : SV_TARGET
         float3 Rd = irradiance * diffuseColor * Fd_Lambert();
         
         // Specular IBL component
-        float lod = roughness * (SceneParams.IBLEnvironmentNumLevels - 1);
+        float lod = alpha * (SceneParams.IBLEnvironmentNumLevels - 1);
         float3 prefilteredColor = GetIBLEnvironment(Rr, lod);
         float2 envBRDF = (float2)0;
         float3 Rs = (float3)0;
