@@ -23,7 +23,7 @@ using namespace glm;
         }                                            \
     }
 
-struct DrawParameters
+struct DrawInfo
 {
     uint32_t      materialIndex = 0;
     uint32_t      numIndices    = 0;
@@ -42,7 +42,7 @@ struct Camera
    vec3 lightPosition;
 };
 
-struct MaterialParameters
+struct DrawParameters
 {
    uint MaterialIndex;
 };
@@ -81,18 +81,21 @@ layout(binding=0) uniform CameraProperties
    vec3 LightPosition;
 } Camera;
 
-layout(binding=1) uniform MaterialParameters
+layout(binding=1) uniform DrawParameters
 {
    uint MaterialIndex;
-} MaterialParams;
+} DrawParams;
 
 struct Material
 {
    vec3 Albedo;
-   uint receiveLight;
+   uint recieveLight;
 };
 
-layout(binding=2) buffer Material Materials;
+layout(binding=2) buffer MaterialsStructuredBuffer
+{
+   Material Materials[];
+};
 
 in vec3 PositionOS;
 in vec3 Normal;
@@ -104,13 +107,10 @@ void main()
    vec3 lightDir = normalize(Camera.LightPosition - PositionOS);
    float diffuse = 0.7 * clamp(dot(lightDir, Normal), 0, 1);
 
-   uint materialIndex = MaterialParams.MaterialIndex;
-   vec3 albedo = Materials[materialIndex].Albedo;
-   uint receiveLight = Materials[materialIndex].receiveLight;
-
-   vec3 color = albedo;
-   if (receiveLight) {
-       color = (0.3 + diffuse) * albedo;
+   Material material = Materials[DrawParams.MaterialIndex];
+   vec3 color = material.Albedo;
+   if (material.recieveLight > 0) {
+       color = (0.3 + diffuse) * material.Albedo;
    }
 
    FragColor = vec4(color, 1);
@@ -125,7 +125,7 @@ static uint32_t gWindowHeight = 720;
 static bool     gEnableDebug  = true;
 static bool     gEnableRayTracing = false;
 
-void CreatePipelineLayout(VulkanRenderer* pRenderer, VkPipelineLayout *pLayout);
+void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout);
 void CreateShaderModules(
    VulkanRenderer*               pRenderer,
    const std::vector<uint32_t>&  spirvVS,
@@ -133,12 +133,25 @@ void CreateShaderModules(
    VkShaderModule*               pModuleVS,
    VkShaderModule*               pModuleFS);
 void CreateGeometryBuffers(
-    VulkanRenderer*              pRenderer,
-    std::vector<DrawParameters>& outDrawParams,
-    VulkanBuffer*                pMaterialBuffer,
-    VulkanBuffer*                pPositionBuffer,
-    VulkanBuffer*                pNormalBuffer,
-    vec3*                        pLightPosition);
+   VulkanRenderer*              pRenderer,
+   std::vector<DrawInfo>&       outDrawParams,
+   VulkanBuffer*                pCameraBuffer,
+   VulkanBuffer*                pDrawParamsBuffer,
+   VulkanBuffer*                pMaterialBuffer,
+   VulkanBuffer*                pPositionBuffer,
+   VulkanBuffer*                pNormalBuffer,
+   vec3*                        pLightPosition);
+void CreateDescriptorBuffer(
+   VulkanRenderer*              pRenderer,
+   VkDescriptorSetLayout        descriptorSetLayout,
+   VulkanBuffer*                pDescriptorBuffer);
+void WriteDescriptors(
+   VulkanRenderer*              pRenderer,
+   VkDescriptorSetLayout        descriptorSetLayout,
+   VulkanBuffer*                pDescriptorBuffer,
+   VulkanBuffer*                pCameraBuffer,
+   VulkanBuffer*                pDrawBuffer,
+   VulkanBuffer*                pMaterialBuffer);
 
 // =============================================================================
 // main()
@@ -185,7 +198,7 @@ int main(int argc, char** argv)
     // This is used for pipeline creation
     //
     // *************************************************************************
-    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+    VulkanPipelineLayout pipelineLayout = {};
     CreatePipelineLayout(renderer.get(), &pipelineLayout);
 
     // *************************************************************************
@@ -206,7 +219,7 @@ int main(int argc, char** argv)
     VkPipeline pipeline = VK_NULL_HANDLE;
     CHECK_CALL(CreateDrawNormalPipeline(
        renderer.get(),
-       pipelineLayout,
+       pipelineLayout.PipelineLayout,
        moduleVS,
        moduleFS,
        GREX_DEFAULT_RTV_FORMAT,
@@ -216,46 +229,36 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Geometry data
     // *************************************************************************
-    std::vector<DrawParameters>  drawParams;
-    VulkanBuffer                 materialBuffer;
-    VulkanBuffer                 positionBuffer;
-    VulkanBuffer                 normalBuffer;
-    vec3                         lightPosition;
+    std::vector<DrawInfo>  drawParams;
+    VulkanBuffer           cameraBuffer;
+    VulkanBuffer           drawParamsBuffer;
+    VulkanBuffer           materialsBuffer;
+    VulkanBuffer           positionBuffer;
+    VulkanBuffer           normalBuffer;
+    vec3                   lightPosition;
     CreateGeometryBuffers(
        renderer.get(),
        drawParams,
-       &materialBuffer,
+       &cameraBuffer,
+       &drawParamsBuffer,
+       &materialsBuffer,
        &positionBuffer,
        &normalBuffer,
        &lightPosition);
 
-    // *************************************************************************
-    // Camera params buffer
-    // *************************************************************************
-    Camera cameraParams = {};
-    VulkanBuffer cameraParamsBuffer = {};
-    CreateBuffer(
-       renderer.get(),
-       sizeof(Camera),
-       &cameraParams,
-       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-       VMA_MEMORY_USAGE_GPU_ONLY,
-       0,
-       &cameraParamsBuffer);
+   // *************************************************************************
+   // Descriptor heaps
+   // *************************************************************************
+   VulkanBuffer descriptorBuffer = {};
+   CreateDescriptorBuffer(renderer.get(), pipelineLayout.DescriptorSetLayout, &descriptorBuffer);
 
-    // *************************************************************************
-    // Material params buffer
-    // *************************************************************************
-    MaterialParameters materialParams = {};
-    VulkanBuffer materialParamsBuffer= {};
-    CreateBuffer(
-       renderer.get(),
-       sizeof(MaterialParameters),
-       &materialParams,
-       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-       VMA_MEMORY_USAGE_GPU_ONLY,
-       0,
-       &materialParamsBuffer);
+   WriteDescriptors(
+      renderer.get(),
+      pipelineLayout.DescriptorSetLayout,
+      &descriptorBuffer,
+      &cameraBuffer,
+      &drawParamsBuffer,
+      &materialsBuffer);
 
     // *************************************************************************
     // Window
@@ -334,20 +337,26 @@ int main(int argc, char** argv)
     // *************************************************************************
     CommandObjects cmdBuf = {};
     {
-        CHECK_CALL(CreateCommandBuffer(renderer.get(), 0, &cmdBuf));
+       CHECK_CALL(CreateCommandBuffer(renderer.get(), 0, &cmdBuf));
     }
 
     // *************************************************************************
-    // Persistent map camera parameters
+    // Persistent map parameters
     // *************************************************************************
-    Camera* pCamParams = nullptr;
-    CHECK_CALL(vmaMapMemory(renderer->Allocator, cameraParamsBuffer.Allocation, reinterpret_cast<void**>(&pCamParams)));
+    Camera* pCameraParams = nullptr;
+    CHECK_CALL(vmaMapMemory(renderer->Allocator, cameraBuffer.Allocation, reinterpret_cast<void**>(&pCameraParams)));
 
-    // *************************************************************************
-    // Persistent map draw parameters
-    // *************************************************************************
-    DrawParameters* pMaterialParams = nullptr;
-    CHECK_CALL(vmaMapMemory(renderer->Allocator, materialParamsBuffer.Allocation, reinterpret_cast<void**>(&pMaterialParams)));
+    DrawParameters* pDrawParams = nullptr;
+    CHECK_CALL(vmaMapMemory(renderer->Allocator, drawParamsBuffer.Allocation, reinterpret_cast<void**>(&pDrawParams)));
+
+   // *************************************************************************
+   // Persistent map descriptor buffer
+   // *************************************************************************
+   char* pDescriptorBufferStartAddress = nullptr;
+   CHECK_CALL(vmaMapMemory(
+      renderer->Allocator,
+      descriptorBuffer.Allocation,
+      reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
 
     // *************************************************************************
     // Main loop
@@ -399,6 +408,8 @@ int main(int argc, char** argv)
            vkri.renderArea.extent.width               = gWindowWidth;
            vkri.renderArea.extent.height              = gWindowHeight;
 
+           vkCmdBeginRendering(cmdBuf.CommandBuffer, &vkri);
+
            VkViewport viewport = { 0, static_cast<float>(gWindowHeight), static_cast<float>(gWindowWidth), -static_cast<float>(gWindowHeight), 0.0f, 1.0f };
            vkCmdSetViewport(cmdBuf.CommandBuffer, 0, 1, &viewport);
 
@@ -418,15 +429,17 @@ int main(int argc, char** argv)
             mat4 projMat  = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
             mat4 mvpMat   = projMat * viewMat * modelMat;
 
-            pCamParams->mvp           = mvpMat;
-            pCamParams->lightPosition = lightPosition;
+            int32 cameraOffsetInBytes     = 0;
+            int32 materialOffsetInBytes   = sizeof(Camera);
+            int32 materialsOffsetInBytes  = sizeof(Camera) + sizeof(Material);
+
+            pCameraParams->mvp            = mvpMat;
+            pCameraParams->lightPosition  = lightPosition;
 
             for (auto& draw : drawParams) {
                // Bind the index buffer for this draw
                vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, draw.indexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
-
-               // Setup the MaterialParams (b1) for this draw
-               pMaterialParams->materialIndex= draw.materialIndex;
+               pDrawParams->MaterialIndex = draw.materialIndex;
 
                vkCmdDrawIndexed(cmdBuf.CommandBuffer, draw.numIndices, 1, 0, 0, 0);
             }
@@ -462,13 +475,12 @@ int main(int argc, char** argv)
     return 0;
 }
 
-void CreatePipelineLayout(VulkanRenderer* pRenderer, VkPipelineLayout* pLayout)
+void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
 {
    // Descriptor set layout
-   VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
    {
       std::vector<VkDescriptorSetLayoutBinding> bindings = {};
-      // ConstantBuffer<CameraProperties> Camera     : register(b0);
+      // layout(binding=0) uniform CameraProperties Camera;
       {
          VkDescriptorSetLayoutBinding binding = {};
          binding.binding                      = 0;
@@ -477,7 +489,7 @@ void CreatePipelineLayout(VulkanRenderer* pRenderer, VkPipelineLayout* pLayout)
          binding.stageFlags                   = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
          bindings.push_back(binding);
       }
-      // ConstantBuffer<DrawParameters>   DrawParams : register(b1);
+      // layout(binding=1) uniform MaterialParameters MaterialParams;
       {
          VkDescriptorSetLayoutBinding binding = {};
          binding.binding                      = 1;
@@ -486,11 +498,11 @@ void CreatePipelineLayout(VulkanRenderer* pRenderer, VkPipelineLayout* pLayout)
          binding.stageFlags                   = VK_SHADER_STAGE_FRAGMENT_BIT;
          bindings.push_back(binding);
       }
-      // StructuredBuffer<Material>       Materials  : register(t2);
+      // layout(binding=2) buffer MaterialStructuredBuffer
       {
          VkDescriptorSetLayoutBinding binding = {};
          binding.binding                      = 2;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
          binding.descriptorCount              = 1;
          binding.stageFlags                   = VK_SHADER_STAGE_FRAGMENT_BIT;
          bindings.push_back(binding);
@@ -505,20 +517,20 @@ void CreatePipelineLayout(VulkanRenderer* pRenderer, VkPipelineLayout* pLayout)
          pRenderer->Device,
          &createInfo,
          nullptr,
-         &descriptorSetLayout));
+         &pLayout->DescriptorSetLayout));
    }
 
    // Pipeline layout
    {
       VkPipelineLayoutCreateInfo createInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
       createInfo.setLayoutCount             = 1;
-      createInfo.pSetLayouts                = &descriptorSetLayout;
+      createInfo.pSetLayouts                = &pLayout->DescriptorSetLayout;
 
       CHECK_CALL(vkCreatePipelineLayout(
          pRenderer->Device,
          &createInfo,
          nullptr,
-         pLayout));
+         &pLayout->PipelineLayout));
    }
 }
 
@@ -549,12 +561,14 @@ void CreateShaderModules(
 }
 
 void CreateGeometryBuffers(
-    VulkanRenderer*              pRenderer,
-    std::vector<DrawParameters>& outDrawParams,
-    VulkanBuffer*                pMaterialBuffer,
-    VulkanBuffer*                pPositionBuffer,
-    VulkanBuffer*                pNormalBuffer,
-    vec3*                        pLightPosition)
+   VulkanRenderer*        pRenderer,
+   std::vector<DrawInfo>& outDrawParams,
+   VulkanBuffer*          pCameraBuffer,
+   VulkanBuffer*          pDrawParamsBuffer,
+   VulkanBuffer*          pMaterialBuffer,
+   VulkanBuffer*          pPositionBuffer,
+   VulkanBuffer*          pNormalBuffer,
+   vec3*                  pLightPosition)
 {
    TriMesh mesh = TriMesh::CornellBox({ .enableVertexColors = true, .enableNormals = true });
 
@@ -574,7 +588,7 @@ void CreateGeometryBuffers(
 
       auto triangles = mesh.GetTrianglesForMaterial(materialIndex);
 
-      DrawParameters params = {};
+      DrawInfo params = {};
       params.numIndices     = static_cast<uint32_t>(3 * triangles.size());
       params.materialIndex  = materialIndex;
 
@@ -592,9 +606,27 @@ void CreateGeometryBuffers(
 
    CHECK_CALL(CreateBuffer(
       pRenderer,
+      Align<size_t>(sizeof(Camera), 256),
+      nullptr,
+      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+      VMA_MEMORY_USAGE_CPU_TO_GPU,
+      0,
+      pCameraBuffer));
+
+   CHECK_CALL(CreateBuffer(
+      pRenderer,
+      Align<size_t>(sizeof(DrawParameters), 256),
+      nullptr,
+      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+      VMA_MEMORY_USAGE_CPU_TO_GPU,
+      0,
+      pDrawParamsBuffer));
+
+   CHECK_CALL(CreateBuffer(
+      pRenderer,
       SizeInBytes(materials),
       DataPtr(materials),
-      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
       VMA_MEMORY_USAGE_GPU_ONLY,
       0,
       pMaterialBuffer));
@@ -616,4 +648,81 @@ void CreateGeometryBuffers(
       VMA_MEMORY_USAGE_GPU_ONLY,
       0,
       pNormalBuffer));
+}
+
+void CreateDescriptorBuffer(
+   VulkanRenderer*              pRenderer,
+   VkDescriptorSetLayout        descriptorSetLayout,
+   VulkanBuffer*                pDescriptorBuffer)
+{
+   /*
+   VkDeviceSize size = 0;
+   fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
+
+   VkBufferUsageFlags usageFlags =
+      VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+
+   CHECK_CALL(CreateBuffer(pRenderer, size, nullptr, usageFlags, 0, pDescriptorBuffer));
+
+   */
+   VkDeviceSize size = 256;
+   // NOCHECKIN fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
+
+   VkBufferUsageFlags usageFlags =
+      VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+
+   CHECK_CALL(CreateBuffer(
+      pRenderer,  // pRenderer
+      size,       // srcSize
+      nullptr,    // pSrcData
+      usageFlags, // usageFlags
+      0,          // minAlignment
+      pDescriptorBuffer));  // pBuffer
+}
+
+void WriteDescriptors(
+   VulkanRenderer*        pRenderer,
+   VkDescriptorSetLayout  descriptorSetLayout,
+   VulkanBuffer*          pDescriptorBuffer,
+   VulkanBuffer*          pCameraBuffer,
+   VulkanBuffer*          pDrawBuffer,
+   VulkanBuffer*          pMaterialBuffer)
+{
+   char* pDescriptorBufferStartAddress = nullptr;
+
+   CHECK_CALL(vmaMapMemory(
+      pRenderer->Allocator,
+      pDescriptorBuffer->Allocation,
+      reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
+
+    WriteDescriptor(
+       pRenderer,
+       pDescriptorBufferStartAddress,
+       descriptorSetLayout,
+       0, // binding
+       0, // arrayElement
+       VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+       pCameraBuffer);
+
+    WriteDescriptor(
+       pRenderer,
+       pDescriptorBufferStartAddress,
+       descriptorSetLayout,
+       1, // binding
+       0, // arrayElement
+       VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+       pDrawBuffer);
+
+    WriteDescriptor(
+       pRenderer,
+       pDescriptorBufferStartAddress,
+       descriptorSetLayout,
+       2, // binding
+       0, // arrayElement
+       VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+       pMaterialBuffer);
+
+    vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
 }

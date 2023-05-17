@@ -1744,7 +1744,7 @@ HRESULT CreateDrawNormalPipeline(
    shader_stages[1].module                          = fsShaderModule;
    shader_stages[1].pName                           = "main";
 
-   VkVertexInputBindingDescription vertex_binding_desc[2] = {};
+   VkVertexInputBindingDescription vertex_binding_desc[4] = {};
    vertex_binding_desc[0].binding   = 0;
    vertex_binding_desc[0].stride    = 12;
    vertex_binding_desc[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
@@ -1789,9 +1789,9 @@ HRESULT CreateDrawNormalPipeline(
    }
 
    VkPipelineVertexInputStateCreateInfo vertex_input_state = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
-   vertex_input_state.vertexBindingDescriptionCount        = 4;
+   vertex_input_state.vertexBindingDescriptionCount        = enableTangents ? 4 : 2;
    vertex_input_state.pVertexBindingDescriptions           = vertex_binding_desc;
-   vertex_input_state.vertexAttributeDescriptionCount      = 4;
+   vertex_input_state.vertexAttributeDescriptionCount      = enableTangents ? 4 : 2;
    vertex_input_state.pVertexAttributeDescriptions         = vertex_attribute_desc;
 
    VkPipelineInputAssemblyStateCreateInfo input_assembly = { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
