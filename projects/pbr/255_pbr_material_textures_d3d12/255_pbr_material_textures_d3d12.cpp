@@ -1450,9 +1450,7 @@ void CreateIBLTextures(
         }
     }
 
-    //iblFiles = {iblDir / "skylit_garage_4k.ibl"};
-    
-    size_t maxEntries = 1; //std::min<size_t>(gMaxIBLs, iblFiles.size());
+    size_t maxEntries = std::min<size_t>(gMaxIBLs, iblFiles.size());
     for (size_t i = 0; i < maxEntries; ++i) {
         std::filesystem::path iblFile = iblFiles[i];
 

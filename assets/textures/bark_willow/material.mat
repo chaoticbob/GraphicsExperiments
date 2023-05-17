@@ -1,4 +1,4 @@
 basecolor diffuse.jpg
 normal normal_gl.png
 roughness roughness.png
-specular 0
+specular 0.015
