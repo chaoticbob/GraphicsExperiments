@@ -210,8 +210,7 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
         std::vector<const char*> enabledExtensions = {
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
             VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
-            VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME
-        };
+            VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME};
 
         if (pRenderer->RayTracingEnabled) {
             enabledExtensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
