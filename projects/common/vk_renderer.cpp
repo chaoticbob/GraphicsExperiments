@@ -209,7 +209,9 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
 
         std::vector<const char*> enabledExtensions = {
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-            VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME};
+            VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+            VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME
+        };
 
         if (pRenderer->RayTracingEnabled) {
             enabledExtensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
@@ -218,7 +220,6 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
             enabledExtensions.push_back(VK_KHR_RAY_TRACING_MAINTENANCE_1_EXTENSION_NAME);
             enabledExtensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
             enabledExtensions.push_back(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
-            enabledExtensions.push_back(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME);
         }
 
         // Make sure all the extenions are present
@@ -1853,6 +1854,7 @@ HRESULT CreateDrawNormalPipeline(
    dynamic_state.pDynamicStates                   = dynamic_states;
 
    VkGraphicsPipelineCreateInfo pipeline_info = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
+   pipeline_info.flags                        = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
    pipeline_info.pNext                        = &pipeline_rendering_create_info;
    pipeline_info.stageCount                   = 2;
    pipeline_info.pStages                      = shader_stages;

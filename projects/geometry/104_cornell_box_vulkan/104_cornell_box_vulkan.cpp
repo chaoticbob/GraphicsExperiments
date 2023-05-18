@@ -81,7 +81,7 @@ layout(binding=0) uniform CameraProperties
    vec3 LightPosition;
 } Camera;
 
-layout(binding=1) uniform DrawParameters
+layout(push_constant) uniform DrawParameters
 {
    uint MaterialIndex;
 } DrawParams;
@@ -136,7 +136,6 @@ void CreateGeometryBuffers(
    VulkanRenderer*              pRenderer,
    std::vector<DrawInfo>&       outDrawParams,
    VulkanBuffer*                pCameraBuffer,
-   VulkanBuffer*                pDrawParamsBuffer,
    VulkanBuffer*                pMaterialBuffer,
    VulkanBuffer*                pPositionBuffer,
    VulkanBuffer*                pNormalBuffer,
@@ -150,7 +149,6 @@ void WriteDescriptors(
    VkDescriptorSetLayout        descriptorSetLayout,
    VulkanBuffer*                pDescriptorBuffer,
    VulkanBuffer*                pCameraBuffer,
-   VulkanBuffer*                pDrawBuffer,
    VulkanBuffer*                pMaterialBuffer);
 
 // =============================================================================
@@ -231,7 +229,6 @@ int main(int argc, char** argv)
     // *************************************************************************
     std::vector<DrawInfo>  drawParams;
     VulkanBuffer           cameraBuffer;
-    VulkanBuffer           drawParamsBuffer;
     VulkanBuffer           materialsBuffer;
     VulkanBuffer           positionBuffer;
     VulkanBuffer           normalBuffer;
@@ -240,7 +237,6 @@ int main(int argc, char** argv)
        renderer.get(),
        drawParams,
        &cameraBuffer,
-       &drawParamsBuffer,
        &materialsBuffer,
        &positionBuffer,
        &normalBuffer,
@@ -257,7 +253,6 @@ int main(int argc, char** argv)
       pipelineLayout.DescriptorSetLayout,
       &descriptorBuffer,
       &cameraBuffer,
-      &drawParamsBuffer,
       &materialsBuffer);
 
     // *************************************************************************
@@ -346,9 +341,6 @@ int main(int argc, char** argv)
     Camera* pCameraParams = nullptr;
     CHECK_CALL(vmaMapMemory(renderer->Allocator, cameraBuffer.Allocation, reinterpret_cast<void**>(&pCameraParams)));
 
-    DrawParameters* pDrawParams = nullptr;
-    CHECK_CALL(vmaMapMemory(renderer->Allocator, drawParamsBuffer.Allocation, reinterpret_cast<void**>(&pDrawParams)));
-
    // *************************************************************************
    // Persistent map descriptor buffer
    // *************************************************************************
@@ -384,7 +376,7 @@ int main(int argc, char** argv)
               GREX_ALL_SUBRESOURCES,
               VK_IMAGE_ASPECT_COLOR_BIT,
               RESOURCE_STATE_PRESENT,
-              RESOURCE_STATE_COMPUTE_UNORDERED_ACCESS);
+              RESOURCE_STATE_RENDER_TARGET);
 
            VkRenderingAttachmentInfo colorAttachment  = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
            colorAttachment.imageView                  = imageViews[bufferIndex];
@@ -419,6 +411,24 @@ int main(int argc, char** argv)
            // Bind the VS/FS Graphics Pipeline
            vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
+           VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT };
+           descriptorBufferBindingInfo.pNext                            = nullptr;
+           descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &descriptorBuffer);
+           descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+
+           fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
+
+           uint32_t     bufferIndices           = 0;
+           VkDeviceSize descriptorBufferOffsets = 0;
+           fn_vkCmdSetDescriptorBufferOffsetsEXT(
+              cmdBuf.CommandBuffer,
+              VK_PIPELINE_BIND_POINT_GRAPHICS,
+              pipelineLayout.PipelineLayout,
+              0, // firstSet
+              1, // setCount
+              &bufferIndices,
+              &descriptorBufferOffsets);
+
            // Bind the Vertex Buffer
            VkBuffer vertexBuffers[] = { positionBuffer.Buffer, normalBuffer.Buffer };
            VkDeviceSize offsets[] = { 0, 0 };
@@ -439,20 +449,27 @@ int main(int argc, char** argv)
             for (auto& draw : drawParams) {
                // Bind the index buffer for this draw
                vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, draw.indexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
-               pDrawParams->MaterialIndex = draw.materialIndex;
+
+               vkCmdPushConstants(
+                  cmdBuf.CommandBuffer,
+                  pipelineLayout.PipelineLayout,
+                  VK_SHADER_STAGE_FRAGMENT_BIT,
+                  0,
+                  sizeof(DrawParameters),
+                  &draw.materialIndex);
 
                vkCmdDrawIndexed(cmdBuf.CommandBuffer, draw.numIndices, 1, 0, 0, 0);
             }
+
+            vkCmdEndRendering(cmdBuf.CommandBuffer);
 
             CmdTransitionImageLayout(
                cmdBuf.CommandBuffer,
                images[bufferIndex],
                GREX_ALL_SUBRESOURCES,
                VK_IMAGE_ASPECT_COLOR_BIT,
-               RESOURCE_STATE_COMPUTE_UNORDERED_ACCESS,
+               RESOURCE_STATE_RENDER_TARGET,
                RESOURCE_STATE_PRESENT);
-
-            vkCmdEndRendering(cmdBuf.CommandBuffer);
         }
 
         CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));
@@ -489,15 +506,6 @@ void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayo
          binding.stageFlags                   = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
          bindings.push_back(binding);
       }
-      // layout(binding=1) uniform MaterialParameters MaterialParams;
-      {
-         VkDescriptorSetLayoutBinding binding = {};
-         binding.binding                      = 1;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-         binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_FRAGMENT_BIT;
-         bindings.push_back(binding);
-      }
       // layout(binding=2) buffer MaterialStructuredBuffer
       {
          VkDescriptorSetLayoutBinding binding = {};
@@ -522,9 +530,17 @@ void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayo
 
    // Pipeline layout
    {
+      // layout(push_constants) uniform MaterialParameters MaterialParams;
+      VkPushConstantRange push_constant    = {};
+      push_constant.offset                 = 0;
+      push_constant.size                   = sizeof(DrawParameters);
+      push_constant.stageFlags             = VK_SHADER_STAGE_FRAGMENT_BIT;
+
       VkPipelineLayoutCreateInfo createInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
       createInfo.setLayoutCount             = 1;
       createInfo.pSetLayouts                = &pLayout->DescriptorSetLayout;
+      createInfo.pushConstantRangeCount     = 1;
+      createInfo.pPushConstantRanges        = &push_constant;
 
       CHECK_CALL(vkCreatePipelineLayout(
          pRenderer->Device,
@@ -564,7 +580,6 @@ void CreateGeometryBuffers(
    VulkanRenderer*        pRenderer,
    std::vector<DrawInfo>& outDrawParams,
    VulkanBuffer*          pCameraBuffer,
-   VulkanBuffer*          pDrawParamsBuffer,
    VulkanBuffer*          pMaterialBuffer,
    VulkanBuffer*          pPositionBuffer,
    VulkanBuffer*          pNormalBuffer,
@@ -609,18 +624,8 @@ void CreateGeometryBuffers(
       Align<size_t>(sizeof(Camera), 256),
       nullptr,
       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-      VMA_MEMORY_USAGE_CPU_TO_GPU,
       0,
       pCameraBuffer));
-
-   CHECK_CALL(CreateBuffer(
-      pRenderer,
-      Align<size_t>(sizeof(DrawParameters), 256),
-      nullptr,
-      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-      VMA_MEMORY_USAGE_CPU_TO_GPU,
-      0,
-      pDrawParamsBuffer));
 
    CHECK_CALL(CreateBuffer(
       pRenderer,
@@ -655,31 +660,20 @@ void CreateDescriptorBuffer(
    VkDescriptorSetLayout        descriptorSetLayout,
    VulkanBuffer*                pDescriptorBuffer)
 {
-   /*
-   VkDeviceSize size = 0;
+   VkDeviceSize size = 256;
    fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
 
    VkBufferUsageFlags usageFlags =
       VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
-   CHECK_CALL(CreateBuffer(pRenderer, size, nullptr, usageFlags, 0, pDescriptorBuffer));
-
-   */
-   VkDeviceSize size = 256;
-   // NOCHECKIN fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
-
-   VkBufferUsageFlags usageFlags =
-      VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-
    CHECK_CALL(CreateBuffer(
-      pRenderer,  // pRenderer
-      size,       // srcSize
-      nullptr,    // pSrcData
-      usageFlags, // usageFlags
-      0,          // minAlignment
-      pDescriptorBuffer));  // pBuffer
+      pRenderer,           // pRenderer
+      size,                // srcSize
+      nullptr,             // pSrcData
+      usageFlags,          // usageFlags
+      0,                   // minAlignment
+      pDescriptorBuffer)); // pBuffer
 }
 
 void WriteDescriptors(
@@ -687,7 +681,6 @@ void WriteDescriptors(
    VkDescriptorSetLayout  descriptorSetLayout,
    VulkanBuffer*          pDescriptorBuffer,
    VulkanBuffer*          pCameraBuffer,
-   VulkanBuffer*          pDrawBuffer,
    VulkanBuffer*          pMaterialBuffer)
 {
    char* pDescriptorBufferStartAddress = nullptr;
@@ -705,15 +698,6 @@ void WriteDescriptors(
        0, // arrayElement
        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
        pCameraBuffer);
-
-    WriteDescriptor(
-       pRenderer,
-       pDescriptorBufferStartAddress,
-       descriptorSetLayout,
-       1, // binding
-       0, // arrayElement
-       VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-       pDrawBuffer);
 
     WriteDescriptor(
        pRenderer,
