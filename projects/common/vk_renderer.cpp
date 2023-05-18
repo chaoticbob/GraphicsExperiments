@@ -1582,15 +1582,18 @@ VkDeviceAddress GetDeviceAddress(VulkanRenderer* pRenderer, const VulkanAccelStr
 }
 
 VkResult CreateDrawVertexColorPipeline(
-    VulkanRenderer*  pRenderer,
-    VkPipelineLayout pipeline_layout,
-    VkShaderModule   vsShaderModule,
-    VkShaderModule   fsShaderModule,
-    VkFormat         rtvFormat,
-    VkFormat         dsvFormat,
-    VkPipeline*      pPipeline,
-    VkCullModeFlags  cullMode)
+    VulkanRenderer*      pRenderer,
+    VkPipelineLayout     pipeline_layout,
+    VkShaderModule       vsShaderModule,
+    VkShaderModule       fsShaderModule,
+    VkFormat             rtvFormat,
+    VkFormat             dsvFormat,
+    VkPipeline*          pPipeline,
+    VkCullModeFlags      cullMode,
+    VkPrimitiveTopology  topologyType,
+    uint32_t             pipelineFlags)
 {
+    bool                          isInterleavedAttrs             = pipelineFlags & VK_PIPELINE_FLAGS_INTERLEAVED_ATTRS;
     VkFormat                      rtv_format                     = GREX_DEFAULT_RTV_FORMAT;
     VkPipelineRenderingCreateInfo pipeline_rendering_create_info = {VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
     pipeline_rendering_create_info.colorAttachmentCount          = 1;
@@ -1621,10 +1624,10 @@ VkResult CreateDrawVertexColorPipeline(
     vertex_attribute_desc[0].format                            = VK_FORMAT_R32G32B32_SFLOAT;
     vertex_attribute_desc[0].offset                            = 0;
 
-    vertex_attribute_desc[1].location = 1;
-    vertex_attribute_desc[1].binding  = 1;
-    vertex_attribute_desc[1].format   = VK_FORMAT_R32G32B32_SFLOAT;
-    vertex_attribute_desc[1].offset   = 0;
+   vertex_attribute_desc[1].location = 1;
+   vertex_attribute_desc[1].binding  = isInterleavedAttrs ? 0 : 1;
+   vertex_attribute_desc[1].format   = VK_FORMAT_R32G32B32_SFLOAT;
+   vertex_attribute_desc[1].offset   = isInterleavedAttrs ? 12 : 0;
 
     VkPipelineVertexInputStateCreateInfo vertex_input_state = {VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
     vertex_input_state.vertexBindingDescriptionCount        = 2;
@@ -1633,7 +1636,7 @@ VkResult CreateDrawVertexColorPipeline(
     vertex_input_state.pVertexAttributeDescriptions         = vertex_attribute_desc;
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly = {VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
-    input_assembly.topology                               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    input_assembly.topology                               = topologyType;
 
     VkPipelineViewportStateCreateInfo viewport_state = {VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
     viewport_state.viewportCount                     = 1;
