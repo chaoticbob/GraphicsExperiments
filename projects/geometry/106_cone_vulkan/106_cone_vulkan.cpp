@@ -42,12 +42,11 @@ layout( push_constant ) uniform CameraProperties
 in vec3 PositionOS;
 in vec3 Color;
 
-out vec4 PositionCS;
 out vec3 outColor;
 
 void main()
 {
-    PositionCS = Cam.MVP * vec4(PositionOS, 1);
+    gl_Position = Cam.MVP * vec4(PositionOS, 1);
     outColor = Color;
 }
 )";
@@ -217,56 +216,56 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain image views, depth buffers/views
     // *************************************************************************
-    std::vector<VkImage>      images;
     std::vector<VkImageView>  imageViews;
     std::vector<VkImageView>  depthViews;
     {
-        CHECK_CALL(GetSwapchainImages(renderer.get(), images));
+       std::vector<VkImage>      images;
+       CHECK_CALL(GetSwapchainImages(renderer.get(), images));
 
-        for (auto& image : images) {
-           // Create swap chain images
-           VkImageViewCreateInfo createInfo           = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
-           createInfo.image                           = image;
-           createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
-           createInfo.format                          = GREX_DEFAULT_RTV_FORMAT;
-           createInfo.components                      = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
-           createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-           createInfo.subresourceRange.baseMipLevel   = 0;
-           createInfo.subresourceRange.levelCount     = 1;
-           createInfo.subresourceRange.baseArrayLayer = 0;
-           createInfo.subresourceRange.layerCount     = 1;
+       for (auto& image : images) {
+          // Create swap chain images
+          VkImageViewCreateInfo createInfo           = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+          createInfo.image                           = image;
+          createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+          createInfo.format                          = GREX_DEFAULT_RTV_FORMAT;
+          createInfo.components                      = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+          createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+          createInfo.subresourceRange.baseMipLevel   = 0;
+          createInfo.subresourceRange.levelCount     = 1;
+          createInfo.subresourceRange.baseArrayLayer = 0;
+          createInfo.subresourceRange.layerCount     = 1;
 
-           VkImageView imageView = VK_NULL_HANDLE;
-           CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &imageView));
+          VkImageView imageView = VK_NULL_HANDLE;
+          CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &imageView));
 
-           imageViews.push_back(imageView);
-        }
+          imageViews.push_back(imageView);
+       }
 
-        size_t imageCount = images.size();
+       size_t imageCount = images.size();
 
-        std::vector<VulkanImage> depthImages;
-        depthImages.resize(images.size());
+       std::vector<VulkanImage> depthImages;
+       depthImages.resize(images.size());
 
-        for (int depthIndex = 0; depthIndex < imageCount; depthIndex++) {
-           // Create depth images
-           CHECK_CALL(CreateDSV(renderer.get(), window->GetWidth(), window->GetHeight(), &depthImages[depthIndex]));
+       for (int depthIndex = 0; depthIndex < imageCount; depthIndex++) {
+          // Create depth images
+          CHECK_CALL(CreateDSV(renderer.get(), window->GetWidth(), window->GetHeight(), &depthImages[depthIndex]));
 
-           VkImageViewCreateInfo createInfo           = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
-           createInfo.image                           = depthImages[depthIndex].Image;
-           createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
-           createInfo.format                          = GREX_DEFAULT_DSV_FORMAT;
-           createInfo.components                      = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY };
-           createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
-           createInfo.subresourceRange.baseMipLevel   = 0;
-           createInfo.subresourceRange.levelCount     = 1;
-           createInfo.subresourceRange.baseArrayLayer = 0;
-           createInfo.subresourceRange.layerCount     = 1;
+          VkImageViewCreateInfo createInfo           = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+          createInfo.image                           = depthImages[depthIndex].Image;
+          createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+          createInfo.format                          = GREX_DEFAULT_DSV_FORMAT;
+          createInfo.components                      = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY };
+          createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
+          createInfo.subresourceRange.baseMipLevel   = 0;
+          createInfo.subresourceRange.levelCount     = 1;
+          createInfo.subresourceRange.baseArrayLayer = 0;
+          createInfo.subresourceRange.layerCount     = 1;
 
-           VkImageView depthView = VK_NULL_HANDLE;
-           CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &depthView));
+          VkImageView depthView = VK_NULL_HANDLE;
+          CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &depthView));
 
-           depthViews.push_back(depthView);
-        }
+          depthViews.push_back(depthView);
+       }
     }
 
     // *************************************************************************
@@ -297,13 +296,6 @@ int main(int argc, char** argv)
         CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
 
         {
-           CmdTransitionImageLayout(
-              cmdBuf.CommandBuffer,
-              images[bufferIndex],
-              GREX_ALL_SUBRESOURCES,
-              VK_IMAGE_ASPECT_COLOR_BIT,
-              RESOURCE_STATE_PRESENT,
-              RESOURCE_STATE_RENDER_TARGET);
 
            VkRenderingAttachmentInfo colorAttachment  = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
            colorAttachment.imageView                  = imageViews[bufferIndex];
@@ -368,14 +360,6 @@ int main(int argc, char** argv)
            }
 
            vkCmdEndRendering(cmdBuf.CommandBuffer);
-
-           CmdTransitionImageLayout(
-              cmdBuf.CommandBuffer,
-              images[bufferIndex],
-              GREX_ALL_SUBRESOURCES,
-              VK_IMAGE_ASPECT_COLOR_BIT,
-              RESOURCE_STATE_RENDER_TARGET,
-              RESOURCE_STATE_PRESENT);
         }
 
         CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));

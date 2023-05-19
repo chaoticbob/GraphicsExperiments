@@ -1611,11 +1611,11 @@ VkResult CreateDrawVertexColorPipeline(
 
     VkVertexInputBindingDescription vertex_binding_desc[2] = {};
     vertex_binding_desc[0].binding                         = 0;
-    vertex_binding_desc[0].stride                          = 12;
+    vertex_binding_desc[0].stride                          = isInterleavedAttrs ? 24 : 12;
     vertex_binding_desc[0].inputRate                       = VK_VERTEX_INPUT_RATE_VERTEX;
 
     vertex_binding_desc[1].binding   = 1;
-    vertex_binding_desc[1].stride    = 12;
+    vertex_binding_desc[1].stride    = isInterleavedAttrs ? 24 : 12;
     vertex_binding_desc[1].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
     VkVertexInputAttributeDescription vertex_attribute_desc[2] = {};
