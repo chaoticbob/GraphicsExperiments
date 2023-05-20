@@ -1,0 +1,5 @@
+basecolor diffuse.png
+normal normal_gl.png
+roughness roughness.png
+disp disp.png
+specular 0

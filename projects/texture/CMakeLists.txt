@@ -9,6 +9,7 @@ if (GREX_ENABLE_D3D12)
     add_subdirectory(301_textured_cube_d3d12)
     add_subdirectory(303_lambert_textured_cube_d3d12)
     add_subdirectory(305_phong_textured_cube_d3d12)
+    add_subdirectory(307_parallax_occlusion_map_d3d12)
 endif()
 
 
