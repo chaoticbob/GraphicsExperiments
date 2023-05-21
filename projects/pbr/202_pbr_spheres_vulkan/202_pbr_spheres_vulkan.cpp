@@ -26,32 +26,42 @@ using namespace glm;
 
 struct Light
 {
-    vec3     position;
-    uint32_t __pad;
-    vec3     color;
-    float    intensity;
+   vec3     position;
+   uint32_t __pad;
+   vec3     color;
+   float    intensity;
 };
 
-struct SceneParameters
+struct PBRSceneParameters
 {
-    mat4     viewProjectionMatrix;
-    vec3     eyePosition;
-    uint32_t numLights;
-    Light    lights[8];
-    uint     iblEnvironmentNumLevels;
+   mat4     viewProjectionMatrix;
+   vec3     eyePosition;
+   uint32_t numLights;
+   Light    lights[8];
+   uint     iblEnvironmentNumLevels;
+};
+
+struct EnvSceneParameters
+{
+   mat4     MVP;
+};
+
+struct DrawParameters
+{ 
+   mat4     ModelMatrix;
 };
 
 struct MaterialParameters
 {
-    vec3  albedo;
-    float roughness;
-    float metalness;
-    vec3  F0;
+   vec3  albedo;
+   float roughness;
+   float metalness;
+   vec3  F0;
 };
 
 struct PBRImplementationInfo
 {
-    std::string description;
+   std::string description;
 };
 
 // =============================================================================
@@ -62,35 +72,64 @@ static uint32_t gWindowHeight = 1024;
 static bool     gEnableDebug  = true;
 static bool     gEnableRayTracing = false;
 
+static uint32_t gNumSlotsX     = 10;
+static uint32_t gNumSlotsY     = 10;
+static float    gSlotSize      = 0.9f;
+static float    gSpanX         = gNumSlotsX * gSlotSize;
+static float    gSpanY         = gNumSlotsY * gSlotSize;
+static float    gHalfSpanX     = gSpanX / 2.0f;
+static float    gHalfSpanY     = gSpanY / 2.0f;
+
 static float gTargetAngle = 0.0f;
 static float gAngle       = 0.0f;
 
 static uint32_t gNumLights = 0;
 
+
 void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout);
 void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout);
+void CreateSphereParamBuffers(
+   VulkanRenderer* pRenderer, 
+   std::vector<VulkanBuffer> &materialParamBuffers,
+   std::vector<VulkanBuffer> &drawParamBuffers);
+void CreateMaterialSphereVertexBuffers(
+    VulkanRenderer*  pRenderer,
+    uint32_t*        pNumIndices,
+    VulkanBuffer*    pIndexBuffer,
+    VulkanBuffer*    pPositionBuffer,
+    VulkanBuffer*    pNormalBuffer);
+void CreateEnvironmentVertexBuffers(
+    VulkanRenderer*  pRenderer,
+    uint32_t*        pNumIndices,
+    VulkanBuffer*    pIndexBuffer,
+    VulkanBuffer*    pPositionBuffer,
+    VulkanBuffer*    pTexCoordBuffer);
+void CreateIBLTextures(
+    VulkanRenderer*  pRenderer,
+    VulkanImage*     pBRDFLUT,
+    VulkanImage*     pIrradianceTexture,
+    VulkanImage*     pEnvironmentTexture,
+    uint32_t*        pEnvNumLevels);
+void CreateDescriptorBuffer(
+   VulkanRenderer*         pRenderer,
+   VkDescriptorSetLayout   pDescriptorSetLayout,
+   VulkanBuffer*           pBuffer);
+void WritePBRDescriptors(
+   VulkanRenderer*         pRenderer,
+   VkDescriptorSetLayout   descriptorSetLayout,
+   VulkanBuffer*           pDescriptorBuffer,
+   const VulkanBuffer*     pSceneParamsBuffer,
+   const VulkanImage*      pBRDFLUT,
+   const VulkanImage*      pIrradianceTexture,
+   const VulkanImage*      pEnvTexture);
+void WriteEnvDescriptors(
+   VulkanRenderer*         pRenderer,
+   VkDescriptorSetLayout   descriptorSetLayout,
+   VulkanBuffer*           pDescrptorBuffer,
+   VulkanBuffer*           pSceneParamsBuffer,
+   VulkanImage*            pEnvTexture);
 
 /*
-void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
-void CreateEnvironmentRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
-void CreateMaterialSphereVertexBuffers(
-    DxRenderer*      pRenderer,
-    uint32_t*        pNumIndices,
-    ID3D12Resource** ppIndexBuffer,
-    ID3D12Resource** ppPositionBuffer,
-    ID3D12Resource** ppNormalBuffer);
-void CreateEnvironmentVertexBuffers(
-    DxRenderer*      pRenderer,
-    uint32_t*        pNumIndices,
-    ID3D12Resource** ppIndexBuffer,
-    ID3D12Resource** ppPositionBuffer,
-    ID3D12Resource** ppTexCoordBuffer);
-void CreateIBLTextures(
-    DxRenderer*      pRenderer,
-    ID3D12Resource** ppBRDFLUT,
-    ID3D12Resource** ppIrradianceTexture,
-    ID3D12Resource** ppEnvironmentTexture,
-    uint32_t*        pEnvNumLevels);
 void CreateDescriptorHeap(
     DxRenderer*            pRenderer,
     ID3D12DescriptorHeap** ppHeap);
@@ -207,8 +246,8 @@ int main(int argc, char** argv)
     VkShaderModule drawTextureShaderModuleVS = VK_NULL_HANDLE;
     {
        VkShaderModuleCreateInfo createInfo   = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
-       createInfo.codeSize                   = SizeInBytes(spirvVS);
-       createInfo.pCode                      = DataPtr(spirvVS);
+       createInfo.codeSize                   = SizeInBytes(drawTextureSpirvVS);
+       createInfo.pCode                      = DataPtr(drawTextureSpirvVS);
 
        CHECK_CALL(vkCreateShaderModule(renderer->Device, &createInfo, nullptr, &drawTextureShaderModuleVS));
     }
@@ -216,8 +255,8 @@ int main(int argc, char** argv)
     VkShaderModule drawTextureShaderModuleFS = VK_NULL_HANDLE;
     {
        VkShaderModuleCreateInfo createInfo   = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
-       createInfo.codeSize                   = SizeInBytes(spirvFS);
-       createInfo.pCode                      = DataPtr(spirvFS);
+       createInfo.codeSize                   = SizeInBytes(drawTextureSpirvFS);
+       createInfo.pCode                      = DataPtr(drawTextureSpirvFS);
 
        CHECK_CALL(vkCreateShaderModule(renderer->Device, &createInfo, nullptr, &drawTextureShaderModuleFS));
     }
@@ -263,24 +302,43 @@ int main(int argc, char** argv)
        &envPipelineState,
        VK_CULL_MODE_FRONT_BIT));
 
-    /*
     // *************************************************************************
-    // Constant buffer
+    // Scene Params Buffer
     // *************************************************************************
-    ComPtr<ID3D12Resource> constantBuffer;
+    VulkanBuffer pbrSceneParamsBuffer;
     CHECK_CALL(CreateBuffer(
-        renderer.get(),
-        Align<size_t>(sizeof(SceneParameters), 256),
-        nullptr,
-        &constantBuffer));
+       renderer.get(),
+       Align<size_t>(sizeof(PBRSceneParameters), 256),
+       nullptr,
+       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+       VMA_MEMORY_USAGE_CPU_TO_GPU,
+       0,
+       &pbrSceneParamsBuffer));
+
+    VulkanBuffer envSceneParamsBuffer;
+    CHECK_CALL(CreateBuffer(
+       renderer.get(),
+       Align<size_t>(sizeof(EnvSceneParameters), 256),
+       nullptr,
+       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+       VMA_MEMORY_USAGE_CPU_TO_GPU,
+       0,
+       &envSceneParamsBuffer));
+
+    // *************************************************************************
+    // Material Params Buffer
+    // *************************************************************************
+    std::vector<VulkanBuffer> materialParamBuffers;
+    std::vector<VulkanBuffer> drawParamBuffers;
+    CreateSphereParamBuffers(renderer.get(), materialParamBuffers, drawParamBuffers);
 
     // *************************************************************************
     // Material sphere vertex buffers
     // *************************************************************************
-    uint32_t               materialSphereNumIndices = 0;
-    ComPtr<ID3D12Resource> materialSphereIndexBuffer;
-    ComPtr<ID3D12Resource> materialSpherePositionBuffer;
-    ComPtr<ID3D12Resource> materialSphereNormalBuffer;
+    uint32_t     materialSphereNumIndices = 0;
+    VulkanBuffer materialSphereIndexBuffer;
+    VulkanBuffer materialSpherePositionBuffer;
+    VulkanBuffer materialSphereNormalBuffer;
     CreateMaterialSphereVertexBuffers(
         renderer.get(),
         &materialSphereNumIndices,
@@ -291,10 +349,10 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Environment vertex buffers
     // *************************************************************************
-    uint32_t               envNumIndices = 0;
-    ComPtr<ID3D12Resource> envIndexBuffer;
-    ComPtr<ID3D12Resource> envPositionBuffer;
-    ComPtr<ID3D12Resource> envTexCoordBuffer;
+    uint32_t     envNumIndices = 0;
+    VulkanBuffer envIndexBuffer;
+    VulkanBuffer envPositionBuffer;
+    VulkanBuffer envTexCoordBuffer;
     CreateEnvironmentVertexBuffers(
         renderer.get(),
         &envNumIndices,
@@ -305,36 +363,41 @@ int main(int argc, char** argv)
     // *************************************************************************
     // IBL texture
     // *************************************************************************
-    ComPtr<ID3D12Resource> brdfLUT;
-    ComPtr<ID3D12Resource> irrTexture;
-    ComPtr<ID3D12Resource> envTexture;
-    uint32_t               envNumLevels = 0;
+    VulkanImage brdfLUT;
+    VulkanImage irrTexture;
+    VulkanImage envTexture;
+    uint32_t    envNumLevels = 0;
     CreateIBLTextures(renderer.get(), &brdfLUT, &irrTexture, &envTexture, &envNumLevels);
 
     // *************************************************************************
-    // Descriptor heaps
+    // Descriptor buffers
     // *************************************************************************
-    ComPtr<ID3D12DescriptorHeap> descriptorHeap;
-    CreateDescriptorHeap(renderer.get(), &descriptorHeap);
-    {
-        D3D12_CPU_DESCRIPTOR_HANDLE descriptor = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    VulkanBuffer pbrDescriptorBuffer = {};
+    CreateDescriptorBuffer(renderer.get(), pbrPipelineLayout.DescriptorSetLayout, &pbrDescriptorBuffer);
 
-        // LUT
-        CreateDescriptorTexture2D(renderer.get(), brdfLUT.Get(), descriptor);
-        descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    WritePBRDescriptors(
+       renderer.get(),
+       pbrPipelineLayout.DescriptorSetLayout,
+       &pbrDescriptorBuffer,
+       &pbrSceneParamsBuffer,
+       &brdfLUT,
+       &irrTexture,
+       &envTexture);
 
-        // Irradiance
-        CreateDescriptorTexture2D(renderer.get(), irrTexture.Get(), descriptor);
-        descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    VulkanBuffer envDescriptorBuffer = {};
+    CreateDescriptorBuffer(renderer.get(), envPipelineLayout.DescriptorSetLayout, &envDescriptorBuffer);
 
-        // Environment
-        CreateDescriptorTexture2D(renderer.get(), envTexture.Get(), descriptor, 0, envNumLevels);
-    }
+    WriteEnvDescriptors(
+       renderer.get(),
+       envPipelineLayout.DescriptorSetLayout,
+       &envDescriptorBuffer,
+       &envSceneParamsBuffer,
+       &envTexture);
 
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "201_pbr_spheres_d3d12");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "202_pbr_spheres_vulkan");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -344,254 +407,302 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT)) {
+    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight())) {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
 
     // *************************************************************************
+    // Render pass to draw ImGui
+    // *************************************************************************
+    std::vector<VulkanAttachmentInfo> colorAttachmentInfos = {
+        {GREX_DEFAULT_RTV_FORMAT, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE, renderer->SwapchainImageUsage}
+    };
+
+    VulkanRenderPass renderPass = {};
+    CHECK_CALL(CreateRenderPass(renderer.get(), colorAttachmentInfos, {}, gWindowWidth, gWindowHeight, &renderPass));
+
+    // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForD3D12(renderer.get())) {
-        assert(false && "Window::InitImGuiForD3D12 failed");
+    if (!window->InitImGuiForVulkan(renderer.get(), renderPass.RenderPass)) {
+        assert(false && "Window::InitImGuiForVulkan failed");
         return EXIT_FAILURE;
     }
 
     // *************************************************************************
-    // Command allocator
+    // Swapchain image views, depth buffers/views
     // *************************************************************************
-    ComPtr<ID3D12CommandAllocator> commandAllocator;
+    std::vector<VkImageView>  imageViews;
+    std::vector<VkImageView>  depthViews;
     {
-        CHECK_CALL(renderer->Device->CreateCommandAllocator(
-            D3D12_COMMAND_LIST_TYPE_DIRECT,    // type
-            IID_PPV_ARGS(&commandAllocator))); // ppCommandList
+       std::vector<VkImage>      images;
+       CHECK_CALL(GetSwapchainImages(renderer.get(), images));
+
+       for (auto& image : images) {
+          // Create swap chain images
+          VkImageViewCreateInfo createInfo           = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+          createInfo.image                           = image;
+          createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+          createInfo.format                          = GREX_DEFAULT_RTV_FORMAT;
+          createInfo.components                      = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+          createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+          createInfo.subresourceRange.baseMipLevel   = 0;
+          createInfo.subresourceRange.levelCount     = 1;
+          createInfo.subresourceRange.baseArrayLayer = 0;
+          createInfo.subresourceRange.layerCount     = 1;
+
+          VkImageView imageView = VK_NULL_HANDLE;
+          CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &imageView));
+
+          imageViews.push_back(imageView);
+       }
+
+       size_t imageCount = images.size();
+
+       std::vector<VulkanImage> depthImages;
+       depthImages.resize(images.size());
+
+       for (int depthIndex = 0; depthIndex < imageCount; depthIndex++) {
+          // Create depth images
+          CHECK_CALL(CreateDSV(renderer.get(), window->GetWidth(), window->GetHeight(), &depthImages[depthIndex]));
+
+          VkImageViewCreateInfo createInfo           = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+          createInfo.image                           = depthImages[depthIndex].Image;
+          createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+          createInfo.format                          = GREX_DEFAULT_DSV_FORMAT;
+          createInfo.components                      = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY };
+          createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
+          createInfo.subresourceRange.baseMipLevel   = 0;
+          createInfo.subresourceRange.levelCount     = 1;
+          createInfo.subresourceRange.baseArrayLayer = 0;
+          createInfo.subresourceRange.layerCount     = 1;
+
+          VkImageView depthView = VK_NULL_HANDLE;
+          CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &depthView));
+
+          depthViews.push_back(depthView);
+       }
     }
 
     // *************************************************************************
-    // Command list
+    // Command buffer
     // *************************************************************************
-    ComPtr<ID3D12GraphicsCommandList5> commandList;
+    CommandObjects cmdBuf = {};
     {
-        CHECK_CALL(renderer->Device->CreateCommandList1(
-            0,                              // nodeMask
-            D3D12_COMMAND_LIST_TYPE_DIRECT, // type
-            D3D12_COMMAND_LIST_FLAG_NONE,   // flags
-            IID_PPV_ARGS(&commandList)));   // ppCommandList
+       CHECK_CALL(CreateCommandBuffer(renderer.get(), 0, &cmdBuf));
     }
 
     // *************************************************************************
     // Persistent map scene parameters
     // *************************************************************************
-    SceneParameters* pSceneParams = nullptr;
-    CHECK_CALL(constantBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pSceneParams)));
+    PBRSceneParameters* pPBRSceneParams = nullptr;
+    vmaMapMemory(renderer->Allocator, pbrSceneParamsBuffer.Allocation, reinterpret_cast<void**>(&pPBRSceneParams));
+
+    EnvSceneParameters* pEnvSceneParams = nullptr;
+    vmaMapMemory(renderer->Allocator, envSceneParamsBuffer.Allocation, reinterpret_cast<void**>(&pEnvSceneParams));
+
+    char* pPBRDescriptorBufferStartAddress = nullptr;
+    CHECK_CALL(vmaMapMemory(
+       renderer->Allocator,
+       pbrDescriptorBuffer.Allocation,
+       reinterpret_cast<void**>(&pPBRDescriptorBufferStartAddress)));
 
     // *************************************************************************
     // Main loop
     // *************************************************************************
+    VkClearValue clearValues[2];
+    clearValues[0].color = { {0.0f, 0.0f, 0.2f, 1.0f } };
+    clearValues[1].depthStencil = { 1.0f, 0 };
+
     while (window->PollEvents()) {
-        window->ImGuiNewFrameD3D12();
+       window->ImGuiNewFrameVulkan();
 
-        if (ImGui::Begin("Scene")) {
-            ImGui::SliderInt("Number of Lights", reinterpret_cast<int*>(&gNumLights), 0, 4);
-        }
-        ImGui::End();
+       if (ImGui::Begin("Scene")) {
+          ImGui::SliderInt("Number of Lights", reinterpret_cast<int*>(&gNumLights), 0, 4);
+       }
+       ImGui::End();
 
-        // ---------------------------------------------------------------------
+       // ---------------------------------------------------------------------
 
-        UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
+       UINT bufferIndex = 0;
+       if (AcquireNextImage(renderer.get(), &bufferIndex)) {
+          assert(false && "AcquireNextImage failed");
+          break;
+       }
 
-        ComPtr<ID3D12Resource> swapchainBuffer;
-        CHECK_CALL(renderer->Swapchain->GetBuffer(bufferIndex, IID_PPV_ARGS(&swapchainBuffer)));
+       VkCommandBufferBeginInfo vkbi = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+       vkbi.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-        CHECK_CALL(commandAllocator->Reset());
-        CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
+       CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
 
-        // Descriptor heap
-        ID3D12DescriptorHeap* heaps[1] = {descriptorHeap.Get()};
-        commandList->SetDescriptorHeaps(1, heaps);
+       {
+          VkRenderingAttachmentInfo colorAttachment  = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
+          colorAttachment.imageView                  = imageViews[bufferIndex];
+          colorAttachment.imageLayout                = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+          colorAttachment.loadOp                     = VK_ATTACHMENT_LOAD_OP_CLEAR;
+          colorAttachment.storeOp                    = VK_ATTACHMENT_STORE_OP_STORE;
+          colorAttachment.clearValue                 = clearValues[0];
 
-        D3D12_RESOURCE_BARRIER preRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        commandList->ResourceBarrier(1, &preRenderBarrier);
-        {
-            commandList->OMSetRenderTargets(
-                1,
-                &renderer->SwapchainRTVDescriptorHandles[bufferIndex],
-                false,
-                &renderer->SwapchainDSVDescriptorHandles[bufferIndex]);
+          VkRenderingAttachmentInfo depthAttachment  = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
+          depthAttachment.imageView                  = depthViews[bufferIndex];
+          depthAttachment.imageLayout                = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+          depthAttachment.loadOp                     = VK_ATTACHMENT_LOAD_OP_CLEAR;
+          depthAttachment.storeOp                    = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+          depthAttachment.clearValue                 = clearValues[1];
 
-            // Clear RTV and DSV
-            float clearColor[4] = {0.23f, 0.23f, 0.31f, 0};
-            commandList->ClearRenderTargetView(renderer->SwapchainRTVDescriptorHandles[bufferIndex], clearColor, 0, nullptr);
-            commandList->ClearDepthStencilView(renderer->SwapchainDSVDescriptorHandles[bufferIndex], D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0xFF, 0, nullptr);
+          VkRenderingInfo vkri                       = { VK_STRUCTURE_TYPE_RENDERING_INFO };
+          vkri.layerCount                            = 1;
+          vkri.colorAttachmentCount                  = 1;
+          vkri.pColorAttachments                     = &colorAttachment;
+          vkri.pDepthAttachment                      = &depthAttachment;
+          vkri.renderArea.extent.width               = gWindowWidth;
+          vkri.renderArea.extent.height              = gWindowHeight;
 
-            // Viewport and scissor
-            D3D12_VIEWPORT viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
-            commandList->RSSetViewports(1, &viewport);
-            D3D12_RECT scissor = {0, 0, static_cast<long>(gWindowWidth), static_cast<long>(gWindowHeight)};
-            commandList->RSSetScissorRects(1, &scissor);
+          vkCmdBeginRendering(cmdBuf.CommandBuffer, &vkri);
 
-            // Smooth out the rotation on Y
-            gAngle += (gTargetAngle - gAngle) * 0.1f;
+          VkViewport viewport = { 0, static_cast<float>(gWindowHeight), static_cast<float>(gWindowWidth), -static_cast<float>(gWindowHeight), 0.0f, 1.0f };
+          vkCmdSetViewport(cmdBuf.CommandBuffer, 0, 1, &viewport);
 
-            // Camera matrices
-            vec3 eyePosition = vec3(0, 0, 9);
-            mat4 viewMat     = glm::lookAt(eyePosition, vec3(0, 0, 0), vec3(0, 1, 0));
-            mat4 projMat     = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
-            mat4 rotMat      = glm::rotate(glm::radians(gAngle), vec3(0, 1, 0));
+          VkRect2D scissor = { 0, 0, gWindowWidth, gWindowHeight };
+          vkCmdSetScissor(cmdBuf.CommandBuffer, 0, 1, &scissor);
 
-            // Set constant buffer values
-            pSceneParams->viewProjectionMatrix    = projMat * viewMat;
-            pSceneParams->eyePosition             = eyePosition;
-            pSceneParams->numLights               = gNumLights;
-            pSceneParams->lights[0].position      = vec3(5, 7, 32);
-            pSceneParams->lights[0].color         = vec3(0.98f, 0.85f, 0.71f);
-            pSceneParams->lights[0].intensity     = 0.5f;
-            pSceneParams->lights[1].position      = vec3(-8, 1, 4);
-            pSceneParams->lights[1].color         = vec3(1.00f, 0.00f, 0.00f);
-            pSceneParams->lights[1].intensity     = 0.5f;
-            pSceneParams->lights[2].position      = vec3(0, 8, -8);
-            pSceneParams->lights[2].color         = vec3(0.00f, 1.00f, 0.00f);
-            pSceneParams->lights[2].intensity     = 0.5f;
-            pSceneParams->lights[3].position      = vec3(15, 8, 0);
-            pSceneParams->lights[3].color         = vec3(0.00f, 0.00f, 1.00f);
-            pSceneParams->lights[3].intensity     = 0.5f;
-            pSceneParams->iblEnvironmentNumLevels = envNumLevels;
+          // Smooth out the rotation on Y
+          gAngle += (gTargetAngle - gAngle) * 0.1f;
 
-            // Draw environment
-            {
-                commandList->SetGraphicsRootSignature(envRootSig.Get());
-                commandList->SetPipelineState(envPipelineState.Get());
+          // Camera matrices
+          vec3 eyePosition = vec3(0, 0, 9);
+          mat4 viewMat     = glm::lookAt(eyePosition, vec3(0, 0, 0), vec3(0, 1, 0));
+          mat4 projMat     = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+          mat4 rotMat      = glm::rotate(glm::radians(gAngle), vec3(0, 1, 0));
 
-                glm::mat4 moveUp = glm::translate(vec3(0, 0, 0));
+          // Set constant buffer values
+          pPBRSceneParams->viewProjectionMatrix    = projMat * viewMat;
+          pPBRSceneParams->eyePosition             = eyePosition;
+          pPBRSceneParams->numLights               = gNumLights;
+          pPBRSceneParams->lights[0].position      = vec3(5, 7, 32);
+          pPBRSceneParams->lights[0].color         = vec3(0.98f, 0.85f, 0.71f);
+          pPBRSceneParams->lights[0].intensity     = 0.5f;
+          pPBRSceneParams->lights[1].position      = vec3(-8, 1, 4);
+          pPBRSceneParams->lights[1].color         = vec3(1.00f, 0.00f, 0.00f);
+          pPBRSceneParams->lights[1].intensity     = 0.5f;
+          pPBRSceneParams->lights[2].position      = vec3(0, 8, -8);
+          pPBRSceneParams->lights[2].color         = vec3(0.00f, 1.00f, 0.00f);
+          pPBRSceneParams->lights[2].intensity     = 0.5f;
+          pPBRSceneParams->lights[3].position      = vec3(15, 8, 0);
+          pPBRSceneParams->lights[3].color         = vec3(0.00f, 0.00f, 1.00f);
+          pPBRSceneParams->lights[3].intensity     = 0.5f;
+          pPBRSceneParams->iblEnvironmentNumLevels = envNumLevels;
 
-                // SceneParmas (b0)
-                mat4 mvp = projMat * viewMat * moveUp;
-                commandList->SetGraphicsRoot32BitConstants(0, 16, &mvp, 0);
-                // Textures (32)
-                D3D12_GPU_DESCRIPTOR_HANDLE tableStart = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
-                tableStart.ptr += 2 * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-                commandList->SetGraphicsRootDescriptorTable(1, tableStart);
+          // Draw environment
+          {
+             // Bind the VS/FS Graphics Pipeline
+             vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, envPipelineState);
 
-                // Index buffer
-                D3D12_INDEX_BUFFER_VIEW ibv = {};
-                ibv.BufferLocation          = envIndexBuffer->GetGPUVirtualAddress();
-                ibv.SizeInBytes             = static_cast<UINT>(envIndexBuffer->GetDesc().Width);
-                ibv.Format                  = DXGI_FORMAT_R32_UINT;
-                commandList->IASetIndexBuffer(&ibv);
+             glm::mat4 moveUp = glm::translate(vec3(0, 0, 0));
 
-                // Vertex buffers
-                D3D12_VERTEX_BUFFER_VIEW vbvs[2] = {};
-                // Position
-                vbvs[0].BufferLocation = envPositionBuffer->GetGPUVirtualAddress();
-                vbvs[0].SizeInBytes    = static_cast<UINT>(envPositionBuffer->GetDesc().Width);
-                vbvs[0].StrideInBytes  = 12;
-                // Tex coord
-                vbvs[1].BufferLocation = envTexCoordBuffer->GetGPUVirtualAddress();
-                vbvs[1].SizeInBytes    = static_cast<UINT>(envTexCoordBuffer->GetDesc().Width);
-                vbvs[1].StrideInBytes  = 8;
+             // SceneParmas (b0)
+             mat4 mvp = projMat * viewMat * moveUp;
+             pEnvSceneParams->MVP = mvp;
 
-                commandList->IASetVertexBuffers(0, 2, vbvs);
-                commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+             // Bind the Index Buffer
+             vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, envIndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
 
-                commandList->DrawIndexedInstanced(envNumIndices, 1, 0, 0, 0);
-            }
+             // Bind the Vertex Buffer
+             VkBuffer vertexBuffers[] = { envPositionBuffer.Buffer, envTexCoordBuffer.Buffer };
+             VkDeviceSize offsets[] = { 0, 0 };
+             vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 2, vertexBuffers, offsets);
 
-            // Draw material sphere
-            {
-                commandList->SetGraphicsRootSignature(pbrRootSig.Get());
-                // SceneParams (b0)
-                commandList->SetGraphicsRootConstantBufferView(0, constantBuffer->GetGPUVirtualAddress());
-                // IBL textures (t3, t4, t5)
-                commandList->SetGraphicsRootDescriptorTable(3, descriptorHeap->GetGPUDescriptorHandleForHeapStart());
+             vkCmdDrawIndexed(cmdBuf.CommandBuffer, envNumIndices, 1, 0, 0, 0);
+          }
 
-                // Index buffer
-                D3D12_INDEX_BUFFER_VIEW ibv = {};
-                ibv.BufferLocation          = materialSphereIndexBuffer->GetGPUVirtualAddress();
-                ibv.SizeInBytes             = static_cast<UINT>(materialSphereIndexBuffer->GetDesc().Width);
-                ibv.Format                  = DXGI_FORMAT_R32_UINT;
-                commandList->IASetIndexBuffer(&ibv);
+          // Draw material sphere
+          {
+             // Bind the Index Buffer
+             vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, materialSphereIndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
 
-                // Vertex buffers
-                D3D12_VERTEX_BUFFER_VIEW vbvs[2] = {};
-                // Position
-                vbvs[0].BufferLocation = materialSpherePositionBuffer->GetGPUVirtualAddress();
-                vbvs[0].SizeInBytes    = static_cast<UINT>(materialSpherePositionBuffer->GetDesc().Width);
-                vbvs[0].StrideInBytes  = 12;
-                // Normal
-                vbvs[1].BufferLocation = materialSphereNormalBuffer->GetGPUVirtualAddress();
-                vbvs[1].SizeInBytes    = static_cast<UINT>(materialSphereNormalBuffer->GetDesc().Width);
-                vbvs[1].StrideInBytes  = 12;
+             // Bind the Vertex Buffer
+             VkBuffer vertexBuffers[] = { materialSpherePositionBuffer.Buffer, materialSphereNormalBuffer.Buffer };
+             VkDeviceSize offsets[] = { 0, 0 };
+             vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 2, vertexBuffers, offsets);
 
-                commandList->IASetVertexBuffers(0, 2, vbvs);
-                commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+             // Pipeline state
+             vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pbrPipelineState);
 
-                // Pipeline state
-                commandList->SetPipelineState(pbrPipelineState.Get());
+             for (uint32_t i = 0; i < gNumSlotsY; ++i) {
+                for (uint32_t j = 0; j < gNumSlotsX; ++j) {
+                   uint32_t sphereIndex= i*gNumSlotsX + j;
 
-                MaterialParameters materialParams = {};
-                materialParams.albedo             = vec3(0.8f, 0.8f, 0.9f);
-                materialParams.roughness          = 0;
-                materialParams.metalness          = 0;
-                materialParams.F0                 = F0_Generic;
+                   float x = -gHalfSpanX + j * gSlotSize;
+                   float y = -gHalfSpanY + i * gSlotSize;
+                   float z = 0;
+                   // Readjust center
+                   x += gSlotSize / 2.0f;
+                   y += gSlotSize / 2.0f;
 
-                uint32_t numSlotsX     = 10;
-                uint32_t numSlotsY     = 10;
-                float    slotSize      = 0.9f;
-                float    spanX         = numSlotsX * slotSize;
-                float    spanY         = numSlotsY * slotSize;
-                float    halfSpanX     = spanX / 2.0f;
-                float    halfSpanY     = spanY / 2.0f;
-                float    roughnessStep = 1.0f / (numSlotsX - 1);
-                float    metalnessStep = 1.0f / (numSlotsY - 1);
+                   // DrawParams (b1)
+                   {
+                      WriteDescriptor(
+                         renderer.get(),
+                         pPBRDescriptorBufferStartAddress,
+                         pbrPipelineLayout.DescriptorSetLayout,
+                         1, // binding
+                         0, // arrayElement
+                         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                         &drawParamBuffers[sphereIndex]);
+                      
+                      // Modify the buffer to have this frame's current rotation
+                      DrawParameters* pDrawParams = nullptr;
+                      vmaMapMemory(
+                         renderer->Allocator,
+                         drawParamBuffers[sphereIndex].Allocation,
+                         reinterpret_cast<void**>(&pDrawParams));
 
-                for (uint32_t i = 0; i < numSlotsY; ++i) {
-                    materialParams.metalness = 0;
+                      pDrawParams->ModelMatrix = rotMat * glm::translate(vec3(x, y, z));
 
-                    for (uint32_t j = 0; j < numSlotsX; ++j) {
-                        float x = -halfSpanX + j * slotSize;
-                        float y = -halfSpanY + i * slotSize;
-                        float z = 0;
-                        // Readjust center
-                        x += slotSize / 2.0f;
-                        y += slotSize / 2.0f;
+                      vmaUnmapMemory(renderer->Allocator, drawParamBuffers[sphereIndex].Allocation);
+                   }
 
-                        glm::mat4 modelMat = rotMat * glm::translate(vec3(x, y, z));
-                        // DrawParams (b1)
-                        commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
-                        // MaterialParams (b2)
-                        commandList->SetGraphicsRoot32BitConstants(2, 8, &materialParams, 0);
+                   // MaterialParams (b2)
+                   {
+                      WriteDescriptor(
+                         renderer.get(),
+                         pPBRDescriptorBufferStartAddress,
+                         pbrPipelineLayout.DescriptorSetLayout,
+                         2, // binding
+                         0, // arrayElement
+                         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                         &materialParamBuffers[sphereIndex]);
+                   }
 
-                        commandList->DrawIndexedInstanced(materialSphereNumIndices, 1, 0, 0, 0);
-
-                        materialParams.metalness += roughnessStep;
-                    }
-                    materialParams.roughness += metalnessStep;
+                   vkCmdDrawIndexed(cmdBuf.CommandBuffer, materialSphereNumIndices, 1, 0, 0, 0);
                 }
-            }
+             }
+          }
 
-            // Draw ImGui
-            window->ImGuiRenderDrawData(renderer.get(), commandList.Get());
-        }
-        D3D12_RESOURCE_BARRIER postRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-        commandList->ResourceBarrier(1, &postRenderBarrier);
+          // Draw ImGui
+          window->ImGuiRenderDrawData(renderer.get(), cmdBuf.CommandBuffer);
 
-        commandList->Close();
+          vkCmdEndRendering(cmdBuf.CommandBuffer);
+       }
 
-        ID3D12CommandList* pList = commandList.Get();
-        renderer->Queue->ExecuteCommandLists(1, &pList);
+      CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));
 
-        if (!WaitForGpu(renderer.get())) {
-            assert(false && "WaitForGpu failed");
-            break;
-        }
+      // Execute command buffer
+      CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
 
-        // Present
-        if (!SwapchainPresent(renderer.get())) {
-            assert(false && "SwapchainPresent failed");
-            break;
-        }
+      // Wait for the GPU to finish the work
+      if (!WaitForGpu(renderer.get())) {
+         assert(false && "WaitForGpu failed");
+         break;
+      }
+
+      // Present
+      if (!SwapchainPresent(renderer.get(), bufferIndex)) {
+         assert(false && "SwapchainPresent failed");
+         break;
+      }
     }
-    */
 
     return 0;
 }
@@ -753,22 +864,6 @@ void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *
          bindings.push_back(binding);
       }
       {
-         VkDescriptorSetLayoutBinding binding = {};
-         binding.binding                      = 1;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-         binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL;
-         bindings.push_back(binding);
-      }
-      {
-         VkDescriptorSetLayoutBinding binding = {};
-         binding.binding                      = 2;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-         binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL;
-         bindings.push_back(binding);
-      }
-      {
          VkSamplerCreateInfo samplerInfo       = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
          samplerInfo.flags                     = 0;
          samplerInfo.magFilter                 = VK_FILTER_LINEAR;
@@ -795,12 +890,20 @@ void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *
             &uWrapSampler));
 
          VkDescriptorSetLayoutBinding binding = {};
-         binding.binding                      = 3;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+         binding.binding                      = 1;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
          binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_FRAGMENT_BIT;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL;
          binding.pImmutableSamplers           = &uWrapSampler;
 
+         bindings.push_back(binding);
+      }
+      {
+         VkDescriptorSetLayoutBinding binding = {};
+         binding.binding                      = 2;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+         binding.descriptorCount              = 1;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL;
          bindings.push_back(binding);
       }
 
@@ -823,155 +926,399 @@ void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *
    CHECK_CALL(vkCreatePipelineLayout(pRenderer->Device, &createInfo, nullptr, &pLayout->PipelineLayout));
 }
 
-/*
+void CreateSphereParamBuffers(
+   VulkanRenderer* pRenderer,
+   std::vector<VulkanBuffer> &materialParamBuffers,
+   std::vector<VulkanBuffer> &drawParamBuffers)
+{
+   MaterialParameters materialParams = {};
+   materialParams.albedo             = vec3(0.8f, 0.8f, 0.9f);
+   materialParams.roughness          = 0;
+   materialParams.metalness          = 0;
+   materialParams.F0                 = F0_Generic;
+
+   float    roughnessStep = 1.0f / (gNumSlotsX - 1);
+   float    metalnessStep = 1.0f / (gNumSlotsY - 1);
+
+   for (uint32_t i = 0; i < gNumSlotsY; ++i) {
+      materialParams.metalness = 0;
+
+      for (uint32_t j = 0; j < gNumSlotsX; ++j) {
+         float x = -gHalfSpanX + j * gSlotSize;
+         float y = -gHalfSpanY + i * gSlotSize;
+         float z = 0;
+         // Readjust center
+         x += gSlotSize / 2.0f;
+         y += gSlotSize / 2.0f;
+
+         // Create the DrawParameters for this sphere
+         {
+            VulkanBuffer drawParamsBuffer = {};
+
+            CHECK_CALL(CreateBuffer(
+               pRenderer,
+               Align<size_t>(sizeof(DrawParameters), 256),
+               nullptr, // Can't set the values because they change per frame
+               VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+               0,
+               &drawParamsBuffer));
+
+            drawParamBuffers.push_back(drawParamsBuffer);
+         }
+
+         // Create the MaterialParameters for this sphere
+         {
+            VulkanBuffer materialParamsBuffer = {};
+
+            CHECK_CALL(CreateBuffer(
+               pRenderer,
+               Align<size_t>(sizeof(MaterialParameters), 256),
+               &materialParams,
+               VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+               0,
+               &materialParamsBuffer));
+
+            materialParamBuffers.push_back(materialParamsBuffer);
+         }
+
+         materialParams.metalness += roughnessStep;
+      }
+
+      materialParams.roughness += metalnessStep;
+   }
+}
+
 void CreateMaterialSphereVertexBuffers(
-    DxRenderer*      pRenderer,
+    VulkanRenderer*  pRenderer,
     uint32_t*        pNumIndices,
-    ID3D12Resource** ppIndexBuffer,
-    ID3D12Resource** ppPositionBuffer,
-    ID3D12Resource** ppNormalBuffer)
+    VulkanBuffer*    pIndexBuffer,
+    VulkanBuffer*    pPositionBuffer,
+    VulkanBuffer*    pNormalBuffer)
 {
-    TriMesh mesh = TriMesh::Sphere(0.42f, 256, 256, {.enableNormals = true});
+   TriMesh mesh = TriMesh::Sphere(0.42f, 256, 256, { .enableNormals = true });
 
-    *pNumIndices = 3 * mesh.GetNumTriangles();
+   *pNumIndices = 3 * mesh.GetNumTriangles();
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTriangles()),
-        DataPtr(mesh.GetTriangles()),
-        ppIndexBuffer));
+   CHECK_CALL(CreateBuffer(
+      pRenderer,
+      SizeInBytes(mesh.GetTriangles()),
+      DataPtr(mesh.GetTriangles()),
+      VMA_MEMORY_USAGE_GPU_ONLY,
+      0,
+      pIndexBuffer));
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetPositions()),
-        DataPtr(mesh.GetPositions()),
-        ppPositionBuffer));
+   CHECK_CALL(CreateBuffer(
+      pRenderer,
+      SizeInBytes(mesh.GetPositions()),
+      DataPtr(mesh.GetPositions()),
+      VMA_MEMORY_USAGE_GPU_ONLY,
+      0,
+      pPositionBuffer));
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetNormals()),
-        DataPtr(mesh.GetNormals()),
-        ppNormalBuffer));
+   CHECK_CALL(CreateBuffer(
+      pRenderer,
+      SizeInBytes(mesh.GetNormals()),
+      DataPtr(mesh.GetNormals()),
+      VMA_MEMORY_USAGE_GPU_ONLY,
+      0,
+      pNormalBuffer));
 }
-*/
 
-/*
 void CreateEnvironmentVertexBuffers(
-    DxRenderer*      pRenderer,
+    VulkanRenderer*  pRenderer,
     uint32_t*        pNumIndices,
-    ID3D12Resource** ppIndexBuffer,
-    ID3D12Resource** ppPositionBuffer,
-    ID3D12Resource** ppTexCoordBuffer)
+    VulkanBuffer*    pIndexBuffer,
+    VulkanBuffer*    pPositionBuffer,
+    VulkanBuffer*    pTexCoordBuffer)
 {
-    TriMesh mesh = TriMesh::Sphere(100, 64, 64, {.enableTexCoords = true, .faceInside = true});
+   TriMesh mesh = TriMesh::Sphere(100, 64, 64, { .enableTexCoords = true, .faceInside = true });
 
-    *pNumIndices = 3 * mesh.GetNumTriangles();
+   *pNumIndices = 3 * mesh.GetNumTriangles();
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTriangles()),
-        DataPtr(mesh.GetTriangles()),
-        ppIndexBuffer));
+   CHECK_CALL(CreateBuffer(
+      pRenderer,
+      SizeInBytes(mesh.GetTriangles()),
+      DataPtr(mesh.GetTriangles()),
+      VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+      VMA_MEMORY_USAGE_GPU_ONLY,
+      0,
+      pIndexBuffer));
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetPositions()),
-        DataPtr(mesh.GetPositions()),
-        ppPositionBuffer));
+   CHECK_CALL(CreateBuffer(
+      pRenderer,
+      SizeInBytes(mesh.GetPositions()),
+      DataPtr(mesh.GetPositions()),
+      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+      VMA_MEMORY_USAGE_GPU_ONLY,
+      0,
+      pPositionBuffer));
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTexCoords()),
-        DataPtr(mesh.GetTexCoords()),
-        ppTexCoordBuffer));
+   CHECK_CALL(CreateBuffer(
+      pRenderer,
+      SizeInBytes(mesh.GetTexCoords()),
+      DataPtr(mesh.GetTexCoords()),
+      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+      VMA_MEMORY_USAGE_GPU_ONLY,
+      0,
+      pTexCoordBuffer));
 }
-*/
 
-/*
 void CreateIBLTextures(
-    DxRenderer*      pRenderer,
-    ID3D12Resource** ppBRDFLUT,
-    ID3D12Resource** ppIrradianceTexture,
-    ID3D12Resource** ppEnvironmentTexture,
+    VulkanRenderer*  pRenderer,
+    VulkanImage*     pBRDFLUT,
+    VulkanImage*     pIrradianceTexture,
+    VulkanImage*     pEnvironmentTexture,
     uint32_t*        pEnvNumLevels)
 {
-    // BRDF LUT
-    {
-        auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut.hdr"));
-        if (bitmap.Empty()) {
-            assert(false && "Load image failed");
-            return;
-        }
+   // BRDF LUT
+   {
+      auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut.hdr"));
+      if (bitmap.Empty()) {
+         assert(false && "Load image failed");
+         return;
+      }
 
-        ComPtr<ID3D12Resource> texture;
-        CHECK_CALL(CreateTexture(
-            pRenderer,
-            bitmap.GetWidth(),
-            bitmap.GetHeight(),
-            DXGI_FORMAT_R32G32B32A32_FLOAT,
-            bitmap.GetSizeInBytes(),
-            bitmap.GetPixels(),
-            ppBRDFLUT));
-    }
+      CHECK_CALL(CreateTexture(
+         pRenderer,
+         bitmap.GetWidth(),
+         bitmap.GetHeight(),
+         VK_FORMAT_R32G32B32A32_SFLOAT,
+         bitmap.GetSizeInBytes(),
+         bitmap.GetPixels(),
+         pBRDFLUT));
+   }
 
-    // IBL file
-    auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
+   // IBL file
+   auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
 
-    IBLMaps ibl = {};
-    if (!LoadIBLMaps32f(iblFile, &ibl)) {
-        GREX_LOG_ERROR("failed to load: " << iblFile);
-        return;
-    }
+   IBLMaps ibl = {};
+   if (!LoadIBLMaps32f(iblFile, &ibl)) {
+      GREX_LOG_ERROR("failed to load: " << iblFile);
+      return;
+   }
 
-    *pEnvNumLevels = ibl.numLevels;
+   *pEnvNumLevels = ibl.numLevels;
 
-    // Irradiance
-    {
-        CHECK_CALL(CreateTexture(
-            pRenderer,
-            ibl.irradianceMap.GetWidth(),
-            ibl.irradianceMap.GetHeight(),
-            DXGI_FORMAT_R32G32B32A32_FLOAT,
-            ibl.irradianceMap.GetSizeInBytes(),
-            ibl.irradianceMap.GetPixels(),
-            ppIrradianceTexture));
-    }
+   // Irradiance
+   {
+      CHECK_CALL(CreateTexture(
+         pRenderer,
+         ibl.irradianceMap.GetWidth(),
+         ibl.irradianceMap.GetHeight(),
+         VK_FORMAT_R32G32B32A32_SFLOAT,
+         ibl.irradianceMap.GetSizeInBytes(),
+         ibl.irradianceMap.GetPixels(),
+         pIrradianceTexture));
+   }
 
-    // Environment
-    {
-        const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
-        const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
+   // Environment
+   {
+      const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
+      const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
 
-        std::vector<DxMipOffset> mipOffsets;
-        uint32_t                 levelOffset = 0;
-        uint32_t                 levelWidth  = ibl.baseWidth;
-        uint32_t                 levelHeight = ibl.baseHeight;
-        for (uint32_t i = 0; i < ibl.numLevels; ++i) {
-            DxMipOffset mipOffset = {};
-            mipOffset.offset      = levelOffset;
-            mipOffset.rowStride   = rowStride;
+      std::vector<VkMipOffset> mipOffsets;
+      uint32_t                 levelOffset = 0;
+      uint32_t                 levelWidth  = ibl.baseWidth;
+      uint32_t                 levelHeight = ibl.baseHeight;
+      for (uint32_t i = 0; i < ibl.numLevels; ++i) {
+         VkMipOffset mipOffset = {};
+         mipOffset.offset      = levelOffset;
+         mipOffset.rowStride   = rowStride;
 
-            mipOffsets.push_back(mipOffset);
+         mipOffsets.push_back(mipOffset);
 
-            levelOffset += (rowStride * levelHeight);
-            levelWidth >>= 1;
-            levelHeight >>= 1;
-        }
+         levelOffset += (rowStride * levelHeight);
+         levelWidth >>= 1;
+         levelHeight >>= 1;
+      }
 
-        CHECK_CALL(CreateTexture(
-            pRenderer,
-            ibl.baseWidth,
-            ibl.baseHeight,
-            DXGI_FORMAT_R32G32B32A32_FLOAT,
-            mipOffsets,
-            ibl.environmentMap.GetSizeInBytes(),
-            ibl.environmentMap.GetPixels(),
-            ppEnvironmentTexture));
-    }
+      CHECK_CALL(CreateTexture(
+         pRenderer,
+         ibl.baseWidth,
+         ibl.baseHeight,
+         VK_FORMAT_R32G32B32A32_SFLOAT,
+         mipOffsets,
+         ibl.environmentMap.GetSizeInBytes(),
+         ibl.environmentMap.GetPixels(),
+         pEnvironmentTexture));
+   }
 
-    GREX_LOG_INFO("Loaded " << iblFile);
+   GREX_LOG_INFO("Loaded " << iblFile);
 }
-*/
+
+void CreateDescriptorBuffer(
+   VulkanRenderer*         pRenderer,
+   VkDescriptorSetLayout   descriptorSetLayout,
+   VulkanBuffer*           pBuffer)
+{
+   VkDeviceSize size = 0;
+   fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
+
+   VkBufferUsageFlags usageFlags =
+      VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+
+   CHECK_CALL(CreateBuffer(
+      pRenderer,  // pRenderer
+      size,       // srcSize
+      nullptr,    // pSrcData
+      usageFlags, // usageFlags
+      0,          // minAlignment
+      pBuffer));  // pBuffer
+}
+
+void WritePBRDescriptors(
+   VulkanRenderer*         pRenderer,
+   VkDescriptorSetLayout   descriptorSetLayout,
+   VulkanBuffer*           pDescriptorBuffer,
+   const VulkanBuffer*     pSceneParamsBuffer,
+   const VulkanImage*      pBRDFLUT,
+   const VulkanImage*      pIrradianceTexture,
+   const VulkanImage*      pEnvTexture)
+{
+   char* pDescriptorBufferStartAddress = nullptr;
+   CHECK_CALL(vmaMapMemory(
+      pRenderer->Allocator,
+      pDescriptorBuffer->Allocation,
+      reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
+
+   // ConstantBuffer<SceneParameters>    SceneParams           : register(b0);
+   WriteDescriptor(
+      pRenderer,
+      pDescriptorBufferStartAddress,
+      descriptorSetLayout,
+      0, // binding
+      0, // arrayElement
+      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+      pSceneParamsBuffer);
+
+   // Set per draw call
+   // ConstantBuffer<DrawParameters>     DrawParams            : register(b1);
+   // ConstantBuffer<MaterialParameters> MaterialParams        : register(b2);
+
+   // Texture2D                          IBLIntegrationLUT     : register(t3);
+   {
+      VkImageView imageView = VK_NULL_HANDLE;
+      CHECK_CALL(CreateImageView(
+         pRenderer,
+         pBRDFLUT,
+         VK_IMAGE_VIEW_TYPE_2D,
+         VK_FORMAT_R32G32B32A32_SFLOAT,
+         GREX_ALL_SUBRESOURCES,
+         &imageView));
+
+      WriteDescriptor(
+         pRenderer,
+         pDescriptorBufferStartAddress,
+         descriptorSetLayout,
+         3, // binding
+         0, // arrayElement
+         VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+         imageView,
+         VK_IMAGE_LAYOUT_GENERAL);
+   }
+
+   // Texture2D                          IBLIrradianceMap      : register(t4);
+   {
+      VkImageView imageView = VK_NULL_HANDLE;
+      CHECK_CALL(CreateImageView(
+         pRenderer,
+         pIrradianceTexture,
+         VK_IMAGE_VIEW_TYPE_2D,
+         VK_FORMAT_R32G32B32A32_SFLOAT,
+         GREX_ALL_SUBRESOURCES,
+         &imageView));
+
+      WriteDescriptor(
+         pRenderer,
+         pDescriptorBufferStartAddress,
+         descriptorSetLayout,
+         4, // binding
+         0, // arrayElement
+         VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+         imageView,
+         VK_IMAGE_LAYOUT_GENERAL);
+   }
+
+   // Texture2D                          IBLEnvironmentMap     : register(t5);
+   {
+      VkImageView imageView = VK_NULL_HANDLE;
+      CHECK_CALL(CreateImageView(
+         pRenderer,
+         pEnvTexture,
+         VK_IMAGE_VIEW_TYPE_2D,
+         VK_FORMAT_R32G32B32A32_SFLOAT,
+         GREX_ALL_SUBRESOURCES,
+         &imageView));
+
+      WriteDescriptor(
+         pRenderer,
+         pDescriptorBufferStartAddress,
+         descriptorSetLayout,
+         5, // binding
+         0, // arrayElement
+         VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+         imageView,
+         VK_IMAGE_LAYOUT_GENERAL);
+   }
+
+   // Samplers are setup in the immutable samplers in the DescriptorSetLayout
+   // SamplerState                       IBLIntegrationSampler : register(s6);
+   // SamplerState                       IBLMapSampler         : register(s7);
+
+   vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
+}
+
+void WriteEnvDescriptors(
+   VulkanRenderer*         pRenderer,
+   VkDescriptorSetLayout   descriptorSetLayout,
+   VulkanBuffer*           pDescriptorBuffer,
+   VulkanBuffer*           pSceneParamsBuffer,
+   VulkanImage*            pEnvTexture)
+{
+   char* pDescriptorBufferStartAddress = nullptr;
+   CHECK_CALL(vmaMapMemory(
+      pRenderer->Allocator,
+      pDescriptorBuffer->Allocation,
+      reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
+
+   // ConstantBuffer<SceneParameters> SceneParams       : register(b0);
+   WriteDescriptor(
+      pRenderer,
+      pDescriptorBufferStartAddress,
+      descriptorSetLayout,
+      0, // binding
+      0, // arrayElement
+      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+      pSceneParamsBuffer);
+
+   // Sampler is setup in the immutable samplers in the DescriptorSetLayout
+   // SamplerState                    IBLMapSampler     : register(s1);
+
+   // Texture2D                       IBLEnvironmentMap : register(t2);
+   {
+      VkImageView imageView = VK_NULL_HANDLE;
+      CHECK_CALL(CreateImageView(
+         pRenderer,
+         pEnvTexture,
+         VK_IMAGE_VIEW_TYPE_2D,
+         VK_FORMAT_R32G32B32A32_SFLOAT,
+         GREX_ALL_SUBRESOURCES,
+         &imageView));
+
+      WriteDescriptor(
+         pRenderer,
+         pDescriptorBufferStartAddress,
+         descriptorSetLayout,
+         2, // binding
+         0, // arrayElement
+         VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+         imageView,
+         VK_IMAGE_LAYOUT_GENERAL);
+   }
+
+   vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
+}
 
 /*
 void CreateDescriptorHeap(

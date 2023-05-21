@@ -384,7 +384,7 @@ void WriteDescriptor(
     VkImageView           imageView,
     VkImageLayout         imageLayout);
 
-// Image view
+// Sampler 
 void WriteDescriptor(
     VulkanRenderer*       pRenderer,
     void*                 pDescriptorBufferStartAddress,
