@@ -43,7 +43,7 @@ void csmain(uint3 tid : SV_DispatchThreadId)
 {
     AccumTarget[tid.xy] = float4(0, 0, 0, 0);
 
-    uint idx = tid.y * 1920 + tid.x;
+    uint idx = tid.y * 1280 + tid.x;
     RayGenSamples[idx] = 0;    
 }
 )";
@@ -490,7 +490,7 @@ int main(int argc, char** argv)
             ImGui::Separator();
 
             static float elapsedTime = 0;
-            if (sampleCount <  gMaxSamples) {
+            if (sampleCount < gMaxSamples) {
                 float currentTime = static_cast<float>(glfwGetTime());
                 elapsedTime       = currentTime - rayGenStartTime;
             }
@@ -531,7 +531,7 @@ int main(int argc, char** argv)
 
         // Reset ray gen samples
         if (gResetRayGenSamples) {
-            sampleCount = 0;
+            sampleCount     = 0;
             rayGenStartTime = static_cast<float>(glfwGetTime());
 
             commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
@@ -1507,14 +1507,14 @@ void CreateIBLTextures(
         const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
         const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
 
-        std::vector<DxMipOffset> mipOffsets;
-        uint32_t                 levelOffset = 0;
-        uint32_t                 levelWidth  = ibl.baseWidth;
-        uint32_t                 levelHeight = ibl.baseHeight;
+        std::vector<MipOffset> mipOffsets;
+        uint32_t               levelOffset = 0;
+        uint32_t               levelWidth  = ibl.baseWidth;
+        uint32_t               levelHeight = ibl.baseHeight;
         for (uint32_t i = 0; i < ibl.numLevels; ++i) {
-            DxMipOffset mipOffset = {};
-            mipOffset.offset      = levelOffset;
-            mipOffset.rowStride   = rowStride;
+            MipOffset mipOffset = {};
+            mipOffset.Offset    = levelOffset;
+            mipOffset.RowStride = rowStride;
 
             mipOffsets.push_back(mipOffset);
 
