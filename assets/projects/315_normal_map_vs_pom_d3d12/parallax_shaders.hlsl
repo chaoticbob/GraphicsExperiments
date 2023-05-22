@@ -4,6 +4,17 @@ struct CameraProperties {
     float3   EyePosition;
 };
 
+// Root constant
+cbuffer Constants : register(b5) {
+    //
+    // Range should be [0, 1]...but anything above 0.5 is probably too much
+    // Good default is 0.02
+    //
+    float HeightMapScale;
+
+    bool EnableDiscard;
+};
+
 ConstantBuffer<CameraProperties> Camera              : register(b0); // Constant buffer
 Texture2D                        DiffuseTexture      : register(t1); // Texture
 Texture2D                        NormalTexture       : register(t2); // Texture
@@ -68,7 +79,7 @@ float4 psmain(VSOutput input) : SV_TARGET
     // -------------------------------------------------------------------------
     // Parallax occlusion mapping [BEGIN]
     // -------------------------------------------------------------------------
-    const float  fHeightMapScale = 0.05; // Slighty exxagerated to show lighting
+    const float  fHeightMapScale = HeightMapScale;
     const float  nMinSamples = 8;
     const float  nMaxSamples = 32;
 
@@ -118,7 +129,7 @@ float4 psmain(VSOutput input) : SV_TARGET
     //
     // OPTIONAL: This creates neat looking cutouts
     //
-    //if (uv.x > 1.0 || uv.y > 1.0 || uv.x < 0.0 || uv.y < 0.0) discard;
+    if (EnableDiscard && (uv.x > 1.0 || uv.y > 1.0 || uv.x < 0.0 || uv.y < 0.0)) discard;
 
     // Sample textures for base color and normal
     float3 baseColor = DiffuseTexture.Sample(Sampler0, uv).rgb;

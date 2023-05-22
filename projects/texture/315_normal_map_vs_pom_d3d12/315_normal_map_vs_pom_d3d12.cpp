@@ -278,6 +278,8 @@ int main(int argc, char** argv)
     uint32_t textureSetIndex        = 0;
     uint32_t currentTextureSetIndex = ~0;
     uint32_t geoIndex               = 0;
+    float    heightMapScale         = 0.05f;
+    uint32_t enableDiscard          = false;
 
     uint32_t halfWindowWidth = gWindowWidth / 2;
 
@@ -318,6 +320,14 @@ int main(int argc, char** argv)
                 }
                 ImGui::EndCombo();
             }
+
+            ImGui::Separator();
+
+            ImGui::SliderFloat("Height Map Scale", &heightMapScale, 0.0f, 0.5f);
+
+            ImGui::Separator();
+
+            ImGui::Checkbox("Enable Discard", reinterpret_cast<bool*>(&enableDiscard));
         }
         ImGui::End();
 
@@ -377,6 +387,9 @@ int main(int argc, char** argv)
             commandList->SetGraphicsRootDescriptorTable(1, cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart());
             // Sampler0 (s2)
             commandList->SetGraphicsRootDescriptorTable(2, samplerHeap->GetGPUDescriptorHandleForHeapStart());
+            // HeightMapScale, EnableDiscard (b5)
+            commandList->SetGraphicsRoot32BitConstants(3, 1, &heightMapScale, 0);
+            commandList->SetGraphicsRoot32BitConstants(3, 1, &enableDiscard, 1);
 
             auto& geo = geometries[geoIndex];
 
@@ -473,7 +486,7 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     ranges[1].RegisterSpace                     = 0;
     ranges[1].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[3]                = {};
+    D3D12_ROOT_PARAMETER rootParameters[4]                = {};
     rootParameters[0].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     rootParameters[0].Constants.Num32BitValues            = 35;
     rootParameters[0].Constants.ShaderRegister            = 0;
@@ -487,9 +500,14 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     rootParameters[2].DescriptorTable.NumDescriptorRanges = 1;
     rootParameters[2].DescriptorTable.pDescriptorRanges   = &ranges[1];
     rootParameters[2].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[3].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    rootParameters[3].Constants.ShaderRegister            = 5;
+    rootParameters[3].Constants.RegisterSpace             = 0;
+    rootParameters[3].Constants.Num32BitValues            = 2;
+    rootParameters[3].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-    rootSigDesc.NumParameters             = 3;
+    rootSigDesc.NumParameters             = 4;
     rootSigDesc.pParameters               = rootParameters;
     rootSigDesc.Flags                     = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
@@ -527,7 +545,7 @@ void CreateTextureSets(
         }
         materialFiles.push_back(materialFilePath);
 
-        //break;
+        // break;
     }
 
     size_t maxEntries = materialFiles.size();
