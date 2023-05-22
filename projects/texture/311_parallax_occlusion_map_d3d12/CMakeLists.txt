@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.0)
 
-project(307_parallax_occlusion_map_d3d12)
+project(311_parallax_occlusion_map_d3d12)
 
 add_executable(
-    307_parallax_occlusion_map_d3d12
-    307_parallax_occlusion_map_d3d12.cpp
+    311_parallax_occlusion_map_d3d12
+    311_parallax_occlusion_map_d3d12.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/dx_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/dx_renderer.cpp
@@ -18,15 +18,15 @@ add_executable(
     ${GREX_THIRD_PARTY_DIR}/MikkTSpace/mikktspace.c
 )
 
-set_target_properties(307_parallax_occlusion_map_d3d12 PROPERTIES FOLDER "texture")
+set_target_properties(311_parallax_occlusion_map_d3d12 PROPERTIES FOLDER "texture")
 
 target_compile_definitions(
-    307_parallax_occlusion_map_d3d12
+    311_parallax_occlusion_map_d3d12
     PUBLIC TRIMESH_USE_MIKKTSPACE
 )
 
 target_include_directories(
-    307_parallax_occlusion_map_d3d12
+    311_parallax_occlusion_map_d3d12
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
            ${GREX_THIRD_PARTY_DIR}/glm
            ${GREX_THIRD_PARTY_DIR}/tinyobjloader
@@ -35,7 +35,7 @@ target_include_directories(
 )
 
 target_link_libraries(
-    307_parallax_occlusion_map_d3d12
+    311_parallax_occlusion_map_d3d12
     PUBLIC glfw
            d3d12
            dxgi

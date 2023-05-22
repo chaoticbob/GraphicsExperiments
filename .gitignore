@@ -7,6 +7,7 @@ CMakeCache.txt
 bin/
 include/
 lib/
+build-vs2022/
 
 **/CMakeFiles
 **/*.sln
