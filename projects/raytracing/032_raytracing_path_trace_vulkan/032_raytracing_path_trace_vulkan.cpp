@@ -28,6 +28,7 @@ using namespace glm;
 // =============================================================================
 const char* gClearRayGenSamplesShader = R"(
 
+
 RWTexture2D<float4>      AccumTarget   : register(u0); // Accumulation texture
 RWStructuredBuffer<uint> RayGenSamples : register(u1); // Ray generation samples
 
@@ -36,7 +37,7 @@ void csmain(uint3 tid : SV_DispatchThreadId)
 {
     AccumTarget[tid.xy] = float4(0, 0, 0, 0);
 
-    uint idx = tid.y * 1920 + tid.x;
+    uint idx = tid.y * 1280 + tid.x;
     RayGenSamples[idx] = 0;    
 }
 )";

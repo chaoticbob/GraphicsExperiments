@@ -71,6 +71,11 @@ struct CompilerOptions
 #define GREX_DEFAULT_RTV_FORMAT VK_FORMAT_B8G8R8A8_UNORM
 #define GREX_DEFAULT_DSV_FORMAT VK_FORMAT_D32_SFLOAT
 
+enum VkPipelineFlags
+{
+   VK_PIPELINE_FLAGS_INTERLEAVED_ATTRS = 0x00000001
+};
+
 struct VkMipOffset
 {
     uint32_t offset    = 0;
@@ -302,14 +307,27 @@ VkDeviceAddress GetDeviceAddress(VulkanRenderer* pRenderer, VkAccelerationStruct
 VkDeviceAddress GetDeviceAddress(VulkanRenderer* pRenderer, const VulkanAccelStruct* pAccelStruct);
 
 VkResult CreateDrawVertexColorPipeline(
-    VulkanRenderer*  pRenderer,
-    VkPipelineLayout pipeline_layout,
-    VkShaderModule   vsShaderModule,
-    VkShaderModule   fsShaderModule,
-    VkFormat         rtvFormat,
-    VkFormat         dsvFormat,
-    VkPipeline*      pPipeline,
-    VkCullModeFlags  cullMode = VK_CULL_MODE_BACK_BIT);
+   VulkanRenderer*      pRenderer,
+   VkPipelineLayout     pipeline_layout,
+   VkShaderModule       vsShaderModule,
+   VkShaderModule       fsShaderModule,
+   VkFormat             rtvFormat,
+   VkFormat             dsvFormat,
+   VkPipeline*          pPipeline,
+   VkCullModeFlags      cullMode = VK_CULL_MODE_BACK_BIT,
+   VkPrimitiveTopology  topologyType = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+   uint32_t             pipelineFlags = 0);
+
+HRESULT CreateDrawNormalPipeline(
+   VulkanRenderer*      pRenderer,
+   VkPipelineLayout     pipelineLayout,
+   VkShaderModule       vsShaderModule,
+   VkShaderModule       fsShaderModule,
+   VkFormat             rtvFormat,
+   VkFormat             dsvFormat,
+   VkPipeline*          pPipeline,
+   bool                 enableTangents = false,
+   VkCullModeFlagBits   cullMode = VK_CULL_MODE_BACK_BIT);
 
 CompileResult CompileGLSL(
     const std::string&     shaderSource,
