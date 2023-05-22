@@ -292,8 +292,6 @@ int main(int argc, char** argv)
             mat4 modelMat = glm::rotate(glm::radians(gAngleY), vec3(0, 1, 0)) *
                             glm::rotate(glm::radians(gAngleX), vec3(1, 0, 0));
 
-            // vec3 eyePos = vec3(0, 0, 1.5f);
-            // vec3 eyePos      = vec3(0, 1.25f, 1.5f);
             vec3 eyePos      = vec3(0, 1.0f, 1.25f);
             mat4 viewMat     = glm::lookAt(eyePos, vec3(0, 0, 0), vec3(0, 1, 0));
             mat4 projMat     = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
@@ -425,10 +423,7 @@ void CreateTextures(
     ID3D12Resource** ppDisplacement,
     ID3D12Resource** ppNormal)
 {
-    //auto dir = GetAssetPath("textures/cobblestone_floor_05");
-    // auto dir = GetAssetPath("textures/medieval_wood");
-    //auto dir = GetAssetPath("textures/metal_grate_rusty");
-    auto dir = GetAssetPath("textures/metal_plate");
+    auto dir = GetAssetPath("textures/red_brick_03");
 
     // Diffuse
     {
@@ -468,7 +463,7 @@ void CreateTextures(
     // Normal
     {
         auto mipmap = MipmapRGBA8u::MipmapT(
-            LoadImage8u(dir / "normal_gl.png"),
+            LoadImage8u(dir / "normal_dx.png"),
             BITMAP_SAMPLE_MODE_CLAMP,
             BITMAP_SAMPLE_MODE_CLAMP,
             BITMAP_FILTER_MODE_LINEAR);
@@ -523,31 +518,7 @@ void CreateGeometryBuffers(
     ID3D12Resource** ppBitangentBuffer)
 {
     TriMesh::Options options = {.enableTexCoords = true, .enableNormals = true, .enableTangents = true};
-
-    //TriMesh mesh = TriMesh::Cube(vec3(1), false, options);
-
-    //options.texCoordScale = vec3(2.0);
-    //TriMesh mesh = TriMesh::Sphere(0.5f, 64, 32, options);
-
-    // options.texCoordScale = vec2(1);
-    // TriMesh mesh = TriMesh::Plane(vec2(1), 1, 1, vec3(0, 0, 1), false, options);
-
-    // TriMesh mesh;
-    // if (!TriMesh::LoadOBJ(GetAssetPath("models/cube.obj").string(), "", options, &mesh)) {
-    //     assert(false && "Failed to load cube.obj");
-    // }
-
-    // TriMesh mesh;
-    // if (!TriMesh::LoadOBJ(GetAssetPath("models/monkey_lowres.obj").string(), "", options, &mesh)) {
-    //     assert(false && "Failed to load monkey_lowres.obj");
-    // }
-
-    TriMesh mesh;
-    options.texCoordScale = vec2(1.5f, 1.5f);
-    if (!TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh)) {
-        assert(false && "Failed to load material_knob.obj");
-    }
-    mesh.ScaleToFit(0.75f);
+    TriMesh          mesh    = TriMesh::Cube(vec3(1), false, options);
 
     CHECK_CALL(CreateBuffer(
         pRenderer,
