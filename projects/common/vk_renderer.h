@@ -311,6 +311,17 @@ VkResult CreateDrawVertexColorPipeline(
     VkPipeline*      pPipeline,
     VkCullModeFlags  cullMode = VK_CULL_MODE_BACK_BIT);
 
+HRESULT CreateDrawNormalPipeline(
+   VulkanRenderer*      pRenderer,
+   VkPipelineLayout     pipelineLayout,
+   VkShaderModule       vsShaderModule,
+   VkShaderModule       fsShaderModule,
+   VkFormat             rtvFormat,
+   VkFormat             dsvFormat,
+   VkPipeline*          pPipeline,
+   bool                 enableTangents = false,
+   VkCullModeFlagBits   cullMode = VK_CULL_MODE_BACK_BIT);
+
 CompileResult CompileGLSL(
     const std::string&     shaderSource,
     const std::string&     entryPoint,

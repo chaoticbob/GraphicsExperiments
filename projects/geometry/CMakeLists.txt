@@ -14,4 +14,5 @@ endif()
 
 if (GREX_ENABLE_VULKAN)
     add_subdirectory(102_color_cube_vulkan)
+    add_subdirectory(104_cornell_box_vulkan)
 endif()
