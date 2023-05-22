@@ -94,7 +94,7 @@ int main(int argc, char** argv)
     std::vector<char> dxilVS;
     std::vector<char> dxilPS;
     {
-        std::string shaderSource = LoadString("projects/307_parallax_occlusion_map_d3d12/shaders.hlsl");
+        std::string shaderSource = LoadString("projects/311_parallax_occlusion_map_d3d12/shaders.hlsl");
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &dxilVS, &errorMsg);
@@ -220,7 +220,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "307_parallax_occlusion_map_d3d12");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "311_parallax_occlusion_map_d3d12");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
