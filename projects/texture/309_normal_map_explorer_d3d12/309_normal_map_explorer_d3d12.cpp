@@ -46,6 +46,18 @@ struct TextureSet
     ComPtr<ID3D12Resource> normalTexture;
 };
 
+struct Geometry
+{
+    std::string            name;
+    ComPtr<ID3D12Resource> indexBuffer;
+    uint32_t               numIndices;
+    ComPtr<ID3D12Resource> positionBuffer;
+    ComPtr<ID3D12Resource> texCoordBuffer;
+    ComPtr<ID3D12Resource> normalBuffer;
+    ComPtr<ID3D12Resource> tangentBuffer;
+    ComPtr<ID3D12Resource> bitangentBuffer;
+};
+
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
 void CreateTextureSets(
     DxRenderer*              pRenderer,
@@ -55,14 +67,8 @@ void CreateDescriptorHeaps(
     ID3D12DescriptorHeap** ppCBVSRVUAVHeap,
     ID3D12DescriptorHeap** ppSamplerHeap);
 void CreateGeometryBuffers(
-    DxRenderer*      pRenderer,
-    ID3D12Resource** ppIndexBuffer,
-    uint32_t*        pNumIndices,
-    ID3D12Resource** ppVertexBuffer,
-    ID3D12Resource** ppTexCoordBuffer,
-    ID3D12Resource** ppNormalBuffer,
-    ID3D12Resource** ppTangentBuffer,
-    ID3D12Resource** ppBitangentBuffer);
+    DxRenderer*            pRenderer,
+    std::vector<Geometry>& outGeometries);
 void WriteDescriptor(
     DxRenderer*           pRenderer,
     ID3D12DescriptorHeap* pHeap,
@@ -178,22 +184,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Geometry data
     // *************************************************************************
-    ComPtr<ID3D12Resource> indexBuffer;
-    uint32_t               numIndices;
-    ComPtr<ID3D12Resource> positionBuffer;
-    ComPtr<ID3D12Resource> texCoordBuffer;
-    ComPtr<ID3D12Resource> normalBuffer;
-    ComPtr<ID3D12Resource> tangentBuffer;
-    ComPtr<ID3D12Resource> bitangentBuffer;
-    CreateGeometryBuffers(
-        renderer.get(),
-        &indexBuffer,
-        &numIndices,
-        &positionBuffer,
-        &texCoordBuffer,
-        &normalBuffer,
-        &tangentBuffer,
-        &bitangentBuffer);
+    std::vector<Geometry> geometries;
+    CreateGeometryBuffers(renderer.get(), geometries);
 
     // *************************************************************************
     // Window
@@ -248,6 +240,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     static uint32_t textureSetIndex        = 0;
     static uint32_t currentTextureSetIndex = ~0;
+    static uint32_t geoIndex               = 0;
 
     // *************************************************************************
     // Main loop
@@ -261,7 +254,24 @@ int main(int argc, char** argv)
                     bool isSelected = (currentTextureSetName == textureSets[i].name);
                     if (ImGui::Selectable(textureSets[i].name.c_str(), isSelected)) {
                         currentTextureSetName = textureSets[i].name.c_str();
-                        textureSetIndex      = static_cast<uint32_t>(i);
+                        textureSetIndex       = static_cast<uint32_t>(i);
+                    }
+                    if (isSelected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
+            ImGui::Separator();
+
+            static const char* currentGeoName = geometries[0].name.c_str();
+            if (ImGui::BeginCombo("Geometry", currentGeoName)) {
+                for (size_t i = 0; i < geometries.size(); ++i) {
+                    bool isSelected = (currentGeoName == geometries[i].name);
+                    if (ImGui::Selectable(geometries[i].name.c_str(), isSelected)) {
+                        currentGeoName = geometries[i].name.c_str();
+                        geoIndex       = static_cast<uint32_t>(i);
                     }
                     if (isSelected) {
                         ImGui::SetItemDefaultFocus();
@@ -329,27 +339,29 @@ int main(int argc, char** argv)
             // Sampler0 (s2)
             commandList->SetGraphicsRootDescriptorTable(2, samplerHeap->GetGPUDescriptorHandleForHeapStart());
 
+            auto& geo = geometries[geoIndex];
+
             D3D12_INDEX_BUFFER_VIEW ibv = {};
-            ibv.BufferLocation          = indexBuffer->GetGPUVirtualAddress();
-            ibv.SizeInBytes             = static_cast<UINT>(indexBuffer->GetDesc().Width);
+            ibv.BufferLocation          = geo.indexBuffer->GetGPUVirtualAddress();
+            ibv.SizeInBytes             = static_cast<UINT>(geo.indexBuffer->GetDesc().Width);
             ibv.Format                  = DXGI_FORMAT_R32_UINT;
             commandList->IASetIndexBuffer(&ibv);
 
             D3D12_VERTEX_BUFFER_VIEW vbvs[5] = {};
-            vbvs[0].BufferLocation           = positionBuffer->GetGPUVirtualAddress();
-            vbvs[0].SizeInBytes              = static_cast<UINT>(positionBuffer->GetDesc().Width);
+            vbvs[0].BufferLocation           = geo.positionBuffer->GetGPUVirtualAddress();
+            vbvs[0].SizeInBytes              = static_cast<UINT>(geo.positionBuffer->GetDesc().Width);
             vbvs[0].StrideInBytes            = 12;
-            vbvs[1].BufferLocation           = texCoordBuffer->GetGPUVirtualAddress();
-            vbvs[1].SizeInBytes              = static_cast<UINT>(texCoordBuffer->GetDesc().Width);
+            vbvs[1].BufferLocation           = geo.texCoordBuffer->GetGPUVirtualAddress();
+            vbvs[1].SizeInBytes              = static_cast<UINT>(geo.texCoordBuffer->GetDesc().Width);
             vbvs[1].StrideInBytes            = 8;
-            vbvs[2].BufferLocation           = normalBuffer->GetGPUVirtualAddress();
-            vbvs[2].SizeInBytes              = static_cast<UINT>(normalBuffer->GetDesc().Width);
+            vbvs[2].BufferLocation           = geo.normalBuffer->GetGPUVirtualAddress();
+            vbvs[2].SizeInBytes              = static_cast<UINT>(geo.normalBuffer->GetDesc().Width);
             vbvs[2].StrideInBytes            = 12;
-            vbvs[3].BufferLocation           = tangentBuffer->GetGPUVirtualAddress();
-            vbvs[3].SizeInBytes              = static_cast<UINT>(tangentBuffer->GetDesc().Width);
+            vbvs[3].BufferLocation           = geo.tangentBuffer->GetGPUVirtualAddress();
+            vbvs[3].SizeInBytes              = static_cast<UINT>(geo.tangentBuffer->GetDesc().Width);
             vbvs[3].StrideInBytes            = 12;
-            vbvs[4].BufferLocation           = bitangentBuffer->GetGPUVirtualAddress();
-            vbvs[4].SizeInBytes              = static_cast<UINT>(bitangentBuffer->GetDesc().Width);
+            vbvs[4].BufferLocation           = geo.bitangentBuffer->GetGPUVirtualAddress();
+            vbvs[4].SizeInBytes              = static_cast<UINT>(geo.bitangentBuffer->GetDesc().Width);
             vbvs[4].StrideInBytes            = 12;
 
             commandList->IASetVertexBuffers(0, 5, vbvs);
@@ -364,7 +376,7 @@ int main(int argc, char** argv)
 
             commandList->SetPipelineState(pipelineState.Get());
 
-            commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
+            commandList->DrawIndexedInstanced(geo.numIndices, 1, 0, 0, 0);
 
             // Draw ImGui
             window->ImGuiRenderDrawData(renderer.get(), commandList.Get());
@@ -564,55 +576,107 @@ void CreateDescriptorHeaps(DxRenderer* pRenderer, ID3D12DescriptorHeap** ppCBVSR
 }
 
 void CreateGeometryBuffers(
-    DxRenderer*      pRenderer,
-    ID3D12Resource** ppIndexBuffer,
-    uint32_t*        pNumIndices,
-    ID3D12Resource** ppPositionBuffer,
-    ID3D12Resource** ppTexCoordBuffer,
-    ID3D12Resource** ppNormalBuffer,
-    ID3D12Resource** ppTangentBuffer,
-    ID3D12Resource** ppBitangentBuffer)
+    DxRenderer*            pRenderer,
+    std::vector<Geometry>& outGeometries)
 {
     TriMesh::Options options = {.enableTexCoords = true, .enableNormals = true, .enableTangents = true};
-    TriMesh          mesh    = TriMesh::Cube(vec3(1), false, options);
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTriangles()),
-        DataPtr(mesh.GetTriangles()),
-        ppIndexBuffer));
+    std::vector<TriMesh> meshes;
+    // Cube
+    {
+        Geometry geometry = {.name = "Cube"};
+        outGeometries.push_back(geometry);
 
-    *pNumIndices = mesh.GetNumIndices();
+        TriMesh mesh = TriMesh::Cube(vec3(1), false, options);
+        meshes.push_back(mesh);
+    }
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetPositions()),
-        DataPtr(mesh.GetPositions()),
-        ppPositionBuffer));
+    // Sphere
+    {
+        Geometry geometry = {.name = "Sphere"};
+        outGeometries.push_back(geometry);
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTexCoords()),
-        DataPtr(mesh.GetTexCoords()),
-        ppTexCoordBuffer));
+        TriMesh mesh = TriMesh::Sphere(0.5f, 64, 32, options);
+        meshes.push_back(mesh);
+    }
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetNormals()),
-        DataPtr(mesh.GetNormals()),
-        ppNormalBuffer));
+    // Plane
+    {
+        Geometry geometry = {.name = "Plane"};
+        outGeometries.push_back(geometry);
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTangents()),
-        DataPtr(mesh.GetTangents()),
-        ppTangentBuffer));
+        TriMesh mesh = TriMesh::Plane(vec2(1.5f), 1, 1, vec3(0, 1, 0), false, options);
+        meshes.push_back(mesh);
+    }
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetBitangents()),
-        DataPtr(mesh.GetBitangents()),
-        ppBitangentBuffer));
+    // Material Knob
+    {
+        Geometry geometry = {.name = "Material Knob"};
+        outGeometries.push_back(geometry);
+
+        TriMesh mesh;
+        if(!TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh)) {
+            assert(false && "Failed to load material knob");
+        }
+        mesh.ScaleToFit(0.75f);
+        meshes.push_back(mesh);
+    }
+
+    // Monkey
+    {
+        Geometry geometry = {.name = "Monkey"};
+        outGeometries.push_back(geometry);
+
+        TriMesh mesh;
+        if(!TriMesh::LoadOBJ(GetAssetPath("models/monkey.obj").string(), "", options, &mesh)) {
+            assert(false && "Failed to load material knob");
+        }
+        mesh.ScaleToFit(0.75f);
+        meshes.push_back(mesh);
+    }
+
+    for (size_t i = 0; i < meshes.size(); ++i) {
+        auto& mesh     = meshes[i];
+        auto& geometry = outGeometries[i];
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTriangles()),
+            DataPtr(mesh.GetTriangles()),
+            &geometry.indexBuffer));
+
+        geometry.numIndices = mesh.GetNumIndices();
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetPositions()),
+            DataPtr(mesh.GetPositions()),
+            &geometry.positionBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTexCoords()),
+            DataPtr(mesh.GetTexCoords()),
+            &geometry.texCoordBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetNormals()),
+            DataPtr(mesh.GetNormals()),
+            &geometry.normalBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTangents()),
+            DataPtr(mesh.GetTangents()),
+            &geometry.tangentBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetBitangents()),
+            DataPtr(mesh.GetBitangents()),
+            &geometry.bitangentBuffer));
+    }
 }
 
 void WriteDescriptor(
