@@ -160,38 +160,6 @@ int main(int argc, char** argv)
     ComPtr<ID3D12DescriptorHeap> samplerHeap;
     CreateDescriptorHeaps(renderer.get(), &cbvsrvuavHeap, &samplerHeap);
     {
-        /*
-        // Write texture descriptors
-        {
-            const UINT                  inc        = renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            D3D12_CPU_DESCRIPTOR_HANDLE descriptor = cbvsrvuavHeap->GetCPUDescriptorHandleForHeapStart();
-
-            // Diffuse
-            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-            srvDesc.Format                          = diffuseTexture->GetDesc().Format;
-            srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_TEXTURE2D;
-            srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            srvDesc.Texture2D.MostDetailedMip       = 0;
-            srvDesc.Texture2D.MipLevels             = diffuseTexture->GetDesc().MipLevels;
-            srvDesc.Texture2D.PlaneSlice            = 0;
-            srvDesc.Texture2D.ResourceMinLODClamp   = 0;
-            renderer->Device->CreateShaderResourceView(diffuseTexture.Get(), &srvDesc, descriptor);
-            descriptor.ptr += inc;
-
-            // Displacement
-            srvDesc.Format              = dispTexture->GetDesc().Format;
-            srvDesc.Texture2D.MipLevels = dispTexture->GetDesc().MipLevels;
-            renderer->Device->CreateShaderResourceView(dispTexture.Get(), &srvDesc, descriptor);
-            descriptor.ptr += inc;
-
-            // Normal
-            srvDesc.Format              = normalTexture->GetDesc().Format;
-            srvDesc.Texture2D.MipLevels = normalTexture->GetDesc().MipLevels;
-            renderer->Device->CreateShaderResourceView(normalTexture.Get(), &srvDesc, descriptor);
-            descriptor.ptr += inc;
-        }
-        */
-
         // Write sampler descriptor
         D3D12_SAMPLER_DESC samplerDesc = {};
         samplerDesc.Filter             = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -567,61 +535,6 @@ void CreateTextureSets(
     if (outTextureSets.empty()) {
         assert(false && "No textures!");
     }
-
-    //// Diffuse
-    //{
-    //    auto mipmap = MipmapRGBA8u::MipmapT(
-    //        LoadImage8u(dir / "diffuse.png"),
-    //        BITMAP_SAMPLE_MODE_CLAMP,
-    //        BITMAP_SAMPLE_MODE_CLAMP,
-    //        BITMAP_FILTER_MODE_LINEAR);
-    //    assert((mipmap.GetSizeInBytes() > 0) && "diffuse image load failed");
-    //
-    //    CHECK_CALL(CreateTexture(
-    //        pRenderer,
-    //        mipmap.GetWidth(0),
-    //        mipmap.GetHeight(0),
-    //        DXGI_FORMAT_R8G8B8A8_UNORM,
-    //        mipmap.GetMipOffsets(),
-    //        mipmap.GetSizeInBytes(),
-    //        mipmap.GetPixels(),
-    //        ppDiffuse));
-    //}
-    //
-    //// Displacement
-    //{
-    //    auto bitmap = LoadImage8u(dir / "disp.png");
-    //    assert((bitmap.GetSizeInBytes() > 0) && "disp image load failed");
-    //
-    //    CHECK_CALL(CreateTexture(
-    //        pRenderer,
-    //        bitmap.GetWidth(),
-    //        bitmap.GetHeight(),
-    //        DXGI_FORMAT_R8G8B8A8_UNORM,
-    //        bitmap.GetSizeInBytes(),
-    //        bitmap.GetPixels(),
-    //        ppDisplacement));
-    //}
-    //
-    //// Normal
-    //{
-    //    auto mipmap = MipmapRGBA8u::MipmapT(
-    //        LoadImage8u(dir / "normal_dx.png"),
-    //        BITMAP_SAMPLE_MODE_CLAMP,
-    //        BITMAP_SAMPLE_MODE_CLAMP,
-    //        BITMAP_FILTER_MODE_LINEAR);
-    //    assert((mipmap.GetSizeInBytes() > 0) && "normal image load failed");
-    //
-    //    CHECK_CALL(CreateTexture(
-    //        pRenderer,
-    //        mipmap.GetWidth(0),
-    //        mipmap.GetHeight(0),
-    //        DXGI_FORMAT_R8G8B8A8_UNORM,
-    //        mipmap.GetMipOffsets(),
-    //        mipmap.GetSizeInBytes(),
-    //        mipmap.GetPixels(),
-    //        ppNormal));
-    //}
 }
 
 void CreateDescriptorHeaps(DxRenderer* pRenderer, ID3D12DescriptorHeap** ppCBVSRVUAVHeap, ID3D12DescriptorHeap** ppSamplerHeap)
