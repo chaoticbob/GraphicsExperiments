@@ -1,5 +1,5 @@
 basecolor diffuse.jpg
-normal normal_gl.png
+normal normal_dx.png
 roughness roughness.jpg
 disp disp.png
 specular 0.04

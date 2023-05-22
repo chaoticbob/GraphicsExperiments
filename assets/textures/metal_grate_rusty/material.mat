@@ -1,6 +1,6 @@
 basecolor diffuse.jpg
 metallic metallic.png
-normal normal_gl.png
+normal normal_dx.png
 roughness roughness.png
 disp disp.png
 specular 0
