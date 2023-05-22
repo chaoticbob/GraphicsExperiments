@@ -237,9 +237,9 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Misc vars
     // *************************************************************************
-    static uint32_t textureSetIndex        = 0;
-    static uint32_t currentTextureSetIndex = ~0;
-    static uint32_t geoIndex               = 0;
+    uint32_t textureSetIndex        = 0;
+    uint32_t currentTextureSetIndex = ~0;
+    uint32_t geoIndex               = 0;
 
     // *************************************************************************
     // Main loop

@@ -107,13 +107,13 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Compile shaders
     // *************************************************************************
-    std::vector<char> dxilVS;
-    std::vector<char> dxilPS;
+    std::vector<char> normalMapDxilVS;
+    std::vector<char> normalMapDxilPS;
     {
-        std::string shaderSource = LoadString("projects/313_parallax_occlusion_map_explorer_d3d12/shaders.hlsl");
+        std::string shaderSource = LoadString("projects/315_normal_map_vs_pom_d3d12/normal_shaders.hlsl");
 
         std::string errorMsg;
-        HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &dxilVS, &errorMsg);
+        HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &normalMapDxilVS, &errorMsg);
         if (FAILED(hr)) {
             std::stringstream ss;
             ss << "\n"
@@ -123,7 +123,34 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &dxilPS, &errorMsg);
+        hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &normalMapDxilPS, &errorMsg);
+        if (FAILED(hr)) {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (PS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            assert(false);
+            return EXIT_FAILURE;
+        }
+    }
+
+    std::vector<char> pomDxilVS;
+    std::vector<char> pomDxilPS;
+    {
+        std::string shaderSource = LoadString("projects/315_normal_map_vs_pom_d3d12/parallax_shaders.hlsl");
+
+        std::string errorMsg;
+        HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &pomDxilVS, &errorMsg);
+        if (FAILED(hr)) {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (VS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            assert(false);
+            return EXIT_FAILURE;
+        }
+
+        hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &pomDxilPS, &errorMsg);
         if (FAILED(hr)) {
             std::stringstream ss;
             ss << "\n"
@@ -141,17 +168,27 @@ int main(int argc, char** argv)
     CreateGlobalRootSig(renderer.get(), &rootSig);
 
     // *************************************************************************
-    // Graphics pipeline state object
+    // Graphics pipeline state objects
     // *************************************************************************
-    ComPtr<ID3D12PipelineState> pipelineState;
+    ComPtr<ID3D12PipelineState> pomPipelineState;
     CHECK_CALL(CreateGraphicsPipeline1(
         renderer.get(),
         rootSig.Get(),
-        dxilVS,
-        dxilPS,
+        pomDxilVS,
+        pomDxilPS,
         GREX_DEFAULT_RTV_FORMAT,
         GREX_DEFAULT_DSV_FORMAT,
-        &pipelineState));
+        &pomPipelineState));
+
+    ComPtr<ID3D12PipelineState> normalMapPipelineState;
+    CHECK_CALL(CreateGraphicsPipeline1(
+        renderer.get(),
+        rootSig.Get(),
+        normalMapDxilVS,
+        normalMapDxilPS,
+        GREX_DEFAULT_RTV_FORMAT,
+        GREX_DEFAULT_DSV_FORMAT,
+        &normalMapPipelineState));
 
     // *************************************************************************
     // Texture
@@ -190,7 +227,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "313_parallax_occlusion_map_explorer_d3d12");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "315_normal_map_vs_pom_d3d12");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -241,6 +278,8 @@ int main(int argc, char** argv)
     uint32_t textureSetIndex        = 0;
     uint32_t currentTextureSetIndex = ~0;
     uint32_t geoIndex               = 0;
+
+    uint32_t halfWindowWidth = gWindowWidth / 2;
 
     // *************************************************************************
     // Main loop
@@ -323,9 +362,9 @@ int main(int argc, char** argv)
             mat4 modelMat = glm::rotate(glm::radians(gAngleY), vec3(0, 1, 0)) *
                             glm::rotate(glm::radians(gAngleX), vec3(1, 0, 0));
 
-            vec3 eyePos      = vec3(0, 1.0f, 1.25f);
+            vec3 eyePos      = vec3(0, 1.25f, 1.75f);
             mat4 viewMat     = glm::lookAt(eyePos, vec3(0, 0, 0), vec3(0, 1, 0));
-            mat4 projMat     = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+            mat4 projMat     = glm::perspective(glm::radians(60.0f), halfWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
             mat4 projViewMat = projMat * viewMat;
 
             commandList->SetGraphicsRootSignature(rootSig.Get());
@@ -368,15 +407,31 @@ int main(int argc, char** argv)
 
             commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-            D3D12_VIEWPORT viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
-            commandList->RSSetViewports(1, &viewport);
+            // Draw normal map
+            {
+                commandList->SetPipelineState(normalMapPipelineState.Get());
 
-            D3D12_RECT scissor = {0, 0, static_cast<long>(gWindowWidth), static_cast<long>(gWindowHeight)};
-            commandList->RSSetScissorRects(1, &scissor);
+                D3D12_VIEWPORT viewport = {0, 0, static_cast<float>(halfWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
+                commandList->RSSetViewports(1, &viewport);
 
-            commandList->SetPipelineState(pipelineState.Get());
+                D3D12_RECT scissor = {0, 0, static_cast<long>(gWindowWidth), static_cast<long>(gWindowHeight)};
+                commandList->RSSetScissorRects(1, &scissor);
 
-            commandList->DrawIndexedInstanced(geo.numIndices, 1, 0, 0, 0);
+                commandList->DrawIndexedInstanced(geo.numIndices, 1, 0, 0, 0);
+            }
+
+            // Draw parallax occlusion map
+            {
+                commandList->SetPipelineState(pomPipelineState.Get());
+
+                D3D12_VIEWPORT viewport = {static_cast<float>(halfWindowWidth), 0, static_cast<float>(halfWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
+                commandList->RSSetViewports(1, &viewport);
+
+                D3D12_RECT scissor = {static_cast<long>(halfWindowWidth), 0, static_cast<long>(gWindowWidth), static_cast<long>(gWindowHeight)};
+                commandList->RSSetScissorRects(1, &scissor);
+
+                commandList->DrawIndexedInstanced(geo.numIndices, 1, 0, 0, 0);
+            }
 
             // Draw ImGui
             window->ImGuiRenderDrawData(renderer.get(), commandList.Get());
@@ -471,6 +526,8 @@ void CreateTextureSets(
             continue;
         }
         materialFiles.push_back(materialFilePath);
+
+        //break;
     }
 
     size_t maxEntries = materialFiles.size();
