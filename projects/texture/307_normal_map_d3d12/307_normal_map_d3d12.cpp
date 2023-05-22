@@ -42,7 +42,6 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 void CreateTextures(
     DxRenderer*      pRenderer,
     ID3D12Resource** ppDiffuse,
-    ID3D12Resource** ppDisplacement,
     ID3D12Resource** ppNormal);
 void CreateDescriptorHeaps(
     DxRenderer*            pRenderer,
@@ -141,9 +140,8 @@ int main(int argc, char** argv)
     // Texture
     // *************************************************************************
     ComPtr<ID3D12Resource> diffuseTexture;
-    ComPtr<ID3D12Resource> dispTexture;
     ComPtr<ID3D12Resource> normalTexture;
-    CreateTextures(renderer.get(), &diffuseTexture, &dispTexture, &normalTexture);
+    CreateTextures(renderer.get(), &diffuseTexture, &normalTexture);
 
     // *************************************************************************
     // Descriptor heaps
@@ -167,12 +165,6 @@ int main(int argc, char** argv)
             srvDesc.Texture2D.PlaneSlice            = 0;
             srvDesc.Texture2D.ResourceMinLODClamp   = 0;
             renderer->Device->CreateShaderResourceView(diffuseTexture.Get(), &srvDesc, descriptor);
-            descriptor.ptr += inc;
-
-            // Displacement
-            srvDesc.Format              = dispTexture->GetDesc().Format;
-            srvDesc.Texture2D.MipLevels = dispTexture->GetDesc().MipLevels;
-            renderer->Device->CreateShaderResourceView(dispTexture.Get(), &srvDesc, descriptor);
             descriptor.ptr += inc;
 
             // Normal
@@ -220,7 +212,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "307_parallax_occlusion_map_d3d12");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "307_normal_map_d3d12");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -372,7 +364,7 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 {
     D3D12_DESCRIPTOR_RANGE ranges[2]            = {};
     ranges[0].RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    ranges[0].NumDescriptors                    = 3;
+    ranges[0].NumDescriptors                    = 2;
     ranges[0].BaseShaderRegister                = 1;
     ranges[0].RegisterSpace                     = 0;
     ranges[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
@@ -420,7 +412,6 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 void CreateTextures(
     DxRenderer*      pRenderer,
     ID3D12Resource** ppDiffuse,
-    ID3D12Resource** ppDisplacement,
     ID3D12Resource** ppNormal)
 {
     auto dir = GetAssetPath("textures/metal_grate_rusty");
@@ -443,21 +434,6 @@ void CreateTextures(
             mipmap.GetSizeInBytes(),
             mipmap.GetPixels(),
             ppDiffuse));
-    }
-
-    // Displacement
-    {
-        auto bitmap = LoadImage8u(dir / "disp.png");
-        assert((bitmap.GetSizeInBytes() > 0) && "disp image load failed");
-
-        CHECK_CALL(CreateTexture(
-            pRenderer,
-            bitmap.GetWidth(),
-            bitmap.GetHeight(),
-            DXGI_FORMAT_R8G8B8A8_UNORM,
-            bitmap.GetSizeInBytes(),
-            bitmap.GetPixels(),
-            ppDisplacement));
     }
 
     // Normal
@@ -488,7 +464,7 @@ void CreateDescriptorHeaps(DxRenderer* pRenderer, ID3D12DescriptorHeap** ppCBVSR
     //
     D3D12_DESCRIPTOR_HEAP_DESC desc = {};
     desc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    desc.NumDescriptors             = 3;
+    desc.NumDescriptors             = 2;
     desc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 
     CHECK_CALL(pRenderer->Device->CreateDescriptorHeap(
