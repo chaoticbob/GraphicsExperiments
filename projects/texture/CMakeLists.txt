@@ -12,6 +12,7 @@ if (GREX_ENABLE_D3D12)
     add_subdirectory(307_normal_map_d3d12)
     add_subdirectory(309_normal_map_explorer_d3d12)
     add_subdirectory(311_parallax_occlusion_map_d3d12)
+    add_subdirectory(313_parallax_occlusion_map_explorer_d3d12)
 endif()
 
 

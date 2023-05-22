@@ -6,8 +6,8 @@ struct CameraProperties {
 
 ConstantBuffer<CameraProperties> Camera              : register(b0); // Constant buffer
 Texture2D                        DiffuseTexture      : register(t1); // Texture
-Texture2D                        DisplacementTexture : register(t2); // Texture
-Texture2D                        NormalTexture       : register(t3); // Texture
+Texture2D                        NormalTexture       : register(t2); // Texture
+Texture2D                        DisplacementTexture : register(t3); // Texture
 SamplerState                     Sampler0            : register(s4); // Sampler
 
 struct VSOutput {

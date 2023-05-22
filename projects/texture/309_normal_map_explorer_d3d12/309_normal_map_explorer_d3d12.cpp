@@ -42,7 +42,6 @@ struct TextureSet
 {
     std::string            name;
     ComPtr<ID3D12Resource> diffuseTexture;
-    ComPtr<ID3D12Resource> displacementTexture;
     ComPtr<ID3D12Resource> normalTexture;
 };
 

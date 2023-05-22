@@ -169,16 +169,16 @@ int main(int argc, char** argv)
             renderer->Device->CreateShaderResourceView(diffuseTexture.Get(), &srvDesc, descriptor);
             descriptor.ptr += inc;
 
-            // Displacement
-            srvDesc.Format              = dispTexture->GetDesc().Format;
-            srvDesc.Texture2D.MipLevels = dispTexture->GetDesc().MipLevels;
-            renderer->Device->CreateShaderResourceView(dispTexture.Get(), &srvDesc, descriptor);
-            descriptor.ptr += inc;
-
             // Normal
             srvDesc.Format              = normalTexture->GetDesc().Format;
             srvDesc.Texture2D.MipLevels = normalTexture->GetDesc().MipLevels;
             renderer->Device->CreateShaderResourceView(normalTexture.Get(), &srvDesc, descriptor);
+            descriptor.ptr += inc;
+
+            // Displacement
+            srvDesc.Format              = dispTexture->GetDesc().Format;
+            srvDesc.Texture2D.MipLevels = dispTexture->GetDesc().MipLevels;
+            renderer->Device->CreateShaderResourceView(dispTexture.Get(), &srvDesc, descriptor);
             descriptor.ptr += inc;
         }
 
@@ -445,21 +445,6 @@ void CreateTextures(
             ppDiffuse));
     }
 
-    // Displacement
-    {
-        auto bitmap = LoadImage8u(dir / "disp.png");
-        assert((bitmap.GetSizeInBytes() > 0) && "disp image load failed");
-
-        CHECK_CALL(CreateTexture(
-            pRenderer,
-            bitmap.GetWidth(),
-            bitmap.GetHeight(),
-            DXGI_FORMAT_R8G8B8A8_UNORM,
-            bitmap.GetSizeInBytes(),
-            bitmap.GetPixels(),
-            ppDisplacement));
-    }
-
     // Normal
     {
         auto mipmap = MipmapRGBA8u::MipmapT(
@@ -478,6 +463,21 @@ void CreateTextures(
             mipmap.GetSizeInBytes(),
             mipmap.GetPixels(),
             ppNormal));
+    }
+
+    // Displacement
+    {
+        auto bitmap = LoadImage8u(dir / "disp.png");
+        assert((bitmap.GetSizeInBytes() > 0) && "disp image load failed");
+
+        CHECK_CALL(CreateTexture(
+            pRenderer,
+            bitmap.GetWidth(),
+            bitmap.GetHeight(),
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            bitmap.GetSizeInBytes(),
+            bitmap.GetPixels(),
+            ppDisplacement));
     }
 }
 
