@@ -72,19 +72,10 @@ static uint32_t gWindowHeight = 1024;
 static bool     gEnableDebug  = true;
 static bool     gEnableRayTracing = false;
 
-static uint32_t gNumSlotsX     = 10;
-static uint32_t gNumSlotsY     = 10;
-static float    gSlotSize      = 0.9f;
-static float    gSpanX         = gNumSlotsX * gSlotSize;
-static float    gSpanY         = gNumSlotsY * gSlotSize;
-static float    gHalfSpanX     = gSpanX / 2.0f;
-static float    gHalfSpanY     = gSpanY / 2.0f;
-
 static float gTargetAngle = 0.0f;
 static float gAngle       = 0.0f;
 
 static uint32_t gNumLights = 0;
-
 
 void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout);
 void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout);
@@ -126,14 +117,7 @@ void WriteEnvDescriptors(
    VulkanRenderer*         pRenderer,
    VkDescriptorSetLayout   descriptorSetLayout,
    VulkanBuffer*           pDescrptorBuffer,
-   VulkanBuffer*           pSceneParamsBuffer,
    VulkanImage*            pEnvTexture);
-
-/*
-void CreateDescriptorHeap(
-    DxRenderer*            pRenderer,
-    ID3D12DescriptorHeap** ppHeap);
-    */
 
 void MouseMove(int x, int y, int buttons)
 {
@@ -315,23 +299,6 @@ int main(int argc, char** argv)
        0,
        &pbrSceneParamsBuffer));
 
-    VulkanBuffer envSceneParamsBuffer;
-    CHECK_CALL(CreateBuffer(
-       renderer.get(),
-       Align<size_t>(sizeof(EnvSceneParameters), 256),
-       nullptr,
-       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-       VMA_MEMORY_USAGE_CPU_TO_GPU,
-       0,
-       &envSceneParamsBuffer));
-
-    // *************************************************************************
-    // Material Params Buffer
-    // *************************************************************************
-    std::vector<VulkanBuffer> materialParamBuffers;
-    std::vector<VulkanBuffer> drawParamBuffers;
-    CreateSphereParamBuffers(renderer.get(), materialParamBuffers, drawParamBuffers);
-
     // *************************************************************************
     // Material sphere vertex buffers
     // *************************************************************************
@@ -391,7 +358,6 @@ int main(int argc, char** argv)
        renderer.get(),
        envPipelineLayout.DescriptorSetLayout,
        &envDescriptorBuffer,
-       &envSceneParamsBuffer,
        &envTexture);
 
     // *************************************************************************
@@ -499,15 +465,6 @@ int main(int argc, char** argv)
     PBRSceneParameters* pPBRSceneParams = nullptr;
     vmaMapMemory(renderer->Allocator, pbrSceneParamsBuffer.Allocation, reinterpret_cast<void**>(&pPBRSceneParams));
 
-    EnvSceneParameters* pEnvSceneParams = nullptr;
-    vmaMapMemory(renderer->Allocator, envSceneParamsBuffer.Allocation, reinterpret_cast<void**>(&pEnvSceneParams));
-
-    char* pPBRDescriptorBufferStartAddress = nullptr;
-    CHECK_CALL(vmaMapMemory(
-       renderer->Allocator,
-       pbrDescriptorBuffer.Allocation,
-       reinterpret_cast<void**>(&pPBRDescriptorBufferStartAddress)));
-
     // *************************************************************************
     // Main loop
     // *************************************************************************
@@ -596,14 +553,31 @@ int main(int argc, char** argv)
 
           // Draw environment
           {
-             // Bind the VS/FS Graphics Pipeline
-             vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, envPipelineState);
+            VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
+            descriptorBufferBindingInfo.pNext                            = nullptr;
+            descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &envDescriptorBuffer);
+            descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+            fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
+
+            uint32_t     bufferIndices           = 0;
+            VkDeviceSize descriptorBufferOffsets = 0;
+            fn_vkCmdSetDescriptorBufferOffsetsEXT(
+                cmdBuf.CommandBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                envPipelineLayout.PipelineLayout,
+                0, // firstSet
+                1, // setCount
+                &bufferIndices,
+                &descriptorBufferOffsets);
+
+            // Bind the VS/FS Graphics Pipeline
+            vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, envPipelineState);
 
              glm::mat4 moveUp = glm::translate(vec3(0, 0, 0));
 
-             // SceneParmas (b0)
+             // SceneParams (b0)
              mat4 mvp = projMat * viewMat * moveUp;
-             pEnvSceneParams->MVP = mvp;
+             vkCmdPushConstants(cmdBuf.CommandBuffer, envPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16 * sizeof(float), &mvp);
 
              // Bind the Index Buffer
              vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, envIndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
@@ -618,6 +592,23 @@ int main(int argc, char** argv)
 
           // Draw material sphere
           {
+            VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
+            descriptorBufferBindingInfo.pNext                            = nullptr;
+            descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &pbrDescriptorBuffer);
+            descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+            fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
+
+            uint32_t     bufferIndices           = 0;
+            VkDeviceSize descriptorBufferOffsets = 0;
+            fn_vkCmdSetDescriptorBufferOffsetsEXT(
+                cmdBuf.CommandBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                pbrPipelineLayout.PipelineLayout,
+                0, // firstSet
+                1, // setCount
+                &bufferIndices,
+                &descriptorBufferOffsets);
+
              // Bind the Index Buffer
              vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, materialSphereIndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
 
@@ -629,54 +620,43 @@ int main(int argc, char** argv)
              // Pipeline state
              vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pbrPipelineState);
 
-             for (uint32_t i = 0; i < gNumSlotsY; ++i) {
-                for (uint32_t j = 0; j < gNumSlotsX; ++j) {
-                   uint32_t sphereIndex= i*gNumSlotsX + j;
+             MaterialParameters materialParams = {};
+             materialParams.albedo             = vec3(0.8f, 0.8f, 0.9f);
+             materialParams.roughness          = 0;
+             materialParams.metalness          = 0;
+             materialParams.F0                 = F0_Generic;
 
-                   float x = -gHalfSpanX + j * gSlotSize;
-                   float y = -gHalfSpanY + i * gSlotSize;
+             uint32_t numSlotsX     = 10;
+             uint32_t numSlotsY     = 10;
+             float    slotSize      = 0.9f;
+             float    spanX         = numSlotsX * slotSize;
+             float    spanY         = numSlotsY * slotSize;
+             float    halfSpanX     = spanX / 2.0f;
+             float    halfSpanY     = spanY / 2.0f;
+             float    roughnessStep = 1.0f / (numSlotsX - 1);
+             float    metalnessStep = 1.0f / (numSlotsY - 1);
+
+             for (uint32_t i = 0; i < numSlotsY; ++i) {
+                materialParams.metalness = 0;
+
+                for (uint32_t j = 0; j < numSlotsX; ++j) {
+                   float x = -halfSpanX + j * slotSize;
+                   float y = -halfSpanY + i * slotSize;
                    float z = 0;
                    // Readjust center
-                   x += gSlotSize / 2.0f;
-                   y += gSlotSize / 2.0f;
+                   x += slotSize / 2.0f;
+                   y += slotSize / 2.0f;
 
-                   // DrawParams (b1)
-                   {
-                      WriteDescriptor(
-                         renderer.get(),
-                         pPBRDescriptorBufferStartAddress,
-                         pbrPipelineLayout.DescriptorSetLayout,
-                         1, // binding
-                         0, // arrayElement
-                         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                         &drawParamBuffers[sphereIndex]);
-                      
-                      // Modify the buffer to have this frame's current rotation
-                      DrawParameters* pDrawParams = nullptr;
-                      vmaMapMemory(
-                         renderer->Allocator,
-                         drawParamBuffers[sphereIndex].Allocation,
-                         reinterpret_cast<void**>(&pDrawParams));
+                   glm::mat4 modelMat = rotMat * glm::translate(vec3(x, y, z));
 
-                      pDrawParams->ModelMatrix = rotMat * glm::translate(vec3(x, y, z));
-
-                      vmaUnmapMemory(renderer->Allocator, drawParamBuffers[sphereIndex].Allocation);
-                   }
-
-                   // MaterialParams (b2)
-                   {
-                      WriteDescriptor(
-                         renderer.get(),
-                         pPBRDescriptorBufferStartAddress,
-                         pbrPipelineLayout.DescriptorSetLayout,
-                         2, // binding
-                         0, // arrayElement
-                         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                         &materialParamBuffers[sphereIndex]);
-                   }
+                   vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(mat4), &modelMat);
+                   vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(mat4), sizeof(MaterialParameters), &materialParams);
 
                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, materialSphereNumIndices, 1, 0, 0, 0);
+
+                   materialParams.metalness += roughnessStep;
                 }
+                materialParams.roughness += metalnessStep;
              }
           }
 
@@ -717,117 +697,47 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout)
          binding.binding                      = 0;
          binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
          binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL;
-         bindings.push_back(binding);
-      }
-      {
-         VkDescriptorSetLayoutBinding binding = {};
-         binding.binding                      = 1;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-         binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL;
-         bindings.push_back(binding);
-      }
-      {
-         VkDescriptorSetLayoutBinding binding = {};
-         binding.binding                      = 2;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-         binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
       {
          VkDescriptorSetLayoutBinding binding = {};
          binding.binding                      = 3;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
          binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
       {
          VkDescriptorSetLayoutBinding binding = {};
          binding.binding                      = 4;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
          binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
       {
          VkDescriptorSetLayoutBinding binding = {};
          binding.binding                      = 5;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
          binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
       {
-         VkSamplerCreateInfo samplerInfo       = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
-         samplerInfo.flags                     = 0;
-         samplerInfo.magFilter                 = VK_FILTER_LINEAR;
-         samplerInfo.minFilter                 = VK_FILTER_LINEAR;
-         samplerInfo.mipmapMode                = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-         samplerInfo.addressModeU              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-         samplerInfo.addressModeV              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-         samplerInfo.addressModeW              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-         samplerInfo.mipLodBias                = 0;
-         samplerInfo.anisotropyEnable          = VK_FALSE;
-         samplerInfo.maxAnisotropy             = 0;
-         samplerInfo.compareEnable             = VK_TRUE;
-         samplerInfo.compareOp                 = VK_COMPARE_OP_LESS_OR_EQUAL;
-         samplerInfo.minLod                    = 0;
-         samplerInfo.maxLod                    = FLT_MAX;
-         samplerInfo.borderColor               = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-         samplerInfo.unnormalizedCoordinates   = VK_FALSE;
-
-         VkSampler clampedSampler = VK_NULL_HANDLE;
-         CHECK_CALL(vkCreateSampler(
-            pRenderer->Device,
-            &samplerInfo,
-            nullptr,
-            &clampedSampler));
-
          VkDescriptorSetLayoutBinding binding = {};
          binding.binding                      = 6;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
          binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL;
-         binding.pImmutableSamplers           = &clampedSampler;
-
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
       {
-         VkSamplerCreateInfo samplerInfo       = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
-         samplerInfo.flags                     = 0;
-         samplerInfo.magFilter                 = VK_FILTER_LINEAR;
-         samplerInfo.minFilter                 = VK_FILTER_LINEAR;
-         samplerInfo.mipmapMode                = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-         samplerInfo.addressModeU              = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-         samplerInfo.addressModeV              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-         samplerInfo.addressModeW              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-         samplerInfo.mipLodBias                = 0;
-         samplerInfo.anisotropyEnable          = VK_FALSE;
-         samplerInfo.maxAnisotropy             = 0;
-         samplerInfo.compareEnable             = VK_TRUE;
-         samplerInfo.compareOp                 = VK_COMPARE_OP_LESS_OR_EQUAL;
-         samplerInfo.minLod                    = 0;
-         samplerInfo.maxLod                    = FLT_MAX;
-         samplerInfo.borderColor               = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-         samplerInfo.unnormalizedCoordinates   = VK_FALSE;
-
-         VkSampler uWrapSampler = VK_NULL_HANDLE;
-         CHECK_CALL(vkCreateSampler(
-            pRenderer->Device,
-            &samplerInfo,
-            nullptr,
-            &uWrapSampler));
-
          VkDescriptorSetLayoutBinding binding = {};
          binding.binding                      = 7;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
          binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL;
-         binding.pImmutableSamplers           = &uWrapSampler;
-
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
 
@@ -843,9 +753,20 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout)
          &pLayout->DescriptorSetLayout));
    }
 
+   std::vector<VkPushConstantRange> push_constants;
+   {
+      VkPushConstantRange push_constant = {};
+      push_constant.offset              = 0;
+      push_constant.size                = sizeof(DrawParameters) + sizeof(MaterialParameters);
+      push_constant.stageFlags          = VK_SHADER_STAGE_ALL_GRAPHICS;
+      push_constants.push_back(push_constant);
+   }
+
    VkPipelineLayoutCreateInfo createInfo  = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
    createInfo.setLayoutCount              = 1;
    createInfo.pSetLayouts                 = &pLayout->DescriptorSetLayout;
+   createInfo.pushConstantRangeCount      = CountU32(push_constants);
+   createInfo.pPushConstantRanges         = DataPtr(push_constants);
 
    CHECK_CALL(vkCreatePipelineLayout(pRenderer->Device, &createInfo, nullptr, &pLayout->PipelineLayout));
 }
@@ -860,50 +781,23 @@ void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *
          binding.binding                      = 0;
          binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
          binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
       {
-         VkSamplerCreateInfo samplerInfo       = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
-         samplerInfo.flags                     = 0;
-         samplerInfo.magFilter                 = VK_FILTER_LINEAR;
-         samplerInfo.minFilter                 = VK_FILTER_LINEAR;
-         samplerInfo.mipmapMode                = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-         samplerInfo.addressModeU              = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-         samplerInfo.addressModeV              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-         samplerInfo.addressModeW              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-         samplerInfo.mipLodBias                = 0;
-         samplerInfo.anisotropyEnable          = VK_FALSE;
-         samplerInfo.maxAnisotropy             = 0;
-         samplerInfo.compareEnable             = VK_TRUE;
-         samplerInfo.compareOp                 = VK_COMPARE_OP_LESS_OR_EQUAL;
-         samplerInfo.minLod                    = 0;
-         samplerInfo.maxLod                    = FLT_MAX;
-         samplerInfo.borderColor               = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-         samplerInfo.unnormalizedCoordinates   = VK_FALSE;
-
-         VkSampler uWrapSampler = VK_NULL_HANDLE;
-         CHECK_CALL(vkCreateSampler(
-            pRenderer->Device,
-            &samplerInfo,
-            nullptr,
-            &uWrapSampler));
-
          VkDescriptorSetLayoutBinding binding = {};
          binding.binding                      = 1;
          binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
          binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL;
-         binding.pImmutableSamplers           = &uWrapSampler;
-
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
       {
          VkDescriptorSetLayoutBinding binding = {};
          binding.binding                      = 2;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
          binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
 
@@ -919,73 +813,18 @@ void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *
          &pLayout->DescriptorSetLayout));
    }
 
+   VkPushConstantRange push_constant   = {};
+   push_constant.offset                = 0;
+   push_constant.size                  = sizeof(EnvSceneParameters);
+   push_constant.stageFlags            = VK_SHADER_STAGE_ALL_GRAPHICS;
+
    VkPipelineLayoutCreateInfo createInfo  = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
    createInfo.setLayoutCount              = 1;
    createInfo.pSetLayouts                 = &pLayout->DescriptorSetLayout;
+   createInfo.pushConstantRangeCount      = 1;
+   createInfo.pPushConstantRanges         = &push_constant;
 
    CHECK_CALL(vkCreatePipelineLayout(pRenderer->Device, &createInfo, nullptr, &pLayout->PipelineLayout));
-}
-
-void CreateSphereParamBuffers(
-   VulkanRenderer* pRenderer,
-   std::vector<VulkanBuffer> &materialParamBuffers,
-   std::vector<VulkanBuffer> &drawParamBuffers)
-{
-   MaterialParameters materialParams = {};
-   materialParams.albedo             = vec3(0.8f, 0.8f, 0.9f);
-   materialParams.roughness          = 0;
-   materialParams.metalness          = 0;
-   materialParams.F0                 = F0_Generic;
-
-   float    roughnessStep = 1.0f / (gNumSlotsX - 1);
-   float    metalnessStep = 1.0f / (gNumSlotsY - 1);
-
-   for (uint32_t i = 0; i < gNumSlotsY; ++i) {
-      materialParams.metalness = 0;
-
-      for (uint32_t j = 0; j < gNumSlotsX; ++j) {
-         float x = -gHalfSpanX + j * gSlotSize;
-         float y = -gHalfSpanY + i * gSlotSize;
-         float z = 0;
-         // Readjust center
-         x += gSlotSize / 2.0f;
-         y += gSlotSize / 2.0f;
-
-         // Create the DrawParameters for this sphere
-         {
-            VulkanBuffer drawParamsBuffer = {};
-
-            CHECK_CALL(CreateBuffer(
-               pRenderer,
-               Align<size_t>(sizeof(DrawParameters), 256),
-               nullptr, // Can't set the values because they change per frame
-               VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-               0,
-               &drawParamsBuffer));
-
-            drawParamBuffers.push_back(drawParamsBuffer);
-         }
-
-         // Create the MaterialParameters for this sphere
-         {
-            VulkanBuffer materialParamsBuffer = {};
-
-            CHECK_CALL(CreateBuffer(
-               pRenderer,
-               Align<size_t>(sizeof(MaterialParameters), 256),
-               &materialParams,
-               VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-               0,
-               &materialParamsBuffer));
-
-            materialParamBuffers.push_back(materialParamsBuffer);
-         }
-
-         materialParams.metalness += roughnessStep;
-      }
-
-      materialParams.roughness += metalnessStep;
-   }
 }
 
 void CreateMaterialSphereVertexBuffers(
@@ -1003,6 +842,7 @@ void CreateMaterialSphereVertexBuffers(
       pRenderer,
       SizeInBytes(mesh.GetTriangles()),
       DataPtr(mesh.GetTriangles()),
+      VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
       VMA_MEMORY_USAGE_GPU_ONLY,
       0,
       pIndexBuffer));
@@ -1011,6 +851,7 @@ void CreateMaterialSphereVertexBuffers(
       pRenderer,
       SizeInBytes(mesh.GetPositions()),
       DataPtr(mesh.GetPositions()),
+      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
       VMA_MEMORY_USAGE_GPU_ONLY,
       0,
       pPositionBuffer));
@@ -1019,6 +860,7 @@ void CreateMaterialSphereVertexBuffers(
       pRenderer,
       SizeInBytes(mesh.GetNormals()),
       DataPtr(mesh.GetNormals()),
+      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
       VMA_MEMORY_USAGE_GPU_ONLY,
       0,
       pNormalBuffer));
@@ -1192,7 +1034,7 @@ void WritePBRDescriptors(
       VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
       pSceneParamsBuffer);
 
-   // Set per draw call
+   // Set via push constants
    // ConstantBuffer<DrawParameters>     DrawParams            : register(b1);
    // ConstantBuffer<MaterialParameters> MaterialParams        : register(b2);
 
@@ -1264,7 +1106,76 @@ void WritePBRDescriptors(
 
    // Samplers are setup in the immutable samplers in the DescriptorSetLayout
    // SamplerState                       IBLIntegrationSampler : register(s6);
+   {
+      VkSamplerCreateInfo samplerInfo       = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+      samplerInfo.flags                     = 0;
+      samplerInfo.magFilter                 = VK_FILTER_LINEAR;
+      samplerInfo.minFilter                 = VK_FILTER_LINEAR;
+      samplerInfo.mipmapMode                = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+      samplerInfo.addressModeU              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      samplerInfo.addressModeV              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      samplerInfo.addressModeW              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      samplerInfo.mipLodBias                = 0;
+      samplerInfo.anisotropyEnable          = VK_FALSE;
+      samplerInfo.maxAnisotropy             = 0;
+      samplerInfo.compareEnable             = VK_TRUE;
+      samplerInfo.compareOp                 = VK_COMPARE_OP_LESS_OR_EQUAL;
+      samplerInfo.minLod                    = 0;
+      samplerInfo.maxLod                    = 1;
+      samplerInfo.borderColor               = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+      samplerInfo.unnormalizedCoordinates   = VK_FALSE;
+
+      VkSampler clampedSampler = VK_NULL_HANDLE;
+      CHECK_CALL(vkCreateSampler(
+         pRenderer->Device,
+         &samplerInfo,
+         nullptr,
+         &clampedSampler));
+
+      WriteDescriptor(
+         pRenderer,
+         pDescriptorBufferStartAddress,
+         descriptorSetLayout,
+         6, // binding
+         0, // arrayElement
+         clampedSampler);
+   }
+
    // SamplerState                       IBLMapSampler         : register(s7);
+   {
+      VkSamplerCreateInfo samplerInfo       = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+      samplerInfo.flags                     = 0;
+      samplerInfo.magFilter                 = VK_FILTER_LINEAR;
+      samplerInfo.minFilter                 = VK_FILTER_LINEAR;
+      samplerInfo.mipmapMode                = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+      samplerInfo.addressModeU              = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+      samplerInfo.addressModeV              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      samplerInfo.addressModeW              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      samplerInfo.mipLodBias                = 0;
+      samplerInfo.anisotropyEnable          = VK_FALSE;
+      samplerInfo.maxAnisotropy             = 0;
+      samplerInfo.compareEnable             = VK_TRUE;
+      samplerInfo.compareOp                 = VK_COMPARE_OP_LESS_OR_EQUAL;
+      samplerInfo.minLod                    = 0;
+      samplerInfo.maxLod                    = FLT_MAX;
+      samplerInfo.borderColor               = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+      samplerInfo.unnormalizedCoordinates   = VK_FALSE;
+
+      VkSampler uWrapSampler = VK_NULL_HANDLE;
+      CHECK_CALL(vkCreateSampler(
+         pRenderer->Device,
+         &samplerInfo,
+         nullptr,
+         &uWrapSampler));
+
+      WriteDescriptor(
+         pRenderer,
+         pDescriptorBufferStartAddress,
+         descriptorSetLayout,
+         7, // binding
+         0, // arrayElement
+         uWrapSampler);
+   }
 
    vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
 }
@@ -1273,7 +1184,6 @@ void WriteEnvDescriptors(
    VulkanRenderer*         pRenderer,
    VkDescriptorSetLayout   descriptorSetLayout,
    VulkanBuffer*           pDescriptorBuffer,
-   VulkanBuffer*           pSceneParamsBuffer,
    VulkanImage*            pEnvTexture)
 {
    char* pDescriptorBufferStartAddress = nullptr;
@@ -1282,18 +1192,44 @@ void WriteEnvDescriptors(
       pDescriptorBuffer->Allocation,
       reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
 
+   // set via push constants
    // ConstantBuffer<SceneParameters> SceneParams       : register(b0);
-   WriteDescriptor(
-      pRenderer,
-      pDescriptorBufferStartAddress,
-      descriptorSetLayout,
-      0, // binding
-      0, // arrayElement
-      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-      pSceneParamsBuffer);
 
-   // Sampler is setup in the immutable samplers in the DescriptorSetLayout
    // SamplerState                    IBLMapSampler     : register(s1);
+   {
+      VkSamplerCreateInfo samplerInfo       = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+      samplerInfo.flags                     = 0;
+      samplerInfo.magFilter                 = VK_FILTER_LINEAR;
+      samplerInfo.minFilter                 = VK_FILTER_LINEAR;
+      samplerInfo.mipmapMode                = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+      samplerInfo.addressModeU              = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+      samplerInfo.addressModeV              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      samplerInfo.addressModeW              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      samplerInfo.mipLodBias                = 0;
+      samplerInfo.anisotropyEnable          = VK_FALSE;
+      samplerInfo.maxAnisotropy             = 0;
+      samplerInfo.compareEnable             = VK_TRUE;
+      samplerInfo.compareOp                 = VK_COMPARE_OP_NEVER;
+      samplerInfo.minLod                    = 0;
+      samplerInfo.maxLod                    = FLT_MAX;
+      samplerInfo.borderColor               = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+      samplerInfo.unnormalizedCoordinates   = VK_FALSE;
+
+      VkSampler uWrapSampler = VK_NULL_HANDLE;
+      CHECK_CALL(vkCreateSampler(
+         pRenderer->Device,
+         &samplerInfo,
+         nullptr,
+         &uWrapSampler));
+      
+      WriteDescriptor(
+         pRenderer,
+         pDescriptorBufferStartAddress,
+         descriptorSetLayout,
+         1, // binding
+         0, // arrayElement
+         uWrapSampler);
+   }
 
    // Texture2D                       IBLEnvironmentMap : register(t2);
    {
@@ -1319,19 +1255,3 @@ void WriteEnvDescriptors(
 
    vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
 }
-
-/*
-void CreateDescriptorHeap(
-    DxRenderer*            pRenderer,
-    ID3D12DescriptorHeap** ppHeap)
-{
-    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-    desc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    desc.NumDescriptors             = 256;
-    desc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-
-    CHECK_CALL(pRenderer->Device->CreateDescriptorHeap(
-        &desc,
-        IID_PPV_ARGS(ppHeap)));
-}
-*/

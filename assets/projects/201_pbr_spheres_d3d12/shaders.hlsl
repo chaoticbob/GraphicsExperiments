@@ -16,20 +16,38 @@ struct SceneParameters {
     uint     IBLEnvironmentNumLevels;
 };
 
-struct DrawParameters {
-    float4x4 ModelMatrix;
-};
+#ifdef __spirv__
 
-struct MaterialParameters {
-    float3 albedo;
-    float  roughness;
-    float  metalness;
-    float3 F0;
-};
+   struct DrawParameters {
+       float4x4   ModelMatrix;
+       float3     albedo;
+       float      roughness;
+       float      metalness;
+       float3     F0;
+   };
 
-ConstantBuffer<SceneParameters>    SceneParams           : register(b0);
+[[vk::push_constant]]
+ConstantBuffer<DrawParameters>     DrawParams            : register(b1);
+
+#else
+
+   struct DrawParameters {
+       float4x4 ModelMatrix;
+   };
+
+   struct MaterialParameters {
+       float3 albedo;
+       float  roughness;
+       float  metalness;
+       float3 F0;
+   };
+
 ConstantBuffer<DrawParameters>     DrawParams            : register(b1);
 ConstantBuffer<MaterialParameters> MaterialParams        : register(b2);
+
+#endif
+
+ConstantBuffer<SceneParameters>    SceneParams           : register(b0);
 Texture2D                          IBLIntegrationLUT     : register(t3);
 Texture2D                          IBLIrradianceMap      : register(t4);
 Texture2D                          IBLEnvironmentMap     : register(t5);
@@ -191,10 +209,17 @@ float4 psmain(VSOutput input) : SV_TARGET
     float  NoV = saturate(dot(N, V));
 
     // Material variables
-    float3 albedo = MaterialParams.albedo;
-    float  roughness = MaterialParams.roughness;
-    float  metalness = MaterialParams.metalness;
-    float3 F0 = MaterialParams.F0;
+    #ifdef __spirv__
+       float3 albedo = DrawParams.albedo;
+       float  roughness = DrawParams.roughness;
+       float  metalness = DrawParams.metalness;
+       float3 F0 = DrawParams.F0;
+    #else
+       float3 albedo = MaterialParams.albedo;
+       float  roughness = MaterialParams.roughness;
+       float  metalness = MaterialParams.metalness;
+       float3 F0 = MaterialParams.F0;
+    #endif
 
     // Remap
     roughness = roughness * roughness;

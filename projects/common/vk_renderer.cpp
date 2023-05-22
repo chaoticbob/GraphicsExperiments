@@ -1914,7 +1914,7 @@ HRESULT CreateDrawTexturePipeline(
    vertex_binding_desc[0].inputRate                       = VK_VERTEX_INPUT_RATE_VERTEX;
 
    vertex_binding_desc[1].binding   = 1;
-   vertex_binding_desc[1].stride    = 12;
+   vertex_binding_desc[1].stride    = 8;
    vertex_binding_desc[1].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
    VkVertexInputAttributeDescription vertex_attribute_desc[2] = {};
@@ -1993,6 +1993,7 @@ HRESULT CreateDrawTexturePipeline(
    dynamic_state.pDynamicStates                   = dynamic_states;
 
    VkGraphicsPipelineCreateInfo pipeline_info = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
+   pipeline_info.flags                        = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
    pipeline_info.pNext                        = &pipeline_rendering_create_info;
    pipeline_info.stageCount                   = 2;
    pipeline_info.pStages                      = shader_stages;
