@@ -10,15 +10,17 @@
 #define FRESNEL_COOK_TORRANCE     2
 #define FRESNEL_NONE              3
 
-#define GEOMETRY_SMITHS        0
-#define GEOMETRY_IMPLICIT      1
-#define GEOMETRY_NEUMANN       2
-#define GEOMETRY_COOK_TORRANCE 3
-#define GEOMETRY_KELEMEN       4
-#define GEOMETRY_BECKMANN      5
-#define GEOMETRY_GGX1          6
-#define GEOMETRY_GGX2          7
-#define GEOMETRY_SCHLICK_GGX   8
+#define GEOMETRY_SMITH                 0
+#define GEOMETRY_IMPLICIT              1
+#define GEOMETRY_NEUMANN               2
+#define GEOMETRY_COOK_TORRANCE         3
+#define GEOMETRY_KELEMEN               4
+#define GEOMETRY_BECKMANN              5
+#define GEOMETRY_GGX1                  6
+#define GEOMETRY_GGX2                  7
+#define GEOMETRY_SCHLICK_GGX           8
+#define GEOMETRY_SMITH_CORRELATED      9
+#define GEOMETRY_SMITH_CORRELATED_FAST 10
 
 #define DIRECT_COMPONENT_MODE_ALL           0
 #define DIRECT_COMPONENT_MODE_DISTRIBUTION  1
@@ -132,11 +134,11 @@ float Distribution_GGX(float3 N, float3 H, float roughness)
 // http://graphicrants.blogspot.com/2013/08/specular-brdf-reference.html
 // Beckmann [3]
 //
-float Distribution_Beckmann(float3 N, float3 H, float alpha)
+float Distribution_Beckmann(float3 N, float3 H, float roughness)
 {
     float NoH    = saturate(dot(N, H));
     float NoH2   = NoH * NoH;
-    float alpha2 = max(alpha * alpha, EPSILON);
+    float alpha2 = max(roughness * roughness, EPSILON);
     // Lower bound for denominator must be capped to EPSILON
     // it doesn't become zero when NoH is 0.
     float den    = max((PI * alpha2 * NoH2 * NoH2), EPSILON);
@@ -147,10 +149,10 @@ float Distribution_Beckmann(float3 N, float3 H, float alpha)
 // http://graphicrants.blogspot.com/2013/08/specular-brdf-reference.html
 // Blinn-Phong [2]
 //
-float Distribution_BlinnPhong(float3 N, float3 H, float alpha)
+float Distribution_BlinnPhong(float3 N, float3 H, float roughness)
 {
     float NoH    = saturate(dot(N, H));
-    float alpha2 = max(alpha * alpha, EPSILON);
+    float alpha2 = max(roughness * roughness, EPSILON);
     // The lower bound for the exponent argument for pow() must be
     // capped to EPSILON so that it doesn't suddenly drop to zero
     // when alpha2 is 1. 
@@ -203,7 +205,7 @@ float Geometry_SchlickBeckman(float NoV, float k)
 // DEFAULT
 // Smiths (https://www.shadertoy.com/view/3tlBW7)
 //
-float Geometry_Smiths(float3 N, float3 V, float3 L,  float roughness)
+float Geometry_Smith(float3 N, float3 V, float3 L,  float roughness)
 {    
     // Q: Where does this k come from?
     float k  = pow(roughness + 1, 2) / 8.0; 
@@ -269,10 +271,10 @@ float Geometry_Kelemen(float3 N, float3 V, float3 L, float3 H)
 //
 // NOTE: There's an issue with this when NoV <= 0
 //
-float Geometry_Beckmann(float3 N, float3 V, float3 L, float3 H, float alpha)
+float Geometry_Beckmann(float3 N, float3 V, float3 L, float3 H, float roughness)
 {
     float NoV = saturate(dot(N, V));
-    float c = NoV / (alpha * sqrt(1 - (NoV * NoV)));
+    float c = NoV / (roughness * sqrt(1 - (NoV * NoV)));
     float A = (3.535 * c) + (2.2181 * c  *c);
     float B = 1 + (2.276 * c) + (2.577 * c * c);    
     return (c < 1.6) ? (A / B) : 1;
@@ -284,10 +286,10 @@ float Geometry_Beckmann(float3 N, float3 V, float3 L, float3 H, float alpha)
 //
 // NOTE: There's an issue with this when NoV <= 0
 //
-float Geometry_GGX1(float3 N, float3 V, float3 H, float alpha)
+float Geometry_GGX1(float3 N, float3 V, float3 H, float roughness)
 {
     float NoV = dot(N, V);
-    float alpha2 = max(alpha * alpha, EPSILON);
+    float alpha2 = max(roughness * roughness, EPSILON);
     return 2 * NoV / (NoV + sqrt(alpha2 + (1 - alpha2) * NoV * NoV));
 }
 
@@ -296,13 +298,13 @@ float Geometry_GGX1(float3 N, float3 V, float3 H, float alpha)
 //
 // NOTE: There's an issue with this when NoV <= 0
 //
-float Geometry_GGX2(float3 N, float3 V, float3 H, float alpha)
+float Geometry_GGX2(float3 N, float3 V, float3 H, float roughness)
 {
     float HoV    = saturate(dot(H, V));
     float HoV2   = HoV * HoV;
     float NoV    = saturate(dot(N, V));
     float chi    = ((HoV / NoV) > 0)? 1 : 0;
-    float alpha2 = max(alpha * alpha, EPSILON);
+    float alpha2 = max(roughness * roughness, EPSILON);
     float tan2   = (1 - HoV2) / HoV2;
     return chi * 2 / (1 + sqrt( 1 + alpha2 * tan2));
 }
@@ -311,14 +313,42 @@ float Geometry_GGX2(float3 N, float3 V, float3 H, float alpha)
 // http://graphicrants.blogspot.com/2013/08/specular-brdf-reference.html
 // Schlick-GGX
 //
-float Geometry_SchlickGGX(float3 N, float3 V, float3 L, float alpha)
+float Geometry_SchlickGGX(float3 N, float3 V, float3 L, float roughness)
 {
-    float k  = alpha / 2.0;
+    float k  = roughness / 2.0;
     float NoV = saturate(dot(N, V));
     float NoL = saturate(dot(N, L));
     float G1 = Geometry_SchlickBeckman(NoV, k);
     float G2 = Geometry_SchlickBeckman(NoL, k);
     return G1 * G2;
+}
+
+//
+// https://google.github.io/filament/Filament.html
+//
+float Vis_SmithGGXCorrelated(float3 N, float3 V, float3 L, float roughness) 
+{
+    float NoV = saturate(dot(N, V));
+    float NoL = saturate(dot(N, L));
+    float a2 = roughness * roughness;
+    float GGXV = NoL * sqrt(NoV * NoV * (1.0 - a2) + a2);
+    float GGXL = NoV * sqrt(NoL * NoL * (1.0 - a2) + a2);
+    return 0.5 / (GGXV + GGXL);
+}
+
+//
+// https://google.github.io/filament/Filament.html
+//
+// Issue with rendering
+//
+float Vis_SmithGGXCorrelatedFast(float3 N, float3 V, float3 L, float roughness)
+{
+    float NoV = saturate(dot(N, V));
+    float NoL = saturate(dot(N, L));    
+    float a = roughness;
+    float GGXV = NoL * (NoV * (1.0 - a) + a);
+    float GGXL = NoV * (NoL * (1.0 - a) + a);
+    return 0.5 / (GGXV + GGXL);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -359,8 +389,8 @@ float3 Fresnel(uint func, float cosTheta, float3 F0, float roughness)
 float Geometry(uint func, float3 N, float3 V, float3 L, float3 H, float roughness)
 {
     float G = 0;
-    if (func == GEOMETRY_SMITHS) {
-        G = Geometry_Smiths(N, V, L, roughness);
+    if (func == GEOMETRY_SMITH) {
+        G = Geometry_Smith(N, V, L, roughness);
     }
     else if (func == GEOMETRY_IMPLICIT) {
         G = Geometry_Implicit(N, V, L, roughness);
@@ -385,6 +415,12 @@ float Geometry(uint func, float3 N, float3 V, float3 L, float3 H, float roughnes
     }
     else if (func == GEOMETRY_SCHLICK_GGX) {
         G = Geometry_SchlickGGX(N, V, L, roughness);
+    }
+    else if (func == GEOMETRY_SMITH_CORRELATED) {
+        G = Geometry_SchlickGGX(N, V, L, roughness);
+    }
+    else if (func == GEOMETRY_SMITH_CORRELATED_FAST) {
+        G = Vis_SmithGGXCorrelatedFast(N, V, L, roughness);
     }
     return G;
 }
@@ -535,27 +571,30 @@ float4 psmain(VSOutput input) : SV_TARGET
 {   
     // Scene and geometry variables - world space
     float3 P = input.PositionWS;                         // Position
-    float3 N = input.Normal;                             // Normal
+    float3 N = normalize(input.Normal);                  // Normal
     float3 V = normalize((SceneParams.EyePosition - P)); // View direction
     float3 R = reflect(-V, N);
     float  NoV = saturate(dot(N, V));
 
     // Material variables
     MaterialParameters material = MaterialParams[DrawParams.MaterialIndex];
-    float3 albedo = material.Albedo;
+    float3 baseColor = material.Albedo;
     float  roughness = material.Roughness;
-    float  metalness = material.Metalness;
+    float  metallic = material.Metalness;
     float  specular = material.Specular;
+    float  dielectric = 1 - metallic;
 
     // Calculate F0
-    float3 F0 = 0.16 * specular * specular * (1 - metalness) + albedo * metalness;
+    float3 F0 = (0.16 * specular * specular * dielectric) + (baseColor * metallic);
 
     // Remap
-    float3 diffuseColor = (1.0 - metalness) * albedo;
-    roughness = roughness * roughness;
+    float3 diffuseColor = dielectric * baseColor;
+    float alpha = roughness * roughness;
 
+    /*
     // Use albedo as the tint color
     F0 = lerp(F0, albedo, metalness);
+    */
 
     // Function selection
     uint D_Func = material.D_Func;
@@ -573,22 +612,22 @@ float4 psmain(VSOutput input) : SV_TARGET
         float3 H  = normalize(L + V);
         float3 Lc = light.Color;
         float  Ls = light.Intensity;
-        float NoL = saturate(dot(N, L));
-
-        float3 diffuse = albedo / PI;
         float3 radiance = Lc * Ls;
+        float  NoL = saturate(dot(N, L));
+
+        float3 Rd = baseColor / PI;
 
         float  cosTheta = saturate(dot(H, V));
-        float  D = Distribution(D_Func, N, H, roughness);
-        float3 F = Fresnel(F_Func, cosTheta, F0, roughness);
-        float  G = Geometry(G_Func, N, V, L, H, roughness);        
+        float  D = Distribution(D_Func, N, H, alpha);
+        float3 F = Fresnel(F_Func, cosTheta, F0, alpha);
+        float  G = Geometry(G_Func, N, V, L, H, alpha);        
 
         // Specular reflectance
-        float3 specular = (D * F * G) / max(0.0001, (4.0 * NoV * NoL));
+        float3 Rs = (D * F * G) / max(0.0001, (4.0 * NoV * NoL));
     
         // Combine diffuse and specular
-        float3 kD = (1.0 - F) * (1.0 - metalness);
-        float3 BRDF = kD  * diffuse + specular;
+        float3 Kd = (1.0 - F) * dielectric;
+        float3 BRDF = Kd * Rd + Rs;
 
         // Direct contribution        
         float3 direct = BRDF * radiance * NoL;
@@ -602,16 +641,16 @@ float4 psmain(VSOutput input) : SV_TARGET
             direct = G;
         }
         else if(material.DirectComponentMode == DIRECT_COMPONENT_MODE_DIFFUSE) {
-            direct = diffuse;
+            direct = Rd;
         }
         else if(material.DirectComponentMode == DIRECT_COMPONENT_MODE_RADIANCE) {
             direct = radiance;
         }
         else if(material.DirectComponentMode == DIRECT_COMPONENT_MODE_KD) {
-            direct = kD;
+            direct = Kd;
         }
         else if(material.DirectComponentMode == DIRECT_COMPONENT_MODE_SPECULAR) {
-            direct = specular;
+            direct = Rs;
         }
         else if(material.DirectComponentMode == DIRECT_COMPONENT_MODE_BRDF) {
             direct = BRDF;
@@ -624,39 +663,35 @@ float4 psmain(VSOutput input) : SV_TARGET
     // Indirect lighting
     float3 indirectLighting = (float3)0;
     {
-        float cosTheta = NoV;
-
         // Diffuse IBL component
-        float3 F = Fresnel(F_Func, cosTheta, F0, roughness);
-        float3 kD = (1.0 - F) * (1.0 - metalness);
+        float3 F = Fresnel(F_Func, NoV, F0, alpha);
+        float3 Kd = (1 - F) * dielectric;
         float3 irradiance = GetIBLIrradiance(N);
-        float3 diffuse = irradiance * albedo / PI;
+        float3 Rd = irradiance * baseColor / PI;
         
         // Specular IBL component
-        float lod = roughness * (SceneParams.IBLEnvNumLevels - 1);
+        float lod = alpha * (SceneParams.IBLEnvNumLevels - 1);
         float3 prefilteredColor = GetIBLEnvironment(R, lod);
-        float2 envBRDF = GetBRDFIntegrationMap(roughness, NoV);
-        float3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
+        float2 envBRDF = GetBRDFIntegrationMap(alpha, NoV);
+        float3 Rs = prefilteredColor * (F * envBRDF.x + envBRDF.y);
         if (material.IndirectSpecularMode == INDIRECT_SPECULAR_MODE_LAZAROV) {
-            specular = EnvDFGLazarov(prefilteredColor, 1 - roughness, NoV, F);
+            Rs = EnvDFGLazarov(prefilteredColor, 1 - alpha, NoV, F);
         }
         else if (material.IndirectSpecularMode == INDIRECT_SPECULAR_MODE_POLYNOMIAL) {
-            specular = EnvDFGPolynomial(prefilteredColor, 1 - roughness, NoV, F);
+            Rs = EnvDFGPolynomial(prefilteredColor, 1 - alpha, NoV, F);
         }
         else if (material.IndirectSpecularMode == INDIRECT_SPECULAR_MODE_KARIS) {
-            specular = EnvBRDFApproxKaris(prefilteredColor, roughness, NoV, F);
+            Rs = EnvBRDFApproxKaris(prefilteredColor, alpha, NoV, F);
         }
-
-        // Ambient
-        float3 ambient = (SceneParams.IBLDiffuseStrength * kD * diffuse) + (SceneParams.IBLSpecularStrength * specular);
 
         // Indirect contribution
-        indirectLighting = ambient;
+        indirectLighting = (SceneParams.IBLDiffuseStrength * Kd * Rd) + (SceneParams.IBLSpecularStrength * Rs);
+
         if (material.IndirectComponentMode == INDIRECT_COMPONENT_MODE_DIFFUSE) {
-            indirectLighting = SceneParams.IBLDiffuseStrength * kD * diffuse;
+            indirectLighting = SceneParams.IBLDiffuseStrength * Kd * Rd;
         }
         else if (material.IndirectComponentMode == INDIRECT_COMPONENT_MODE_SPECULAR) {
-            indirectLighting = SceneParams.IBLSpecularStrength * specular;
+            indirectLighting = SceneParams.IBLSpecularStrength * Rs;
         }
     }
     

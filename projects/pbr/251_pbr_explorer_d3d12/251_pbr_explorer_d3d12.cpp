@@ -33,15 +33,17 @@ using namespace glm;
 #define FRESNEL_COOK_TORRANCE     2
 #define FRESNEL_NONE              3
 
-#define GEOMETRY_SMITHS        0
-#define GEOMETRY_IMPLICIT      1
-#define GEOMETRY_NEUMANN       2
-#define GEOMETRY_COOK_TORRANCE 3
-#define GEOMETRY_KELEMEN       4
-#define GEOMETRY_BECKMANN      5
-#define GEOMETRY_GGX1          6
-#define GEOMETRY_GGX2          7
-#define GEOMETRY_SCHLICK_GGX   8
+#define GEOMETRY_SMITH                 0
+#define GEOMETRY_IMPLICIT              1
+#define GEOMETRY_NEUMANN               2
+#define GEOMETRY_COOK_TORRANCE         3
+#define GEOMETRY_KELEMEN               4
+#define GEOMETRY_BECKMANN              5
+#define GEOMETRY_GGX1                  6
+#define GEOMETRY_GGX2                  7
+#define GEOMETRY_SCHLICK_GGX           8
+#define GEOMETRY_SMITH_CORRELATED      9
+#define GEOMETRY_SMITH_CORRELATED_FAST 10
 
 // This will be passed in via constant buffer
 struct Light
@@ -66,9 +68,9 @@ struct SceneParameters
 
 struct MaterialParameters
 {
-    vec3     albedo;
+    vec3     baseColor;
     float    roughness;
-    float    metalness;
+    float    metallic;
     float    specular;
     uint     directComponentMode;
     uint32_t D_Func;
@@ -108,7 +110,7 @@ const std::vector<std::string> gFresnelNames = {
 };
 
 const std::vector<std::string> gGeometryNames = {
-    "Smiths",
+    "Smith",
     "Implicit",
     "Neumann",
     "Cook-Torrance",
@@ -117,6 +119,8 @@ const std::vector<std::string> gGeometryNames = {
     "GGX1",
     "GGX2",
     "SchlickGGX",
+    "Smith Correlated",
+    "Smith Correlated Fast",
 };
 
 const std::vector<std::string> gDirectComponentModeNames = {
@@ -647,9 +651,9 @@ int main(int argc, char** argv)
                     }
 
                     ImGui::SliderFloat("Roughness", &(pMaterialParams[matIdx].roughness), 0.0f, 1.0f);
-                    ImGui::SliderFloat("Metalness", &(pMaterialParams[matIdx].metalness), 0.0f, 1.0f);
+                    ImGui::SliderFloat("Metallic", &(pMaterialParams[matIdx].metallic), 0.0f, 1.0f);
                     ImGui::SliderFloat("Specular", &(pMaterialParams[matIdx].specular), 0.0f, 1.0f);
-                    ImGui::ColorPicker3("Albedo", reinterpret_cast<float*>(&(pMaterialParams[matIdx].albedo)), ImGuiColorEditFlags_NoInputs);
+                    ImGui::ColorPicker3("Albedo", reinterpret_cast<float*>(&(pMaterialParams[matIdx].baseColor)), ImGuiColorEditFlags_NoInputs);
 
                     ImGui::TreePop();
                 }
@@ -1299,14 +1303,14 @@ void CreateIBLTextures(
             const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
             const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
 
-            std::vector<DxMipOffset> mipOffsets;
-            uint32_t                 levelOffset = 0;
-            uint32_t                 levelWidth  = ibl.baseWidth;
-            uint32_t                 levelHeight = ibl.baseHeight;
+            std::vector<MipOffset> mipOffsets;
+            uint32_t               levelOffset = 0;
+            uint32_t               levelWidth  = ibl.baseWidth;
+            uint32_t               levelHeight = ibl.baseHeight;
             for (uint32_t i = 0; i < ibl.numLevels; ++i) {
-                DxMipOffset mipOffset = {};
-                mipOffset.offset      = levelOffset;
-                mipOffset.rowStride   = rowStride;
+                MipOffset mipOffset = {};
+                mipOffset.Offset    = levelOffset;
+                mipOffset.RowStride = rowStride;
 
                 mipOffsets.push_back(mipOffset);
 

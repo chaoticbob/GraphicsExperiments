@@ -25,8 +25,6 @@ struct SceneParameters {
     Light    Lights[8];
     uint     IBLEnvironmentNumLevels;
     uint     IBLIndex;
-    float    IBLDiffuseStrength;
-    float    IBLSpecularStrength;
     uint     Multiscatter;
     uint     ColorCorrect;
 };
@@ -52,7 +50,7 @@ SamplerState                         IBLIntegrationSampler         : register(s3
 SamplerState                         IBLMapSampler                 : register(s33);
 
 // Material textures are in groups of 4:
-//   [t100 + (MaterialIndex * MaterialTextureStride) + 0] : Albedo
+//   [t100 + (MaterialIndex * MaterialTextureStride) + 0] : BaseColor
 //   [t100 + (MaterialIndex * MaterialTextureStride) + 1] : Normal
 //   [t100 + (MaterialIndex * MaterialTextureStride) + 2] : Roughness
 //   [t100 + (MaterialIndex * MaterialTextureStride) + 3] : Metallic
@@ -125,7 +123,7 @@ float Geometry_SchlickBeckman(float NoV, float k)
 	return NoV / (NoV * (1 - k) + k);
 }
 
-float Geometry_Smiths(float3 N, float3 V, float3 L,  float roughness)
+float Geometry_Smith(float3 N, float3 V, float3 L,  float roughness)
 {    
     float k   = pow(roughness + 1, 2) / 8.0; 
     float NoL = saturate(dot(N, L));
@@ -299,15 +297,16 @@ float4 psmain(VSOutput input) : SV_TARGET
     uint   metallicTexIdx      = DrawParams.MaterialIndex * MATERIAL_TEXTURE_STRIDE + MATERIAL_METALLIC_INDEX;    
 
     // Material variables
-    float  specularReflectance = MaterialParams[DrawParams.MaterialIndex].Specular;
-    float2 texCoord            = input.TexCoord;
-    float3 baseColor           = MaterialTextures[baseColorTexIdx].Sample(MaterialSampler, texCoord).rgb;
-    float3 normal              = MaterialTextures[normalTexIdx].Sample(MaterialNormalMapSampler, texCoord).rgb;
-    float  roughness           = MaterialTextures[roughnessTexIdx].Sample(MaterialSampler, texCoord).r;
-    float  metallic            = MaterialTextures[metallicTexIdx].Sample(MaterialSampler, texCoord).r;
-    float  clearCoat           = 0;
-    float  clearCoatRoughness  = 0;
-    float  anisotropy          = 0;
+    float  specular           = MaterialParams[DrawParams.MaterialIndex].Specular;
+    float2 texCoord           = input.TexCoord;
+    float3 baseColor          = MaterialTextures[baseColorTexIdx].Sample(MaterialSampler, texCoord).rgb;
+    float3 normal             = MaterialTextures[normalTexIdx].Sample(MaterialNormalMapSampler, texCoord).rgb;
+    float  roughness          = MaterialTextures[roughnessTexIdx].Sample(MaterialSampler, texCoord).r;
+    float  metallic           = MaterialTextures[metallicTexIdx].Sample(MaterialSampler, texCoord).r > 0 ? 1 : 0;
+    float  clearCoat          = 0;
+    float  clearCoatRoughness = 0;
+    float  anisotropy         = 0;
+    float  dielectric         = 1 - metallic;
 
     if (DrawParams.InvertNormalMapY) {
         normal.y = 1.0 - normal.y;
@@ -320,12 +319,12 @@ float4 psmain(VSOutput input) : SV_TARGET
     normal = normalize(2.0 * normal - 1.0);
 
     // Calculate F0
-    float3 F0 = 0.16 * specularReflectance * specularReflectance * (1 - metallic) + baseColor * metallic;
+    float3 F0 = (0.16 * specular * specular * dielectric) + (baseColor * metallic);
 
     // Remap
-    float3 diffuseColor = (1.0 - metallic) * baseColor;
-    roughness = roughness * roughness;
-    clearCoatRoughness = clearCoatRoughness * clearCoatRoughness;
+    float3 diffuseColor = dielectric * baseColor;
+    float alpha = roughness * roughness;
+    float clearCoatAlpha = clearCoatRoughness * clearCoatRoughness;
 
     // Calculate N
     float3 vNt = normal;
@@ -351,69 +350,69 @@ float4 psmain(VSOutput input) : SV_TARGET
         float3 H  = normalize(L + V);
         float3 Lc = light.Color;
         float  Ls = light.Intensity;
-        float NoL = saturate(dot(N, L));
-
-        float3 diffuse = diffuseColor * Fd_Lambert();
         float3 radiance = Lc * Ls;
+        float  NoL = saturate(dot(N, L));
 
-        float  cosTheta = saturate(dot(H, V));
-        
+        float3 Rd = diffuseColor * Fd_Lambert();
+
+        float  cosTheta = saturate(dot(H, V));        
         float  D = 0;
-        float3 F = Fresnel_SchlickRoughness(cosTheta, F0, roughness);
+        float3 F = Fresnel_SchlickRoughness(cosTheta, F0, alpha);
         float  G = 0;
         float  Vis = 0;
         if (anisotropy == 0.0) 
         {
-            D = Distribution_GGX(N, H, roughness);
-            G = Geometry_Smiths(N, V, L, roughness);
+            D = Distribution_GGX(N, H, alpha);
+            G = Geometry_Smith(N, V, L, alpha);
             Vis = G / max(0.0001, (4.0 * NoV * NoL));
         }
         else {
-            float at = max(roughness * (1.0 + anisotropy), 0.001);
-            float ab = max(roughness * (1.0 - anisotropy), 0.001);
+            float at = max(alpha * (1.0 + anisotropy), 0.001);
+            float ab = max(alpha * (1.0 - anisotropy), 0.001);
             
             D = DistributionAnisotropic_GGX(
                 saturate(dot(N, H)), // NoH
                 H,                   // H
-                vT,                   // T
-                vB,                   // B
+                vT,                  // T
+                vB,                  // B
                 at,                  // at
                 ab);                 // ab
             
             Vis = GeometryAnisotropic_SmithsGGX(
-                at,                  // at
-                ab,                  // ab
+                at,                   // at
+                ab,                   // ab
                 saturate(dot(vT, V)), // dot_c(tangent, viewDir), 
                 saturate(dot(vB, V)), // dot_c(bitangent, viewDir),
                 saturate(dot(vT, L)), // dot_c(tangent, lightDir), 
                 saturate(dot(vB, L)), // dot_c(bitangent, lightDir),
-                NoV,                 // dot_c(n, viewDir), 
-                NoL);                // dot_c(n, lightDir));
+                NoV,                  // dot_c(n, viewDir), 
+                NoL);                 // dot_c(n, lightDir));
 
         }
         
         // Specular reflectance
-        float3 specular = (D * F * Vis); 
+        float3 Rs = (D * F * Vis); 
 
         if (SceneParams.Multiscatter) {
-            float2 envBRDF = GetBRDFIntegrationMultiscatterMap(saturate(dot(N, H)), roughness);
+            float2 envBRDF = GetBRDFIntegrationMultiscatterMap(saturate(dot(N, H)), alpha);
             float3 energyCompensation = 1.0 + F0 * (1.0 / envBRDF.y - 1.0);
-            specular *= energyCompensation;
-        }        
-    
+            Rs *= energyCompensation;
+        }
+        float3 Rs_dieletric = (specular * dielectric * Rs);
+        float3 Rs_metallic = (metallic * Rs);
+
         // Combine diffuse and specular
-        float3 kD = (1.0 - F) * (1.0 - metallic);
-        float3 BRDF = kD  * diffuse + ((specularReflectance * (1.0 - metallic)) * specular + metallic * specular);
+        float3 Kd = (1 - F) * dielectric;
+        float3 BRDF = Kd * Rd + (Rs_dieletric + Rs_metallic);
 
         // Clear coat
         if (clearCoat > 0) {
-            D = Distribution_GGX(N, H, clearCoatRoughness);
-            F = Fresnel_SchlickRoughness(cosTheta, 0.04, clearCoatRoughness);
-            G = Geometry_Smiths(N, V, L, clearCoatRoughness);
+            D = Distribution_GGX(N, H, clearCoatAlpha);
+            F = Fresnel_SchlickRoughness(cosTheta, 0.04, clearCoatAlpha);
+            G = Geometry_Smith(N, V, L, clearCoatAlpha);
             Vis = G;
-            float3 clearCoatSpecular = (D * F * Vis);
-
-            BRDF = BRDF * (1.0 - clearCoat * F) + (clearCoat * clearCoatSpecular);
+            float3 Rs_clearCoat = (D * F * Vis);            
+            BRDF = (BRDF * (1.0 - (clearCoat * F))) + (clearCoat * Rs_clearCoat);
         }
 
         directLighting += BRDF * radiance * NoL;
@@ -422,51 +421,48 @@ float4 psmain(VSOutput input) : SV_TARGET
     // Indirect lighting
     float3 indirectLighting = (float3)0;
     {
-        float  cosTheta = saturate(dot(N, V));
-        float3 F = Fresnel_SchlickRoughness(cosTheta, F0, roughness);
-        float3 kS = F;
-        float3 kD = (1.0 - kS) * (1.0 - metallic);
+        float3 F = Fresnel_SchlickRoughness(NoV, F0, alpha);
+        float3 Kd = (1 - F) * dielectric;
 
         float3 Rr = R;
         if (anisotropy != 0.0) {
-            Rr = GetReflectedVector(V, N, vT, vB, roughness, anisotropy);
+            Rr = GetReflectedVector(V, N, vT, vB, alpha, anisotropy);
         }
 
         // Diffuse IBL component
         float3 irradiance = GetIBLIrradiance(N);
-        float3 diffuse = irradiance * diffuseColor * Fd_Lambert();
-        diffuse *= SceneParams.IBLDiffuseStrength;
+        float3 Rd = irradiance * diffuseColor * Fd_Lambert();
         
         // Specular IBL component
-        float lod = roughness * (SceneParams.IBLEnvironmentNumLevels - 1);
+        float lod = alpha * (SceneParams.IBLEnvironmentNumLevels - 1);
         float3 prefilteredColor = GetIBLEnvironment(Rr, lod);
         float2 envBRDF = (float2)0;
-        float3 specular = (float3)0;
+        float3 Rs = (float3)0;
         if (SceneParams.Multiscatter) {
-            envBRDF = GetBRDFIntegrationMultiscatterMap(NoV, roughness);
-            specular = prefilteredColor * lerp(envBRDF.xxx, envBRDF.yyy, F0);
+            envBRDF = GetBRDFIntegrationMultiscatterMap(NoV, alpha);
+            Rs = prefilteredColor * lerp(envBRDF.xxx, envBRDF.yyy, F0);
 
             float3 energyCompensation = 1.0 + F0 * (1.0 / envBRDF.y - 1.0);
-            specular *= energyCompensation;
+            Rs *= energyCompensation;
         }
         else {
-            envBRDF = GetBRDFIntegrationMap(NoV, roughness);
-            specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
+            envBRDF = GetBRDFIntegrationMap(NoV, alpha);
+            Rs = prefilteredColor * (F * envBRDF.x + envBRDF.y);
         }
-        specular *= SceneParams.IBLSpecularStrength;        
-
-        indirectLighting = kD * diffuse + ((specularReflectance * (1.0 - metallic)) * specular + metallic * specular);
-
-        // Clear coat
+        float3 Rs_dieletric = (specular * dielectric * Rs);
+        float3 Rs_metallic = (metallic * Rs);
+        float3 BRDF = Kd * Rd + (Rs_dieletric + Rs_metallic);
+        
         if (clearCoat > 0) {
-            float3 clearCoatFresnel = Fresnel_SchlickRoughness(cosTheta, 0.04, clearCoatRoughness);
-            lod = clearCoatRoughness * (SceneParams.IBLEnvironmentNumLevels - 1);
+            float3 clearCoatFresnel = Fresnel_SchlickRoughness(NoV, 0.04, clearCoatAlpha);
+            lod = clearCoatAlpha * (SceneParams.IBLEnvironmentNumLevels - 1);
             prefilteredColor = GetIBLEnvironment(R, lod);        
-            envBRDF = GetBRDFIntegrationMap(NoV, clearCoatRoughness);
-            float3 clearCoatSpecular = clearCoatSpecular = prefilteredColor * (clearCoatFresnel * envBRDF.x + envBRDF.y);
-
-            indirectLighting = indirectLighting * (1.0 - clearCoat * clearCoatFresnel) + (clearCoat * clearCoatSpecular);
+            envBRDF = GetBRDFIntegrationMap(NoV, clearCoatAlpha);
+            float3 Rs_clearCoat = prefilteredColor * (clearCoatFresnel * envBRDF.x + envBRDF.y);
+            BRDF = (BRDF * (1.0 - (clearCoat * clearCoatFresnel))) + (clearCoat * Rs_clearCoat);
         }
+
+        indirectLighting = BRDF;
     }
 
     float3 finalColor = directLighting + indirectLighting;

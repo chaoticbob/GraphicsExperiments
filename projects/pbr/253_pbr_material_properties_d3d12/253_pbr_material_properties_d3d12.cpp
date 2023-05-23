@@ -55,7 +55,7 @@ struct MaterialParameters
 {
     vec3  baseColor;
     float roughness;
-    float metalness;
+    float metallic;
     float reflectance;
     float clearCoat;
     float clearCoatRoughness;
@@ -590,7 +590,7 @@ int main(int argc, char** argv)
                     MaterialParameters materialParams = {};
                     materialParams.baseColor          = vec3(1.0f, 1.0f, 1.0f);
                     materialParams.roughness          = 0;
-                    materialParams.metalness          = 0;
+                    materialParams.metallic           = 0;
                     materialParams.reflectance        = 0.5;
                     materialParams.clearCoat          = 0;
                     materialParams.clearCoatRoughness = 0;
@@ -599,7 +599,7 @@ int main(int argc, char** argv)
                         default: break;
                         case ROW_METALLIC: {
                             materialParams.baseColor = F0_MetalChromium;
-                            materialParams.metalness = t;
+                            materialParams.metallic  = t;
                             materialParams.roughness = 0;
                         } break;
 
@@ -611,27 +611,27 @@ int main(int argc, char** argv)
                         case ROW_ROUGHNESS_METALLIC: {
                             materialParams.baseColor = pSceneParams->furnace ? vec3(1) : F0_MetalGold;
                             materialParams.roughness = std::max(0.045f, t);
-                            materialParams.metalness = 1.0;
+                            materialParams.metallic  = 1.0;
                         } break;
 
                         case ROW_REFLECTANCE: {
                             materialParams.baseColor   = vec3(0.75f, 0, 0);
                             materialParams.roughness   = 0.2f;
-                            materialParams.metalness   = 0;
+                            materialParams.metallic    = 0;
                             materialParams.reflectance = t;
                         } break;
 
                         case ROW_CLEAR_COAT: {
                             materialParams.baseColor = vec3(0.75f, 0, 0);
                             materialParams.roughness = 0.8f;
-                            materialParams.metalness = 1.0f;
+                            materialParams.metallic  = 1.0f;
                             materialParams.clearCoat = t;
                         } break;
 
                         case ROW_CLEAR_COAT_ROUGHNESS: {
                             materialParams.baseColor          = vec3(0.75f, 0, 0);
                             materialParams.roughness          = 0.8f;
-                            materialParams.metalness          = 1.0f;
+                            materialParams.metallic           = 1.0f;
                             materialParams.clearCoat          = 1;
                             materialParams.clearCoatRoughness = std::max(0.045f, t);
                         } break;
@@ -639,7 +639,7 @@ int main(int argc, char** argv)
                         case ROW_ANISOTROPY: {
                             materialParams.baseColor  = F0_MetalZinc;
                             materialParams.roughness  = 0.45f;
-                            materialParams.metalness  = 1.0f;
+                            materialParams.metallic   = 1.0f;
                             materialParams.anisotropy = t;
                         } break;
                     }
@@ -971,14 +971,14 @@ void CreateIBLTextures(
         const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
         const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
 
-        std::vector<DxMipOffset> mipOffsets;
-        uint32_t                 levelOffset = 0;
-        uint32_t                 levelWidth  = ibl.baseWidth;
-        uint32_t                 levelHeight = ibl.baseHeight;
+        std::vector<MipOffset> mipOffsets;
+        uint32_t               levelOffset = 0;
+        uint32_t               levelWidth  = ibl.baseWidth;
+        uint32_t               levelHeight = ibl.baseHeight;
         for (uint32_t i = 0; i < ibl.numLevels; ++i) {
-            DxMipOffset mipOffset = {};
-            mipOffset.offset      = levelOffset;
-            mipOffset.rowStride   = rowStride;
+            MipOffset mipOffset = {};
+            mipOffset.Offset    = levelOffset;
+            mipOffset.RowStride = rowStride;
 
             mipOffsets.push_back(mipOffset);
 

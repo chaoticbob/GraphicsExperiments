@@ -564,14 +564,14 @@ HRESULT CreateUAVBuffer(DxRenderer* pRenderer, size_t size, D3D12_RESOURCE_STATE
 }
 
 HRESULT CreateTexture(
-    DxRenderer*                     pRenderer,
-    uint32_t                        width,
-    uint32_t                        height,
-    DXGI_FORMAT                     format,
-    const std::vector<DxMipOffset>& mipOffsets,
-    uint64_t                        srcSizeBytes,
-    const void*                     pSrcData,
-    ID3D12Resource**                ppResource)
+    DxRenderer*                   pRenderer,
+    uint32_t                      width,
+    uint32_t                      height,
+    DXGI_FORMAT                   format,
+    const std::vector<MipOffset>& mipOffsets,
+    uint64_t                      srcSizeBytes,
+    const void*                   pSrcData,
+    ID3D12Resource**              ppResource)
 {
     if (IsNull(pRenderer)) {
         return E_UNEXPECTED;
@@ -616,7 +616,7 @@ HRESULT CreateTexture(
     if (!IsNull(pSrcData)) {
         const uint32_t rowStride = width * PixelStride(format);
         // Calculate the total number of rows for all mip maps
-        uint32_t numRows   = 0;
+        uint32_t numRows = 0;
         {
             uint32_t mipHeight = height;
             for (UINT level = 0; level < mipLevels; ++level) {
@@ -664,7 +664,7 @@ HRESULT CreateTexture(
             uint32_t levelHeight = height;
             for (UINT level = 0; level < mipLevels; ++level) {
                 const auto&    mipOffset    = mipOffsets[level];
-                const uint32_t mipRowStride = Align<uint32_t>(mipOffset.rowStride, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+                const uint32_t mipRowStride = Align<uint32_t>(mipOffset.RowStride, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
 
                 D3D12_TEXTURE_COPY_LOCATION dst = {};
                 dst.pResource                   = *ppResource;
@@ -674,7 +674,7 @@ HRESULT CreateTexture(
                 D3D12_TEXTURE_COPY_LOCATION src        = {};
                 src.pResource                          = stagingBuffer.Get();
                 src.Type                               = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-                src.PlacedFootprint.Offset             = mipOffset.offset;
+                src.PlacedFootprint.Offset             = mipOffset.Offset;
                 src.PlacedFootprint.Footprint.Format   = format;
                 src.PlacedFootprint.Footprint.Width    = static_cast<UINT>(levelWidth);
                 src.PlacedFootprint.Footprint.Height   = static_cast<UINT>(levelHeight);
@@ -724,9 +724,9 @@ HRESULT CreateTexture(
     const void*      pSrcData,
     ID3D12Resource** ppResource)
 {
-    DxMipOffset mipOffset = {};
-    mipOffset.offset      = 0;
-    mipOffset.rowStride   = width * PixelStride(format);
+    MipOffset mipOffset = {};
+    mipOffset.Offset    = 0;
+    mipOffset.RowStride = width * PixelStride(format);
 
     return CreateTexture(
         pRenderer,

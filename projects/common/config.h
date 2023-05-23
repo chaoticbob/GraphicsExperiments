@@ -1,6 +1,10 @@
 #pragma once
 
+#include <algorithm>
 #include <cassert>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -25,6 +29,12 @@ using Microsoft::WRL::ComPtr;
         ss_grex_log_info << "ERROR: " << MSG << std::endl; \
         Print(ss_grex_log_info.str().c_str());             \
     }
+
+struct MipOffset
+{
+    uint32_t Offset    = 0;
+    uint32_t RowStride = 0;
+};
 
 inline void Print(const char* c_str)
 {

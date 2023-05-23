@@ -1,10 +1,6 @@
 #pragma once
 
-#include <algorithm>
-#include <cassert>
-#include <cstdint>
-#include <filesystem>
-#include <vector>
+#include "config.h"
 
 enum BitmapSampleMode
 {
@@ -919,6 +915,18 @@ public:
             assert(false && "level exceeds available mips");
         }
         return mMips[level];
+    }
+
+    std::vector<MipOffset> GetMipOffsets() const
+    {
+        std::vector<MipOffset> mipOffsets;
+        for (auto& offset : mOffsets) {
+            MipOffset mipOffset = {};
+            mipOffset.Offset    = offset;
+            mipOffset.RowStride = mStorage.GetRowStride();
+            mipOffsets.push_back(mipOffset);
+        }
+        return mipOffsets;
     }
 
     uint32_t GetWidth(uint32_t level) const

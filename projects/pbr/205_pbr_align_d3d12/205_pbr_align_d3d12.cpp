@@ -43,10 +43,9 @@ struct SceneParameters
 
 struct MaterialParameters
 {
-    vec3  albedo;
+    vec3  baseColor;
     float roughness;
-    float metalness;
-    vec3  F0;
+    float metallic;
 };
 
 struct PBRImplementationInfo
@@ -489,10 +488,9 @@ int main(int argc, char** argv)
                 // Shiny pastic
                 {
                     MaterialParameters materialParams = {};
-                    materialParams.albedo             = vec3(1.0f, 1.0f, 1.0f);
+                    materialParams.baseColor          = vec3(1.0f, 1.0f, 1.0f);
                     materialParams.roughness          = 0;
-                    materialParams.metalness          = 0;
-                    materialParams.F0                 = F0_DiletricPlastic;
+                    materialParams.metallic           = 0;
 
                     float x = -2.25f;
                     float y = 0;
@@ -510,10 +508,9 @@ int main(int argc, char** argv)
                 // Rough plastic
                 {
                     MaterialParameters materialParams = {};
-                    materialParams.albedo             = vec3(1.0f, 1.0f, 1.0f);
+                    materialParams.baseColor          = vec3(1.0f, 1.0f, 1.0f);
                     materialParams.roughness          = 1;
-                    materialParams.metalness          = 0;
-                    materialParams.F0                 = F0_DiletricPlastic;
+                    materialParams.metallic           = 0;
 
                     float x = -0.75f;
                     float y = 0;
@@ -531,10 +528,9 @@ int main(int argc, char** argv)
                 // Shiny metal
                 {
                     MaterialParameters materialParams = {};
-                    materialParams.albedo             = vec3(0.5f, 0.5f, 0.5f);
+                    materialParams.baseColor          = F0_MetalGold;
                     materialParams.roughness          = 0;
-                    materialParams.metalness          = 1;
-                    materialParams.F0                 = F0_MetalGold;
+                    materialParams.metallic           = 1;
 
                     float x = 0.75f;
                     float y = 0;
@@ -552,10 +548,9 @@ int main(int argc, char** argv)
                 // Rough metal
                 {
                     MaterialParameters materialParams = {};
-                    materialParams.albedo             = vec3(0.5f, 0.5f, 0.5f);
+                    materialParams.baseColor          = vec3(0.5f, 0.5f, 0.5f);
                     materialParams.roughness          = 1;
-                    materialParams.metalness          = 1;
-                    materialParams.F0                 = F0_MetalGold;
+                    materialParams.metallic           = 1;
 
                     float x = 2.25f;
                     float y = 0;
@@ -569,48 +564,6 @@ int main(int argc, char** argv)
 
                     commandList->DrawIndexedInstanced(materialSphereNumIndices, 1, 0, 0, 0);
                 }
-
-                /*
-                MaterialParameters materialParams = {};
-                materialParams.albedo             = vec3(0.8f, 0.8f, 0.9f);
-                materialParams.roughness          = 0;
-                materialParams.metalness          = 0;
-                materialParams.F0                 = F0_Generic;
-
-                uint32_t numSlotsX     = 10;
-                uint32_t numSlotsY     = 10;
-                float    slotSize      = 0.9f;
-                float    spanX         = numSlotsX * slotSize;
-                float    spanY         = numSlotsY * slotSize;
-                float    halfSpanX     = spanX / 2.0f;
-                float    halfSpanY     = spanY / 2.0f;
-                float    roughnessStep = 1.0f / (numSlotsX - 1);
-                float    metalnessStep = 1.0f / (numSlotsY - 1);
-
-                for (uint32_t i = 0; i < numSlotsY; ++i) {
-                    materialParams.metalness = 0;
-
-                    for (uint32_t j = 0; j < numSlotsX; ++j) {
-                        float x = -halfSpanX + j * slotSize;
-                        float y = -halfSpanY + i * slotSize;
-                        float z = 0;
-                        // Readjust center
-                        x += slotSize / 2.0f;
-                        y += slotSize / 2.0f;
-
-                        glm::mat4 modelMat = glm::translate(vec3(x, y, z));
-                        // DrawParams (b1)
-                        commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
-                        // MaterialParams (b2)
-                        commandList->SetGraphicsRoot32BitConstants(2, 8, &materialParams, 0);
-
-                        commandList->DrawIndexedInstanced(materialSphereNumIndices, 1, 0, 0, 0);
-
-                        materialParams.metalness += roughnessStep;
-                    }
-                    materialParams.roughness += metalnessStep;
-                }
-                */
             }
 
             // Draw ImGui
@@ -887,14 +840,14 @@ void CreateIBLTextures(
         const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
         const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
 
-        std::vector<DxMipOffset> mipOffsets;
-        uint32_t                 levelOffset = 0;
-        uint32_t                 levelWidth  = ibl.baseWidth;
-        uint32_t                 levelHeight = ibl.baseHeight;
+        std::vector<MipOffset> mipOffsets;
+        uint32_t               levelOffset = 0;
+        uint32_t               levelWidth  = ibl.baseWidth;
+        uint32_t               levelHeight = ibl.baseHeight;
         for (uint32_t i = 0; i < ibl.numLevels; ++i) {
-            DxMipOffset mipOffset = {};
-            mipOffset.offset      = levelOffset;
-            mipOffset.rowStride   = rowStride;
+            MipOffset mipOffset = {};
+            mipOffset.Offset    = levelOffset;
+            mipOffset.RowStride = rowStride;
 
             mipOffsets.push_back(mipOffset);
 

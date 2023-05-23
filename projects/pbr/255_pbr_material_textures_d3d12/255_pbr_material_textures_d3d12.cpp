@@ -53,8 +53,6 @@ struct SceneParameters
     Light    lights[8];
     uint32_t iblNumEnvLevels;
     uint32_t iblIndex;
-    float    iblDiffuseStrength;
-    float    iblSpecularStrength;
     uint     multiscatter;
     uint     colorCorrect;
 };
@@ -109,13 +107,11 @@ static float gAngle       = 0.0f;
 
 static std::vector<std::string> gMaterialNames = {};
 
-static uint32_t                 gNumLights           = 4;
-static const uint32_t           gMaxIBLs             = 32;
-static uint32_t                 gIBLIndex            = 0;
-static std::vector<std::string> gIBLNames            = {};
-static float                    gIBLDiffuseStrength  = 1.0f;
-static float                    gIBLSpecularStrength = 1.0f;
-static uint32_t                 gModelIndex          = 0;
+static uint32_t                 gNumLights  = 4;
+static const uint32_t           gMaxIBLs    = 32;
+static uint32_t                 gIBLIndex   = 0;
+static std::vector<std::string> gIBLNames   = {};
+static uint32_t                 gModelIndex = 0;
 
 void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
 void CreateEnvironmentRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
@@ -465,8 +461,6 @@ int main(int argc, char** argv)
     pSceneParams->lights[3].intensity = 0.5f;
     pSceneParams->iblNumEnvLevels     = envNumLevels[gIBLIndex];
     pSceneParams->iblIndex            = gIBLIndex;
-    pSceneParams->iblDiffuseStrength  = 1.0f;
-    pSceneParams->iblSpecularStrength = 1.0f;
     pSceneParams->colorCorrect        = 0;
 
     // *************************************************************************
@@ -510,8 +504,6 @@ int main(int argc, char** argv)
 
             ImGui::Separator();
 
-            ImGui::SliderFloat("IBL Diffuse Strength", &pSceneParams->iblDiffuseStrength, 0.0f, 5.0f);
-            ImGui::SliderFloat("IBL Specular Strength", &pSceneParams->iblSpecularStrength, 0.0f, 5.0f);
             ImGui::Checkbox("Multiscatter", reinterpret_cast<bool*>(&pSceneParams->multiscatter));
 
             ImGui::Separator();
@@ -1046,7 +1038,7 @@ void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     staticSamplers[1].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[1].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[1].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].MipLODBias       = 0.5f; //D3D12_DEFAULT_MIP_LOD_BIAS;
+    staticSamplers[1].MipLODBias       = 0.5f; // D3D12_DEFAULT_MIP_LOD_BIAS;
     staticSamplers[1].MaxAnisotropy    = 0;
     staticSamplers[1].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     staticSamplers[1].MinLOD           = 0;
@@ -1465,6 +1457,7 @@ void CreateIBLTextures(
         IBLMaps ibl = {};
         if (!LoadIBLMaps32f(iblFile, &ibl)) {
             GREX_LOG_ERROR("failed to load: " << iblFile);
+            assert(false && "IBL maps load failed failed");
             return;
         }
 
@@ -1489,14 +1482,14 @@ void CreateIBLTextures(
             const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
             const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
 
-            std::vector<DxMipOffset> mipOffsets;
-            uint32_t                 levelOffset = 0;
-            uint32_t                 levelWidth  = ibl.baseWidth;
-            uint32_t                 levelHeight = ibl.baseHeight;
+            std::vector<MipOffset> mipOffsets;
+            uint32_t               levelOffset = 0;
+            uint32_t               levelWidth  = ibl.baseWidth;
+            uint32_t               levelHeight = ibl.baseHeight;
             for (uint32_t i = 0; i < ibl.numLevels; ++i) {
-                DxMipOffset mipOffset = {};
-                mipOffset.offset      = levelOffset;
-                mipOffset.rowStride   = rowStride;
+                MipOffset mipOffset = {};
+                mipOffset.Offset    = levelOffset;
+                mipOffset.RowStride = rowStride;
 
                 mipOffsets.push_back(mipOffset);
 
@@ -1542,18 +1535,28 @@ void CreateMaterials(
         CHECK_CALL(CreateTexture(pRenderer, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &blackPixel, &outDefaultMaterialTextures.metallicTexture));
     }
 
-    auto                               texturesDir = GetAssetPath("Textures");
-    std::vector<std::filesystem::path> materialFiles;
-    for (auto& entry : std::filesystem::directory_iterator(texturesDir)) {
-        if (!entry.is_directory()) {
-            continue;
-        }
-        auto materialFilePath = entry.path() / "material.mat";
-        if (!fs::exists(materialFilePath)) {
-            continue;
-        }
-        materialFiles.push_back(materialFilePath);
-    }
+    // Texture directory
+    auto                               texturesDir = GetAssetPath("textures");
+
+    // Material files - limit to 16 since there's 16 objects draws
+    std::vector<std::filesystem::path> materialFiles = {
+        texturesDir / "bark_brown_02" / "material.mat",
+        texturesDir / "bark_willow" / "material.mat",
+        texturesDir / "brick_4" / "material.mat",
+        texturesDir / "castle_brick_02_red" / "material.mat",
+        texturesDir / "dark_brick_wall" / "material.mat",
+        texturesDir / "factory_wall" / "material.mat",
+        texturesDir / "green_metal_rust" / "material.mat",
+        texturesDir / "hexagonal_concrete_paving" / "material.mat",
+        texturesDir / "metal_grate_rusty" / "material.mat",
+        texturesDir / "metal_plate" / "material.mat",
+        texturesDir / "mud_cracked_dry_riverbed_002" / "material.mat",
+        texturesDir / "pavement_02" / "material.mat",
+        texturesDir / "rough_plaster_broken" / "material.mat",
+        texturesDir / "rusty_metal_02" / "material.mat",
+        texturesDir / "weathered_planks" / "material.mat",
+        texturesDir / "wood_table_001" / "material.mat",
+    };
 
     size_t maxEntries = materialFiles.size();
     for (size_t i = 0; i < maxEntries; ++i) {
@@ -1598,7 +1601,7 @@ void CreateMaterials(
             }
 
             auto cwd    = materialFile.parent_path().filename();
-            textureFile = "Textures" / cwd / textureFile;
+            textureFile = "textures" / cwd / textureFile;
 
             auto bitmap = LoadImage8u(textureFile);
             if (!bitmap.Empty()) {
@@ -1608,11 +1611,11 @@ void CreateMaterials(
                     BITMAP_SAMPLE_MODE_WRAP,
                     BITMAP_FILTER_MODE_NEAREST);
 
-                std::vector<DxMipOffset> mipOffsets;
+                std::vector<MipOffset> mipOffsets;
                 for (auto& srcOffset : mipmap.GetOffsets()) {
-                    DxMipOffset dstOffset = {};
-                    dstOffset.offset      = srcOffset;
-                    dstOffset.rowStride   = mipmap.GetRowStride();
+                    MipOffset dstOffset = {};
+                    dstOffset.Offset    = srcOffset;
+                    dstOffset.RowStride = mipmap.GetRowStride();
                     mipOffsets.push_back(dstOffset);
                 }
 
@@ -1630,6 +1633,7 @@ void CreateMaterials(
             }
             else {
                 GREX_LOG_ERROR("Failed to load: " << textureFile);
+                assert(false && "Failed to load texture!");
             }
         }
 

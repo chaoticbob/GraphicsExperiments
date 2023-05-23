@@ -15,11 +15,11 @@ enum DxPipelineFlags
     DX_PIPELINE_FLAGS_INTERLEAVED_ATTRS = 0x00000001
 };
 
-struct DxMipOffset
-{
-    uint32_t offset    = 0;
-    uint32_t rowStride = 0;
-};
+// struct DxMipOffset
+//{
+//     uint32_t offset    = 0;
+//     uint32_t rowStride = 0;
+// };
 
 struct DxRenderer
 {
@@ -60,14 +60,14 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t rowStride, size_t totalNumRow
 HRESULT CreateUAVBuffer(DxRenderer* pRenderer, size_t size, D3D12_RESOURCE_STATES initialResourceState, ID3D12Resource** ppResource);
 
 HRESULT CreateTexture(
-    DxRenderer*                     pRenderer,
-    uint32_t                        width,
-    uint32_t                        height,
-    DXGI_FORMAT                     format,
-    const std::vector<DxMipOffset>& mipOffsets,
-    uint64_t                        srcSizeBytes,
-    const void*                     pSrcData,
-    ID3D12Resource**                ppResource);
+    DxRenderer*                   pRenderer,
+    uint32_t                      width,
+    uint32_t                      height,
+    DXGI_FORMAT                   format,
+    const std::vector<MipOffset>& mipOffsets,
+    uint64_t                      srcSizeBytes,
+    const void*                   pSrcData,
+    ID3D12Resource**              ppResource);
 
 HRESULT CreateTexture(
     DxRenderer*      pRenderer,
@@ -172,6 +172,5 @@ HRESULT CompileHLSL(
     const std::string& profile,
     std::vector<char>* pDXIL,
     std::string*       pErrorMsg);
-
 
 HRESULT CopyDataToBuffer(size_t dataSize, void* pData, ID3D12Resource* pBuffer);
