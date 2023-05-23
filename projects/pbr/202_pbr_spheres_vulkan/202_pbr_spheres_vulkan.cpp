@@ -53,10 +53,9 @@ struct DrawParameters
 
 struct MaterialParameters
 {
-   vec3  albedo;
-   float roughness;
-   float metalness;
-   vec3  F0;
+   vec3     baseColor;
+   float    roughness;
+   float    metallic;
 };
 
 struct PBRImplementationInfo
@@ -270,7 +269,11 @@ int main(int argc, char** argv)
        shaderModuleFS,
        GREX_DEFAULT_RTV_FORMAT,
        GREX_DEFAULT_DSV_FORMAT,
-       &pbrPipelineState));
+       &pbrPipelineState,
+       false,
+       VK_CULL_MODE_BACK_BIT,
+       "vsmain",
+       "psmain"));
 
     // *************************************************************************
     // Environment pipeline state object
@@ -399,10 +402,10 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain image views, depth buffers/views
     // *************************************************************************
+    std::vector<VkImage>      images;
     std::vector<VkImageView>  imageViews;
     std::vector<VkImageView>  depthViews;
     {
-       std::vector<VkImage>      images;
        CHECK_CALL(GetSwapchainImages(renderer.get(), images));
 
        for (auto& image : images) {
@@ -494,6 +497,14 @@ int main(int argc, char** argv)
        CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
 
        {
+          CmdTransitionImageLayout(
+             cmdBuf.CommandBuffer,
+             images[bufferIndex],
+             GREX_ALL_SUBRESOURCES,
+             VK_IMAGE_ASPECT_COLOR_BIT,
+             RESOURCE_STATE_PRESENT,
+             RESOURCE_STATE_RENDER_TARGET);
+
           VkRenderingAttachmentInfo colorAttachment  = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
           colorAttachment.imageView                  = imageViews[bufferIndex];
           colorAttachment.imageLayout                = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
@@ -553,15 +564,15 @@ int main(int argc, char** argv)
 
           // Draw environment
           {
-            VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
-            descriptorBufferBindingInfo.pNext                            = nullptr;
-            descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &envDescriptorBuffer);
-            descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-            fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
+             VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT };
+             descriptorBufferBindingInfo.pNext                            = nullptr;
+             descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &envDescriptorBuffer);
+             descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+             fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
 
-            uint32_t     bufferIndices           = 0;
-            VkDeviceSize descriptorBufferOffsets = 0;
-            fn_vkCmdSetDescriptorBufferOffsetsEXT(
+             uint32_t     bufferIndices           = 0;
+             VkDeviceSize descriptorBufferOffsets = 0;
+             fn_vkCmdSetDescriptorBufferOffsetsEXT(
                 cmdBuf.CommandBuffer,
                 VK_PIPELINE_BIND_POINT_GRAPHICS,
                 envPipelineLayout.PipelineLayout,
@@ -570,8 +581,8 @@ int main(int argc, char** argv)
                 &bufferIndices,
                 &descriptorBufferOffsets);
 
-            // Bind the VS/FS Graphics Pipeline
-            vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, envPipelineState);
+             // Bind the VS/FS Graphics Pipeline
+             vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, envPipelineState);
 
              glm::mat4 moveUp = glm::translate(vec3(0, 0, 0));
 
@@ -592,15 +603,15 @@ int main(int argc, char** argv)
 
           // Draw material sphere
           {
-            VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
-            descriptorBufferBindingInfo.pNext                            = nullptr;
-            descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &pbrDescriptorBuffer);
-            descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-            fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
+             VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT };
+             descriptorBufferBindingInfo.pNext                            = nullptr;
+             descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &pbrDescriptorBuffer);
+             descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+             fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
 
-            uint32_t     bufferIndices           = 0;
-            VkDeviceSize descriptorBufferOffsets = 0;
-            fn_vkCmdSetDescriptorBufferOffsetsEXT(
+             uint32_t     bufferIndices           = 0;
+             VkDeviceSize descriptorBufferOffsets = 0;
+             fn_vkCmdSetDescriptorBufferOffsetsEXT(
                 cmdBuf.CommandBuffer,
                 VK_PIPELINE_BIND_POINT_GRAPHICS,
                 pbrPipelineLayout.PipelineLayout,
@@ -621,10 +632,9 @@ int main(int argc, char** argv)
              vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pbrPipelineState);
 
              MaterialParameters materialParams = {};
-             materialParams.albedo             = vec3(0.8f, 0.8f, 0.9f);
+             materialParams.baseColor             = vec3(0.8f, 0.8f, 0.9f);
              materialParams.roughness          = 0;
-             materialParams.metalness          = 0;
-             materialParams.F0                 = F0_Generic;
+             materialParams.metallic          = 0;
 
              uint32_t numSlotsX     = 10;
              uint32_t numSlotsY     = 10;
@@ -637,7 +647,7 @@ int main(int argc, char** argv)
              float    metalnessStep = 1.0f / (numSlotsY - 1);
 
              for (uint32_t i = 0; i < numSlotsY; ++i) {
-                materialParams.metalness = 0;
+                materialParams.metallic = 0;
 
                 for (uint32_t j = 0; j < numSlotsX; ++j) {
                    float x = -halfSpanX + j * slotSize;
@@ -654,16 +664,42 @@ int main(int argc, char** argv)
 
                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, materialSphereNumIndices, 1, 0, 0, 0);
 
-                   materialParams.metalness += roughnessStep;
+                   materialParams.metallic += roughnessStep;
                 }
                 materialParams.roughness += metalnessStep;
              }
           }
 
-          // Draw ImGui
-          window->ImGuiRenderDrawData(renderer.get(), cmdBuf.CommandBuffer);
-
           vkCmdEndRendering(cmdBuf.CommandBuffer);
+
+          // Setup render passes and draw ImGui
+          {
+             VkRenderPassAttachmentBeginInfo attachmentBeginInfo = { VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO };
+             attachmentBeginInfo.pNext                           = 0;
+             attachmentBeginInfo.attachmentCount                 = 1;
+             attachmentBeginInfo.pAttachments                    = &imageViews[bufferIndex];
+
+             VkRenderPassBeginInfo beginInfo = { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
+             beginInfo.pNext                 = &attachmentBeginInfo;
+             beginInfo.renderPass            = renderPass.RenderPass;
+             beginInfo.framebuffer           = renderPass.Framebuffer;
+             beginInfo.renderArea            = scissor;
+
+             vkCmdBeginRenderPass(cmdBuf.CommandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+             // Draw ImGui
+             window->ImGuiRenderDrawData(renderer.get(), cmdBuf.CommandBuffer);
+
+             vkCmdEndRenderPass(cmdBuf.CommandBuffer);
+          }
+
+          CmdTransitionImageLayout(
+             cmdBuf.CommandBuffer,
+             images[bufferIndex],
+             GREX_ALL_SUBRESOURCES,
+             VK_IMAGE_ASPECT_COLOR_BIT,
+             RESOURCE_STATE_RENDER_TARGET,
+             RESOURCE_STATE_PRESENT);
        }
 
       CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));

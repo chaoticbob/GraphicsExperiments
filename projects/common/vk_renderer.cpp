@@ -1247,15 +1247,17 @@ VkResult CreateTexture(
         {
             uint32_t levelWidth  = width;
             uint32_t levelHeight = height;
+            uint32_t formatSizeInBytes = PixelStride(format);
             for (UINT level = 0; level < mipLevels; ++level) {
                 const auto&    mipOffset    = mipOffsets[level];
                 const uint32_t mipRowStride = mipOffset.rowStride;
+                const uint32_t mipRowStrideInPixels = mipRowStride / formatSizeInBytes;
 
                 VkImageAspectFlagBits aspectFlags     = VK_IMAGE_ASPECT_COLOR_BIT;
                 VkBufferImageCopy     srcRegion       = {};
                 srcRegion.bufferOffset                = mipOffset.offset;
-                srcRegion.bufferRowLength             = levelWidth;  // Pixels/texels *NOT* row stride
-                srcRegion.bufferImageHeight           = levelHeight; // Pixels/texels
+                srcRegion.bufferRowLength             = mipRowStrideInPixels; // Row stride but in Pixels/texels 
+                srcRegion.bufferImageHeight           = levelHeight;          // Pixels/texels
                 srcRegion.imageSubresource.aspectMask = aspectFlags;
                 srcRegion.imageSubresource.layerCount = 1;
                 srcRegion.imageSubresource.mipLevel   = level;
@@ -1730,7 +1732,9 @@ HRESULT CreateDrawNormalPipeline(
    VkFormat             dsvFormat,
    VkPipeline*          pPipeline,
    bool                 enableTangents,
-   VkCullModeFlagBits   cullMode)
+   VkCullModeFlagBits   cullMode,
+   const char*          vsEntryPoint,
+   const char*          fsEntryPoint)
 {
    VkFormat                      rtv_format                     = GREX_DEFAULT_RTV_FORMAT;
    VkPipelineRenderingCreateInfo pipeline_rendering_create_info = { VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
@@ -1741,11 +1745,11 @@ HRESULT CreateDrawNormalPipeline(
    VkPipelineShaderStageCreateInfo shader_stages[2] = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
    shader_stages[0].stage                           = VK_SHADER_STAGE_VERTEX_BIT;
    shader_stages[0].module                          = vsShaderModule;
-   shader_stages[0].pName                           = "vsmain";
+   shader_stages[0].pName                           = vsEntryPoint;
    shader_stages[1].sType                           = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
    shader_stages[1].stage                           = VK_SHADER_STAGE_FRAGMENT_BIT;
    shader_stages[1].module                          = fsShaderModule;
-   shader_stages[1].pName                           = "psmain";
+   shader_stages[1].pName                           = fsEntryPoint;
 
    VkVertexInputBindingDescription vertex_binding_desc[4] = {};
    vertex_binding_desc[0].binding   = 0;
@@ -2024,7 +2028,6 @@ HRESULT CreateDrawTexturePipeline(
 
 CompileResult CompileGLSL(
     const std::string&     shaderSource,
-    const std::string&     entryPoint,
     VkShaderStageFlagBits  shaderStage,
     const CompilerOptions& options,
     std::vector<uint32_t>* pSPIRV,

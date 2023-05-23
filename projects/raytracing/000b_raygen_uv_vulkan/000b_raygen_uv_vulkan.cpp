@@ -97,7 +97,7 @@ int main(int argc, char** argv)
     std::vector<uint32_t> spirvRGEN;
     {
         std::string   errorMsg;
-        CompileResult res = CompileGLSL(gShaderRGEN, "main", VK_SHADER_STAGE_RAYGEN_BIT_KHR, {}, &spirvRGEN, &errorMsg);
+        CompileResult res = CompileGLSL(gShaderRGEN, VK_SHADER_STAGE_RAYGEN_BIT_KHR, {}, &spirvRGEN, &errorMsg);
         if (res != COMPILE_SUCCESS) {
             std::stringstream ss;
             ss << "\n"

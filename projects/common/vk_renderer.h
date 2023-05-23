@@ -327,7 +327,9 @@ HRESULT CreateDrawNormalPipeline(
    VkFormat             dsvFormat,
    VkPipeline*          pPipeline,
    bool                 enableTangents = false,
-   VkCullModeFlagBits   cullMode = VK_CULL_MODE_BACK_BIT);
+   VkCullModeFlagBits   cullMode = VK_CULL_MODE_BACK_BIT,
+   const char*          vsEntryPoint = "main",
+   const char*          fsEntryPoint = "main");
 
 HRESULT CreateDrawTexturePipeline(
    VulkanRenderer*      pRenderer,
@@ -341,7 +343,6 @@ HRESULT CreateDrawTexturePipeline(
 
 CompileResult CompileGLSL(
     const std::string&     shaderSource,
-    const std::string&     entryPoint,
     VkShaderStageFlagBits  shaderStage,
     const CompilerOptions& options,
     std::vector<uint32_t>* pSPIRV,
