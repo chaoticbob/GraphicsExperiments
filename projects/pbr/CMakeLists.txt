@@ -16,4 +16,5 @@ endif()
 
 if (GREX_ENABLE_VULKAN)
     add_subdirectory(202_pbr_spheres_vulkan)
+    add_subdirectory(204_pbr_camera_vulkan)
 endif()

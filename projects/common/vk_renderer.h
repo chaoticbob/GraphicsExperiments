@@ -341,6 +341,16 @@ HRESULT CreateDrawTexturePipeline(
    VkPipeline*          pPipeline,
    VkCullModeFlagBits   cullMode = VK_CULL_MODE_BACK_BIT);
 
+HRESULT CreateGraphicsPipeline1(
+   VulkanRenderer*      pRenderer,
+   VkPipelineLayout     pipelineLayout,
+   VkShaderModule       vsShaderModule,
+   VkShaderModule       fsShaderModule,
+   VkFormat             rtvFormat,
+   VkFormat             dsvFormat,
+   VkPipeline*          pPipeline,
+   VkCullModeFlagBits   cullMode = VK_CULL_MODE_BACK_BIT);
+
 CompileResult CompileGLSL(
     const std::string&     shaderSource,
     VkShaderStageFlagBits  shaderStage,
