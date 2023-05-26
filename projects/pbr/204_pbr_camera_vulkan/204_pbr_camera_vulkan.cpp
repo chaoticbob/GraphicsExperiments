@@ -720,7 +720,7 @@ int main(int argc, char** argv)
                   sizeof(DrawParameters),
                   &drawParams);
 
-               // vkCmdDrawIndexed(cmdBuf.CommandBuffer, draw.numIndices, 1, 0, 0, 0);
+               vkCmdDrawIndexed(cmdBuf.CommandBuffer, draw.numIndices, 1, 0, 0, 0);
             }
          }
 
@@ -1346,6 +1346,7 @@ void WritePBRDescriptors(
 
    // Texture2D    MaterialTextures[10] : register(t10);
    {
+      uint32_t arrayIndex = 0;
       for (auto& materialTextures : materialTextureSets) {
          VulkanImage *textureImages[] = {
             &materialTextures.baseColorTexture,
@@ -1355,7 +1356,6 @@ void WritePBRDescriptors(
             &materialTextures.aoTexture
          };
 
-         uint32_t arrayIndex = 0;
          for (auto& image : textureImages) {
             VkImageView imageView = VK_NULL_HANDLE;
             CHECK_CALL(CreateImageView(
@@ -1412,7 +1412,7 @@ void WritePBRDescriptors(
          pRenderer,
          pDescriptorBufferStartAddress,
          descriptorSetLayout,
-         7, // binding
+         9, // binding
          0, // arrayElement
          materialSampler);
    }
