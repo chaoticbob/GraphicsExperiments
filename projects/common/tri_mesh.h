@@ -268,7 +268,6 @@ public:
         uint32_t         usegs           = 1,
         uint32_t         vsegs           = 1,
         glm::vec3        normalToPlane   = glm::vec3(0, 1, 0),
-        bool             zAxisModeOpenGL = false,
         const Options&   options         = {});
 
     static TriMesh Sphere(

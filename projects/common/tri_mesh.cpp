@@ -790,15 +790,18 @@ TriMesh TriMesh::Plane(
     uint32_t                usegs,
     uint32_t                vsegs,
     glm::vec3               normalToPlane,
-    bool                    zAxisModeOpenGL,
     const TriMesh::Options& options)
 
 {
-    float     zScale = zAxisModeOpenGL ? -1.0f : 1.0f;
-    glm::vec3 P0     = glm::vec3(-0.5f, 0.0f, +0.5f * zScale) * glm::vec3(size.x, 1.0f, size.y);
-    glm::vec3 P1     = glm::vec3(-0.5f, 0.0f, -0.5f * zScale) * glm::vec3(size.x, 1.0f, size.y);
-    glm::vec3 P2     = glm::vec3(+0.5f, 0.0f, -0.5f * zScale) * glm::vec3(size.x, 1.0f, size.y);
-    glm::vec3 P3     = glm::vec3(+0.5f, 0.0f, +0.5f * zScale) * glm::vec3(size.x, 1.0f, size.y);
+    glm::vec3 P0 = glm::vec3(-0.5f, 0.0f, -0.5f) * glm::vec3(size.x, 1.0, size.y);
+    glm::vec3 P1 = glm::vec3(-0.5f, 0.0f, 0.5f) * glm::vec3(size.x, 1.0, size.y);
+    glm::vec3 P2 = glm::vec3(0.5f, 0.0f, 0.5f) * glm::vec3(size.x, 1.0, size.y);
+    glm::vec3 P3 = glm::vec3(0.5f, 0.0f, -0.5f) * glm::vec3(size.x, 1.0, size.y);
+
+    glm::vec2 uv0 = glm::vec2(0, 0);
+    glm::vec2 uv1 = glm::vec2(0, 1);
+    glm::vec2 uv2 = glm::vec2(1, 1);
+    glm::vec2 uv3 = glm::vec2(1, 0);
 
     const uint32_t uverts = usegs + 1;
     const uint32_t vverts = vsegs + 1;
@@ -807,8 +810,8 @@ TriMesh TriMesh::Plane(
     float dv = 1.0f / vsegs;
 
     const glm::vec3 T = glm::vec3(1, 0, 0);
-    const glm::vec3 B = glm::vec3(0, 0, -1);
-    const glm::vec3 N = glm::normalize(normalToPlane);
+    const glm::vec3 B = glm::vec3(0, 0, 1);
+    const glm::vec3 N = glm::vec3(0, 1, 0);
 
     glm::quat rotQuat = glm::rotation(N, glm::normalize(normalToPlane));
     glm::mat4 rotMat  = glm::toMat4(rotQuat);
@@ -853,16 +856,8 @@ TriMesh TriMesh::Plane(
             uint32_t v2 = j1 * uverts + i1;
             uint32_t v3 = j0 * uverts + i1;
 
-            if (zAxisModeOpenGL) {
-                // Counter-clockwise
-                mesh.AddTriangle(v0, v1, v2);
-                mesh.AddTriangle(v0, v2, v3);
-            }
-            else {
-                // Clockwise
-                mesh.AddTriangle(v0, v2, v1);
-                mesh.AddTriangle(v0, v3, v2);
-            }
+            mesh.AddTriangle(v0, v1, v2);
+            mesh.AddTriangle(v0, v2, v3);
         }
     }
 
@@ -1095,7 +1090,6 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
                 1,
                 1,
                 glm::vec3(0, -1, 0),
-                true,
                 thisOptions);
             plane.SetVertexColors(baseColor);
 
@@ -1133,7 +1127,6 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
                 1,
                 1,
                 glm::vec3(1, 0, 0),
-                true,
                 thisOptions);
             plane.SetVertexColors(baseColor);
 
@@ -1159,7 +1152,6 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
                 1,
                 1,
                 glm::vec3(-1, 0, 0),
-                true,
                 thisOptions);
             plane.SetVertexColors(baseColor);
 
