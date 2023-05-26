@@ -13,6 +13,9 @@ cbuffer Constants : register(b5) {
     float HeightMapScale;
 
     bool EnableDiscard;
+
+    bool  EnableShadow;
+    float ShadowStep;
 };
 
 ConstantBuffer<CameraProperties> Camera              : register(b0); // Constant buffer
@@ -55,7 +58,7 @@ VSOutput vsmain(
 float4 psmain(VSOutput input) : SV_TARGET
 {  
     // These are in world space
-    const float3 Lp = float3(4, 4, 0);
+    const float3 Lp = float3(4, 5, 0);
     const float3 V = normalize(Camera.EyePosition - input.PositionWS.xyz);
 
     //
@@ -80,8 +83,8 @@ float4 psmain(VSOutput input) : SV_TARGET
     // Parallax occlusion mapping [BEGIN]
     // -------------------------------------------------------------------------
     const float  fHeightMapScale = HeightMapScale;
-    const float  nMinSamples = 8;
-    const float  nMaxSamples = 32;
+    const float  nMinSamples = 32;
+    const float  nMaxSamples = 64;
 
     // These are in tangent space...except uv
     float3 N  = mul(worldToTangentSpace, vN);
@@ -126,6 +129,46 @@ float4 psmain(VSOutput input) : SV_TARGET
     // Parallax occlusion mapping [END]
     // -------------------------------------------------------------------------
 
+    float shadow = 0.0;
+    if (EnableShadow && (L.z > 0)) {
+        fParallaxLimit = length(L.xy) / L.z * fHeightMapScale;
+        vOffsetDir = normalize(L.xy);
+        vMaxOffset = vOffsetDir * fParallaxLimit;
+        nNumSamples = (int)lerp(nMaxSamples, nMinSamples, dot(L, N));
+        fStepSize = 1.0 / (float)nNumSamples;
+
+        vCurrOffset = (float2)0;
+        vLastOffset = (float2)0;
+        fCurrRayHeight = DisplacementTexture.SampleGrad(Sampler0, uv + vCurrOffset, dx, dy).r;
+        fCurrSampledHeight = fCurrRayHeight;
+        fLastSampledHeight = fCurrRayHeight;
+
+        nCurrSample = 0;
+        while ((nCurrSample < nNumSamples) && (fCurrRayHeight < 1)) {
+            fCurrSampledHeight = DisplacementTexture.SampleGrad(Sampler0, uv + vCurrOffset, dx, dy).r;
+            if (fCurrSampledHeight > fCurrRayHeight) {
+                float delta1 = fCurrSampledHeight - fCurrRayHeight;
+                float delta2 = (fCurrRayHeight + fStepSize) - fLastSampledHeight;
+                float ratio  = delta1 / (delta1 + delta2);
+                vCurrOffset  = (ratio * vLastOffset) + ((1.0 - ratio) * vCurrOffset);
+                nCurrSample  = nNumSamples + 1;
+                shadow = pow(ratio, 0.5);
+            }
+            else {
+                nCurrSample++;
+                fCurrRayHeight += fStepSize;
+                vLastOffset = vCurrOffset;
+                vCurrOffset += fStepSize * vMaxOffset;
+                fLastSampledHeight = fCurrSampledHeight;
+            }            
+        }
+
+        float NoL = saturate(dot(N, L));
+        float factor = NoL / (25.0 * 3.141592 / 180.0);
+        factor = smoothstep(0, 1, factor);
+        shadow *= factor;
+    }
+
     //
     // OPTIONAL: This creates neat looking cutouts
     //
@@ -137,13 +180,15 @@ float4 psmain(VSOutput input) : SV_TARGET
     normal = normal * 2.0  - 1.0;
     normal = normalize(normal);
 
+    float NoL = saturate(dot(normal, L));
+
     // Lighting    
-    float  Ra = 0.3;
-    float  Rd = saturate(dot(L, normal));
+    float  Ra = 0.1;
+    float  Rd = NoL;
     float3 R = reflect(-L, normal);
     float  RdotV = saturate(dot(R, -E));
     float  Rs = pow(RdotV, 10.0);
-    float3 finalColor = (Ra + Rd) * baseColor + 0.45 * Rs;
+    float3 finalColor = (Ra + Rd * (1 - shadow) * baseColor) + (0.45 * Rs * NoL);
 
     return float4(finalColor, 1);
 }
