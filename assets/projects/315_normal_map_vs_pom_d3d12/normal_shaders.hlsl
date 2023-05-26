@@ -81,7 +81,7 @@ float4 psmain(VSOutput input) : SV_TARGET
     float3 R = reflect(-L, normal);
     float  RdotV = saturate(dot(R, -E));
     float  Rs = pow(RdotV, 10.0);
-    float3 finalColor = (Ra + Rd) * baseColor + 0.45 * Rs;
+    float3 finalColor = ((Ra + Rd) * baseColor) + (0.45 * Rs);
 
     return float4(finalColor, 1);
 }
