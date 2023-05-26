@@ -153,7 +153,7 @@ int main(int argc, char** argv)
    std::vector<uint32_t> spirvFS;
    {
       std::string errorMsg;
-      CompileResult vkRes = CompileGLSL(gShadersVS, "main", VK_SHADER_STAGE_VERTEX_BIT, {}, &spirvVS, &errorMsg);
+      CompileResult vkRes = CompileGLSL(gShadersVS, VK_SHADER_STAGE_VERTEX_BIT, {}, &spirvVS, &errorMsg);
       if (vkRes != COMPILE_SUCCESS) {
          std::stringstream ss;
          ss << "\n"
@@ -163,7 +163,7 @@ int main(int argc, char** argv)
          return EXIT_FAILURE;
       }
 
-      vkRes = CompileGLSL(gShadersFS, "main", VK_SHADER_STAGE_FRAGMENT_BIT, {}, &spirvFS, &errorMsg);
+      vkRes = CompileGLSL(gShadersFS, VK_SHADER_STAGE_FRAGMENT_BIT, {}, &spirvFS, &errorMsg);
       if (vkRes != COMPILE_SUCCESS) {
          std::stringstream ss;
          ss << "\n"
@@ -275,10 +275,10 @@ int main(int argc, char** argv)
    // *************************************************************************
    // Swapchain image views, depth buffers/views
    // *************************************************************************
+   std::vector<VkImage>      images;
    std::vector<VkImageView>  imageViews;
    std::vector<VkImageView>  depthViews;
    {
-      std::vector<VkImage>      images;
       CHECK_CALL(GetSwapchainImages(renderer.get(), images));
 
       for (auto& image : images) {
@@ -378,6 +378,14 @@ int main(int argc, char** argv)
       CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
 
       {
+         CmdTransitionImageLayout(
+            cmdBuf.CommandBuffer,
+            images[bufferIndex],
+            GREX_ALL_SUBRESOURCES,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            RESOURCE_STATE_PRESENT,
+            RESOURCE_STATE_RENDER_TARGET);
+
          VkRenderingAttachmentInfo colorAttachment  = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
          colorAttachment.imageView                  = imageViews[bufferIndex];
          colorAttachment.imageLayout                = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
@@ -444,10 +452,36 @@ int main(int argc, char** argv)
             vkCmdDraw(cmdBuf.CommandBuffer, geo.tbnDebugNumVertices, 1, 0, 0);
          }
 
-         // Draw ImGui
-         window->ImGuiRenderDrawData(renderer.get(), cmdBuf.CommandBuffer);
-
          vkCmdEndRendering(cmdBuf.CommandBuffer);
+
+         // Setup render passes and draw ImGui
+         {
+            VkRenderPassAttachmentBeginInfo attachmentBeginInfo = { VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO };
+            attachmentBeginInfo.pNext                           = 0;
+            attachmentBeginInfo.attachmentCount                 = 1;
+            attachmentBeginInfo.pAttachments                    = &imageViews[bufferIndex];
+
+            VkRenderPassBeginInfo beginInfo = { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
+            beginInfo.pNext                 = &attachmentBeginInfo;
+            beginInfo.renderPass            = renderPass.RenderPass;
+            beginInfo.framebuffer           = renderPass.Framebuffer;
+            beginInfo.renderArea            = scissor;
+
+            vkCmdBeginRenderPass(cmdBuf.CommandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+            // Draw ImGui
+            window->ImGuiRenderDrawData(renderer.get(), cmdBuf.CommandBuffer);
+
+            vkCmdEndRenderPass(cmdBuf.CommandBuffer);
+         }
+
+          CmdTransitionImageLayout(
+             cmdBuf.CommandBuffer,
+             images[bufferIndex],
+             GREX_ALL_SUBRESOURCES,
+             VK_IMAGE_ASPECT_COLOR_BIT,
+             RESOURCE_STATE_RENDER_TARGET,
+             RESOURCE_STATE_PRESENT);
       }
 
       CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));

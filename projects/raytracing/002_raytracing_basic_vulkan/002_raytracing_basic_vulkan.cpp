@@ -162,7 +162,7 @@ int main(int argc, char** argv)
     std::vector<uint32_t> spirvCHIT;
     {
         std::string   errorMsg;
-        CompileResult res = CompileGLSL(gShaderRGEN, "main", VK_SHADER_STAGE_RAYGEN_BIT_KHR, {}, &spirvRGEN, &errorMsg);
+        CompileResult res = CompileGLSL(gShaderRGEN, VK_SHADER_STAGE_RAYGEN_BIT_KHR, {}, &spirvRGEN, &errorMsg);
         if (res != COMPILE_SUCCESS) {
             std::stringstream ss;
             ss << "\n"
@@ -171,7 +171,7 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        res = CompileGLSL(gShaderMISS, "main", VK_SHADER_STAGE_MISS_BIT_KHR, {}, &spirvMISS, &errorMsg);
+        res = CompileGLSL(gShaderMISS, VK_SHADER_STAGE_MISS_BIT_KHR, {}, &spirvMISS, &errorMsg);
         if (res != COMPILE_SUCCESS) {
             std::stringstream ss;
             ss << "\n"
@@ -180,7 +180,7 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        res = CompileGLSL(gShaderCHIT, "main", VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, {}, &spirvCHIT, &errorMsg);
+        res = CompileGLSL(gShaderCHIT, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, {}, &spirvCHIT, &errorMsg);
         if (res != COMPILE_SUCCESS) {
             std::stringstream ss;
             ss << "\n"

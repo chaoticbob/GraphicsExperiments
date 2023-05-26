@@ -105,7 +105,7 @@ int main(int argc, char** argv)
     std::vector<uint32_t> spirvFS;
     {
         std::string errorMsg;
-        CompileResult vkRes = CompileGLSL(gShadersVS, "main", VK_SHADER_STAGE_VERTEX_BIT, {}, &spirvVS, &errorMsg);
+        CompileResult vkRes = CompileGLSL(gShadersVS, VK_SHADER_STAGE_VERTEX_BIT, {}, &spirvVS, &errorMsg);
         if (vkRes != COMPILE_SUCCESS) {
             std::stringstream ss;
             ss << "\n"
@@ -115,7 +115,7 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        vkRes = CompileGLSL(gShadersFS, "main", VK_SHADER_STAGE_FRAGMENT_BIT, {}, &spirvFS, &errorMsg);
+        vkRes = CompileGLSL(gShadersFS, VK_SHADER_STAGE_FRAGMENT_BIT, {}, &spirvFS, &errorMsg);
         if (vkRes != COMPILE_SUCCESS) {
             std::stringstream ss;
             ss << "\n"

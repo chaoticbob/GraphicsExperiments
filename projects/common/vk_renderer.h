@@ -327,11 +327,22 @@ HRESULT CreateDrawNormalPipeline(
    VkFormat             dsvFormat,
    VkPipeline*          pPipeline,
    bool                 enableTangents = false,
+   VkCullModeFlagBits   cullMode = VK_CULL_MODE_BACK_BIT,
+   const char*          vsEntryPoint = "main",
+   const char*          fsEntryPoint = "main");
+
+HRESULT CreateDrawTexturePipeline(
+   VulkanRenderer*      pRenderer,
+   VkPipelineLayout     pipelineLayout,
+   VkShaderModule       vsShaderModule,
+   VkShaderModule       fsShaderModule,
+   VkFormat             rtvFormat,
+   VkFormat             dsvFormat,
+   VkPipeline*          pPipeline,
    VkCullModeFlagBits   cullMode = VK_CULL_MODE_BACK_BIT);
 
 CompileResult CompileGLSL(
     const std::string&     shaderSource,
-    const std::string&     entryPoint,
     VkShaderStageFlagBits  shaderStage,
     const CompilerOptions& options,
     std::vector<uint32_t>* pSPIRV,
@@ -374,7 +385,7 @@ void WriteDescriptor(
     VkImageView           imageView,
     VkImageLayout         imageLayout);
 
-// Image view
+// Sampler 
 void WriteDescriptor(
     VulkanRenderer*       pRenderer,
     void*                 pDescriptorBufferStartAddress,
