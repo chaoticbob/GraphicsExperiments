@@ -38,6 +38,8 @@ static float gAngleX       = 0.0f;
 static float gTargetAngleY = 0.0f;
 static float gAngleY       = 0.0f;
 
+static float gShadowStep = 0.0f;
+
 struct TextureSet
 {
     std::string            name;
@@ -91,6 +93,21 @@ void MouseMove(int x, int y, int buttons)
 
     prevX = x;
     prevY = y;
+}
+
+void KeyDown(int key)
+{
+    switch (key) {
+        default: break;
+
+        case GLFW_KEY_UP: {
+            gShadowStep += 1.0f;
+        } break;
+
+        case GLFW_KEY_DOWN: {
+            gShadowStep -= 1.0f;
+        } break;
+    }
 }
 
 // =============================================================================
@@ -233,6 +250,7 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
     window->AddMouseMoveCallbacks(MouseMove);
+    window->AddKeyDownCallbacks(KeyDown);
 
     // *************************************************************************
     // Swapchain
@@ -278,8 +296,9 @@ int main(int argc, char** argv)
     uint32_t textureSetIndex        = 0;
     uint32_t currentTextureSetIndex = ~0;
     uint32_t geoIndex               = 0;
-    float    heightMapScale         = 0.05f;
+    float    heightMapScale         = 0.20f;
     uint32_t enableDiscard          = false;
+    uint32_t enableShadow           = true;
 
     uint32_t halfWindowWidth = gWindowWidth / 2;
 
@@ -328,6 +347,11 @@ int main(int argc, char** argv)
             ImGui::Separator();
 
             ImGui::Checkbox("Enable Discard", reinterpret_cast<bool*>(&enableDiscard));
+
+            ImGui::Separator();
+
+            ImGui::Checkbox("Enable Shadow", reinterpret_cast<bool*>(&enableShadow));
+            ImGui::Text("Shadow step: %0.3f", gShadowStep);
         }
         ImGui::End();
 
@@ -387,9 +411,11 @@ int main(int argc, char** argv)
             commandList->SetGraphicsRootDescriptorTable(1, cbvsrvuavHeap->GetGPUDescriptorHandleForHeapStart());
             // Sampler0 (s2)
             commandList->SetGraphicsRootDescriptorTable(2, samplerHeap->GetGPUDescriptorHandleForHeapStart());
-            // HeightMapScale, EnableDiscard (b5)
+            // HeightMapScale, EnableDiscard, EnableShadow, ShadowStep (b5)
             commandList->SetGraphicsRoot32BitConstants(3, 1, &heightMapScale, 0);
             commandList->SetGraphicsRoot32BitConstants(3, 1, &enableDiscard, 1);
+            commandList->SetGraphicsRoot32BitConstants(3, 1, &enableShadow, 2);
+            commandList->SetGraphicsRoot32BitConstants(3, 1, &gShadowStep, 3);
 
             auto& geo = geometries[geoIndex];
 
@@ -503,7 +529,7 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     rootParameters[3].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     rootParameters[3].Constants.ShaderRegister            = 5;
     rootParameters[3].Constants.RegisterSpace             = 0;
-    rootParameters[3].Constants.Num32BitValues            = 2;
+    rootParameters[3].Constants.Num32BitValues            = 4;
     rootParameters[3].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
@@ -545,7 +571,8 @@ void CreateTextureSets(
         }
         materialFiles.push_back(materialFilePath);
 
-        // break;
+        // Limit me!
+        //break;
     }
 
     size_t maxEntries = materialFiles.size();
@@ -684,7 +711,7 @@ void CreateGeometryBuffers(
         Geometry geometry = {.name = "Plane"};
         outGeometries.push_back(geometry);
 
-        TriMesh mesh = TriMesh::Plane(vec2(1.5f), 1, 1, vec3(0, 1, 0), false, options);
+        TriMesh mesh = TriMesh::Plane(vec2(1.5f), 1, 1, vec3(0, 1, 0), options);
         meshes.push_back(mesh);
     }
 

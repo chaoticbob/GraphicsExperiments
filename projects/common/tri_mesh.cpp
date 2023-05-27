@@ -578,42 +578,6 @@ TriMesh TriMesh::Box(
     const float hy = size.y / 2.0f;
     const float hz = size.z / 2.0f;
 
-/*
-    // clang-format off
-    std::vector<float> vertexData = {  
-        // position      // vertex colors    // texcoords  // normal           // tangents         // bitangents
-         hx,  hy, -hz,    1.0f, 0.0f, 0.0f,   0.0f, 0.0f,   0.0f, 0.0f,-1.0f,  -1.0f, 0.0f, 0.0f,   0.0f, 1.0f, 0.0f,  //  0  -Z side
-         hx, -hy, -hz,    1.0f, 0.0f, 0.0f,   0.0f, 1.0f,   0.0f, 0.0f,-1.0f,  -1.0f, 0.0f, 0.0f,   0.0f, 1.0f, 0.0f,  //  1
-        -hx, -hy, -hz,    1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   0.0f, 0.0f,-1.0f,  -1.0f, 0.0f, 0.0f,   0.0f, 1.0f, 0.0f,  //  2
-        -hx,  hy, -hz,    1.0f, 0.0f, 0.0f,   1.0f, 0.0f,   0.0f, 0.0f,-1.0f,  -1.0f, 0.0f, 0.0f,   0.0f, 1.0f, 0.0f,  //  3
-                                                                                                    
-        -hx,  hy,  hz,    0.0f, 1.0f, 0.0f,   0.0f, 0.0f,   0.0f, 0.0f, 1.0f,   1.0f, 0.0f, 0.0f,   0.0f, 1.0f, 0.0f,  //  4  +Z side
-        -hx, -hy,  hz,    0.0f, 1.0f, 0.0f,   0.0f, 1.0f,   0.0f, 0.0f, 1.0f,   1.0f, 0.0f, 0.0f,   0.0f, 1.0f, 0.0f,  //  5
-         hx, -hy,  hz,    0.0f, 1.0f, 0.0f,   1.0f, 1.0f,   0.0f, 0.0f, 1.0f,   1.0f, 0.0f, 0.0f,   0.0f, 1.0f, 0.0f,  //  6
-         hx,  hy,  hz,    0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   0.0f, 0.0f, 1.0f,   1.0f, 0.0f, 0.0f,   0.0f, 1.0f, 0.0f,  //  7
-                                                                                                    
-        -hx,  hy, -hz,   -0.0f, 0.0f, 1.0f,   0.0f, 0.0f,  -1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 1.0f, 0.0f,  //  8  -X side
-        -hx, -hy, -hz,   -0.0f, 0.0f, 1.0f,   0.0f, 1.0f,  -1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 1.0f, 0.0f,  //  9
-        -hx, -hy,  hz,   -0.0f, 0.0f, 1.0f,   1.0f, 1.0f,  -1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 1.0f, 0.0f,  // 10
-        -hx,  hy,  hz,   -0.0f, 0.0f, 1.0f,   1.0f, 0.0f,  -1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 1.0f, 0.0f,  // 11
-                                                                                                    
-         hx,  hy,  hz,    1.0f, 1.0f, 0.0f,   0.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f,   0.0f, 1.0f, 0.0f,  // 12  +X side
-         hx, -hy,  hz,    1.0f, 1.0f, 0.0f,   0.0f, 1.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f,   0.0f, 1.0f, 0.0f,  // 13
-         hx, -hy, -hz,    1.0f, 1.0f, 0.0f,   1.0f, 1.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f,   0.0f, 1.0f, 0.0f,  // 14
-         hx,  hy, -hz,    1.0f, 1.0f, 0.0f,   1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f,   0.0f, 1.0f, 0.0f,  // 15
-                                                                                                    
-        -hx, -hy,  hz,    1.0f, 0.0f, 1.0f,   0.0f, 0.0f,   0.0f,-1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,  // 16  -Y side
-        -hx, -hy, -hz,    1.0f, 0.0f, 1.0f,   0.0f, 1.0f,   0.0f,-1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,  // 17
-         hx, -hy, -hz,    1.0f, 0.0f, 1.0f,   1.0f, 1.0f,   0.0f,-1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,  // 18
-         hx, -hy,  hz,    1.0f, 0.0f, 1.0f,   1.0f, 0.0f,   0.0f,-1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,  // 19
-                                                                                                    
-        -hx,  hy, -hz,    0.0f, 1.0f, 1.0f,   0.0f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f,  // 20  +Y side
-        -hx,  hy,  hz,    0.0f, 1.0f, 1.0f,   0.0f, 1.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f,  // 21
-         hx,  hy,  hz,    0.0f, 1.0f, 1.0f,   1.0f, 1.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f,  // 22
-         hx,  hy, -hz,    0.0f, 1.0f, 1.0f,   1.0f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f,-1.0f,  // 23
-    };
-*/
-
     // clang-format off
     std::vector<float> vertexData = {  
         // position      // vertex colors    // texcoords  // normal           // tangents         // bitangents
@@ -642,15 +606,10 @@ TriMesh TriMesh::Box(
          hx, -hy, -hz,    1.0f, 0.0f, 1.0f,   1.0f, 1.0f,   0.0f,-1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, -1.0f,  // 18
          hx, -hy,  hz,    1.0f, 0.0f, 1.0f,   1.0f, 0.0f,   0.0f,-1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, -1.0f,  // 19
                                                                                                     
-//        -hx,  hy, -hz,    0.0f, 1.0f, 1.0f,   0.0f, 1.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, -1.0f,  // 20  +Y side
-//        -hx,  hy,  hz,    0.0f, 1.0f, 1.0f,   0.0f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, -1.0f,  // 21
-//         hx,  hy,  hz,    0.0f, 1.0f, 1.0f,   1.0f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, -1.0f,  // 22
-//         hx,  hy, -hz,    0.0f, 1.0f, 1.0f,   1.0f, 1.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, -1.0f,  // 23
-
-        -hx,  hy, -hz,    0.0f, 1.0f, 1.0f,   0.0f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,  // 20  +Y side
-        -hx,  hy,  hz,    0.0f, 1.0f, 1.0f,   0.0f, 1.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,  // 21
-         hx,  hy,  hz,    0.0f, 1.0f, 1.0f,   1.0f, 1.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,  // 22
-         hx,  hy, -hz,    0.0f, 1.0f, 1.0f,   1.0f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,  // 23
+        -hx,  hy, -hz,    0.0f, 1.0f, 1.0f,   0.0f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,   // 20  +Y side
+        -hx,  hy,  hz,    0.0f, 1.0f, 1.0f,   0.0f, 1.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,   // 21
+         hx,  hy,  hz,    0.0f, 1.0f, 1.0f,   1.0f, 1.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,   // 22
+         hx,  hy, -hz,    0.0f, 1.0f, 1.0f,   1.0f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,   // 23
     };
 
     float u0 = 0.0f;
@@ -831,15 +790,18 @@ TriMesh TriMesh::Plane(
     uint32_t                usegs,
     uint32_t                vsegs,
     glm::vec3               normalToPlane,
-    bool                    zAxisModeOpenGL,
     const TriMesh::Options& options)
 
 {
-    float     zScale = zAxisModeOpenGL ? -1.0f : 1.0f;
-    glm::vec3 P0     = glm::vec3(-0.5f, 0.0f, +0.5f * zScale) * glm::vec3(size.x, 1.0f, size.y);
-    glm::vec3 P1     = glm::vec3(-0.5f, 0.0f, -0.5f * zScale) * glm::vec3(size.x, 1.0f, size.y);
-    glm::vec3 P2     = glm::vec3(+0.5f, 0.0f, -0.5f * zScale) * glm::vec3(size.x, 1.0f, size.y);
-    glm::vec3 P3     = glm::vec3(+0.5f, 0.0f, +0.5f * zScale) * glm::vec3(size.x, 1.0f, size.y);
+    glm::vec3 P0 = glm::vec3(-0.5f, 0.0f, -0.5f) * glm::vec3(size.x, 1.0, size.y);
+    glm::vec3 P1 = glm::vec3(-0.5f, 0.0f, 0.5f) * glm::vec3(size.x, 1.0, size.y);
+    glm::vec3 P2 = glm::vec3(0.5f, 0.0f, 0.5f) * glm::vec3(size.x, 1.0, size.y);
+    glm::vec3 P3 = glm::vec3(0.5f, 0.0f, -0.5f) * glm::vec3(size.x, 1.0, size.y);
+
+    glm::vec2 uv0 = glm::vec2(0, 0);
+    glm::vec2 uv1 = glm::vec2(0, 1);
+    glm::vec2 uv2 = glm::vec2(1, 1);
+    glm::vec2 uv3 = glm::vec2(1, 0);
 
     const uint32_t uverts = usegs + 1;
     const uint32_t vverts = vsegs + 1;
@@ -848,8 +810,8 @@ TriMesh TriMesh::Plane(
     float dv = 1.0f / vsegs;
 
     const glm::vec3 T = glm::vec3(1, 0, 0);
-    const glm::vec3 B = glm::vec3(0, 0, -1);
-    const glm::vec3 N = glm::normalize(normalToPlane);
+    const glm::vec3 B = glm::vec3(0, 0, 1);
+    const glm::vec3 N = glm::vec3(0, 1, 0);
 
     glm::quat rotQuat = glm::rotation(N, glm::normalize(normalToPlane));
     glm::mat4 rotMat  = glm::toMat4(rotQuat);
@@ -894,16 +856,8 @@ TriMesh TriMesh::Plane(
             uint32_t v2 = j1 * uverts + i1;
             uint32_t v3 = j0 * uverts + i1;
 
-            if (zAxisModeOpenGL) {
-                // Counter-clockwise
-                mesh.AddTriangle(v0, v1, v2);
-                mesh.AddTriangle(v0, v2, v3);
-            }
-            else {
-                // Clockwise
-                mesh.AddTriangle(v0, v2, v1);
-                mesh.AddTriangle(v0, v3, v2);
-            }
+            mesh.AddTriangle(v0, v1, v2);
+            mesh.AddTriangle(v0, v2, v3);
         }
     }
 
@@ -1136,7 +1090,6 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
                 1,
                 1,
                 glm::vec3(0, -1, 0),
-                true,
                 thisOptions);
             plane.SetVertexColors(baseColor);
 
@@ -1174,7 +1127,6 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
                 1,
                 1,
                 glm::vec3(1, 0, 0),
-                true,
                 thisOptions);
             plane.SetVertexColors(baseColor);
 
@@ -1200,7 +1152,6 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
                 1,
                 1,
                 glm::vec3(-1, 0, 0),
-                true,
                 thisOptions);
             plane.SetVertexColors(baseColor);
 
