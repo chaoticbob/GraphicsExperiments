@@ -438,7 +438,7 @@ bool SwapchainPresent(DxRenderer* pRenderer)
     return true;
 }
 
-HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData, ID3D12Resource** ppResource)
+HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, D3D12_HEAP_TYPE heapType, ID3D12Resource** ppResource)
 {
     if (IsNull(pRenderer)) {
         return E_UNEXPECTED;
@@ -460,7 +460,7 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData
     desc.Flags               = D3D12_RESOURCE_FLAG_NONE;
 
     D3D12_HEAP_PROPERTIES heapProperties = {};
-    heapProperties.Type                  = D3D12_HEAP_TYPE_UPLOAD;
+    heapProperties.Type                  = heapType;
 
     HRESULT hr = pRenderer->Device->CreateCommittedResource(
         &heapProperties,                   // pHeapProperties
@@ -469,6 +469,16 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData
         D3D12_RESOURCE_STATE_GENERIC_READ, // InitialResourceState
         nullptr,                           // pOptimizedClearValues
         IID_PPV_ARGS(ppResource));         // riidResource, ppvResouce
+    if (FAILED(hr)) {
+        return hr;
+    }
+
+    return S_OK;
+}
+
+HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData, ID3D12Resource** ppResource)
+{
+    HRESULT hr = CreateBuffer(pRenderer, srcSize, D3D12_HEAP_TYPE_UPLOAD, ppResource);
     if (FAILED(hr)) {
         return hr;
     }
