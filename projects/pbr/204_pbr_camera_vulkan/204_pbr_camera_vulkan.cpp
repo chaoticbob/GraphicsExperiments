@@ -1087,7 +1087,7 @@ void CreateIBLTextures(
    }
 
    // IBL file
-   auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
+   auto iblFile = GetAssetPath("IBL/palermo_square_4k.ibl");
 
    IBLMaps ibl = {};
    if (!LoadIBLMaps32f(iblFile, &ibl)) {
