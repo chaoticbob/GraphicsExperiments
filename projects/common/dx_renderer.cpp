@@ -438,6 +438,25 @@ bool SwapchainPresent(DxRenderer* pRenderer)
     return true;
 }
 
+DXGI_FORMAT ToDxFormat(GREXFormat format)
+{
+    // clang-format off
+    switch (format) {
+        default: break;
+        case GREX_FORMAT_R8_UNORM           : return DXGI_FORMAT_R8_UNORM;
+        case GREX_FORMAT_R8G8_UNORM         : return DXGI_FORMAT_R8G8_UNORM;
+        case GREX_FORMAT_R8G8B8A8_UNORM     : return DXGI_FORMAT_R8G8B8A8_UNORM;
+        case GREX_FORMAT_R8_UINT            : return DXGI_FORMAT_R8_UINT;
+        case GREX_FORMAT_R16_UINT           : return DXGI_FORMAT_R16_UINT;
+        case GREX_FORMAT_R32_UINT           : return DXGI_FORMAT_R32_UINT;
+        case GREX_FORMAT_R32_FLOAT          : return DXGI_FORMAT_R32_FLOAT;
+        case GREX_FORMAT_R32G32_FLOAT       : return DXGI_FORMAT_R32G32_FLOAT;
+        case GREX_FORMAT_R32G32B32A32_FLOAT : return DXGI_FORMAT_R32G32B32A32_FLOAT;
+    }
+    // clang-format on
+    return DXGI_FORMAT_UNKNOWN;
+}
+
 HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, D3D12_HEAP_TYPE heapType, ID3D12Resource** ppResource)
 {
     if (IsNull(pRenderer)) {
@@ -445,6 +464,14 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, D3D12_HEAP_TYPE heap
     }
     if (IsNull(ppResource)) {
         return E_UNEXPECTED;
+    }
+
+    switch (heapType) {
+        default: return E_INVALIDARG;
+        case D3D12_HEAP_TYPE_DEFAULT:
+        case D3D12_HEAP_TYPE_UPLOAD:
+        case D3D12_HEAP_TYPE_READBACK:
+            break;
     }
 
     D3D12_RESOURCE_DESC desc = {};
@@ -463,12 +490,12 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, D3D12_HEAP_TYPE heap
     heapProperties.Type                  = heapType;
 
     HRESULT hr = pRenderer->Device->CreateCommittedResource(
-        &heapProperties,                   // pHeapProperties
-        D3D12_HEAP_FLAG_NONE,              // HeapFlags
-        &desc,                             // pDesc
-        D3D12_RESOURCE_STATE_GENERIC_READ, // InitialResourceState
-        nullptr,                           // pOptimizedClearValues
-        IID_PPV_ARGS(ppResource));         // riidResource, ppvResouce
+        &heapProperties,             // pHeapProperties
+        D3D12_HEAP_FLAG_NONE,        // HeapFlags
+        &desc,                       // pDesc
+        D3D12_RESOURCE_STATE_COMMON, // InitialResourceState
+        nullptr,                     // pOptimizedClearValues
+        IID_PPV_ARGS(ppResource));   // riidResource, ppvResouce
     if (FAILED(hr)) {
         return hr;
     }
@@ -476,26 +503,120 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, D3D12_HEAP_TYPE heap
     return S_OK;
 }
 
-HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData, ID3D12Resource** ppResource)
+HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData, D3D12_HEAP_TYPE heapType, ID3D12Resource** ppResource)
 {
-    HRESULT hr = CreateBuffer(pRenderer, srcSize, D3D12_HEAP_TYPE_UPLOAD, ppResource);
+    HRESULT hr = CreateBuffer(pRenderer, srcSize, heapType, ppResource);
     if (FAILED(hr)) {
         return hr;
     }
 
     if (!IsNull(pSrcData)) {
-        void* pData = nullptr;
-        hr          = (*ppResource)->Map(0, nullptr, &pData);
+        // Target buffer pointer - assume output resource
+        ID3D12Resource* pTargetBuffer = (*ppResource);
+
+        // Create a staging buffer if heap type is DEFAULT and reassign
+        // the target buffer pointer
+        //
+        ComPtr<ID3D12Resource> stagingBuffer;
+        if (heapType == D3D12_HEAP_TYPE_DEFAULT) {
+            HRESULT hr = CreateBuffer(pRenderer, srcSize, D3D12_HEAP_TYPE_UPLOAD, &stagingBuffer);
+            if (FAILED(hr)) {
+                return hr;
+            }
+
+            pTargetBuffer = stagingBuffer.Get();
+        }
+
+        // Copy source data to target buffer
+        {
+            void* pData = nullptr;
+            hr          = pTargetBuffer->Map(0, nullptr, &pData);
+            if (FAILED(hr)) {
+                return hr;
+            }
+
+            memcpy(pData, pSrcData, srcSize);
+
+            pTargetBuffer->Unmap(0, nullptr);
+        }
+
+        // Copy from pTargetBuffer to ppResource if heap type is DEFAULT
+        if (heapType == D3D12_HEAP_TYPE_DEFAULT) {
+            ComPtr<ID3D12CommandAllocator> cmdAllocator;
+            hr = pRenderer->Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAllocator));
+            if (FAILED(hr)) {
+                return hr;
+            }
+
+            ComPtr<ID3D12GraphicsCommandList> cmdList;
+            hr = pRenderer->Device->CreateCommandList1(0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(&cmdList));
+            if (FAILED(hr)) {
+                return hr;
+            }
+
+            hr = cmdAllocator->Reset();
+            if (FAILED(hr)) {
+                return hr;
+            }
+
+            hr = cmdList->Reset(cmdAllocator.Get(), nullptr);
+            if (FAILED(hr)) {
+                return hr;
+            }
+
+            // Build command buffer
+            {
+                cmdList->CopyBufferRegion(
+                    (*ppResource),                 // pDstBuffer
+                    0,                             // DstOffset
+                    pTargetBuffer,                 // pSrcBuffer
+                    0,                             // SrcOffset
+                    static_cast<UINT64>(srcSize)); // NumBytes
+            }
+            hr = cmdList->Close();
+            if (FAILED(hr)) {
+                return hr;
+            }
+
+            ID3D12CommandList* pList = cmdList.Get();
+            pRenderer->Queue->ExecuteCommandLists(1, &pList);
+
+            if (!WaitForGpu(pRenderer)) {
+                return E_FAIL;
+            }
+        }
+    }
+
+    return S_OK;
+}
+
+HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData, ID3D12Resource** ppResource)
+{
+    HRESULT hr = CreateBuffer(pRenderer, srcSize, pSrcData, D3D12_HEAP_TYPE_UPLOAD, ppResource);
+    if (FAILED(hr)) {
+        return hr;
+    }
+    return S_OK;
+
+    /*
         if (FAILED(hr)) {
             return hr;
         }
 
-        memcpy(pData, pSrcData, srcSize);
+        if (!IsNull(pSrcData)) {
+            void* pData = nullptr;
+            hr          = (*ppResource)->Map(0, nullptr, &pData);
+            if (FAILED(hr)) {
+                return hr;
+            }
 
-        (*ppResource)->Unmap(0, nullptr);
-    }
+            memcpy(pData, pSrcData, srcSize);
 
-    return S_OK;
+            (*ppResource)->Unmap(0, nullptr);
+        }
+
+        return S_OK;
+    */
 }
 
 HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData, size_t minAlignment, ID3D12Resource** ppResource)
@@ -574,14 +695,13 @@ HRESULT CreateUAVBuffer(DxRenderer* pRenderer, size_t size, D3D12_RESOURCE_STATE
 }
 
 HRESULT CreateTexture(
-    DxRenderer*                   pRenderer,
-    uint32_t                      width,
-    uint32_t                      height,
-    DXGI_FORMAT                   format,
-    const std::vector<MipOffset>& mipOffsets,
-    uint64_t                      srcSizeBytes,
-    const void*                   pSrcData,
-    ID3D12Resource**              ppResource)
+    DxRenderer*      pRenderer,
+    uint32_t         width,
+    uint32_t         height,
+    DXGI_FORMAT      format,
+    uint32_t         numMipLevels,
+    uint32_t         numArrayLayers,
+    ID3D12Resource** ppResource)
 {
     if (IsNull(pRenderer)) {
         return E_UNEXPECTED;
@@ -592,22 +712,18 @@ HRESULT CreateTexture(
     if ((format == DXGI_FORMAT_UNKNOWN) || IsVideo(format)) {
         return E_INVALIDARG;
     }
-    if (mipOffsets.empty()) {
-        return E_INVALIDARG;
-    }
 
-    UINT                mipLevels = static_cast<UINT>(mipOffsets.size());
-    D3D12_RESOURCE_DESC desc      = {};
-    desc.Dimension                = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    desc.Alignment                = 0;
-    desc.Width                    = static_cast<UINT64>(width);
-    desc.Height                   = static_cast<UINT>(height);
-    desc.DepthOrArraySize         = 1;
-    desc.MipLevels                = mipLevels;
-    desc.Format                   = format;
-    desc.SampleDesc               = {1, 0};
-    desc.Layout                   = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    desc.Flags                    = D3D12_RESOURCE_FLAG_NONE;
+    D3D12_RESOURCE_DESC desc = {};
+    desc.Dimension           = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Alignment           = 0;
+    desc.Width               = static_cast<UINT64>(width);
+    desc.Height              = static_cast<UINT>(height);
+    desc.DepthOrArraySize    = numArrayLayers;
+    desc.MipLevels           = numMipLevels;
+    desc.Format              = format;
+    desc.SampleDesc          = {1, 0};
+    desc.Layout              = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    desc.Flags               = D3D12_RESOURCE_FLAG_NONE;
 
     D3D12_HEAP_PROPERTIES heapProperties = {};
     heapProperties.Type                  = D3D12_HEAP_TYPE_DEFAULT;
@@ -623,13 +739,40 @@ HRESULT CreateTexture(
         return hr;
     }
 
+    return S_OK;
+}
+
+HRESULT CreateTexture(
+    DxRenderer*                   pRenderer,
+    uint32_t                      width,
+    uint32_t                      height,
+    DXGI_FORMAT                   format,
+    const std::vector<MipOffset>& mipOffsets,
+    uint64_t                      srcSizeBytes,
+    const void*                   pSrcData,
+    ID3D12Resource**              ppResource)
+{
+    uint32_t numMipLevels = static_cast<uint32_t>(mipOffsets.size());
+
+    HRESULT hr = CreateTexture(
+        pRenderer,
+        width,
+        height,
+        format,
+        numMipLevels,
+        1,
+        ppResource);
+    if (FAILED(hr)) {
+        return hr;
+    }
+
     if (!IsNull(pSrcData)) {
         const uint32_t rowStride = width * PixelStride(format);
         // Calculate the total number of rows for all mip maps
         uint32_t numRows = 0;
         {
             uint32_t mipHeight = height;
-            for (UINT level = 0; level < mipLevels; ++level) {
+            for (UINT level = 0; level < numMipLevels; ++level) {
                 numRows += mipHeight;
                 mipHeight >>= 1;
             }
@@ -672,7 +815,7 @@ HRESULT CreateTexture(
         {
             uint32_t levelWidth  = width;
             uint32_t levelHeight = height;
-            for (UINT level = 0; level < mipLevels; ++level) {
+            for (UINT level = 0; level < numMipLevels; ++level) {
                 const auto&    mipOffset    = mipOffsets[level];
                 const uint32_t mipRowStride = Align<uint32_t>(mipOffset.RowStride, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
 

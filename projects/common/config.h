@@ -30,6 +30,23 @@ using Microsoft::WRL::ComPtr;
         Print(ss_grex_log_info.str().c_str());             \
     }
 
+#define GREX_MAX_VERTEX_ATTRIBUTES 6
+
+enum GREXFormat
+{
+    GREX_FORMAT_UNKNOWN            = 0,
+    GREX_FORMAT_R8_UNORM           = 1,
+    GREX_FORMAT_R8G8_UNORM         = 2,
+    GREX_FORMAT_R8G8B8A8_UNORM     = 3,
+    GREX_FORMAT_R8_UINT            = 4,
+    GREX_FORMAT_R16_UINT           = 5,
+    GREX_FORMAT_R32_UINT           = 6,
+    GREX_FORMAT_R32_FLOAT          = 7,
+    GREX_FORMAT_R32G32_FLOAT       = 8,
+    GREX_FORMAT_R32G32B32_FLOAT    = 9,
+    GREX_FORMAT_R32G32B32A32_FLOAT = 10,
+};
+
 struct MipOffset
 {
     uint32_t Offset    = 0;

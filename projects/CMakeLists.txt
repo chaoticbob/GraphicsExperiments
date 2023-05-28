@@ -12,6 +12,7 @@ add_subdirectory(texture)
 
 if (GREX_ENABLE_D3D12)
     add_subdirectory(misc/imgui_d3d12)
+    add_subdirectory(misc/gltf_d3d12)
 endif()
 
 
