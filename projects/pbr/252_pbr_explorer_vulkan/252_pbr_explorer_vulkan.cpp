@@ -950,6 +950,7 @@ int main(int argc, char** argv)
 
                 // Select which model to draw
                 const GeometryBuffers& geoBuffers = matGeoBuffers[gModelIndex];
+                uint32_t geoIndexCount = geoBuffers.numIndices;
 
                 // Bind the Index Buffer
                 vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, geoBuffers.indexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
@@ -975,7 +976,7 @@ int main(int argc, char** argv)
 
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
 
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoIndexCount, 1, 0, 0, 0);
                 }
 
                 // Gold
@@ -989,7 +990,7 @@ int main(int argc, char** argv)
 
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
 
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoIndexCount, 1, 0, 0, 0);
                 }
 
                 // Silver
@@ -1003,7 +1004,7 @@ int main(int argc, char** argv)
 
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
 
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoIndexCount, 1, 0, 0, 0);
                 }
 
                 // Zink
@@ -1017,7 +1018,7 @@ int main(int argc, char** argv)
 
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
 
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoIndexCount, 1, 0, 0, 0);
                 }
 
                 // Titanium
@@ -1031,7 +1032,7 @@ int main(int argc, char** argv)
 
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
 
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoIndexCount, 1, 0, 0, 0);
                 }
 
                 // Shiny Plastic
@@ -1045,7 +1046,7 @@ int main(int argc, char** argv)
 
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
 
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoIndexCount, 1, 0, 0, 0);
                 }
 
                 // Rough Plastic
@@ -1059,7 +1060,7 @@ int main(int argc, char** argv)
 
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
 
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoIndexCount, 1, 0, 0, 0);
                 }
 
                 // Rougher Plastic
@@ -1073,7 +1074,7 @@ int main(int argc, char** argv)
 
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
 
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoIndexCount, 1, 0, 0, 0);
                 }
 
                 // Roughest Plastic
@@ -1087,7 +1088,7 @@ int main(int argc, char** argv)
 
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
 
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoIndexCount, 1, 0, 0, 0);
                 }
             }
 
@@ -1149,6 +1150,7 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout)
    // Descriptor set layout
    {
       std::vector<VkDescriptorSetLayoutBinding> bindings = {};
+      // ConstantBuffer<SceneParameters>      SceneParams        : register(b0);
       {
          VkDescriptorSetLayoutBinding binding = {};
          binding.binding                      = 0;
@@ -1157,6 +1159,7 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout)
          binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
+      // StructuredBuffer<MaterialParameters> MaterialParams     : register(t2);
       {
          VkDescriptorSetLayoutBinding binding = {};
          binding.binding                      = 2;
@@ -1165,6 +1168,7 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout)
          binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
+      // SamplerState                         ClampedSampler     : register(s4);
       {
          VkDescriptorSetLayoutBinding binding = {};
          binding.binding                      = 4;
@@ -1173,6 +1177,7 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout)
          binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
+      // SamplerState                         UWrapSampler       : register(s5);
       {
          VkDescriptorSetLayoutBinding binding = {};
          binding.binding                      = 5;
@@ -1181,6 +1186,7 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout)
          binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
+      // Texture2D                            BRDFLUT            : register(t10);
       {
          VkDescriptorSetLayoutBinding binding = {};
          binding.binding                      = 10;
@@ -1189,6 +1195,7 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout)
          binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
+      // Texture2D                            IrradianceMap[32]  : register(t16);
       {
          VkDescriptorSetLayoutBinding binding = {};
          binding.binding                      = 16;
@@ -1197,6 +1204,7 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout)
          binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
+      // Texture2D                            EnvironmentMap[32] : register(t48);
       {
          VkDescriptorSetLayoutBinding binding = {};
          binding.binding                      = 48;
@@ -1617,7 +1625,7 @@ void WritePBRDescriptors(
        pRenderer,
        pDescriptorBufferStartAddress,
        descriptorSetLayout,
-       1, // binding
+       2, // binding
        0, // arrayElement
        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
        pMaterialsBuffer);
@@ -1734,7 +1742,7 @@ void WritePBRDescriptors(
                 pRenderer,
                 pDescriptorBufferStartAddress,
                 descriptorSetLayout,
-                32,           // binding
+                16,           // binding
                 arrayElement, // arrayElement
                 VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                 imageView,
