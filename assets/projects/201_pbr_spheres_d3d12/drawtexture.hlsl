@@ -23,7 +23,6 @@ struct VSOutput
  VSOutput vsmain(float3 PositionOS : POSITION, float2 TexCoord : TEXCOORD)
  {
     VSOutput output = (VSOutput)0;
-    // output.PositionCS = mul(float4(PositionOS, 1), SceneParams.MVP); // transpose
     output.PositionCS = mul(SceneParams.MVP, float4(PositionOS, 1));
     output.TexCoord = TexCoord;
     return output;
