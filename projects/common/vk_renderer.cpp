@@ -1147,14 +1147,14 @@ VkResult CreateImage(
 }
 
 VkResult CreateTexture(
-    VulkanRenderer*                 pRenderer,
-    uint32_t                        width,
-    uint32_t                        height,
-    VkFormat                        format,
-    const std::vector<VkMipOffset>& mipOffsets,
-    uint64_t                        srcSizeBytes,
-    const void*                     pSrcData,
-    VulkanImage*                    pImage)
+    VulkanRenderer*               pRenderer,
+    uint32_t                      width,
+    uint32_t                      height,
+    VkFormat                      format,
+    const std::vector<MipOffset>& mipOffsets,
+    uint64_t                      srcSizeBytes,
+    const void*                   pSrcData,
+    VulkanImage*                  pImage)
 {
     if (IsNull(pRenderer)) {
         return VK_ERROR_UNKNOWN;
@@ -1174,7 +1174,7 @@ VkResult CreateTexture(
     VkResult vkres = CreateImage(
         pRenderer,
         VK_IMAGE_TYPE_2D,
-        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
         width,
         height,
         1,
@@ -1250,12 +1250,12 @@ VkResult CreateTexture(
             uint32_t formatSizeInBytes = PixelStride(format);
             for (UINT level = 0; level < mipLevels; ++level) {
                 const auto&    mipOffset    = mipOffsets[level];
-                const uint32_t mipRowStride = mipOffset.rowStride;
+                const uint32_t mipRowStride = mipOffset.RowStride;
                 const uint32_t mipRowStrideInPixels = mipRowStride / formatSizeInBytes;
 
                 VkImageAspectFlagBits aspectFlags     = VK_IMAGE_ASPECT_COLOR_BIT;
                 VkBufferImageCopy     srcRegion       = {};
-                srcRegion.bufferOffset                = mipOffset.offset;
+                srcRegion.bufferOffset                = mipOffset.Offset;
                 srcRegion.bufferRowLength             = mipRowStrideInPixels; // Row stride but in Pixels/texels 
                 srcRegion.bufferImageHeight           = levelHeight;          // Pixels/texels
                 srcRegion.imageSubresource.aspectMask = aspectFlags;
@@ -1324,9 +1324,9 @@ VkResult CreateTexture(
     const void*     pSrcData,
     VulkanImage*    pImage)
 {
-    VkMipOffset mipOffset = {};
-    mipOffset.offset      = 0;
-    mipOffset.rowStride   = width * PixelStride(format);
+    MipOffset mipOffset = {};
+    mipOffset.Offset      = 0;
+    mipOffset.RowStride   = width * PixelStride(format);
 
     return CreateTexture(
         pRenderer,
@@ -1383,7 +1383,7 @@ VkResult CreateDSV(
     return CreateImage(
         pRenderer,
         VK_IMAGE_TYPE_2D,
-        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         width,
         height,
         1,
@@ -1762,13 +1762,13 @@ HRESULT CreateDrawNormalPipeline(
 
    if (enableTangents)
    {
-      vertex_binding_desc[1].binding   = 2;
-      vertex_binding_desc[1].stride    = 12;
-      vertex_binding_desc[1].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+      vertex_binding_desc[2].binding   = 2;
+      vertex_binding_desc[2].stride    = 12;
+      vertex_binding_desc[2].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-      vertex_binding_desc[1].binding   = 3;
-      vertex_binding_desc[1].stride    = 12;
-      vertex_binding_desc[1].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+      vertex_binding_desc[3].binding   = 3;
+      vertex_binding_desc[3].stride    = 12;
+      vertex_binding_desc[3].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
    }
 
    VkVertexInputAttributeDescription vertex_attribute_desc[4] = {};
@@ -1784,15 +1784,15 @@ HRESULT CreateDrawNormalPipeline(
 
    if (enableTangents)
    {
-      vertex_attribute_desc[1].location = 2;
-      vertex_attribute_desc[1].binding  = 2;
-      vertex_attribute_desc[1].format   = VK_FORMAT_R32G32B32_SFLOAT;
-      vertex_attribute_desc[1].offset   = 0;
+      vertex_attribute_desc[2].location = 2;
+      vertex_attribute_desc[2].binding  = 2;
+      vertex_attribute_desc[2].format   = VK_FORMAT_R32G32B32_SFLOAT;
+      vertex_attribute_desc[2].offset   = 0;
 
-      vertex_attribute_desc[1].location = 3;
-      vertex_attribute_desc[1].binding  = 3;
-      vertex_attribute_desc[1].format   = VK_FORMAT_R32G32B32_SFLOAT;
-      vertex_attribute_desc[1].offset   = 0;
+      vertex_attribute_desc[3].location = 3;
+      vertex_attribute_desc[3].binding  = 3;
+      vertex_attribute_desc[3].format   = VK_FORMAT_R32G32B32_SFLOAT;
+      vertex_attribute_desc[3].offset   = 0;
    }
 
    VkPipelineVertexInputStateCreateInfo vertex_input_state = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
