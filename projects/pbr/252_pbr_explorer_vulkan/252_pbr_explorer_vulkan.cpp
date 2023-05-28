@@ -1,6 +1,6 @@
 #include "window.h"
 
-#include "dx_renderer.h"
+#include "vk_renderer.h"
 #include "bitmap.h"
 #include "tri_mesh.h"
 
@@ -54,7 +54,7 @@ struct Light
     float    intensity;
 };
 
-struct SceneParameters
+struct PBRSceneParameters
 {
     mat4     viewProjectionMatrix;
     vec3     eyePosition;
@@ -64,6 +64,18 @@ struct SceneParameters
     uint32_t iblIndex;
     float    iblDiffuseStrength;
     float    iblSpecularStrength;
+};
+
+struct EnvSceneParameters
+{
+    mat4     MVP;
+    uint     IBLIndex;
+};
+
+struct DrawParameters
+{
+    mat4     ModelMatrix;
+    uint     MaterialIndex;
 };
 
 struct MaterialParameters
@@ -83,13 +95,13 @@ struct MaterialParameters
 
 struct GeometryBuffers
 {
-    uint32_t               numIndices;
-    ComPtr<ID3D12Resource> indexBuffer;
-    ComPtr<ID3D12Resource> positionBuffer;
-    ComPtr<ID3D12Resource> texCoordBuffer;
-    ComPtr<ID3D12Resource> normalBuffer;
-    ComPtr<ID3D12Resource> tangentBuffer;
-    ComPtr<ID3D12Resource> bitangentBuffer;
+    uint32_t     numIndices;
+    VulkanBuffer indexBuffer;
+    VulkanBuffer positionBuffer;
+    VulkanBuffer texCoordBuffer;
+    VulkanBuffer normalBuffer;
+    VulkanBuffer tangentBuffer;
+    VulkanBuffer bitangentBuffer;
 };
 
 // =============================================================================
@@ -165,6 +177,7 @@ const std::vector<std::string> gModelNames = {
 static uint32_t gWindowWidth  = 1920;
 static uint32_t gWindowHeight = 1080;
 static bool     gEnableDebug  = true;
+static bool		gEnableRayTracing = false;
 
 static LPCWSTR gVSShaderName = L"vsmain";
 static LPCWSTR gPSShaderName = L"psmain";
@@ -206,23 +219,46 @@ static float                    gIBLDiffuseStrength  = 1.0f;
 static float                    gIBLSpecularStrength = 1.0f;
 static uint32_t                 gModelIndex          = 0;
 
-void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
-void CreateEnvironmentRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
+void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout);
+void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout);
 void CreateEnvironmentVertexBuffers(
-    DxRenderer*      pRenderer,
+    VulkanRenderer*  pRenderer,
     GeometryBuffers& outGeomtryBuffers);
 void CreateMaterialModels(
-    DxRenderer*                   pRenderer,
+    VulkanRenderer*               pRenderer,
     std::vector<GeometryBuffers>& outGeomtryBuffers);
 void CreateIBLTextures(
-    DxRenderer*                          pRenderer,
-    ID3D12Resource**                     ppBRDFLUT,
-    std::vector<ComPtr<ID3D12Resource>>& outIrradianceTextures,
-    std::vector<ComPtr<ID3D12Resource>>& outEnvironmentTextures,
-    std::vector<uint32_t>&               outEnvNumLevels);
+    VulkanRenderer*           pRenderer,
+    VulkanImage*              pBRDFLUT,
+    std::vector<VulkanImage>& outIrradianceTextures,
+    std::vector<VulkanImage>& outEnvironmentTextures,
+    std::vector<uint32_t>&    outEnvNumLevels);
+void CreateDescriptorBuffer(
+    VulkanRenderer*       pRenderer,
+    VkDescriptorSetLayout descriptorSetLayout,
+    VulkanBuffer*         pBuffer);
+void WritePBRDescriptors(
+   VulkanRenderer*            pRenderer,
+   VkDescriptorSetLayout      descriptorSetLayout,
+   VulkanBuffer*              pDescriptorBuffer,
+   const VulkanBuffer*        pSceneParamsBuffer,
+   const VulkanBuffer*        pMaterialsBuffer,
+   const VulkanImage*         pBRDFLUT,
+   std::vector<VulkanImage>&  pIrradianceTexture,
+   std::vector<VulkanImage>&  pEnvTexture);
+void WriteEnvDescriptors(
+   VulkanRenderer*            pRenderer,
+   VkDescriptorSetLayout      descriptorSetLayout,
+   VulkanBuffer*              pDescriptorBuffer,
+   std::vector<VulkanImage>&  envTextures);
+
+/*
+void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
+void CreateEnvironmentRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
 void CreateDescriptorHeap(
     DxRenderer*            pRenderer,
     ID3D12DescriptorHeap** ppHeap);
+	*/
 
 void MouseMove(int x, int y, int buttons)
 {
@@ -245,9 +281,9 @@ void MouseMove(int x, int y, int buttons)
 // =============================================================================
 int main(int argc, char** argv)
 {
-    std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
+    std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    if (!InitDx(renderer.get(), gEnableDebug)) {
+    if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRayTracing)) {
         return EXIT_FAILURE;
     }
 
@@ -255,8 +291,8 @@ int main(int argc, char** argv)
     // Compile shaders
     // *************************************************************************
     // PBR shaders
-    std::vector<char> dxilVS;
-    std::vector<char> dxilPS;
+    std::vector<uint32_t> spirvVS;
+    std::vector<uint32_t> spirvFS;
     {
         std::string shaderSource = LoadString("projects/251_pbr_explorer_d3d12/shaders.hlsl");
         if (shaderSource.empty()) {
@@ -265,7 +301,7 @@ int main(int argc, char** argv)
         }
 
         std::string errorMsg;
-        HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &dxilVS, &errorMsg);
+        HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &spirvVS, &errorMsg);
         if (FAILED(hr)) {
             std::stringstream ss;
             ss << "\n"
@@ -275,7 +311,7 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &dxilPS, &errorMsg);
+        hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &spirvFS, &errorMsg);
         if (FAILED(hr)) {
             std::stringstream ss;
             ss << "\n"
@@ -285,9 +321,28 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
     }
+
+    VkShaderModule shaderModuleVS = VK_NULL_HANDLE;
+    {
+       VkShaderModuleCreateInfo createInfo   = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+       createInfo.codeSize                   = SizeInBytes(spirvVS);
+       createInfo.pCode                      = DataPtr(spirvVS);
+
+       CHECK_CALL(vkCreateShaderModule(renderer->Device, &createInfo, nullptr, &shaderModuleVS));
+    }
+
+    VkShaderModule shaderModuleFS = VK_NULL_HANDLE;
+    {
+       VkShaderModuleCreateInfo createInfo   = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+       createInfo.codeSize                   = SizeInBytes(spirvFS);
+       createInfo.pCode                      = DataPtr(spirvFS);
+
+       CHECK_CALL(vkCreateShaderModule(renderer->Device, &createInfo, nullptr, &shaderModuleFS));
+    }
+
     // Draw texture shaders
-    std::vector<char> drawTextureDxilVS;
-    std::vector<char> drawTextureDxilPS;
+    std::vector<uint32_t> drawTextureSpirvVS;
+    std::vector<uint32_t> drawTextureSpirvFS;
     {
         std::string shaderSource = LoadString("projects/251_pbr_explorer_d3d12/drawtexture.hlsl");
         if (shaderSource.empty()) {
@@ -296,7 +351,7 @@ int main(int argc, char** argv)
         }
 
         std::string errorMsg;
-        HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &drawTextureDxilVS, &errorMsg);
+        HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &drawTextureSpirvVS, &errorMsg);
         if (FAILED(hr)) {
             std::stringstream ss;
             ss << "\n"
@@ -306,7 +361,7 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &drawTextureDxilPS, &errorMsg);
+        hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &drawTextureSpirvFS, &errorMsg);
         if (FAILED(hr)) {
             std::stringstream ss;
             ss << "\n"
@@ -317,64 +372,92 @@ int main(int argc, char** argv)
         }
     }
 
-    // *************************************************************************
-    // PBR root signature
-    // *************************************************************************
-    ComPtr<ID3D12RootSignature> pbrRootSig;
-    CreatePBRRootSig(renderer.get(), &pbrRootSig);
+    VkShaderModule drawTextureShaderModuleVS = VK_NULL_HANDLE;
+    {
+       VkShaderModuleCreateInfo createInfo   = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+       createInfo.codeSize                   = SizeInBytes(drawTextureSpirvVS);
+       createInfo.pCode                      = DataPtr(drawTextureSpirvVS);
+
+       CHECK_CALL(vkCreateShaderModule(renderer->Device, &createInfo, nullptr, &drawTextureShaderModuleVS));
+    }
+
+    VkShaderModule drawTextureShaderModuleFS = VK_NULL_HANDLE;
+    {
+       VkShaderModuleCreateInfo createInfo   = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+       createInfo.codeSize                   = SizeInBytes(drawTextureSpirvFS);
+       createInfo.pCode                      = DataPtr(drawTextureSpirvFS);
+
+       CHECK_CALL(vkCreateShaderModule(renderer->Device, &createInfo, nullptr, &drawTextureShaderModuleFS));
+    }
 
     // *************************************************************************
-    // Environment root signature
+    // PBR pipeline layout
     // *************************************************************************
-    ComPtr<ID3D12RootSignature> envRootSig;
-    CreateEnvironmentRootSig(renderer.get(), &envRootSig);
+    VulkanPipelineLayout pbrPipelineLayout = {};
+    CreatePBRPipeline(renderer.get(), &pbrPipelineLayout);
+
+    // *************************************************************************
+    // Environment pipeline layout
+    // *************************************************************************
+    VulkanPipelineLayout envPipelineLayout = {};
+    CreateEnvironmentPipeline(renderer.get(), &envPipelineLayout);
 
     // *************************************************************************
     // PBR pipeline state object
     // *************************************************************************
-    ComPtr<ID3D12PipelineState> pbrPipelineState;
+    VkPipeline pbrPipelineState = VK_NULL_HANDLE;
     CHECK_CALL(CreateDrawNormalPipeline(
         renderer.get(),
-        pbrRootSig.Get(),
-        dxilVS,
-        dxilPS,
+        pbrPipelineLayout.PipelineLayout,
+        shaderModuleVS,
+        shaderModuleFS,
         GREX_DEFAULT_RTV_FORMAT,
         GREX_DEFAULT_DSV_FORMAT,
-        &pbrPipelineState));
+        &pbrPipelineState,
+        false, // enable tangents
+        VK_CULL_MODE_BACK_BIT,
+        "vsmain",
+        "psmain"));
 
     // *************************************************************************
     // Environment pipeline state object
     // *************************************************************************
-    ComPtr<ID3D12PipelineState> envPipelineState;
+    VkPipeline envPipelineState = VK_NULL_HANDLE;
     CHECK_CALL(CreateDrawTexturePipeline(
         renderer.get(),
-        envRootSig.Get(),
-        drawTextureDxilVS,
-        drawTextureDxilPS,
+        envPipelineLayout.PipelineLayout,
+        drawTextureShaderModuleVS,
+        drawTextureShaderModuleFS,
         GREX_DEFAULT_RTV_FORMAT,
         GREX_DEFAULT_DSV_FORMAT,
         &envPipelineState,
-        D3D12_CULL_MODE_FRONT));
+        VK_CULL_MODE_FRONT_BIT));
 
     // *************************************************************************
     // Material buffer
     // *************************************************************************
-    ComPtr<ID3D12Resource> materialBuffer;
+    VulkanBuffer pbrMaterialParamsBuffer = {};
     CHECK_CALL(CreateBuffer(
         renderer.get(),
         SizeInBytes(gMaterialParams),
         DataPtr(gMaterialParams),
-        &materialBuffer));
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VMA_MEMORY_USAGE_CPU_TO_GPU,
+        0,
+        &pbrMaterialParamsBuffer));
 
     // *************************************************************************
     // Constant buffers
     // *************************************************************************
-    ComPtr<ID3D12Resource> constantBuffer;
+    VulkanBuffer pbrSceneParamsBuffer;
     CHECK_CALL(CreateBuffer(
         renderer.get(),
-        Align<size_t>(sizeof(SceneParameters), 256),
+        Align<size_t>(sizeof(PBRSceneParameters), 256),
         nullptr,
-        &constantBuffer));
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VMA_MEMORY_USAGE_CPU_TO_GPU,
+        0,
+        &pbrSceneParamsBuffer));
 
     // *************************************************************************
     // Environment vertex buffers
@@ -395,43 +478,41 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Environment texture
     // *************************************************************************
-    ComPtr<ID3D12Resource>              brdfLUT;
-    std::vector<ComPtr<ID3D12Resource>> irrTextures;
-    std::vector<ComPtr<ID3D12Resource>> envTextures;
-    std::vector<uint32_t>               envNumLevels;
+    VulkanImage              brdfLUT;
+    std::vector<VulkanImage> irrTextures;
+    std::vector<VulkanImage> envTextures;
+    std::vector<uint32_t>    envNumLevels;
     CreateIBLTextures(renderer.get(), &brdfLUT, irrTextures, envTextures, envNumLevels);
 
     // *************************************************************************
-    // Descriptor heaps
+    // Descriptor buffers
     // *************************************************************************
-    ComPtr<ID3D12DescriptorHeap> descriptorHeap;
-    CreateDescriptorHeap(renderer.get(), &descriptorHeap);
-    {
-        D3D12_CPU_DESCRIPTOR_HANDLE heapStart = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
-        auto                        incSize   = renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    VulkanBuffer pbrDescriptorBuffer = {};
+    CreateDescriptorBuffer(renderer.get(), pbrPipelineLayout.DescriptorSetLayout, &pbrDescriptorBuffer);
 
-        // LUT
-        CreateDescriptorTexture2D(renderer.get(), brdfLUT.Get(), heapStart);
+    WritePBRDescriptors(
+       renderer.get(),
+       pbrPipelineLayout.DescriptorSetLayout,
+       &pbrDescriptorBuffer,
+       &pbrSceneParamsBuffer,
+       &pbrMaterialParamsBuffer,
+       &brdfLUT,
+       irrTextures,
+       envTextures);
 
-        // Irradiance
-        D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {heapStart.ptr + incSize};
-        for (size_t i = 0; i < irrTextures.size(); ++i) {
-            CreateDescriptorTexture2D(renderer.get(), irrTextures[i].Get(), descriptor);
-            descriptor.ptr += incSize;
-        }
+    VulkanBuffer envDescriptorBuffer = {};
+    CreateDescriptorBuffer(renderer.get(), envPipelineLayout.DescriptorSetLayout, &envDescriptorBuffer);
 
-        // Environment
-        descriptor = {heapStart.ptr + (1 + gMaxIBLs) * incSize};
-        for (size_t i = 0; i < irrTextures.size(); ++i) {
-            CreateDescriptorTexture2D(renderer.get(), envTextures[i].Get(), descriptor, 0, envNumLevels[i]);
-            descriptor.ptr += incSize;
-        }
-    }
+    WriteEnvDescriptors(
+       renderer.get(),
+       envPipelineLayout.DescriptorSetLayout,
+       &envDescriptorBuffer,
+       envTextures);
 
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "251_pbr_explorer_d3d12");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "252_pbr_explorer_vulkan");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -441,55 +522,110 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT)) {
+    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight())) {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
 
     // *************************************************************************
+    // Render pass to draw ImGui
+    // *************************************************************************
+    std::vector<VulkanAttachmentInfo> colorAttachmentInfos = {
+        {GREX_DEFAULT_RTV_FORMAT, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE, renderer->SwapchainImageUsage}
+    };
+
+    VulkanRenderPass renderPass = {};
+    CHECK_CALL(CreateRenderPass(renderer.get(), colorAttachmentInfos, {}, gWindowWidth, gWindowHeight, &renderPass));
+
+    // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForD3D12(renderer.get())) {
-        assert(false && "Window::InitImGuiForD3D12 failed");
+    if (!window->InitImGuiForVulkan(renderer.get(), renderPass.RenderPass)) {
+        assert(false && "Window::InitImGuiForVulkan failed");
         return EXIT_FAILURE;
     }
 
     // *************************************************************************
-    // Command allocator
+    // Swapchain image views, depth buffers/views
     // *************************************************************************
-    ComPtr<ID3D12CommandAllocator> commandAllocator;
+    std::vector<VkImage>      images;
+    std::vector<VkImageView>  imageViews;
+    std::vector<VkImageView>  depthViews;
     {
-        CHECK_CALL(renderer->Device->CreateCommandAllocator(
-            D3D12_COMMAND_LIST_TYPE_DIRECT,    // type
-            IID_PPV_ARGS(&commandAllocator))); // ppCommandList
+       CHECK_CALL(GetSwapchainImages(renderer.get(), images));
+
+       for (auto& image : images) {
+          // Create swap chain images
+          VkImageViewCreateInfo createInfo           = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+          createInfo.image                           = image;
+          createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+          createInfo.format                          = GREX_DEFAULT_RTV_FORMAT;
+          createInfo.components                      = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+          createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+          createInfo.subresourceRange.baseMipLevel   = 0;
+          createInfo.subresourceRange.levelCount     = 1;
+          createInfo.subresourceRange.baseArrayLayer = 0;
+          createInfo.subresourceRange.layerCount     = 1;
+
+          VkImageView imageView = VK_NULL_HANDLE;
+          CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &imageView));
+
+          imageViews.push_back(imageView);
+       }
+
+       size_t imageCount = images.size();
+
+       std::vector<VulkanImage> depthImages;
+       depthImages.resize(images.size());
+
+       for (int depthIndex = 0; depthIndex < imageCount; depthIndex++) {
+          // Create depth images
+          CHECK_CALL(CreateDSV(renderer.get(), window->GetWidth(), window->GetHeight(), &depthImages[depthIndex]));
+
+          VkImageViewCreateInfo createInfo           = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+          createInfo.image                           = depthImages[depthIndex].Image;
+          createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+          createInfo.format                          = GREX_DEFAULT_DSV_FORMAT;
+          createInfo.components                      = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY };
+          createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
+          createInfo.subresourceRange.baseMipLevel   = 0;
+          createInfo.subresourceRange.levelCount     = 1;
+          createInfo.subresourceRange.baseArrayLayer = 0;
+          createInfo.subresourceRange.layerCount     = 1;
+
+          VkImageView depthView = VK_NULL_HANDLE;
+          CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &depthView));
+
+          depthViews.push_back(depthView);
+       }
     }
 
     // *************************************************************************
-    // Command list
+    // Command buffer
     // *************************************************************************
-    ComPtr<ID3D12GraphicsCommandList5> commandList;
+    CommandObjects cmdBuf = {};
     {
-        CHECK_CALL(renderer->Device->CreateCommandList1(
-            0,                              // nodeMask
-            D3D12_COMMAND_LIST_TYPE_DIRECT, // type
-            D3D12_COMMAND_LIST_FLAG_NONE,   // flags
-            IID_PPV_ARGS(&commandList)));   // ppCommandList
+       CHECK_CALL(CreateCommandBuffer(renderer.get(), 0, &cmdBuf));
     }
 
     // *************************************************************************
-    // Persistent map parameters
+    // Persistent map scene parameters
     // *************************************************************************
-    SceneParameters* pSceneParams = nullptr;
-    CHECK_CALL(constantBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pSceneParams)));
+    PBRSceneParameters* pPBRSceneParams = nullptr;
+    vmaMapMemory(renderer->Allocator, pbrSceneParamsBuffer.Allocation, reinterpret_cast<void**>(&pPBRSceneParams));
 
     MaterialParameters* pMaterialParams = nullptr;
-    CHECK_CALL(materialBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pMaterialParams)));
+    vmaMapMemory(renderer->Allocator, pbrMaterialParamsBuffer.Allocation, reinterpret_cast<void**>(&pMaterialParams));
 
     // *************************************************************************
     // Main loop
     // *************************************************************************
+    VkClearValue clearValues[2];
+    clearValues[0].color = { {0.0f, 0.0f, 0.2f, 1.0f } };
+    clearValues[1].depthStencil = { 1.0f, 0 };
+
     while (window->PollEvents()) {
-        window->ImGuiNewFrameD3D12();
+        window->ImGuiNewFrameVulkan();
 
         if (ImGui::Begin("Scene")) {
             static const char* currentIBLName = gIBLNames[0].c_str();
@@ -665,38 +801,55 @@ int main(int argc, char** argv)
 
         // ---------------------------------------------------------------------
 
-        UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
+       UINT bufferIndex = 0;
+        if (AcquireNextImage(renderer.get(), &bufferIndex)) {
+            assert(false && "AcquireNextImage failed");
+            break;
+        }
 
-        ComPtr<ID3D12Resource> swapchainBuffer;
-        CHECK_CALL(renderer->Swapchain->GetBuffer(bufferIndex, IID_PPV_ARGS(&swapchainBuffer)));
+        VkCommandBufferBeginInfo vkbi = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        vkbi.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-        CHECK_CALL(commandAllocator->Reset());
-        CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
+        CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
 
-        // Descriptor heap
-        ID3D12DescriptorHeap* heaps[1] = {descriptorHeap.Get()};
-        commandList->SetDescriptorHeaps(1, heaps);
-
-        // Draw stuff
-        D3D12_RESOURCE_BARRIER preRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        commandList->ResourceBarrier(1, &preRenderBarrier);
         {
-            commandList->OMSetRenderTargets(
-                1,
-                &renderer->SwapchainRTVDescriptorHandles[bufferIndex],
-                false,
-                &renderer->SwapchainDSVDescriptorHandles[bufferIndex]);
+            CmdTransitionImageLayout(
+                cmdBuf.CommandBuffer,
+                images[bufferIndex],
+                GREX_ALL_SUBRESOURCES,
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                RESOURCE_STATE_PRESENT,
+                RESOURCE_STATE_RENDER_TARGET);
 
-            // Clear RTV and DSV
-            float clearColor[4] = {0.23f, 0.23f, 0.31f, 0};
-            commandList->ClearRenderTargetView(renderer->SwapchainRTVDescriptorHandles[bufferIndex], clearColor, 0, nullptr);
-            commandList->ClearDepthStencilView(renderer->SwapchainDSVDescriptorHandles[bufferIndex], D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0xFF, 0, nullptr);
+            VkRenderingAttachmentInfo colorAttachment = {VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+            colorAttachment.imageView                 = imageViews[bufferIndex];
+            colorAttachment.imageLayout               = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+            colorAttachment.loadOp                    = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            colorAttachment.storeOp                   = VK_ATTACHMENT_STORE_OP_STORE;
+            colorAttachment.clearValue                = clearValues[0];
 
-            // Viewport and scissor
-            D3D12_VIEWPORT viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
-            commandList->RSSetViewports(1, &viewport);
-            D3D12_RECT scissor = {0, 0, static_cast<long>(gWindowWidth), static_cast<long>(gWindowHeight)};
-            commandList->RSSetScissorRects(1, &scissor);
+            VkRenderingAttachmentInfo depthAttachment = {VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+            depthAttachment.imageView                 = depthViews[bufferIndex];
+            depthAttachment.imageLayout               = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+            depthAttachment.loadOp                    = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            depthAttachment.storeOp                   = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            depthAttachment.clearValue                = clearValues[1];
+
+            VkRenderingInfo vkri                      = {VK_STRUCTURE_TYPE_RENDERING_INFO};
+            vkri.layerCount                           = 1;
+            vkri.colorAttachmentCount                 = 1;
+            vkri.pColorAttachments                    = &colorAttachment;
+            vkri.pDepthAttachment                     = &depthAttachment;
+            vkri.renderArea.extent.width              = gWindowWidth;
+            vkri.renderArea.extent.height             = gWindowHeight;
+
+            vkCmdBeginRendering(cmdBuf.CommandBuffer, &vkri);
+
+            VkViewport viewport = {0, static_cast<float>(gWindowHeight), static_cast<float>(gWindowWidth), -static_cast<float>(gWindowHeight), 0.0f, 1.0f};
+            vkCmdSetViewport(cmdBuf.CommandBuffer, 0, 1, &viewport);
+
+            VkRect2D scissor = {0, 0, gWindowWidth, gWindowHeight};
+            vkCmdSetScissor(cmdBuf.CommandBuffer, 0, 1, &scissor);
 
             // Smooth out the rotation on Y
             gAngle += (gTargetAngle - gAngle) * 0.1f;
@@ -712,110 +865,102 @@ int main(int argc, char** argv)
             //
             // We're rotating everything in the world...including the lights
             //
-            pSceneParams->viewProjectionMatrix = projMat * viewMat;
-            pSceneParams->eyePosition          = eyePosition;
-            pSceneParams->numLights            = gNumLights;
-            pSceneParams->lights[0].position   = vec3(3, 10, 0);
-            pSceneParams->lights[0].color      = vec3(1, 1, 1);
-            pSceneParams->lights[0].intensity  = 1.5f;
-            pSceneParams->lights[1].position   = vec3(-8, 1, 4);
-            pSceneParams->lights[1].color      = vec3(0.85f, 0.95f, 0.81f);
-            pSceneParams->lights[1].intensity  = 0.4f;
-            pSceneParams->lights[2].position   = vec3(0, 8, -8);
-            pSceneParams->lights[2].color      = vec3(0.89f, 0.89f, 0.97f);
-            pSceneParams->lights[2].intensity  = 0.95f;
-            pSceneParams->lights[3].position   = vec3(15, 0, 0);
-            pSceneParams->lights[3].color      = vec3(0.92f, 0.5f, 0.7f);
-            pSceneParams->lights[3].intensity  = 0.5f;
-            pSceneParams->iblNumEnvLevels      = envNumLevels[gIBLIndex];
-            pSceneParams->iblIndex             = gIBLIndex;
-            pSceneParams->iblDiffuseStrength   = gIBLDiffuseStrength;
-            pSceneParams->iblSpecularStrength  = gIBLSpecularStrength;
+            pPBRSceneParams->viewProjectionMatrix = projMat * viewMat;
+            pPBRSceneParams->eyePosition          = eyePosition;
+            pPBRSceneParams->numLights            = gNumLights;
+            pPBRSceneParams->lights[0].position   = vec3(3, 10, 0);
+            pPBRSceneParams->lights[0].color      = vec3(1, 1, 1);
+            pPBRSceneParams->lights[0].intensity  = 1.5f;
+            pPBRSceneParams->lights[1].position   = vec3(-8, 1, 4);
+            pPBRSceneParams->lights[1].color      = vec3(0.85f, 0.95f, 0.81f);
+            pPBRSceneParams->lights[1].intensity  = 0.4f;
+            pPBRSceneParams->lights[2].position   = vec3(0, 8, -8);
+            pPBRSceneParams->lights[2].color      = vec3(0.89f, 0.89f, 0.97f);
+            pPBRSceneParams->lights[2].intensity  = 0.95f;
+            pPBRSceneParams->lights[3].position   = vec3(15, 0, 0);
+            pPBRSceneParams->lights[3].color      = vec3(0.92f, 0.5f, 0.7f);
+            pPBRSceneParams->lights[3].intensity  = 0.5f;
+            pPBRSceneParams->iblNumEnvLevels      = envNumLevels[gIBLIndex];
+            pPBRSceneParams->iblIndex             = gIBLIndex;
+            pPBRSceneParams->iblDiffuseStrength   = gIBLDiffuseStrength;
+            pPBRSceneParams->iblSpecularStrength  = gIBLSpecularStrength;
 
             // Draw environment
             {
-                commandList->SetGraphicsRootSignature(envRootSig.Get());
-                commandList->SetPipelineState(envPipelineState.Get());
+                VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
+                descriptorBufferBindingInfo.pNext                            = nullptr;
+                descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &envDescriptorBuffer);
+                descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+                fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
+
+                uint32_t     bufferIndices           = 0;
+                VkDeviceSize descriptorBufferOffsets = 0;
+                fn_vkCmdSetDescriptorBufferOffsetsEXT(
+                    cmdBuf.CommandBuffer,
+                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    envPipelineLayout.PipelineLayout,
+                    0, // firstSet
+                    1, // setCount
+                    &bufferIndices,
+                    &descriptorBufferOffsets);
+
+                // Bind the VS/FS Graphics Pipeline
+                vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, envPipelineState);
 
                 glm::mat4 moveUp = glm::translate(vec3(0, 5, 0));
 
                 // SceneParmas (b0)
                 mat4 mvp = projMat * viewMat * moveUp;
-                commandList->SetGraphicsRoot32BitConstants(0, 16, &mvp, 0);
-                commandList->SetGraphicsRoot32BitConstants(0, 1, &gIBLIndex, 16);
-                // Textures (32)
-                D3D12_GPU_DESCRIPTOR_HANDLE tableStart = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
-                tableStart.ptr += (1 + gMaxIBLs) * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-                commandList->SetGraphicsRootDescriptorTable(1, tableStart);
 
-                // Index buffer
-                D3D12_INDEX_BUFFER_VIEW ibv = {};
-                ibv.BufferLocation          = envGeoBuffers.indexBuffer->GetGPUVirtualAddress();
-                ibv.SizeInBytes             = static_cast<UINT>(envGeoBuffers.indexBuffer->GetDesc().Width);
-                ibv.Format                  = DXGI_FORMAT_R32_UINT;
-                commandList->IASetIndexBuffer(&ibv);
+                EnvSceneParameters envSceneParams = {};
+                envSceneParams.IBLIndex           = gIBLIndex;
+                envSceneParams.MVP                = mvp;
 
-                // Vertex buffers
-                D3D12_VERTEX_BUFFER_VIEW vbvs[2] = {};
-                // Position
-                vbvs[0].BufferLocation = envGeoBuffers.positionBuffer->GetGPUVirtualAddress();
-                vbvs[0].SizeInBytes    = static_cast<UINT>(envGeoBuffers.positionBuffer->GetDesc().Width);
-                vbvs[0].StrideInBytes  = 12;
-                // Tex coord
-                vbvs[1].BufferLocation = envGeoBuffers.texCoordBuffer->GetGPUVirtualAddress();
-                vbvs[1].SizeInBytes    = static_cast<UINT>(envGeoBuffers.texCoordBuffer->GetDesc().Width);
-                vbvs[1].StrideInBytes  = 8;
+                vkCmdPushConstants(cmdBuf.CommandBuffer, envPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(EnvSceneParameters), &envSceneParams);
 
-                commandList->IASetVertexBuffers(0, 2, vbvs);
-                commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+                // Bind the Index Buffer
+                vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, envGeoBuffers.indexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
 
-                commandList->DrawIndexedInstanced(envGeoBuffers.numIndices, 1, 0, 0, 0);
+                // Bind the Vertex Buffer
+                VkBuffer     vertexBuffers[] = {envGeoBuffers.positionBuffer.Buffer, envGeoBuffers.texCoordBuffer.Buffer};
+                VkDeviceSize offsets[]       = {0, 0};
+                vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 2, vertexBuffers, offsets);
+
+                vkCmdDrawIndexed(cmdBuf.CommandBuffer, envGeoBuffers.numIndices, 1, 0, 0, 0);
             }
 
             // Draw sample spheres
             {
-                commandList->SetGraphicsRootSignature(pbrRootSig.Get());
-                // SceneParams (b0)
-                commandList->SetGraphicsRootConstantBufferView(0, constantBuffer->GetGPUVirtualAddress());
-                // MaterialParams (b2)
-                commandList->SetGraphicsRootShaderResourceView(2, materialBuffer->GetGPUVirtualAddress());
-                // BRDFLUT (t10)
-                D3D12_GPU_DESCRIPTOR_HANDLE tableStart = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
-                commandList->SetGraphicsRootDescriptorTable(3, tableStart);
-                tableStart.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-                // IrradianceMap (t16)
-                commandList->SetGraphicsRootDescriptorTable(4, tableStart);
-                tableStart.ptr += gMaxIBLs * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-                // EnvironmentMap (t32)
-                commandList->SetGraphicsRootDescriptorTable(5, tableStart);
-                tableStart.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
+                descriptorBufferBindingInfo.pNext                            = nullptr;
+                descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &pbrDescriptorBuffer);
+                descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+                fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
+
+                uint32_t     bufferIndices           = 0;
+                VkDeviceSize descriptorBufferOffsets = 0;
+                fn_vkCmdSetDescriptorBufferOffsetsEXT(
+                    cmdBuf.CommandBuffer,
+                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    pbrPipelineLayout.PipelineLayout,
+                    0, // firstSet
+                    1, // setCount
+                    &bufferIndices,
+                    &descriptorBufferOffsets);
 
                 // Select which model to draw
                 const GeometryBuffers& geoBuffers = matGeoBuffers[gModelIndex];
 
-                // Index buffer
-                D3D12_INDEX_BUFFER_VIEW ibv = {};
-                ibv.BufferLocation          = geoBuffers.indexBuffer->GetGPUVirtualAddress();
-                ibv.SizeInBytes             = static_cast<UINT>(geoBuffers.indexBuffer->GetDesc().Width);
-                ibv.Format                  = DXGI_FORMAT_R32_UINT;
-                commandList->IASetIndexBuffer(&ibv);
+                // Bind the Index Buffer
+                vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, geoBuffers.indexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
 
-                // Vertex buffers
-                D3D12_VERTEX_BUFFER_VIEW vbvs[2] = {};
-                // Position
-                vbvs[0].BufferLocation = geoBuffers.positionBuffer->GetGPUVirtualAddress();
-                vbvs[0].SizeInBytes    = static_cast<UINT>(geoBuffers.positionBuffer->GetDesc().Width);
-                vbvs[0].StrideInBytes  = 12;
-                // Normal
-                vbvs[1].BufferLocation = geoBuffers.normalBuffer->GetGPUVirtualAddress();
-                vbvs[1].SizeInBytes    = static_cast<UINT>(geoBuffers.normalBuffer->GetDesc().Width);
-                vbvs[1].StrideInBytes  = 12;
-
-                commandList->IASetVertexBuffers(0, 2, vbvs);
-                commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+                // Bind the Vertex Buffer
+                VkBuffer     vertexBuffers[] = {geoBuffers.positionBuffer.Buffer, geoBuffers.normalBuffer.Buffer};
+                VkDeviceSize offsets[]       = {0, 0};
+                vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 2, vertexBuffers, offsets);
 
                 // Pipeline state
-                commandList->SetPipelineState(pbrPipelineState.Get());
+                vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pbrPipelineState);
 
                 const float yPos = 0.0f;
 
@@ -824,9 +969,13 @@ int main(int argc, char** argv)
                     glm::mat4 modelMat      = glm::translate(vec3(-3, yPos, 3));
                     uint32_t  materialIndex = 0;
 
-                    commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
-                    commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
-                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
+                    DrawParameters drawParams = {};
+                    drawParams.ModelMatrix    = modelMat;
+                    drawParams.MaterialIndex  = materialIndex;
+
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
+
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
                 }
 
                 // Gold
@@ -834,9 +983,13 @@ int main(int argc, char** argv)
                     glm::mat4 modelMat      = glm::translate(vec3(0, yPos, 3));
                     uint32_t  materialIndex = 1;
 
-                    commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
-                    commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
-                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
+                    DrawParameters drawParams = {};
+                    drawParams.ModelMatrix    = modelMat;
+                    drawParams.MaterialIndex  = materialIndex;
+
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
+
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
                 }
 
                 // Silver
@@ -844,9 +997,13 @@ int main(int argc, char** argv)
                     glm::mat4 modelMat      = glm::translate(vec3(3, yPos, 3));
                     uint32_t  materialIndex = 2;
 
-                    commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
-                    commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
-                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
+                    DrawParameters drawParams = {};
+                    drawParams.ModelMatrix    = modelMat;
+                    drawParams.MaterialIndex  = materialIndex;
+
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
+
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
                 }
 
                 // Zink
@@ -854,9 +1011,13 @@ int main(int argc, char** argv)
                     glm::mat4 modelMat      = glm::translate(vec3(-3, yPos, 0));
                     uint32_t  materialIndex = 3;
 
-                    commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
-                    commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
-                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
+                    DrawParameters drawParams = {};
+                    drawParams.ModelMatrix    = modelMat;
+                    drawParams.MaterialIndex  = materialIndex;
+
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
+
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
                 }
 
                 // Titanium
@@ -864,9 +1025,13 @@ int main(int argc, char** argv)
                     glm::mat4 modelMat      = glm::translate(vec3(0, yPos, 0));
                     uint32_t  materialIndex = 4;
 
-                    commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
-                    commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
-                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
+                    DrawParameters drawParams = {};
+                    drawParams.ModelMatrix    = modelMat;
+                    drawParams.MaterialIndex  = materialIndex;
+
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
+
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
                 }
 
                 // Shiny Plastic
@@ -874,9 +1039,13 @@ int main(int argc, char** argv)
                     glm::mat4 modelMat      = glm::translate(vec3(3, yPos, 0));
                     uint32_t  materialIndex = 5;
 
-                    commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
-                    commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
-                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
+                    DrawParameters drawParams = {};
+                    drawParams.ModelMatrix    = modelMat;
+                    drawParams.MaterialIndex  = materialIndex;
+
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
+
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
                 }
 
                 // Rough Plastic
@@ -884,9 +1053,13 @@ int main(int argc, char** argv)
                     glm::mat4 modelMat      = glm::translate(vec3(-3, yPos, -3));
                     uint32_t  materialIndex = 6;
 
-                    commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
-                    commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
-                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
+                    DrawParameters drawParams = {};
+                    drawParams.ModelMatrix    = modelMat;
+                    drawParams.MaterialIndex  = materialIndex;
+
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
+
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
                 }
 
                 // Rougher Plastic
@@ -894,9 +1067,13 @@ int main(int argc, char** argv)
                     glm::mat4 modelMat      = glm::translate(vec3(0, yPos, -3));
                     uint32_t  materialIndex = 7;
 
-                    commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
-                    commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
-                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
+                    DrawParameters drawParams = {};
+                    drawParams.ModelMatrix    = modelMat;
+                    drawParams.MaterialIndex  = materialIndex;
+
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
+
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
                 }
 
                 // Roughest Plastic
@@ -904,30 +1081,61 @@ int main(int argc, char** argv)
                     glm::mat4 modelMat      = glm::translate(vec3(3, yPos, -3));
                     uint32_t  materialIndex = 8;
 
-                    commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
-                    commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
-                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
+                    DrawParameters drawParams = {};
+                    drawParams.ModelMatrix    = modelMat;
+                    drawParams.MaterialIndex  = materialIndex;
+
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
+
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
                 }
             }
 
-            // Draw ImGui
-            window->ImGuiRenderDrawData(renderer.get(), commandList.Get());
+            vkCmdEndRendering(cmdBuf.CommandBuffer);
+
+            // Setup render passes and draw ImGui
+            {
+                VkRenderPassAttachmentBeginInfo attachmentBeginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO};
+                attachmentBeginInfo.pNext                           = 0;
+                attachmentBeginInfo.attachmentCount                 = 1;
+                attachmentBeginInfo.pAttachments                    = &imageViews[bufferIndex];
+
+                VkRenderPassBeginInfo beginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+                beginInfo.pNext                 = &attachmentBeginInfo;
+                beginInfo.renderPass            = renderPass.RenderPass;
+                beginInfo.framebuffer           = renderPass.Framebuffer;
+                beginInfo.renderArea            = scissor;
+
+                vkCmdBeginRenderPass(cmdBuf.CommandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+                // Draw ImGui
+                window->ImGuiRenderDrawData(renderer.get(), cmdBuf.CommandBuffer);
+
+                vkCmdEndRenderPass(cmdBuf.CommandBuffer);
+            }
+
+            CmdTransitionImageLayout(
+                cmdBuf.CommandBuffer,
+                images[bufferIndex],
+                GREX_ALL_SUBRESOURCES,
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                RESOURCE_STATE_RENDER_TARGET,
+                RESOURCE_STATE_PRESENT);
         }
-        D3D12_RESOURCE_BARRIER postRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-        commandList->ResourceBarrier(1, &postRenderBarrier);
 
-        commandList->Close();
+        CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));
 
-        ID3D12CommandList* pList = commandList.Get();
-        renderer->Queue->ExecuteCommandLists(1, &pList);
+        // Execute command buffer
+        CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
 
+        // Wait for the GPU to finish the work
         if (!WaitForGpu(renderer.get())) {
             assert(false && "WaitForGpu failed");
             break;
         }
 
         // Present
-        if (!SwapchainPresent(renderer.get())) {
+        if (!SwapchainPresent(renderer.get(), bufferIndex)) {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -936,6 +1144,718 @@ int main(int argc, char** argv)
     return 0;
 }
 
+void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout)
+{
+   // Descriptor set layout
+   {
+      std::vector<VkDescriptorSetLayoutBinding> bindings = {};
+      {
+         VkDescriptorSetLayoutBinding binding = {};
+         binding.binding                      = 0;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+         binding.descriptorCount              = 1;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+         bindings.push_back(binding);
+      }
+      {
+         VkDescriptorSetLayoutBinding binding = {};
+         binding.binding                      = 2;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+         binding.descriptorCount              = 1;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+         bindings.push_back(binding);
+      }
+      {
+         VkDescriptorSetLayoutBinding binding = {};
+         binding.binding                      = 4;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
+         binding.descriptorCount              = 1;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+         bindings.push_back(binding);
+      }
+      {
+         VkDescriptorSetLayoutBinding binding = {};
+         binding.binding                      = 5;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
+         binding.descriptorCount              = 1;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+         bindings.push_back(binding);
+      }
+      {
+         VkDescriptorSetLayoutBinding binding = {};
+         binding.binding                      = 10;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+         binding.descriptorCount              = 1;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+         bindings.push_back(binding);
+      }
+      {
+         VkDescriptorSetLayoutBinding binding = {};
+         binding.binding                      = 16;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+         binding.descriptorCount              = 32;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+         bindings.push_back(binding);
+      }
+      {
+         VkDescriptorSetLayoutBinding binding = {};
+         binding.binding                      = 48;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+         binding.descriptorCount              = 32;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+         bindings.push_back(binding);
+      }
+
+      VkDescriptorSetLayoutCreateInfo createInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+      createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+      createInfo.bindingCount                    = CountU32(bindings);
+      createInfo.pBindings                       = DataPtr(bindings);
+
+      CHECK_CALL(vkCreateDescriptorSetLayout(
+         pRenderer->Device,
+         &createInfo,
+         nullptr,
+         &pLayout->DescriptorSetLayout));
+   }
+
+   std::vector<VkPushConstantRange> push_constants;
+   {
+      VkPushConstantRange push_constant = {};
+      push_constant.offset              = 0;
+      push_constant.size                = sizeof(DrawParameters);
+      push_constant.stageFlags          = VK_SHADER_STAGE_ALL_GRAPHICS;
+      push_constants.push_back(push_constant);
+   }
+
+   VkPipelineLayoutCreateInfo createInfo  = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+   createInfo.setLayoutCount              = 1;
+   createInfo.pSetLayouts                 = &pLayout->DescriptorSetLayout;
+   createInfo.pushConstantRangeCount      = CountU32(push_constants);
+   createInfo.pPushConstantRanges         = DataPtr(push_constants);
+
+   CHECK_CALL(vkCreatePipelineLayout(pRenderer->Device, &createInfo, nullptr, &pLayout->PipelineLayout));
+}
+
+void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout)
+{
+   // Descriptor set layout
+   {
+      std::vector<VkDescriptorSetLayoutBinding> bindings = {};
+      {
+         VkDescriptorSetLayoutBinding binding = {};
+         binding.binding                      = 1;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
+         binding.descriptorCount              = 1;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+         bindings.push_back(binding);
+      }
+      {
+         VkDescriptorSetLayoutBinding binding = {};
+         binding.binding                      = 32;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+         binding.descriptorCount              = 16;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+         bindings.push_back(binding);
+      }
+
+      VkDescriptorSetLayoutCreateInfo createInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+      createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+      createInfo.bindingCount                    = CountU32(bindings);
+      createInfo.pBindings                       = DataPtr(bindings);
+
+      CHECK_CALL(vkCreateDescriptorSetLayout(
+         pRenderer->Device,
+         &createInfo,
+         nullptr,
+         &pLayout->DescriptorSetLayout));
+   }
+
+   VkPushConstantRange push_constant   = {};
+   push_constant.offset                = 0;
+   push_constant.size                  = sizeof(EnvSceneParameters);
+   push_constant.stageFlags            = VK_SHADER_STAGE_ALL_GRAPHICS;
+
+   VkPipelineLayoutCreateInfo createInfo  = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+   createInfo.setLayoutCount              = 1;
+   createInfo.pSetLayouts                 = &pLayout->DescriptorSetLayout;
+   createInfo.pushConstantRangeCount      = 1;
+   createInfo.pPushConstantRanges         = &push_constant;
+
+   CHECK_CALL(vkCreatePipelineLayout(pRenderer->Device, &createInfo, nullptr, &pLayout->PipelineLayout));
+}
+
+void CreateEnvironmentVertexBuffers(
+    VulkanRenderer*  pRenderer,
+    GeometryBuffers& outGeomtryBuffers)
+{
+   TriMesh mesh = TriMesh::Sphere(25, 64, 64, {.enableTexCoords = true, .faceInside = true});
+
+   outGeomtryBuffers.numIndices = 3 * mesh.GetNumTriangles();
+
+   CHECK_CALL(CreateBuffer(
+       pRenderer,
+       SizeInBytes(mesh.GetTriangles()),
+       DataPtr(mesh.GetTriangles()),
+       VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+       VMA_MEMORY_USAGE_GPU_ONLY,
+       0,
+       &outGeomtryBuffers.indexBuffer));
+
+   CHECK_CALL(CreateBuffer(
+       pRenderer,
+       SizeInBytes(mesh.GetPositions()),
+       DataPtr(mesh.GetPositions()),
+       VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+       VMA_MEMORY_USAGE_GPU_ONLY,
+       0,
+       &outGeomtryBuffers.positionBuffer));
+
+   CHECK_CALL(CreateBuffer(
+       pRenderer,
+       SizeInBytes(mesh.GetTexCoords()),
+       DataPtr(mesh.GetTexCoords()),
+       VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+       VMA_MEMORY_USAGE_GPU_ONLY,
+       0,
+       &outGeomtryBuffers.texCoordBuffer));
+}
+
+void CreateMaterialModels(
+    VulkanRenderer*               pRenderer,
+    std::vector<GeometryBuffers>& outGeomtryBuffers)
+{
+   // Sphere
+   {
+      TriMesh mesh = TriMesh::Sphere(1, 256, 256, {.enableNormals = true});
+
+      GeometryBuffers buffers = {};
+
+      buffers.numIndices = 3 * mesh.GetNumTriangles();
+
+      CHECK_CALL(CreateBuffer(
+          pRenderer,
+          SizeInBytes(mesh.GetTriangles()),
+          DataPtr(mesh.GetTriangles()),
+          VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+          VMA_MEMORY_USAGE_GPU_ONLY,
+          0,
+          &buffers.indexBuffer));
+
+      CHECK_CALL(CreateBuffer(
+          pRenderer,
+          SizeInBytes(mesh.GetPositions()),
+          DataPtr(mesh.GetPositions()),
+          VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+          VMA_MEMORY_USAGE_GPU_ONLY,
+          0,
+          &buffers.positionBuffer));
+
+      CHECK_CALL(CreateBuffer(
+          pRenderer,
+          SizeInBytes(mesh.GetNormals()),
+          DataPtr(mesh.GetNormals()),
+          VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+          VMA_MEMORY_USAGE_GPU_ONLY,
+          0,
+          &buffers.normalBuffer));
+
+      outGeomtryBuffers.push_back(buffers);
+   }
+
+   // Knob
+   {
+      TriMesh::Options options = {};
+      options.enableNormals    = true;
+      options.applyTransform   = true;
+      options.transformRotate  = glm::vec3(0, glm::radians(180.0f), 0);
+
+      TriMesh mesh;
+      if (!TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh)) {
+         return;
+      }
+      mesh.ScaleToFit(1.0f);
+
+      GeometryBuffers buffers = {};
+
+      buffers.numIndices = 3 * mesh.GetNumTriangles();
+
+      CHECK_CALL(CreateBuffer(
+          pRenderer,
+          SizeInBytes(mesh.GetTriangles()),
+          DataPtr(mesh.GetTriangles()),
+          VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+          VMA_MEMORY_USAGE_GPU_ONLY,
+          0,
+          &buffers.indexBuffer));
+
+      CHECK_CALL(CreateBuffer(
+          pRenderer,
+          SizeInBytes(mesh.GetPositions()),
+          DataPtr(mesh.GetPositions()),
+          VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+          VMA_MEMORY_USAGE_GPU_ONLY,
+          0,
+          &buffers.positionBuffer));
+
+      CHECK_CALL(CreateBuffer(
+          pRenderer,
+          SizeInBytes(mesh.GetNormals()),
+          DataPtr(mesh.GetNormals()),
+          VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+          VMA_MEMORY_USAGE_GPU_ONLY,
+          0,
+          &buffers.normalBuffer));
+
+      outGeomtryBuffers.push_back(buffers);
+   }
+
+   // Monkey
+   {
+      TriMesh::Options options = {};
+      options.enableNormals    = true;
+      options.applyTransform   = true;
+      options.transformRotate  = glm::vec3(0, glm::radians(180.0f), 0);
+
+      TriMesh mesh;
+      if (!TriMesh::LoadOBJ(GetAssetPath("models/monkey.obj").string(), "", options, &mesh)) {
+         return;
+      }
+      // mesh.ScaleToUnit();
+
+      GeometryBuffers buffers = {};
+
+      buffers.numIndices = 3 * mesh.GetNumTriangles();
+
+      CHECK_CALL(CreateBuffer(
+          pRenderer,
+          SizeInBytes(mesh.GetTriangles()),
+          DataPtr(mesh.GetTriangles()),
+          VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+          VMA_MEMORY_USAGE_GPU_ONLY,
+          0,
+          &buffers.indexBuffer));
+
+      CHECK_CALL(CreateBuffer(
+          pRenderer,
+          SizeInBytes(mesh.GetPositions()),
+          DataPtr(mesh.GetPositions()),
+          VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+          VMA_MEMORY_USAGE_GPU_ONLY,
+          0,
+          &buffers.positionBuffer));
+
+      CHECK_CALL(CreateBuffer(
+          pRenderer,
+          SizeInBytes(mesh.GetNormals()),
+          DataPtr(mesh.GetNormals()),
+          VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+          VMA_MEMORY_USAGE_GPU_ONLY,
+          0,
+          &buffers.normalBuffer));
+
+      outGeomtryBuffers.push_back(buffers);
+   }
+}
+
+void CreateIBLTextures(
+    VulkanRenderer*           pRenderer,
+    VulkanImage*              pBRDFLUT,
+    std::vector<VulkanImage>& outIrradianceTextures,
+    std::vector<VulkanImage>& outEnvironmentTextures,
+    std::vector<uint32_t>&    outEnvNumLevels)
+{
+    // BRDF LUT
+    {
+        auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut.hdr"));
+        if (bitmap.Empty()) {
+            assert(false && "Load image failed");
+            return;
+        }
+
+        CHECK_CALL(CreateTexture(
+            pRenderer,
+            bitmap.GetWidth(),
+            bitmap.GetHeight(),
+            VK_FORMAT_R32G32B32A32_SFLOAT,
+            bitmap.GetSizeInBytes(),
+            bitmap.GetPixels(),
+            pBRDFLUT));
+    }
+
+    auto                               iblDir = GetAssetPath("IBL");
+    std::vector<std::filesystem::path> iblFiles;
+    for (auto& entry : std::filesystem::directory_iterator(iblDir)) {
+        if (!entry.is_regular_file()) {
+            continue;
+        }
+        auto path = entry.path();
+        auto ext  = path.extension();
+        if (ext == ".ibl") {
+            path = std::filesystem::relative(path, iblDir.parent_path());
+            iblFiles.push_back(path);
+        }
+    }
+
+    size_t maxEntries = std::min<size_t>(gMaxIBLs, iblFiles.size());
+    for (size_t i = 0; i < maxEntries; ++i) {
+        auto& iblFile = iblFiles[i];
+
+        IBLMaps ibl = {};
+        if (!LoadIBLMaps32f(iblFile, &ibl)) {
+            GREX_LOG_ERROR("failed to load: " << iblFile);
+            return;
+        }
+
+        outEnvNumLevels.push_back(ibl.numLevels);
+
+        // Irradiance
+        {
+            VulkanImage texture;
+            CHECK_CALL(CreateTexture(
+                pRenderer,
+                ibl.irradianceMap.GetWidth(),
+                ibl.irradianceMap.GetHeight(),
+                VK_FORMAT_R32G32B32A32_SFLOAT,
+                ibl.irradianceMap.GetSizeInBytes(),
+                ibl.irradianceMap.GetPixels(),
+                &texture));
+            outIrradianceTextures.push_back(texture);
+        }
+
+        // Environment
+        {
+            const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
+            const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
+
+            std::vector<MipOffset> mipOffsets;
+            uint32_t               levelOffset = 0;
+            uint32_t               levelWidth  = ibl.baseWidth;
+            uint32_t               levelHeight = ibl.baseHeight;
+            for (uint32_t i = 0; i < ibl.numLevels; ++i) {
+                MipOffset mipOffset = {};
+                mipOffset.Offset    = levelOffset;
+                mipOffset.RowStride = rowStride;
+
+                mipOffsets.push_back(mipOffset);
+
+                levelOffset += (rowStride * levelHeight);
+                levelWidth >>= 1;
+                levelHeight >>= 1;
+            }
+
+            VulkanImage texture;
+            CHECK_CALL(CreateTexture(
+                pRenderer,
+                ibl.baseWidth,
+                ibl.baseHeight,
+                VK_FORMAT_R32G32B32A32_SFLOAT,
+                mipOffsets,
+                ibl.environmentMap.GetSizeInBytes(),
+                ibl.environmentMap.GetPixels(),
+                &texture));
+            outEnvironmentTextures.push_back(texture);
+        }
+
+        gIBLNames.push_back(iblFile.filename().replace_extension().string());
+
+        GREX_LOG_INFO("Loaded " << iblFile);
+    }
+}
+
+void CreateDescriptorBuffer(
+   VulkanRenderer*         pRenderer,
+   VkDescriptorSetLayout   descriptorSetLayout,
+   VulkanBuffer*           pBuffer)
+{
+   VkDeviceSize size = 0;
+   fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
+
+   VkBufferUsageFlags usageFlags =
+      VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+
+   CHECK_CALL(CreateBuffer(
+      pRenderer,  // pRenderer
+      size,       // srcSize
+      nullptr,    // pSrcData
+      usageFlags, // usageFlags
+      0,          // minAlignment
+      pBuffer));  // pBuffer
+}
+
+void WritePBRDescriptors(
+   VulkanRenderer*            pRenderer,
+   VkDescriptorSetLayout      descriptorSetLayout,
+   VulkanBuffer*              pDescriptorBuffer,
+   const VulkanBuffer*        pSceneParamsBuffer,
+   const VulkanBuffer*        pMaterialsBuffer,
+   const VulkanImage*         pBRDFLUT,
+   std::vector<VulkanImage>&  irradianceTextures,
+   std::vector<VulkanImage>&  envTextures)
+{
+   char* pDescriptorBufferStartAddress = nullptr;
+   CHECK_CALL(vmaMapMemory(
+      pRenderer->Allocator,
+      pDescriptorBuffer->Allocation,
+      reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
+
+   // ConstantBuffer<SceneParameters>    SceneParams           : register(b0);
+   WriteDescriptor(
+      pRenderer,
+      pDescriptorBufferStartAddress,
+      descriptorSetLayout,
+      0, // binding
+      0, // arrayElement
+      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+      pSceneParamsBuffer);
+
+   // Set via push constants
+   // ConstantBuffer<DrawParameters>     DrawParams            : register(b1);
+
+   // ConstantBuffer<MaterialParameters> MaterialParams        : register(b2);
+   WriteDescriptor(
+       pRenderer,
+       pDescriptorBufferStartAddress,
+       descriptorSetLayout,
+       1, // binding
+       0, // arrayElement
+       VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+       pMaterialsBuffer);
+
+   // Samplers are setup in the immutable samplers in the DescriptorSetLayout
+   // SamplerState                       IBLIntegrationSampler : register(s4);
+   {
+      VkSamplerCreateInfo samplerInfo       = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+      samplerInfo.flags                     = 0;
+      samplerInfo.magFilter                 = VK_FILTER_LINEAR;
+      samplerInfo.minFilter                 = VK_FILTER_LINEAR;
+      samplerInfo.mipmapMode                = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+      samplerInfo.addressModeU              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      samplerInfo.addressModeV              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      samplerInfo.addressModeW              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      samplerInfo.mipLodBias                = 0;
+      samplerInfo.anisotropyEnable          = VK_FALSE;
+      samplerInfo.maxAnisotropy             = 0;
+      samplerInfo.compareEnable             = VK_TRUE;
+      samplerInfo.compareOp                 = VK_COMPARE_OP_LESS_OR_EQUAL;
+      samplerInfo.minLod                    = 0;
+      samplerInfo.maxLod                    = 1;
+      samplerInfo.borderColor               = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+      samplerInfo.unnormalizedCoordinates   = VK_FALSE;
+
+      VkSampler clampedSampler = VK_NULL_HANDLE;
+      CHECK_CALL(vkCreateSampler(
+         pRenderer->Device,
+         &samplerInfo,
+         nullptr,
+         &clampedSampler));
+
+      WriteDescriptor(
+         pRenderer,
+         pDescriptorBufferStartAddress,
+         descriptorSetLayout,
+         4, // binding
+         0, // arrayElement
+         clampedSampler);
+   }
+
+   // SamplerState                         UWrapSampler       : register(s5);
+   {
+      VkSamplerCreateInfo samplerInfo       = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+      samplerInfo.flags                     = 0;
+      samplerInfo.magFilter                 = VK_FILTER_LINEAR;
+      samplerInfo.minFilter                 = VK_FILTER_LINEAR;
+      samplerInfo.mipmapMode                = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+      samplerInfo.addressModeU              = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+      samplerInfo.addressModeV              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      samplerInfo.addressModeW              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      samplerInfo.mipLodBias                = 0;
+      samplerInfo.anisotropyEnable          = VK_FALSE;
+      samplerInfo.maxAnisotropy             = 0;
+      samplerInfo.compareEnable             = VK_TRUE;
+      samplerInfo.compareOp                 = VK_COMPARE_OP_LESS_OR_EQUAL;
+      samplerInfo.minLod                    = 0;
+      samplerInfo.maxLod                    = FLT_MAX;
+      samplerInfo.borderColor               = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+      samplerInfo.unnormalizedCoordinates   = VK_FALSE;
+
+      VkSampler uWrapSampler = VK_NULL_HANDLE;
+      CHECK_CALL(vkCreateSampler(
+         pRenderer->Device,
+         &samplerInfo,
+         nullptr,
+         &uWrapSampler));
+
+      WriteDescriptor(
+         pRenderer,
+         pDescriptorBufferStartAddress,
+         descriptorSetLayout,
+         5, // binding
+         0, // arrayElement
+         uWrapSampler);
+   }
+
+   // Texture2D                            BRDFLUT            : register(t10);
+   {
+      VkImageView imageView = VK_NULL_HANDLE;
+      CHECK_CALL(CreateImageView(
+         pRenderer,
+         pBRDFLUT,
+         VK_IMAGE_VIEW_TYPE_2D,
+         VK_FORMAT_R32G32B32A32_SFLOAT,
+         GREX_ALL_SUBRESOURCES,
+         &imageView));
+
+      WriteDescriptor(
+         pRenderer,
+         pDescriptorBufferStartAddress,
+         descriptorSetLayout,
+         10, // binding
+         0,  // arrayElement
+         VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+         imageView,
+         VK_IMAGE_LAYOUT_GENERAL);
+   }
+
+   // Texture2D                            IrradianceMap[32]  : register(t16);
+   {
+      uint32_t arrayElement = 0;
+      for (auto& irradianceTexture : irradianceTextures) {
+            VkImageView imageView = VK_NULL_HANDLE;
+            CHECK_CALL(CreateImageView(
+                pRenderer,
+                &irradianceTexture,
+                VK_IMAGE_VIEW_TYPE_2D,
+                VK_FORMAT_R32G32B32A32_SFLOAT,
+                GREX_ALL_SUBRESOURCES,
+                &imageView));
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                32,           // binding
+                arrayElement, // arrayElement
+                VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                imageView,
+                VK_IMAGE_LAYOUT_GENERAL);
+
+            arrayElement++;
+      }
+   }
+
+   // Texture2D                            EnvironmentMap[32] : register(t48);
+   {
+      uint32_t arrayElement = 0;
+      for (auto& envTexture : envTextures) {
+            VkImageView imageView = VK_NULL_HANDLE;
+            CHECK_CALL(CreateImageView(
+                pRenderer,
+                &envTexture,
+                VK_IMAGE_VIEW_TYPE_2D,
+                VK_FORMAT_R32G32B32A32_SFLOAT,
+                GREX_ALL_SUBRESOURCES,
+                &imageView));
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                48,           // binding
+                arrayElement, // arrayElement
+                VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                imageView,
+                VK_IMAGE_LAYOUT_GENERAL);
+
+            arrayElement++;
+      }
+   }
+
+   vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
+}
+
+void WriteEnvDescriptors(
+   VulkanRenderer*            pRenderer,
+   VkDescriptorSetLayout      descriptorSetLayout,
+   VulkanBuffer*              pDescriptorBuffer,
+   std::vector<VulkanImage>&  envTextures)
+{
+   char* pDescriptorBufferStartAddress = nullptr;
+   CHECK_CALL(vmaMapMemory(
+      pRenderer->Allocator,
+      pDescriptorBuffer->Allocation,
+      reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
+
+   // set via push constants
+   // ConstantBuffer<SceneParameters> SceneParams       : register(b0);
+
+   // SamplerState                    IBLMapSampler     : register(s1);
+   {
+      VkSamplerCreateInfo samplerInfo       = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+      samplerInfo.flags                     = 0;
+      samplerInfo.magFilter                 = VK_FILTER_LINEAR;
+      samplerInfo.minFilter                 = VK_FILTER_LINEAR;
+      samplerInfo.mipmapMode                = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+      samplerInfo.addressModeU              = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+      samplerInfo.addressModeV              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      samplerInfo.addressModeW              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      samplerInfo.mipLodBias                = 0;
+      samplerInfo.anisotropyEnable          = VK_FALSE;
+      samplerInfo.maxAnisotropy             = 0;
+      samplerInfo.compareEnable             = VK_TRUE;
+      samplerInfo.compareOp                 = VK_COMPARE_OP_NEVER;
+      samplerInfo.minLod                    = 0;
+      samplerInfo.maxLod                    = FLT_MAX;
+      samplerInfo.borderColor               = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+      samplerInfo.unnormalizedCoordinates   = VK_FALSE;
+
+      VkSampler uWrapSampler = VK_NULL_HANDLE;
+      CHECK_CALL(vkCreateSampler(
+         pRenderer->Device,
+         &samplerInfo,
+         nullptr,
+         &uWrapSampler));
+      
+      WriteDescriptor(
+         pRenderer,
+         pDescriptorBufferStartAddress,
+         descriptorSetLayout,
+         1, // binding
+         0, // arrayElement
+         uWrapSampler);
+   }
+
+   // Texture2D                       IBLEnvironmentMap : register(t2);
+   {
+      uint32_t arrayElement = 0;
+      for (auto& envTexture : envTextures) {
+            VkImageView imageView = VK_NULL_HANDLE;
+            CHECK_CALL(CreateImageView(
+                pRenderer,
+                &envTexture,
+                VK_IMAGE_VIEW_TYPE_2D,
+                VK_FORMAT_R32G32B32A32_SFLOAT,
+                GREX_ALL_SUBRESOURCES,
+                &imageView));
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                32,           // binding
+                arrayElement, // arrayElement
+                VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                imageView,
+                VK_IMAGE_LAYOUT_GENERAL);
+
+            arrayElement++;
+      }
+   }
+
+   vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
+}
+
+/*
 void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 {
     // BRDFLUT (t10)
@@ -1095,249 +2015,6 @@ void CreateEnvironmentRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRoo
         IID_PPV_ARGS(ppRootSig))); // riid, ppvRootSignature
 }
 
-void CreateEnvironmentVertexBuffers(
-    DxRenderer*      pRenderer,
-    GeometryBuffers& outGeomtryBuffers)
-{
-    TriMesh mesh = TriMesh::Sphere(25, 64, 64, {.enableTexCoords = true, .faceInside = true});
-
-    outGeomtryBuffers.numIndices = 3 * mesh.GetNumTriangles();
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTriangles()),
-        DataPtr(mesh.GetTriangles()),
-        &outGeomtryBuffers.indexBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetPositions()),
-        DataPtr(mesh.GetPositions()),
-        &outGeomtryBuffers.positionBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTexCoords()),
-        DataPtr(mesh.GetTexCoords()),
-        &outGeomtryBuffers.texCoordBuffer));
-}
-
-void CreateMaterialModels(
-    DxRenderer*                   pRenderer,
-    std::vector<GeometryBuffers>& outGeomtryBuffers)
-{
-    // Sphere
-    {
-        TriMesh mesh = TriMesh::Sphere(1, 256, 256, {.enableNormals = true});
-
-        GeometryBuffers buffers = {};
-
-        buffers.numIndices = 3 * mesh.GetNumTriangles();
-
-        CHECK_CALL(CreateBuffer(
-            pRenderer,
-            SizeInBytes(mesh.GetTriangles()),
-            DataPtr(mesh.GetTriangles()),
-            &buffers.indexBuffer));
-
-        CHECK_CALL(CreateBuffer(
-            pRenderer,
-            SizeInBytes(mesh.GetPositions()),
-            DataPtr(mesh.GetPositions()),
-            &buffers.positionBuffer));
-
-        CHECK_CALL(CreateBuffer(
-            pRenderer,
-            SizeInBytes(mesh.GetNormals()),
-            DataPtr(mesh.GetNormals()),
-            &buffers.normalBuffer));
-
-        outGeomtryBuffers.push_back(buffers);
-    }
-
-    // Knob
-    {
-        TriMesh::Options options = {};
-        options.enableNormals    = true;
-        options.applyTransform   = true;
-        options.transformRotate  = glm::vec3(0, glm::radians(180.0f), 0);
-
-        TriMesh mesh;
-        if (!TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh)) {
-            return;
-        }
-        mesh.ScaleToFit(1.0f);
-
-        GeometryBuffers buffers = {};
-
-        buffers.numIndices = 3 * mesh.GetNumTriangles();
-
-        CHECK_CALL(CreateBuffer(
-            pRenderer,
-            SizeInBytes(mesh.GetTriangles()),
-            DataPtr(mesh.GetTriangles()),
-            &buffers.indexBuffer));
-
-        CHECK_CALL(CreateBuffer(
-            pRenderer,
-            SizeInBytes(mesh.GetPositions()),
-            DataPtr(mesh.GetPositions()),
-            &buffers.positionBuffer));
-
-        CHECK_CALL(CreateBuffer(
-            pRenderer,
-            SizeInBytes(mesh.GetNormals()),
-            DataPtr(mesh.GetNormals()),
-            &buffers.normalBuffer));
-
-        outGeomtryBuffers.push_back(buffers);
-    }
-
-    // Monkey
-    {
-        TriMesh::Options options = {};
-        options.enableNormals    = true;
-        options.applyTransform   = true;
-        options.transformRotate  = glm::vec3(0, glm::radians(180.0f), 0);
-
-        TriMesh mesh;
-        if (!TriMesh::LoadOBJ(GetAssetPath("models/monkey.obj").string(), "", options, &mesh)) {
-            return;
-        }
-        // mesh.ScaleToUnit();
-
-        GeometryBuffers buffers = {};
-
-        buffers.numIndices = 3 * mesh.GetNumTriangles();
-
-        CHECK_CALL(CreateBuffer(
-            pRenderer,
-            SizeInBytes(mesh.GetTriangles()),
-            DataPtr(mesh.GetTriangles()),
-            &buffers.indexBuffer));
-
-        CHECK_CALL(CreateBuffer(
-            pRenderer,
-            SizeInBytes(mesh.GetPositions()),
-            DataPtr(mesh.GetPositions()),
-            &buffers.positionBuffer));
-
-        CHECK_CALL(CreateBuffer(
-            pRenderer,
-            SizeInBytes(mesh.GetNormals()),
-            DataPtr(mesh.GetNormals()),
-            &buffers.normalBuffer));
-
-        outGeomtryBuffers.push_back(buffers);
-    }
-}
-
-void CreateIBLTextures(
-    DxRenderer*                          pRenderer,
-    ID3D12Resource**                     ppBRDFLUT,
-    std::vector<ComPtr<ID3D12Resource>>& outIrradianceTextures,
-    std::vector<ComPtr<ID3D12Resource>>& outEnvironmentTextures,
-    std::vector<uint32_t>&               outEnvNumLevels)
-{
-    // BRDF LUT
-    {
-        auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut.hdr"));
-        if (bitmap.Empty()) {
-            assert(false && "Load image failed");
-            return;
-        }
-
-        ComPtr<ID3D12Resource> texture;
-        CHECK_CALL(CreateTexture(
-            pRenderer,
-            bitmap.GetWidth(),
-            bitmap.GetHeight(),
-            DXGI_FORMAT_R32G32B32A32_FLOAT,
-            bitmap.GetSizeInBytes(),
-            bitmap.GetPixels(),
-            ppBRDFLUT));
-    }
-
-    auto                               iblDir = GetAssetPath("IBL");
-    std::vector<std::filesystem::path> iblFiles;
-    for (auto& entry : std::filesystem::directory_iterator(iblDir)) {
-        if (!entry.is_regular_file()) {
-            continue;
-        }
-        auto path = entry.path();
-        auto ext  = path.extension();
-        if (ext == ".ibl") {
-            path = std::filesystem::relative(path, iblDir.parent_path());
-            iblFiles.push_back(path);
-        }
-    }
-
-    size_t maxEntries = std::min<size_t>(gMaxIBLs, iblFiles.size());
-    for (size_t i = 0; i < maxEntries; ++i) {
-        auto& iblFile = iblFiles[i];
-
-        IBLMaps ibl = {};
-        if (!LoadIBLMaps32f(iblFile, &ibl)) {
-            GREX_LOG_ERROR("failed to load: " << iblFile);
-            return;
-        }
-
-        outEnvNumLevels.push_back(ibl.numLevels);
-
-        // Irradiance
-        {
-            ComPtr<ID3D12Resource> texture;
-            CHECK_CALL(CreateTexture(
-                pRenderer,
-                ibl.irradianceMap.GetWidth(),
-                ibl.irradianceMap.GetHeight(),
-                DXGI_FORMAT_R32G32B32A32_FLOAT,
-                ibl.irradianceMap.GetSizeInBytes(),
-                ibl.irradianceMap.GetPixels(),
-                &texture));
-            outIrradianceTextures.push_back(texture);
-        }
-
-        // Environment
-        {
-            const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
-            const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
-
-            std::vector<MipOffset> mipOffsets;
-            uint32_t               levelOffset = 0;
-            uint32_t               levelWidth  = ibl.baseWidth;
-            uint32_t               levelHeight = ibl.baseHeight;
-            for (uint32_t i = 0; i < ibl.numLevels; ++i) {
-                MipOffset mipOffset = {};
-                mipOffset.Offset    = levelOffset;
-                mipOffset.RowStride = rowStride;
-
-                mipOffsets.push_back(mipOffset);
-
-                levelOffset += (rowStride * levelHeight);
-                levelWidth >>= 1;
-                levelHeight >>= 1;
-            }
-
-            ComPtr<ID3D12Resource> texture;
-            CHECK_CALL(CreateTexture(
-                pRenderer,
-                ibl.baseWidth,
-                ibl.baseHeight,
-                DXGI_FORMAT_R32G32B32A32_FLOAT,
-                mipOffsets,
-                ibl.environmentMap.GetSizeInBytes(),
-                ibl.environmentMap.GetPixels(),
-                &texture));
-            outEnvironmentTextures.push_back(texture);
-        }
-
-        gIBLNames.push_back(iblFile.filename().replace_extension().string());
-
-        GREX_LOG_INFO("Loaded " << iblFile);
-    }
-}
-
 void CreateDescriptorHeap(
     DxRenderer*            pRenderer,
     ID3D12DescriptorHeap** ppHeap)
@@ -1351,3 +2028,4 @@ void CreateDescriptorHeap(
         &desc,
         IID_PPV_ARGS(ppHeap)));
 }
+*/
