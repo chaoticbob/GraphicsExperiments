@@ -630,7 +630,7 @@ int main(int argc, char** argv)
             VkRenderingAttachmentInfo colorAttachment = {VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
             colorAttachment.imageView                 = imageViews[bufferIndex];
             colorAttachment.imageLayout               = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
-            colorAttachment.loadOp                    = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            colorAttachment.loadOp                    = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             colorAttachment.storeOp                   = VK_ATTACHMENT_STORE_OP_STORE;
             colorAttachment.clearValue                = clearValues[0];
 
@@ -676,6 +676,27 @@ int main(int argc, char** argv)
             pPBRSceneParams->iblEnvironmentNumLevels = envNumLevels;
 
             // -----------------------------------------------------------------
+            // Descriptors
+            // -----------------------------------------------------------------
+
+            VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
+            descriptorBufferBindingInfo.pNext                            = nullptr;
+            descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &pbrDescriptorBuffer);
+            descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+            fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
+
+            uint32_t     bufferIndices           = 0;
+            VkDeviceSize descriptorBufferOffsets = 0;
+            fn_vkCmdSetDescriptorBufferOffsetsEXT(
+                cmdBuf.CommandBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                pbrPipelineLayout.PipelineLayout,
+                0, // firstSet
+                1, // setCount
+                &bufferIndices,
+                &descriptorBufferOffsets);
+
+            // -----------------------------------------------------------------
             // Pipeline state
             // -----------------------------------------------------------------
             vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pbrPipelineState);
@@ -715,88 +736,29 @@ int main(int argc, char** argv)
                     cellRect.extent.height = gCellRenderResY;
 
                     if (pPBRSceneParams->furnace) {
-                        vkCmdEndRendering(cmdBuf.CommandBuffer);
+                        VkClearAttachment clearColorAttachment = {};
+                        clearColorAttachment.aspectMask        = VK_IMAGE_ASPECT_COLOR_BIT;
+                        clearColorAttachment.clearValue.color  = {1, 1, 1, 1};
 
-                        CmdTransitionImageLayout(
-                            cmdBuf.CommandBuffer,
-                            images[bufferIndex],
-                            0,
-                            1,
-                            0,
-                            1,
-                            VK_IMAGE_ASPECT_COLOR_BIT,
-                            RESOURCE_STATE_RENDER_TARGET,
-                            RESOURCE_STATE_TRANSFER_DST);
+                        VkClearRect clearRect    = {};
+                        clearRect.baseArrayLayer = 0;
+                        clearRect.layerCount     = 1;
+                        clearRect.rect           = cellRect;
 
-                        VkImageSubresourceRange range = {};
-                        range.aspectMask              = VK_IMAGE_ASPECT_COLOR_BIT;
-                        range.baseArrayLayer          = 0;
-                        range.baseMipLevel            = 0;
-                        range.layerCount              = 1;
-                        range.levelCount              = 1;
-
-                        vkCmdClearColorImage(
-                            cmdBuf.CommandBuffer,
-                            images[bufferIndex],
-                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                            &clearValues[0].color,
-                            1,
-                            &range);
-
-                        CmdTransitionImageLayout(
-                            cmdBuf.CommandBuffer,
-                            images[bufferIndex],
-                            0,
-                            1,
-                            0,
-                            1,
-                            VK_IMAGE_ASPECT_COLOR_BIT,
-                            RESOURCE_STATE_TRANSFER_DST,
-                            RESOURCE_STATE_RENDER_TARGET);
-
-                        vkCmdBeginRendering(cmdBuf.CommandBuffer, &vkri);
+                        vkCmdClearAttachments(cmdBuf.CommandBuffer, 1, &clearColorAttachment, 1, &clearRect);
                     }
+
                     {
-                        vkCmdEndRendering(cmdBuf.CommandBuffer);
+                        VkClearAttachment clearDepthAttachment       = {};
+                        clearDepthAttachment.aspectMask              = VK_IMAGE_ASPECT_DEPTH_BIT;
+                        clearDepthAttachment.clearValue.depthStencil = {1.0, 0};
 
-                        CmdTransitionImageLayout(
-                            cmdBuf.CommandBuffer,
-                            depthImages[bufferIndex].Image,
-                            0,
-                            1,
-                            0,
-                            1,
-                            VK_IMAGE_ASPECT_DEPTH_BIT,
-                            RESOURCE_STATE_DEPTH_STENCIL,
-                            RESOURCE_STATE_TRANSFER_DST);
+                        VkClearRect clearRect    = {};
+                        clearRect.baseArrayLayer = 0;
+                        clearRect.layerCount     = 1;
+                        clearRect.rect           = cellRect;
 
-                        VkImageSubresourceRange range = {};
-                        range.aspectMask              = VK_IMAGE_ASPECT_DEPTH_BIT;
-                        range.baseArrayLayer          = 0;
-                        range.baseMipLevel            = 0;
-                        range.layerCount              = 1;
-                        range.levelCount              = 1;
-
-                        vkCmdClearDepthStencilImage(
-                            cmdBuf.CommandBuffer,
-                            depthImages[bufferIndex].Image,
-                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                            &clearValues[1].depthStencil,
-                            1,
-                            &range);
-
-                        CmdTransitionImageLayout(
-                            cmdBuf.CommandBuffer,
-                            depthImages[bufferIndex].Image,
-                            0,
-                            1,
-                            0,
-                            1,
-                            VK_IMAGE_ASPECT_DEPTH_BIT,
-                            RESOURCE_STATE_TRANSFER_DST,
-                            RESOURCE_STATE_DEPTH_STENCIL);
-
-                        vkCmdBeginRendering(cmdBuf.CommandBuffer, &vkri);
+                        vkCmdClearAttachments(cmdBuf.CommandBuffer, 1, &clearDepthAttachment, 1, &clearRect);
                     }
 
                     // ---------------------------------------------------------
