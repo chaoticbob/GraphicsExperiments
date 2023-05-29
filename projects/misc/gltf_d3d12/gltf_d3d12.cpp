@@ -159,7 +159,7 @@ int main(int argc, char** argv)
     // Scene
     // *************************************************************************
     DxScene scene = DxScene(renderer.get());
-    if (!scene.LoadGLTF(GetAssetPath("scenes/test2.gltf"))) {
+    if (!scene.LoadGLTF(GetAssetPath("scenes/basic_test_2.gltf"))) {
         assert(false && "LoadGLTF failed");
         return EXIT_FAILURE;
     }
@@ -246,9 +246,9 @@ int main(int argc, char** argv)
 
             // Camera constants
             mat4 transformEyeMat     = glm::rotate(glm::radians(-gAngle), vec3(0, 1, 0));
-            vec3 startingEyePosition = vec3(0, 3, 10);
+            vec3 startingEyePosition = vec3(0, 16, 10);
             vec3 eyePosition         = transformEyeMat * vec4(startingEyePosition, 1);
-            mat4 viewMat             = glm::lookAt(eyePosition, vec3(0, 0, -2), vec3(0, 1, 0));
+            mat4 viewMat             = glm::lookAt(eyePosition, vec3(0, 0, -6), vec3(0, 1, 0));
             mat4 projMat             = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
             mat4 projViewMat         = projMat * viewMat;
 

@@ -47,18 +47,28 @@ struct SceneTexture
     uint32_t   NumMipLevels = 0;
 };
 
+struct SceneMaterial
+{
+    std::string Name;
+
+    struct {
+    } PBR;
+};
+
 struct ScenePrimitiveBatch
 {
-    SceneIndexBufferView  IndexBufferView;
-    SceneVertexBufferView PositionBufferView;
-    SceneVertexBufferView VertexColorBufferView;
-    SceneVertexBufferView TexCoordBufferView;
-    SceneVertexBufferView NormalBufferView;
-    SceneVertexBufferView TangentBufferView;
+    uint32_t              MaterialIndex         = UINT32_MAX;
+    SceneIndexBufferView  IndexBufferView       = {};
+    SceneVertexBufferView PositionBufferView    = {};
+    SceneVertexBufferView VertexColorBufferView = {};
+    SceneVertexBufferView TexCoordBufferView    = {};
+    SceneVertexBufferView NormalBufferView      = {};
+    SceneVertexBufferView TangentBufferView     = {};
 };
 
 struct SceneMesh
 {
+    std::string                      Name;
     std::vector<ScenePrimitiveBatch> Batches;
 };
 

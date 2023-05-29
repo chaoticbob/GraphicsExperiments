@@ -127,10 +127,22 @@ bool Scene::LoadGLTF(const std::filesystem::path& path)
             GREX_LOG_INFO("   Mesh " << meshIdx << " : " << (srcMesh.name != nullptr ? srcMesh.name : ""));
             GREX_LOG_INFO("      Batch count: " << srcMesh.primitives_count);
 
+            // Name
+            if (!IsNull(srcMesh.name)) {
+                dstMesh.Name = srcMesh.name;
+            }
+
+            // Batches
             dstMesh.Batches.resize(srcMesh.primitives_count);
             for (size_t primsIdx = 0; primsIdx < srcMesh.primitives_count; ++primsIdx) {
                 const auto& srcPrims = srcMesh.primitives[primsIdx];
                 auto&       batch    = dstMesh.Batches[primsIdx];
+
+                // Material
+                batch.MaterialIndex = UINT32_MAX;
+                if (!IsNull(srcPrims.material)) {
+                    batch.MaterialIndex = cgltf_material_index(pData, srcPrims.material);
+                }
 
                 // Indices
                 {
