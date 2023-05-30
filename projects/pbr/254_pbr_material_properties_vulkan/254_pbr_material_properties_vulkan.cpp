@@ -106,7 +106,6 @@ static float gAngle       = 0.0f;
 static uint32_t gNumLights = 0;
 
 void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout);
-void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout);
 void CreateMaterialSphereVertexBuffers(
     VulkanRenderer* pRenderer,
     uint32_t*       pNumIndices,
@@ -115,12 +114,6 @@ void CreateMaterialSphereVertexBuffers(
     VulkanBuffer*   pNormalBuffer,
     VulkanBuffer*   pTangentBuffer,
     VulkanBuffer*   pBitangetBuffer);
-void CreateEnvironmentVertexBuffers(
-    VulkanRenderer* pRenderer,
-    uint32_t*       pNumIndices,
-    VulkanBuffer*   pIndexBuffer,
-    VulkanBuffer*   pPositionBuffer,
-    VulkanBuffer*   pTexCoordBuffer);
 void CreateIBLTextures(
     VulkanRenderer* pRenderer,
     VulkanImage*    pBRDFLUT,
@@ -142,11 +135,6 @@ void WritePBRDescriptors(
     const VulkanImage*    pMultiscatterBRDFLUT,
     const VulkanImage*    pIrradianceTexture,
     const VulkanImage*    pEnvTexture);
-void WriteEnvDescriptors(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pDescrptorBuffer,
-    VulkanImage*          pEnvTexture);
 
 void MouseMove(int x, int y, int buttons)
 {
@@ -224,67 +212,11 @@ int main(int argc, char** argv)
         CHECK_CALL(vkCreateShaderModule(renderer->Device, &createInfo, nullptr, &shaderModuleFS));
     }
 
-    // Draw texture shaders
-    std::vector<uint32_t> drawTextureSpirvVS;
-    std::vector<uint32_t> drawTextureSpirvFS;
-    {
-        std::string shaderSource = LoadString("projects/253_pbr_material_properties_d3d12/drawtexture.hlsl");
-        if (shaderSource.empty()) {
-            assert(false && "no shader source");
-            return EXIT_FAILURE;
-        }
-
-        std::string errorMsg;
-        HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &drawTextureSpirvVS, &errorMsg);
-        if (FAILED(hr)) {
-            std::stringstream ss;
-            ss << "\n"
-               << "Shader compiler error (VS): " << errorMsg << "\n";
-            GREX_LOG_ERROR(ss.str().c_str());
-            assert(false);
-            return EXIT_FAILURE;
-        }
-
-        hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &drawTextureSpirvFS, &errorMsg);
-        if (FAILED(hr)) {
-            std::stringstream ss;
-            ss << "\n"
-               << "Shader compiler error (PS): " << errorMsg << "\n";
-            GREX_LOG_ERROR(ss.str().c_str());
-            assert(false);
-            return EXIT_FAILURE;
-        }
-    }
-
-    VkShaderModule drawTextureShaderModuleVS = VK_NULL_HANDLE;
-    {
-        VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        createInfo.codeSize                 = SizeInBytes(drawTextureSpirvVS);
-        createInfo.pCode                    = DataPtr(drawTextureSpirvVS);
-
-        CHECK_CALL(vkCreateShaderModule(renderer->Device, &createInfo, nullptr, &drawTextureShaderModuleVS));
-    }
-
-    VkShaderModule drawTextureShaderModuleFS = VK_NULL_HANDLE;
-    {
-        VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        createInfo.codeSize                 = SizeInBytes(drawTextureSpirvFS);
-        createInfo.pCode                    = DataPtr(drawTextureSpirvFS);
-
-        CHECK_CALL(vkCreateShaderModule(renderer->Device, &createInfo, nullptr, &drawTextureShaderModuleFS));
-    }
-
     // *************************************************************************
     // PBR pipeline layout
     // *************************************************************************
     VulkanPipelineLayout pbrPipelineLayout = {};
     CreatePBRPipeline(renderer.get(), &pbrPipelineLayout);
-
-    // *************************************************************************
-    // Environment pipeline layout
-    // *************************************************************************
-    VulkanPipelineLayout envPipelineLayout = {};
-    CreateEnvironmentPipeline(renderer.get(), &envPipelineLayout);
 
     // *************************************************************************
     // PBR pipeline state object
@@ -302,20 +234,6 @@ int main(int argc, char** argv)
         VK_CULL_MODE_BACK_BIT,
         "vsmain",
         "psmain"));
-
-    // *************************************************************************
-    // Environment pipeline state object
-    // *************************************************************************
-    VkPipeline envPipelineState = VK_NULL_HANDLE;
-    CHECK_CALL(CreateDrawTexturePipeline(
-        renderer.get(),
-        envPipelineLayout.PipelineLayout,
-        drawTextureShaderModuleVS,
-        drawTextureShaderModuleFS,
-        GREX_DEFAULT_RTV_FORMAT,
-        GREX_DEFAULT_DSV_FORMAT,
-        &envPipelineState,
-        VK_CULL_MODE_FRONT_BIT));
 
     // *************************************************************************
     // Scene Params Buffer
@@ -349,20 +267,6 @@ int main(int argc, char** argv)
         &materialSphereBitangentBuffer);
 
     // *************************************************************************
-    // Environment vertex buffers
-    // *************************************************************************
-    uint32_t     envNumIndices = 0;
-    VulkanBuffer envIndexBuffer;
-    VulkanBuffer envPositionBuffer;
-    VulkanBuffer envTexCoordBuffer;
-    CreateEnvironmentVertexBuffers(
-        renderer.get(),
-        &envNumIndices,
-        &envIndexBuffer,
-        &envPositionBuffer,
-        &envTexCoordBuffer);
-
-    // *************************************************************************
     // IBL texture
     // *************************************************************************
     VulkanImage brdfLUT;
@@ -391,18 +295,9 @@ int main(int argc, char** argv)
         pbrPipelineLayout.DescriptorSetLayout,
         &pbrDescriptorBuffer,
         &pbrSceneParamsBuffer,
-        &multiscatterBRDFLUT,
         &brdfLUT,
+        &multiscatterBRDFLUT,
         &irrTexture,
-        &envTexture);
-
-    VulkanBuffer envDescriptorBuffer = {};
-    CreateDescriptorBuffer(renderer.get(), envPipelineLayout.DescriptorSetLayout, &envDescriptorBuffer);
-
-    WriteEnvDescriptors(
-        renderer.get(),
-        envPipelineLayout.DescriptorSetLayout,
-        &envDescriptorBuffer,
         &envTexture);
 
     // *************************************************************************
@@ -527,6 +422,30 @@ int main(int argc, char** argv)
     PBRSceneParameters* pPBRSceneParams = nullptr;
     vmaMapMemory(renderer->Allocator, pbrSceneParamsBuffer.Allocation, reinterpret_cast<void**>(&pPBRSceneParams));
 
+    char* pDescriptorBufferStartAddress = nullptr;
+    CHECK_CALL(vmaMapMemory(
+        renderer->Allocator,
+        pbrDescriptorBuffer.Allocation,
+        reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
+
+    VkImageView furnaceImageView = VK_NULL_HANDLE;
+    CHECK_CALL(CreateImageView(
+        renderer.get(),
+        &furnaceTexture,
+        VK_IMAGE_VIEW_TYPE_2D,
+        VK_FORMAT_R32G32B32A32_SFLOAT,
+        GREX_ALL_SUBRESOURCES,
+        &furnaceImageView));
+
+    VkImageView envImageView = VK_NULL_HANDLE;
+    CHECK_CALL(CreateImageView(
+        renderer.get(),
+        &envTexture,
+        VK_IMAGE_VIEW_TYPE_2D,
+        VK_FORMAT_R32G32B32A32_SFLOAT,
+        GREX_ALL_SUBRESOURCES,
+        &envImageView));
+
     // *************************************************************************
     // Main loop
     // *************************************************************************
@@ -542,6 +461,21 @@ int main(int argc, char** argv)
             ImGui::Checkbox("Furnace", reinterpret_cast<bool*>(&pPBRSceneParams->furnace));
         }
         ImGui::End();
+
+        // ---------------------------------------------------------------------
+        VkImageView desiredImageView = (pPBRSceneParams->furnace) ? furnaceImageView : envImageView;
+
+        WriteDescriptor(
+            renderer.get(),
+            pDescriptorBufferStartAddress,
+            pbrPipelineLayout.DescriptorSetLayout,
+            6, // binding
+            0, // arrayElement
+            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            desiredImageView,
+            VK_IMAGE_LAYOUT_GENERAL);
+
+         pPBRSceneParams->iblEnvironmentNumLevels = (pPBRSceneParams->furnace) ? 1 : envNumLevels;
 
         // ---------------------------------------------------------------------
 
@@ -746,6 +680,7 @@ int main(int argc, char** argv)
                         clearRect.rect           = cellRect;
 
                         vkCmdClearAttachments(cmdBuf.CommandBuffer, 1, &clearColorAttachment, 1, &clearRect);
+                        pPBRSceneParams->iblEnvironmentNumLevels = 1;
                     }
 
                     {
@@ -765,10 +700,10 @@ int main(int argc, char** argv)
                     // Set viewport and scissor
                     // ---------------------------------------------------------
                     VkViewport viewport = {
-                        static_cast<float>(cellX),
-                        static_cast<float>(cellY),
-                        static_cast<float>(gCellRenderResX),
-                        static_cast<float>(gCellRenderResY),
+                         static_cast<float>(cellRect.offset.x),
+                         static_cast<float>(cellRect.offset.y + cellRect.extent.height),
+                         static_cast<float>(cellRect.extent.width),
+                        -static_cast<float>(cellRect.extent.height),
                         0,
                         1};
                     vkCmdSetViewport(cmdBuf.CommandBuffer, 0, 1, &viewport);
@@ -1004,60 +939,6 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
     CHECK_CALL(vkCreatePipelineLayout(pRenderer->Device, &createInfo, nullptr, &pLayout->PipelineLayout));
 }
 
-void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
-{
-    // Descriptor set layout
-    {
-        std::vector<VkDescriptorSetLayoutBinding> bindings = {};
-
-        // [[vk::push_constant]]
-        // ConstantBuffer<SceneParameters> SceneParams       : register(b0);
-
-        // SamplerState                    IBLMapSampler     : register(s1);
-        {
-            VkDescriptorSetLayoutBinding binding = {};
-            binding.binding                      = 1;
-            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
-            binding.descriptorCount              = 1;
-            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-            bindings.push_back(binding);
-        }
-        // Texture2D                       IBLEnvironmentMap : register(t2);
-        {
-            VkDescriptorSetLayoutBinding binding = {};
-            binding.binding                      = 2;
-            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-            binding.descriptorCount              = 1;
-            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-            bindings.push_back(binding);
-        }
-
-        VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-        createInfo.bindingCount                    = CountU32(bindings);
-        createInfo.pBindings                       = DataPtr(bindings);
-
-        CHECK_CALL(vkCreateDescriptorSetLayout(
-            pRenderer->Device,
-            &createInfo,
-            nullptr,
-            &pLayout->DescriptorSetLayout));
-    }
-
-    VkPushConstantRange push_constant = {};
-    push_constant.offset              = 0;
-    push_constant.size                = sizeof(EnvSceneParameters);
-    push_constant.stageFlags          = VK_SHADER_STAGE_ALL_GRAPHICS;
-
-    VkPipelineLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-    createInfo.setLayoutCount             = 1;
-    createInfo.pSetLayouts                = &pLayout->DescriptorSetLayout;
-    createInfo.pushConstantRangeCount     = 1;
-    createInfo.pPushConstantRanges        = &push_constant;
-
-    CHECK_CALL(vkCreatePipelineLayout(pRenderer->Device, &createInfo, nullptr, &pLayout->PipelineLayout));
-}
-
 void CreateMaterialSphereVertexBuffers(
     VulkanRenderer* pRenderer,
     uint32_t*       pNumIndices,
@@ -1115,45 +996,6 @@ void CreateMaterialSphereVertexBuffers(
         VMA_MEMORY_USAGE_GPU_ONLY,
         0,
         pBitangetBuffer));
-}
-
-void CreateEnvironmentVertexBuffers(
-    VulkanRenderer* pRenderer,
-    uint32_t*       pNumIndices,
-    VulkanBuffer*   pIndexBuffer,
-    VulkanBuffer*   pPositionBuffer,
-    VulkanBuffer*   pTexCoordBuffer)
-{
-    TriMesh mesh = TriMesh::Sphere(100, 64, 64, {.enableTexCoords = true, .faceInside = true});
-
-    *pNumIndices = 3 * mesh.GetNumTriangles();
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTriangles()),
-        DataPtr(mesh.GetTriangles()),
-        VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-        VMA_MEMORY_USAGE_GPU_ONLY,
-        0,
-        pIndexBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetPositions()),
-        DataPtr(mesh.GetPositions()),
-        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VMA_MEMORY_USAGE_GPU_ONLY,
-        0,
-        pPositionBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTexCoords()),
-        DataPtr(mesh.GetTexCoords()),
-        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VMA_MEMORY_USAGE_GPU_ONLY,
-        0,
-        pTexCoordBuffer));
 }
 
 void CreateIBLTextures(
@@ -1488,78 +1330,3 @@ void WritePBRDescriptors(
     vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
 }
 
-void WriteEnvDescriptors(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pDescriptorBuffer,
-    VulkanImage*          pEnvTexture)
-{
-    char* pDescriptorBufferStartAddress = nullptr;
-    CHECK_CALL(vmaMapMemory(
-        pRenderer->Allocator,
-        pDescriptorBuffer->Allocation,
-        reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
-
-    // set via push constants
-    // ConstantBuffer<SceneParameters> SceneParams       : register(b0);
-
-    // SamplerState                    IBLMapSampler     : register(s1);
-    {
-        VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-        samplerInfo.flags                   = 0;
-        samplerInfo.magFilter               = VK_FILTER_LINEAR;
-        samplerInfo.minFilter               = VK_FILTER_LINEAR;
-        samplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-        samplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        samplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-        samplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-        samplerInfo.mipLodBias              = 0;
-        samplerInfo.anisotropyEnable        = VK_FALSE;
-        samplerInfo.maxAnisotropy           = 0;
-        samplerInfo.compareEnable           = VK_TRUE;
-        samplerInfo.compareOp               = VK_COMPARE_OP_NEVER;
-        samplerInfo.minLod                  = 0;
-        samplerInfo.maxLod                  = FLT_MAX;
-        samplerInfo.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-        samplerInfo.unnormalizedCoordinates = VK_FALSE;
-
-        VkSampler iblMapSampler = VK_NULL_HANDLE;
-        CHECK_CALL(vkCreateSampler(
-            pRenderer->Device,
-            &samplerInfo,
-            nullptr,
-            &iblMapSampler));
-
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
-            1, // binding
-            0, // arrayElement
-            iblMapSampler);
-    }
-
-    // Texture2D                       IBLEnvironmentMap : register(t2);
-    {
-        VkImageView imageView = VK_NULL_HANDLE;
-        CHECK_CALL(CreateImageView(
-            pRenderer,
-            pEnvTexture,
-            VK_IMAGE_VIEW_TYPE_2D,
-            VK_FORMAT_R32G32B32A32_SFLOAT,
-            GREX_ALL_SUBRESOURCES,
-            &imageView));
-
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
-            2, // binding
-            0, // arrayElement
-            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            imageView,
-            VK_IMAGE_LAYOUT_GENERAL);
-    }
-
-    vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
-}
