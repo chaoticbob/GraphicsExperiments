@@ -16,5 +16,6 @@ endif()
 
 if (GREX_ENABLE_VULKAN)
     add_subdirectory(202_pbr_spheres_vulkan)
+    add_subdirectory(206_pbr_align_vulkan)
     add_subdirectory(254_pbr_material_properties_vulkan)
 endif()

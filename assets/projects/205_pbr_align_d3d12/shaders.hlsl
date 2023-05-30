@@ -16,6 +16,19 @@ struct SceneParameters {
     uint     IBLEnvironmentNumLevels;
 };
 
+#ifdef __spirv__
+
+struct DrawParameters {
+   float4x4  ModelMatrix;
+   float3    baseColor;
+   float     roughness;
+   float     metallic;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<DrawParameters>     DrawParams            : register(b1);
+
+#else
 struct DrawParameters {
     float4x4 ModelMatrix;
 };
@@ -26,9 +39,12 @@ struct MaterialParameters {
     float  metallic;
 };
 
-ConstantBuffer<SceneParameters>    SceneParams           : register(b0);
 ConstantBuffer<DrawParameters>     DrawParams            : register(b1);
 ConstantBuffer<MaterialParameters> MaterialParams        : register(b2);
+
+#endif
+
+ConstantBuffer<SceneParameters>    SceneParams           : register(b0);
 Texture2D                          IBLIntegrationLUT     : register(t3);
 Texture2D                          IBLIrradianceMap      : register(t4);
 Texture2D                          IBLEnvironmentMap     : register(t5);
@@ -190,10 +206,17 @@ float4 psmain(VSOutput input) : SV_TARGET
     float  NoV = saturate(dot(N, V));
 
     // Material variables
-    float3 baseColor = MaterialParams.baseColor;
-    float  roughness = MaterialParams.roughness;
-    float  metallic = MaterialParams.metallic;
-    float  dielectric = 1 - metallic;
+    #ifdef __spirv__
+       float3 baseColor = DrawParams.baseColor;
+       float  roughness = DrawParams.roughness;
+       float  metallic = DrawParams.metallic;
+       float  dielectric = 1 - metallic;
+    #else
+       float3 baseColor = MaterialParams.baseColor;
+       float  roughness = MaterialParams.roughness;
+       float  metallic = MaterialParams.metallic;
+       float  dielectric = 1 - metallic;
+    #endif
 
     // Remap
     float3 diffuseColor = baseColor * dielectric;
