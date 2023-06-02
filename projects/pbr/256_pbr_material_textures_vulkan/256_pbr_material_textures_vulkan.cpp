@@ -27,7 +27,7 @@ using namespace glm;
     }
 
 #define MATERIAL_TEXTURE_STRIDE 4
-#define NUM_MATERIALS           9
+#define NUM_MATERIALS           16 
 #define TOTAL_MATERIAL_TEXTURES (NUM_MATERIALS * MATERIAL_TEXTURE_STRIDE)
 
 #define IBL_INTEGRATION_LUT_DESCRIPTOR_OFFSET    3
@@ -35,10 +35,6 @@ using namespace glm;
 #define IBL_IRRADIANCE_MAPS_DESCRIPTOR_OFFSET    16
 #define IBL_ENVIRONMENT_MAPS_DESCRIPTOR_OFFSET   48
 #define MATERIAL_TEXTURES_DESCRIPTOR_OFFSET      100
-
-// Enable this to draw a single triangle and display whatever is in VSOutput.Normal
-// Needed in the shaders.hlsl file as well
-//#define DEBUGGING_ENABLED
 
 // This will be passed in via constant buffer
 struct Light
@@ -798,20 +794,14 @@ int main(int argc, char** argv)
                 uint32_t    materialIndex    = 0;
                 uint32_t    invertNormalMapY = false; // Invert if sphere
 
-#ifndef DEBUGGING_ENABLED
-                uint32_t indexCount          = geoBuffers.numIndices;
-#else
-                uint32_t indexCount          = 6;
-#endif
-
                 // Material 0
                 {
                     glm::mat4 modelMat = glm::translate(vec3(-4.5f, yPos, 4.5f));
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -822,10 +812,10 @@ int main(int argc, char** argv)
                 {
                     glm::mat4 modelMat = glm::translate(vec3(-1.5f, yPos, 4.5f));
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -836,10 +826,10 @@ int main(int argc, char** argv)
                 {
                     glm::mat4 modelMat = glm::translate(vec3(1.5f, yPos, 4.5f));
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -850,10 +840,10 @@ int main(int argc, char** argv)
                 {
                     glm::mat4 modelMat = glm::translate(vec3(4.5f, yPos, 4.5f));
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -864,10 +854,10 @@ int main(int argc, char** argv)
                 {
                     glm::mat4 modelMat = glm::translate(vec3(-4.5f, yPos, 1.5f));
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -878,10 +868,10 @@ int main(int argc, char** argv)
                 {
                     glm::mat4 modelMat = glm::translate(vec3(-1.5f, yPos, 1.5f));
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -892,10 +882,10 @@ int main(int argc, char** argv)
                 {
                     glm::mat4 modelMat = glm::translate(vec3(1.5f, yPos, 1.5f));
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -906,10 +896,10 @@ int main(int argc, char** argv)
                 {
                     glm::mat4 modelMat = glm::translate(vec3(4.5f, yPos, 1.5f));
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -920,10 +910,10 @@ int main(int argc, char** argv)
                 {
                     glm::mat4 modelMat = glm::translate(vec3(-4.5f, yPos, -1.5f));
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -934,10 +924,10 @@ int main(int argc, char** argv)
                 {
                     glm::mat4 modelMat = glm::translate(vec3(-1.5f, yPos, -1.5f));
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -948,10 +938,10 @@ int main(int argc, char** argv)
                 {
                     glm::mat4 modelMat = glm::translate(vec3(1.5f, yPos, -1.5f));
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -962,10 +952,10 @@ int main(int argc, char** argv)
                 {
                     glm::mat4 modelMat = glm::translate(vec3(4.5f, yPos, -1.5f));
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -976,10 +966,10 @@ int main(int argc, char** argv)
                 {
                     glm::mat4 modelMat = glm::translate(vec3(-4.5f, yPos, -4.5f));
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -990,10 +980,10 @@ int main(int argc, char** argv)
                 {
                     glm::mat4 modelMat = glm::translate(vec3(-1.5f, yPos, -4.5f));
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -1004,10 +994,10 @@ int main(int argc, char** argv)
                 {
                     glm::mat4 modelMat = glm::translate(vec3(1.5f, yPos, -4.5f));
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -1018,10 +1008,10 @@ int main(int argc, char** argv)
                 {
                     glm::mat4 modelMat = glm::translate(vec3(4.5f, yPos, -4.5f));
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -1658,12 +1648,7 @@ void CreateIBLTextures(
         }
     }
 
-#ifndef DEBUGGING_ENABLED
     size_t maxEntries = std::min<size_t>(gMaxIBLs, iblFiles.size());
-#else
-    size_t maxEntries = 1;
-#endif 
-
     for (size_t i = 0; i < maxEntries; ++i) {
         std::filesystem::path iblFile = iblFiles[i];
 
@@ -1771,12 +1756,7 @@ void CreateMaterials(
         texturesDir / "wood_table_001" / "material.mat",
     };
 
-#ifndef DEBUGGING_ENABLED
     size_t maxEntries = materialFiles.size();
-#else
-    size_t maxEntries = 1;
-#endif
-
     for (size_t i = 0; i < maxEntries; ++i) {
         auto materialFile = materialFiles[i];
 

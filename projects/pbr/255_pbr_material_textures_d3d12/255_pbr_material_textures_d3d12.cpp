@@ -36,10 +36,6 @@ using namespace glm;
 #define IBL_ENVIRONMENT_MAPS_DESCRIPTOR_OFFSET   48
 #define MATERIAL_TEXTURES_DESCRIPTOR_OFFSET      100
 
-// Enable this to draw a single triangle and display whatever is in VSOutput.Normal
-// Needed in the shaders.hlsl file as well
-//#define DEBUGGING_ENABLED
-
 // This will be passed in via constant buffer
 struct Light
 {
@@ -700,12 +696,6 @@ int main(int argc, char** argv)
                 uint32_t    materialIndex    = 0;
                 uint32_t    invertNormalMapY = false; // Invert if sphere
 
-#ifndef DEBUGGING_ENABLED
-                uint32_t indexCount          = geoBuffers.numIndices;
-#else
-                uint32_t indexCount          = 6;
-#endif
-
                 // Material 0
                 {
                     glm::mat4 modelMat = glm::translate(vec3(-4.5f, yPos, 4.5f));
@@ -713,7 +703,7 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
-                    commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -727,7 +717,7 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
-                    commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -741,7 +731,7 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
-                    commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -755,7 +745,7 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
-                    commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -769,7 +759,7 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
-                    commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -783,7 +773,7 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
-                    commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -797,7 +787,7 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
-                    commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -811,7 +801,7 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
-                    commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -825,7 +815,7 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
-                    commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -839,7 +829,7 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
-                    commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -853,7 +843,7 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
-                    commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -867,7 +857,7 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
-                    commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -881,7 +871,7 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
-                    commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -895,7 +885,7 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
-                    commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -909,7 +899,7 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
-                    commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -923,7 +913,7 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &materialIndex, 16);
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
-                    commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+                    commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -1460,12 +1450,7 @@ void CreateIBLTextures(
         }
     }
 
-#ifndef DEBUGGING_ENABLED
     size_t maxEntries = std::min<size_t>(gMaxIBLs, iblFiles.size());
-#else
-    size_t maxEntries = 1;
-#endif
-
     for (size_t i = 0; i < maxEntries; ++i) {
         std::filesystem::path iblFile = iblFiles[i];
 
@@ -1573,12 +1558,7 @@ void CreateMaterials(
         texturesDir / "wood_table_001" / "material.mat",
     };
 
-#ifndef DEBUGGING_ENABLED
     size_t maxEntries = materialFiles.size();
-#else
-    size_t maxEntries = 1;
-#endif
-
     for (size_t i = 0; i < maxEntries; ++i) {
         auto materialFile = materialFiles[i];
 
