@@ -52,6 +52,7 @@ struct SceneMaterial
     std::string Name;
 
     struct {
+        
     } PBR;
 };
 
