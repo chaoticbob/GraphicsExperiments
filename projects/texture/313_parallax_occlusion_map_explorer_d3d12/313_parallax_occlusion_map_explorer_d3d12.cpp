@@ -609,7 +609,7 @@ void CreateGeometryBuffers(
         Geometry geometry = {.name = "Plane"};
         outGeometries.push_back(geometry);
 
-        TriMesh mesh = TriMesh::Plane(vec2(1.5f), 1, 1, vec3(0, 1, 0), false, options);
+        TriMesh mesh = TriMesh::Plane(vec2(1.5f), 1, 1, vec3(0, 1, 0), options);
         meshes.push_back(mesh);
     }
 
