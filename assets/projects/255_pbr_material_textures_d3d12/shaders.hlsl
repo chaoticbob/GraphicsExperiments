@@ -7,6 +7,10 @@
 #define DEFINE_AS_PUSH_CONSTANT
 #endif
 
+// Enable this to draw a single triangle and display whatever is in VSOutput.Normal
+// Needed in the the 255/256_pbr_material_textures_d3d12/vulkan.cpp file as well
+//#define DEBUGGING_ENABLED
+
 #define MATERIAL_TEXTURE_STRIDE     4
 #define MATERIAL_BASE_COLOR_INDEX   0
 #define MATERIAL_NORMAL_INDEX       1
@@ -91,17 +95,18 @@ VSOutput vsmain(
 {
     VSOutput output = (VSOutput)0;
 
-#if 0
+#ifndef DEBUGGING_ENABLED
     output.PositionWS = mul(DrawParams.ModelMatrix, float4(PositionOS, 1)).xyz;
     output.PositionCS = mul(SceneParams.ViewProjectionMatrix, float4(output.PositionWS, 1));
     output.TexCoord = TexCoord;
-    output.Normal = Normal; //mul(DrawParams.ModelMatrix, float4(Normal, 0)).xyz;
-    output.Tangent = Tangent; //mul(DrawParams.ModelMatrix, float4(Tangent, 0)).xyz;
-    output.Bitangent = Bitangent; //mul(DrawParams.ModelMatrix, float4(Bitangent, 0)).xyz;
+    output.Normal = mul(DrawParams.ModelMatrix, float4(Normal, 0)).xyz;
+    output.Tangent = mul(DrawParams.ModelMatrix, float4(Tangent, 0)).xyz;
+    output.Bitangent = mul(DrawParams.ModelMatrix, float4(Bitangent, 0)).xyz;
 #else
-    float vertices[] = { -0.5, 0.5, -0.5, 0.5, 0.5, 0.5 };
+    float vertices[] = { -0.5, 0.5, -0.5, -0.5, 0.5, 0.5 };
     uint index = 2 * (vertID % 3);
     output.PositionCS = float4(vertices[index], vertices[index + 1], 0, 1);
+    output.Normal = mul(DrawParams.ModelMatrix, float4(Normal, 0)).xyz;
 #endif
 
     return output;
@@ -491,7 +496,10 @@ float4 psmain(VSOutput input) : SV_TARGET
     // Reapply gamma
     finalColor = pow(finalColor, 1 / 2.2);
 
-    // NOCHECKIN return float4(finalColor, 0);  
-    return float4(1, 0, 0, 1);
+#ifndef DEBUGGING_ENABLED
+    return float4(finalColor, 0);  
+#else
+    return float4(input.Normal, 1);
+#endif
 
 }

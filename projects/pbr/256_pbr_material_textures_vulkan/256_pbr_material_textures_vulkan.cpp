@@ -36,6 +36,10 @@ using namespace glm;
 #define IBL_ENVIRONMENT_MAPS_DESCRIPTOR_OFFSET   48
 #define MATERIAL_TEXTURES_DESCRIPTOR_OFFSET      100
 
+// Enable this to draw a single triangle and display whatever is in VSOutput.Normal
+// Needed in the shaders.hlsl file as well
+//#define DEBUGGING_ENABLED
+
 // This will be passed in via constant buffer
 struct Light
 {
@@ -164,14 +168,6 @@ void WriteEnvDescriptors(
     VkDescriptorSetLayout    descriptorSetLayout,
     VulkanBuffer*            pDescriptorBuffer,
     std::vector<VulkanImage> envTextures);
-
-/*
-void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
-void CreateEnvironmentRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
-void CreateDescriptorHeap(
-    DxRenderer*            pRenderer,
-    ID3D12DescriptorHeap** ppHeap);
-*/
 
 void MouseMove(int x, int y, int buttons)
 {
@@ -802,6 +798,12 @@ int main(int argc, char** argv)
                 uint32_t    materialIndex    = 0;
                 uint32_t    invertNormalMapY = false; // Invert if sphere
 
+#ifndef DEBUGGING_ENABLED
+                uint32_t indexCount          = geoBuffers.numIndices;
+#else
+                uint32_t indexCount          = 6;
+#endif
+
                 // Material 0
                 {
                     glm::mat4 modelMat = glm::translate(vec3(-4.5f, yPos, 4.5f));
@@ -809,7 +811,7 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -823,7 +825,7 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -837,7 +839,7 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -851,7 +853,7 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -865,7 +867,7 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -879,7 +881,7 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -893,7 +895,7 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -907,7 +909,7 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -921,7 +923,7 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -935,7 +937,7 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -949,7 +951,7 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -963,7 +965,7 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -977,7 +979,7 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -991,7 +993,7 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -1005,7 +1007,7 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -1019,7 +1021,7 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16, &modelMat);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, indexCount, 1, 0, 0, 0);
 
                     if (materialIndex < (materialTexturesSets.size() - 1)) {
                         ++materialIndex;
@@ -1656,7 +1658,12 @@ void CreateIBLTextures(
         }
     }
 
+#ifndef DEBUGGING_ENABLED
     size_t maxEntries = std::min<size_t>(gMaxIBLs, iblFiles.size());
+#else
+    size_t maxEntries = 1;
+#endif 
+
     for (size_t i = 0; i < maxEntries; ++i) {
         std::filesystem::path iblFile = iblFiles[i];
 
@@ -1764,7 +1771,12 @@ void CreateMaterials(
         texturesDir / "wood_table_001" / "material.mat",
     };
 
+#ifndef DEBUGGING_ENABLED
     size_t maxEntries = materialFiles.size();
+#else
+    size_t maxEntries = 1;
+#endif
+
     for (size_t i = 0; i < maxEntries; ++i) {
         auto materialFile = materialFiles[i];
 
@@ -2273,218 +2285,3 @@ void WriteEnvDescriptors(
 
     vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
 }
-
-/*
-void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
-{
-    // IBL LUT textures (t3, t4)
-    D3D12_DESCRIPTOR_RANGE iblLUTRange            = {};
-    iblLUTRange.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    iblLUTRange.NumDescriptors                    = 2;
-    iblLUTRange.BaseShaderRegister                = IBL_INTEGRATION_LUT_DESCRIPTOR_OFFSET;
-    iblLUTRange.RegisterSpace                     = 0;
-    iblLUTRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-    // IBL irradiance textures (t16)
-    D3D12_DESCRIPTOR_RANGE iblIrrRange            = {};
-    iblIrrRange.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    iblIrrRange.NumDescriptors                    = gMaxIBLs;
-    iblIrrRange.BaseShaderRegister                = IBL_IRRADIANCE_MAPS_DESCRIPTOR_OFFSET;
-    iblIrrRange.RegisterSpace                     = 0;
-    iblIrrRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-    // IBL environment textures (t48)
-    D3D12_DESCRIPTOR_RANGE iblEnvRange            = {};
-    iblEnvRange.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    iblEnvRange.NumDescriptors                    = gMaxIBLs;
-    iblEnvRange.BaseShaderRegister                = IBL_ENVIRONMENT_MAPS_DESCRIPTOR_OFFSET;
-    iblEnvRange.RegisterSpace                     = 0;
-    iblEnvRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-    // MaterialTextures (t100)
-    D3D12_DESCRIPTOR_RANGE materialRange            = {};
-    materialRange.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    materialRange.NumDescriptors                    = TOTAL_MATERIAL_TEXTURES;
-    materialRange.BaseShaderRegister                = MATERIAL_TEXTURES_DESCRIPTOR_OFFSET;
-    materialRange.RegisterSpace                     = 0;
-    materialRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-    D3D12_ROOT_PARAMETER rootParameters[7] = {};
-    // SceneParams (b0)
-    rootParameters[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
-    rootParameters[0].Descriptor.ShaderRegister = 0;
-    rootParameters[0].Descriptor.RegisterSpace  = 0;
-    rootParameters[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // DrawParams (b1)
-    rootParameters[1].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    rootParameters[1].Constants.Num32BitValues = 18;
-    rootParameters[1].Constants.ShaderRegister = 1;
-    rootParameters[1].Constants.RegisterSpace  = 0;
-    rootParameters[1].ShaderVisibility         = D3D12_SHADER_VISIBILITY_ALL;
-    // MaterialParams (t2)
-    rootParameters[2].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[2].Descriptor.ShaderRegister = 2;
-    rootParameters[2].Descriptor.RegisterSpace  = 0;
-    rootParameters[2].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // IBL textures (t3, t4)
-    rootParameters[3].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[3].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[3].DescriptorTable.pDescriptorRanges   = &iblLUTRange;
-    rootParameters[3].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-    // IBL irradiance textures (t16)
-    rootParameters[4].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[4].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[4].DescriptorTable.pDescriptorRanges   = &iblIrrRange;
-    rootParameters[4].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-    // // IBL environment textures (t48)
-    rootParameters[5].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[5].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[5].DescriptorTable.pDescriptorRanges   = &iblEnvRange;
-    rootParameters[5].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-    // MaterialTextures (t100)
-    rootParameters[6].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[6].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[6].DescriptorTable.pDescriptorRanges   = &materialRange;
-    rootParameters[6].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[4] = {};
-    // IBLIntegrationSampler (s32)
-    staticSamplers[0].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSamplers[0].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[0].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[0].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[0].MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
-    staticSamplers[0].MaxAnisotropy    = 0;
-    staticSamplers[0].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    staticSamplers[0].MinLOD           = 0;
-    staticSamplers[0].MaxLOD           = 1;
-    staticSamplers[0].ShaderRegister   = 32;
-    staticSamplers[0].RegisterSpace    = 0;
-    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    // IBLMapSampler (s33)
-    staticSamplers[1].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSamplers[1].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[1].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].MipLODBias       = 0.5f; // D3D12_DEFAULT_MIP_LOD_BIAS;
-    staticSamplers[1].MaxAnisotropy    = 0;
-    staticSamplers[1].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    staticSamplers[1].MinLOD           = 0;
-    staticSamplers[1].MaxLOD           = D3D12_FLOAT32_MAX;
-    staticSamplers[1].ShaderRegister   = 33;
-    staticSamplers[1].RegisterSpace    = 0;
-    staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    // MaterialSampler (s34)
-    staticSamplers[2].Filter           = D3D12_FILTER_MAXIMUM_MIN_MAG_MIP_LINEAR;
-    staticSamplers[2].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[2].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[2].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[2].MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
-    staticSamplers[2].MaxAnisotropy    = 0;
-    staticSamplers[2].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    staticSamplers[2].MinLOD           = 0;
-    staticSamplers[2].MaxLOD           = D3D12_FLOAT32_MAX;
-    staticSamplers[2].ShaderRegister   = 34;
-    staticSamplers[2].RegisterSpace    = 0;
-    staticSamplers[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    // MaterialSampler (s35)
-    staticSamplers[3].Filter           = D3D12_FILTER_MAXIMUM_MIN_MAG_LINEAR_MIP_POINT;
-    staticSamplers[3].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[3].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[3].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[3].MipLODBias       = 0.5f;
-    staticSamplers[3].MaxAnisotropy    = 0;
-    staticSamplers[3].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    staticSamplers[3].MinLOD           = 1;
-    staticSamplers[3].MaxLOD           = D3D12_FLOAT32_MAX;
-    staticSamplers[3].ShaderRegister   = 35;
-    staticSamplers[3].RegisterSpace    = 0;
-    staticSamplers[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-    D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-    rootSigDesc.NumParameters             = 7;
-    rootSigDesc.pParameters               = rootParameters;
-    rootSigDesc.NumStaticSamplers         = 4;
-    rootSigDesc.pStaticSamplers           = staticSamplers;
-    rootSigDesc.Flags                     = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-    ComPtr<ID3DBlob> blob;
-    ComPtr<ID3DBlob> error;
-    CHECK_CALL(D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error));
-    CHECK_CALL(pRenderer->Device->CreateRootSignature(
-        0,                         // nodeMask
-        blob->GetBufferPointer(),  // pBloblWithRootSignature
-        blob->GetBufferSize(),     // blobLengthInBytes
-        IID_PPV_ARGS(ppRootSig))); // riid, ppvRootSignature
-}
-
-void CreateEnvironmentRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
-{
-    // Textures (t32)
-    D3D12_DESCRIPTOR_RANGE range            = {};
-    range.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    range.NumDescriptors                    = gMaxIBLs;
-    range.BaseShaderRegister                = 32;
-    range.RegisterSpace                     = 0;
-    range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-    D3D12_ROOT_PARAMETER rootParameters[4] = {};
-    // SceneParams (b0)
-    rootParameters[0].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    rootParameters[0].Constants.Num32BitValues = 17;
-    rootParameters[0].Constants.ShaderRegister = 0;
-    rootParameters[0].Constants.RegisterSpace  = 0;
-    rootParameters[0].ShaderVisibility         = D3D12_SHADER_VISIBILITY_ALL;
-    // Textures (t32)
-    rootParameters[1].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[1].DescriptorTable.pDescriptorRanges   = &range;
-    rootParameters[1].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-
-    D3D12_STATIC_SAMPLER_DESC staticSampler = {};
-    // Sampler0 (s1)
-    staticSampler.Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSampler.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSampler.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSampler.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSampler.MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
-    staticSampler.MaxAnisotropy    = 0;
-    staticSampler.ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    staticSampler.MinLOD           = 0;
-    staticSampler.MaxLOD           = 1;
-    staticSampler.ShaderRegister   = 1;
-    staticSampler.RegisterSpace    = 0;
-    staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-    D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-    rootSigDesc.NumParameters             = 2;
-    rootSigDesc.pParameters               = rootParameters;
-    rootSigDesc.NumStaticSamplers         = 1;
-    rootSigDesc.pStaticSamplers           = &staticSampler;
-    rootSigDesc.Flags                     = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-    ComPtr<ID3DBlob> blob;
-    ComPtr<ID3DBlob> error;
-    CHECK_CALL(D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error));
-    CHECK_CALL(pRenderer->Device->CreateRootSignature(
-        0,                         // nodeMask
-        blob->GetBufferPointer(),  // pBloblWithRootSignature
-        blob->GetBufferSize(),     // blobLengthInBytes
-        IID_PPV_ARGS(ppRootSig))); // riid, ppvRootSignature
-}
-
-
-void CreateDescriptorHeap(
-    DxRenderer*            pRenderer,
-    ID3D12DescriptorHeap** ppHeap)
-{
-    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-    desc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    desc.NumDescriptors             = 256;
-    desc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-
-    CHECK_CALL(pRenderer->Device->CreateDescriptorHeap(
-        &desc,
-        IID_PPV_ARGS(ppHeap)));
-}
-*/
