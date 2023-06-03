@@ -318,6 +318,23 @@ int main(int argc, char** argv)
 
             vkCmdBeginRendering(cmdBuf.CommandBuffer, &vkri);
 
+            VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
+            descriptorBufferBindingInfo.pNext                            = nullptr;
+            descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &envDescriptorBuffer);
+            descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+            fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
+
+            uint32_t     bufferIndices           = 0;
+            VkDeviceSize descriptorBufferOffsets = 0;
+            fn_vkCmdSetDescriptorBufferOffsetsEXT(
+                cmdBuf.CommandBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                pipelineLayout.PipelineLayout,
+                0, // firstSet
+                1, // setCount
+                &bufferIndices,
+                &descriptorBufferOffsets);
+
             VkViewport viewport = {0, static_cast<float>(gWindowHeight), static_cast<float>(gWindowWidth), -static_cast<float>(gWindowHeight), 0.0f, 1.0f};
             vkCmdSetViewport(cmdBuf.CommandBuffer, 0, 1, &viewport);
 
