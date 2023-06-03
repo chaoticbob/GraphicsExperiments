@@ -994,14 +994,14 @@ void CreateIBLTextures(
       const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
       const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
 
-      std::vector<VkMipOffset> mipOffsets;
-      uint32_t                 levelOffset = 0;
-      uint32_t                 levelWidth  = ibl.baseWidth;
-      uint32_t                 levelHeight = ibl.baseHeight;
+      std::vector<MipOffset> mipOffsets;
+      uint32_t               levelOffset = 0;
+      uint32_t               levelWidth  = ibl.baseWidth;
+      uint32_t               levelHeight = ibl.baseHeight;
       for (uint32_t i = 0; i < ibl.numLevels; ++i) {
-         VkMipOffset mipOffset = {};
-         mipOffset.offset      = levelOffset;
-         mipOffset.rowStride   = rowStride;
+         MipOffset mipOffset = {};
+         mipOffset.Offset    = levelOffset;
+         mipOffset.RowStride = rowStride;
 
          mipOffsets.push_back(mipOffset);
 
