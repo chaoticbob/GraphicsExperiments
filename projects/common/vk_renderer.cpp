@@ -1889,14 +1889,16 @@ HRESULT CreateDrawNormalPipeline(
 }
 
 HRESULT CreateDrawTexturePipeline(
-   VulkanRenderer*      pRenderer,
-   VkPipelineLayout     pipelineLayout,
-   VkShaderModule       vsShaderModule,
-   VkShaderModule       fsShaderModule,
-   VkFormat             rtvFormat,
-   VkFormat             dsvFormat,
-   VkPipeline*          pPipeline,
-   VkCullModeFlagBits   cullMode)
+    VulkanRenderer*    pRenderer,
+    VkPipelineLayout   pipelineLayout,
+    VkShaderModule     vsShaderModule,
+    VkShaderModule     fsShaderModule,
+    VkFormat           rtvFormat,
+    VkFormat           dsvFormat,
+    VkPipeline*        pPipeline,
+    VkCullModeFlagBits cullMode,
+    const char*        vsEntryPoint,
+    const char*        fsEntryPoint)
 {
    VkPipelineRenderingCreateInfo pipeline_rendering_create_info = { VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
    pipeline_rendering_create_info.colorAttachmentCount          = 1;
@@ -1906,11 +1908,11 @@ HRESULT CreateDrawTexturePipeline(
    VkPipelineShaderStageCreateInfo shader_stages[2] = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
    shader_stages[0].stage                           = VK_SHADER_STAGE_VERTEX_BIT;
    shader_stages[0].module                          = vsShaderModule;
-   shader_stages[0].pName                           = "vsmain";
+   shader_stages[0].pName                           = vsEntryPoint;
    shader_stages[1].sType                           = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
    shader_stages[1].stage                           = VK_SHADER_STAGE_FRAGMENT_BIT;
    shader_stages[1].module                          = fsShaderModule;
-   shader_stages[1].pName                           = "psmain";
+   shader_stages[1].pName                           = fsEntryPoint;
 
    VkVertexInputBindingDescription vertex_binding_desc[2] = {};
    vertex_binding_desc[0].binding                         = 0;

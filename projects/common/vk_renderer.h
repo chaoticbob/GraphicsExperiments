@@ -332,14 +332,16 @@ HRESULT CreateDrawNormalPipeline(
    const char*          fsEntryPoint = "main");
 
 HRESULT CreateDrawTexturePipeline(
-   VulkanRenderer*      pRenderer,
-   VkPipelineLayout     pipelineLayout,
-   VkShaderModule       vsShaderModule,
-   VkShaderModule       fsShaderModule,
-   VkFormat             rtvFormat,
-   VkFormat             dsvFormat,
-   VkPipeline*          pPipeline,
-   VkCullModeFlagBits   cullMode = VK_CULL_MODE_BACK_BIT);
+    VulkanRenderer*    pRenderer,
+    VkPipelineLayout   pipelineLayout,
+    VkShaderModule     vsShaderModule,
+    VkShaderModule     fsShaderModule,
+    VkFormat           rtvFormat,
+    VkFormat           dsvFormat,
+    VkPipeline*        pPipeline,
+    VkCullModeFlagBits cullMode     = VK_CULL_MODE_BACK_BIT,
+    const char*        vsEntryPoint = "main",
+    const char*        fsEntryPoint = "main");
 
 CompileResult CompileGLSL(
     const std::string&     shaderSource,
