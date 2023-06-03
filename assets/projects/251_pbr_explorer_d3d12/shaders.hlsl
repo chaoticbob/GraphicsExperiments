@@ -45,6 +45,13 @@
 #define DRAW_MODE_DIRECT    1
 #define DRAW_MODE_INDIRECT  2    
 
+#if defined(__spirv__)
+#define DEFINE_AS_PUSH_CONSTANT   [[vk::push_constant]]
+#else
+#define DEFINE_AS_PUSH_CONSTANT
+#endif 
+
+
 struct Light
 {
     float3 Position;
@@ -83,6 +90,7 @@ struct MaterialParameters {
 };
 
 ConstantBuffer<SceneParameters>      SceneParams        : register(b0);
+DEFINE_AS_PUSH_CONSTANT
 ConstantBuffer<DrawParameters>       DrawParams         : register(b1);
 StructuredBuffer<MaterialParameters> MaterialParams     : register(t2);
 SamplerState                         ClampedSampler     : register(s4);
@@ -705,4 +713,5 @@ float4 psmain(VSOutput input) : SV_TARGET
       
     finalColor = ACESFilm(finalColor);      
     return float4(pow(finalColor, 1 / 2.2), 0);
+
 }
