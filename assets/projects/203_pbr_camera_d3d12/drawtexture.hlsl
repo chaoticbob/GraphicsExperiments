@@ -1,8 +1,15 @@
 
+#ifdef __spirv__
+#define DEFINE_PUSH_CONSTANT  [[vk::push_constant]]
+#else
+#define DEFINE_PUSH_CONSTANT
+#endif
+
 struct SceneParameters {
     float4x4 MVP;
 };
 
+DEFINE_PUSH_CONSTANT
 ConstantBuffer<SceneParameters> SceneParams       : register(b0);
 SamplerState                    IBLMapSampler     : register(s1);
 Texture2D                       IBLEnvironmentMap : register(t2);
