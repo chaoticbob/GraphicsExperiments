@@ -391,7 +391,7 @@ bool InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_
         vkci.pQueueFamilyIndices   = nullptr;
         vkci.preTransform          = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
         vkci.compositeAlpha        = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        vkci.presentMode           = VK_PRESENT_MODE_IMMEDIATE_KHR;
+        vkci.presentMode           = VK_PRESENT_MODE_FIFO_KHR;
         vkci.clipped               = VK_FALSE;
         vkci.oldSwapchain          = VK_NULL_HANDLE;
 
