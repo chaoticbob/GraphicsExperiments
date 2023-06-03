@@ -1147,14 +1147,14 @@ VkResult CreateImage(
 }
 
 VkResult CreateTexture(
-    VulkanRenderer*                 pRenderer,
-    uint32_t                        width,
-    uint32_t                        height,
-    VkFormat                        format,
-    const std::vector<VkMipOffset>& mipOffsets,
-    uint64_t                        srcSizeBytes,
-    const void*                     pSrcData,
-    VulkanImage*                    pImage)
+    VulkanRenderer*               pRenderer,
+    uint32_t                      width,
+    uint32_t                      height,
+    VkFormat                      format,
+    const std::vector<MipOffset>& mipOffsets,
+    uint64_t                      srcSizeBytes,
+    const void*                   pSrcData,
+    VulkanImage*                  pImage)
 {
     if (IsNull(pRenderer)) {
         return VK_ERROR_UNKNOWN;
@@ -1250,12 +1250,12 @@ VkResult CreateTexture(
             uint32_t formatSizeInBytes = PixelStride(format);
             for (UINT level = 0; level < mipLevels; ++level) {
                 const auto&    mipOffset    = mipOffsets[level];
-                const uint32_t mipRowStride = mipOffset.rowStride;
+                const uint32_t mipRowStride = mipOffset.RowStride;
                 const uint32_t mipRowStrideInPixels = mipRowStride / formatSizeInBytes;
 
                 VkImageAspectFlagBits aspectFlags     = VK_IMAGE_ASPECT_COLOR_BIT;
                 VkBufferImageCopy     srcRegion       = {};
-                srcRegion.bufferOffset                = mipOffset.offset;
+                srcRegion.bufferOffset                = mipOffset.Offset;
                 srcRegion.bufferRowLength             = mipRowStrideInPixels; // Row stride but in Pixels/texels 
                 srcRegion.bufferImageHeight           = levelHeight;          // Pixels/texels
                 srcRegion.imageSubresource.aspectMask = aspectFlags;
@@ -1324,9 +1324,9 @@ VkResult CreateTexture(
     const void*     pSrcData,
     VulkanImage*    pImage)
 {
-    VkMipOffset mipOffset = {};
-    mipOffset.offset      = 0;
-    mipOffset.rowStride   = width * PixelStride(format);
+    MipOffset mipOffset   = {};
+    mipOffset.Offset      = 0;
+    mipOffset.RowStride   = width * PixelStride(format);
 
     return CreateTexture(
         pRenderer,
