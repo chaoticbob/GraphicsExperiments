@@ -1,6 +1,12 @@
 #define PI 3.1415292
 #define EPSILON 0.000001
 
+#ifdef __spirv__
+#define DEFINE_PUSH_CONSTANT  [[vk::push_constant]]
+#else
+#define DEFINE_PUSH_CONSTANT
+#endif
+
 struct Light
 {
     float3 Position;
@@ -26,7 +32,10 @@ struct MaterialParameters {
 };
 
 ConstantBuffer<SceneParameters>      SceneParams           : register(b0);
+
+DEFINE_PUSH_CONSTANT
 ConstantBuffer<DrawParameters>       DrawParams            : register(b1);
+
 StructuredBuffer<MaterialParameters> MaterialParams        : register(t2);
 Texture2D                            IBLIntegrationLUT     : register(t3);
 Texture2D                            IBLIrradianceMap      : register(t4);
