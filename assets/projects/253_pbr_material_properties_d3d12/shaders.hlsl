@@ -1,6 +1,12 @@
 #define PI 3.1415292
 #define EPSILON 0.00001
 
+#if defined(__spirv__)
+#define DEFINE_AS_PUSH_CONSTANT   [[vk::push_constant]]
+#else
+#define DEFINE_AS_PUSH_CONSTANT
+#endif 
+
 struct Light
 {
     float3 Position;
@@ -18,6 +24,26 @@ struct SceneParameters {
     uint     Furnace;
 };
 
+#ifdef __spirv__
+
+// Can only use one push constant so we have to merge these two structures into one
+
+struct MaterialParameters {
+    float4x4 ModelMatrix;
+    float3   BaseColor;
+    float    Roughness;
+    float    Metallic;
+    float    Reflectance;
+    float    ClearCoat;
+    float    ClearCoatRoughness;
+    float    Anisotropy;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<MaterialParameters> MaterialParams                : register(b2);
+
+#else
+
 struct DrawParameters {
     float4x4 ModelMatrix;
 };
@@ -32,9 +58,12 @@ struct MaterialParameters {
     float  Anisotropy;
 };
 
-ConstantBuffer<SceneParameters>    SceneParams                   : register(b0);
 ConstantBuffer<DrawParameters>     DrawParams                    : register(b1);
 ConstantBuffer<MaterialParameters> MaterialParams                : register(b2);
+
+#endif
+
+ConstantBuffer<SceneParameters>    SceneParams                   : register(b0);
 Texture2D                          IBLIntegrationLUT             : register(t3);
 Texture2D                          IBLIntegrationMultiscatterLUT : register(t4);
 Texture2D                          IBLIrradianceMap              : register(t5);
@@ -61,11 +90,19 @@ VSOutput vsmain(
 )
 {
     VSOutput output = (VSOutput)0;
-    output.PositionWS = mul(DrawParams.ModelMatrix, float4(PositionOS, 1)).xyz;
+
+#ifdef __spirv__
+    float4x4 modelMatrix = MaterialParams.ModelMatrix;
+#else
+    float4x4 modelMatrix = DrawParams.ModelMatrix;
+#endif
+    
+    output.PositionWS = mul(modelMatrix, float4(PositionOS, 1)).xyz;
     output.PositionCS = mul(SceneParams.ViewProjectionMatrix, float4(output.PositionWS, 1));
-    output.Normal = mul(DrawParams.ModelMatrix, float4(Normal, 0)).xyz;
-    output.Tangent = mul(DrawParams.ModelMatrix, float4(Tangent, 0)).xyz;
-    output.Bitangent = mul(DrawParams.ModelMatrix, float4(Bitangent, 0)).xyz;
+    output.Normal = mul(modelMatrix, float4(Normal, 0)).xyz;
+    output.Tangent = mul(modelMatrix, float4(Tangent, 0)).xyz;
+    output.Bitangent = mul(modelMatrix, float4(Bitangent, 0)).xyz;
+
     return output;
 }
 
