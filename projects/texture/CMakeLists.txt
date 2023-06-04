@@ -19,4 +19,5 @@ endif()
 
 if (GREX_ENABLE_VULKAN)
     add_subdirectory(306_phong_textured_cube_vulkan)
+    add_subdirectory(308_normal_map_vulkan)
 endif()
