@@ -349,18 +349,6 @@ HRESULT CreateDrawBasicPipeline(
     const char*        vsEntryPoint = "main",
     const char*        fsEntryPoint = "main");
 
-HRESULT CreateDrawBasicPipeline(
-    VulkanRenderer*    pRenderer,
-    VkPipelineLayout   pipelineLayout,
-    VkShaderModule     vsShaderModule,
-    VkShaderModule     fsShaderModule,
-    VkFormat           rtvFormat,
-    VkFormat           dsvFormat,
-    VkPipeline*        pPipeline,
-    VkCullModeFlagBits cullMode = VK_CULL_MODE_BACK_BIT,
-    const char*        vsEntryPoint = "main",
-    const char*        fsEntryPoint = "main");
-
 HRESULT CreateGraphicsPipeline1(
    VulkanRenderer*      pRenderer,
    VkPipelineLayout     pipelineLayout,
