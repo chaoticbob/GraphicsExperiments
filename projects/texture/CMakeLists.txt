@@ -18,4 +18,5 @@ endif()
 
 
 if (GREX_ENABLE_VULKAN)
+    add_subdirectory(302_textured_cube_vulkan)
 endif()
