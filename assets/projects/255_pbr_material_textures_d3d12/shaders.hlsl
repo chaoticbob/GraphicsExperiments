@@ -1,6 +1,12 @@
 #define PI 3.1415292
 #define EPSILON 0.00001
 
+#if defined(__spirv__)
+#define DEFINE_AS_PUSH_CONSTANT [[vk::push_constant]]
+#else
+#define DEFINE_AS_PUSH_CONSTANT
+#endif
+
 #define MATERIAL_TEXTURE_STRIDE     4
 #define MATERIAL_BASE_COLOR_INDEX   0
 #define MATERIAL_NORMAL_INDEX       1
@@ -40,6 +46,7 @@ struct MaterialParameters {
 };
 
 ConstantBuffer<SceneParameters>      SceneParams                   : register(b0);
+DEFINE_AS_PUSH_CONSTANT
 ConstantBuffer<DrawParameters>       DrawParams                    : register(b1);
 StructuredBuffer<MaterialParameters> MaterialParams                : register(t2);
 Texture2D                            IBLIntegrationLUT             : register(t3);
