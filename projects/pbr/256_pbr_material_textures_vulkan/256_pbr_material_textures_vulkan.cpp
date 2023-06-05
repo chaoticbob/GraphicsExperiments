@@ -333,7 +333,9 @@ int main(int argc, char** argv)
         GREX_DEFAULT_RTV_FORMAT,
         GREX_DEFAULT_DSV_FORMAT,
         &envPipelineState,
-        VK_CULL_MODE_FRONT_BIT));
+        VK_CULL_MODE_FRONT_BIT,
+        "vsmain",
+        "psmain"));
 
     // *************************************************************************
     // Constant buffer
