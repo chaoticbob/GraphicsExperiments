@@ -4,6 +4,31 @@ struct CameraProperties {
     float3   EyePosition;
 };
 
+#ifdef __spirv__
+
+// Root constant
+struct Constants {
+    //
+    // Range should be [0, 1]...but anything above 0.5 is probably too much
+    // Good default is 0.02
+    //
+    float HeightMapScale;
+
+    bool EnableDiscard;
+
+    bool  EnableShadow;
+    float ShadowStep;
+
+    CameraProperties Camera;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<Constants> PushConstants : register(b0); // All push constants
+
+#define ROOT_CONSTANT_LOCATION PushConstants.
+
+#else
+
 // Root constant
 cbuffer Constants : register(b5) {
     //
@@ -19,6 +44,11 @@ cbuffer Constants : register(b5) {
 };
 
 ConstantBuffer<CameraProperties> Camera              : register(b0); // Constant buffer
+
+#define ROOT_CONSTANT_LOCATION
+
+#endif
+
 Texture2D                        DiffuseTexture      : register(t1); // Texture
 Texture2D                        NormalTexture       : register(t2); // Texture
 Texture2D                        DisplacementTexture : register(t3); // Texture
@@ -41,12 +71,12 @@ VSOutput vsmain(
     float3 Bitangent  : BITANGENT)
 {
     // World space
-    float4 Pw = mul(Camera.ModelMatrix, float4(PositionOS, 1));
+    float4 Pw = mul(ROOT_CONSTANT_LOCATION Camera.ModelMatrix, float4(PositionOS, 1));
 
     // Position in clip space and texture coords
     VSOutput output   = (VSOutput)0;
     output.PositionWS = Pw;
-    output.PositionCS = mul(Camera.ViewProjectionMatrix, Pw);
+    output.PositionCS = mul(ROOT_CONSTANT_LOCATION Camera.ViewProjectionMatrix, Pw);
     output.TexCoord   = TexCoord;
     output.Normal     = Normal;
     output.Tangent    = Tangent;
@@ -59,7 +89,7 @@ float4 psmain(VSOutput input) : SV_TARGET
 {  
     // These are in world space
     const float3 Lp = float3(4, 5, 0);
-    const float3 V = normalize(Camera.EyePosition - input.PositionWS.xyz);
+    const float3 V = normalize(ROOT_CONSTANT_LOCATION Camera.EyePosition - input.PositionWS.xyz);
 
     //
     // Build TBN, tangentToWorldSpace, and worldToTangentSpace matrices
@@ -70,9 +100,9 @@ float4 psmain(VSOutput input) : SV_TARGET
     float3 vT = normalize(input.Tangent);
     float3 vB = normalize(input.Bitangent);
     float3 vN = normalize(input.Normal);
-    vT = mul(Camera.ModelMatrix, float4(vT, 0)).xyz;
-    vB = mul(Camera.ModelMatrix, float4(vB, 0)).xyz;
-    vN = mul(Camera.ModelMatrix, float4(vN, 0)).xyz;
+    vT = mul(ROOT_CONSTANT_LOCATION Camera.ModelMatrix, float4(vT, 0)).xyz;
+    vB = mul(ROOT_CONSTANT_LOCATION Camera.ModelMatrix, float4(vB, 0)).xyz;
+    vN = mul(ROOT_CONSTANT_LOCATION Camera.ModelMatrix, float4(vN, 0)).xyz;
     float3x3 tangentToWorldSpace = float3x3(
         float3(vT.x, vB.x, vN.x),
         float3(vT.y, vB.y, vN.y),
@@ -82,7 +112,7 @@ float4 psmain(VSOutput input) : SV_TARGET
     // -------------------------------------------------------------------------
     // Parallax occlusion mapping [BEGIN]
     // -------------------------------------------------------------------------
-    const float  fHeightMapScale = HeightMapScale;
+    const float  fHeightMapScale = ROOT_CONSTANT_LOCATION HeightMapScale;
     const float  nMinSamples = 32;
     const float  nMaxSamples = 64;
 
@@ -130,7 +160,7 @@ float4 psmain(VSOutput input) : SV_TARGET
     // -------------------------------------------------------------------------
 
     float shadow = 0.0;
-    if (EnableShadow && (L.z > 0)) {
+    if (ROOT_CONSTANT_LOCATION EnableShadow && (L.z > 0)) {
         fParallaxLimit = length(L.xy) / L.z * fHeightMapScale;
         vOffsetDir = normalize(L.xy);
         vMaxOffset = vOffsetDir * fParallaxLimit;
@@ -172,7 +202,7 @@ float4 psmain(VSOutput input) : SV_TARGET
     //
     // OPTIONAL: This creates neat looking cutouts
     //
-    if (EnableDiscard && (uv.x > 1.0 || uv.y > 1.0 || uv.x < 0.0 || uv.y < 0.0)) discard;
+    if (ROOT_CONSTANT_LOCATION EnableDiscard && (uv.x > 1.0 || uv.y > 1.0 || uv.x < 0.0 || uv.y < 0.0)) discard;
 
     // Sample textures for base color and normal
     float3 baseColor = DiffuseTexture.Sample(Sampler0, uv).rgb;

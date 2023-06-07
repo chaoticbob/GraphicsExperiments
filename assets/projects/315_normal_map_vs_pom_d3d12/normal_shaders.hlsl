@@ -1,9 +1,16 @@
+#ifdef __spirv__
+#define DEFINE_AS_PUSH_CONSTANT [[vk::push_constant]]
+#else
+#define DEFINE_AS_PUSH_CONSTANT
+#endif
+
 struct CameraProperties {
     float4x4 ModelMatrix;
 	float4x4 ViewProjectionMatrix;
     float3   EyePosition;
 };
 
+DEFINE_AS_PUSH_CONSTANT
 ConstantBuffer<CameraProperties> Camera              : register(b0); // Constant buffer
 Texture2D                        DiffuseTexture      : register(t1); // Texture
 Texture2D                        NormalTexture       : register(t2); // Texture
