@@ -53,10 +53,7 @@ public:
     uint32_t    GetWidth() const { return mWidth; }
     uint32_t    GetHeight() const { return mHeight; }
     GLFWwindow* GetWindow() const { return mWindow; }
-
-#if defined(WIN32)
-    HWND GetHWND() const;
-#endif
+    void*       GetNativeWindow() const;
 
     bool PollEvents();
 

@@ -3,6 +3,11 @@
 #include <cassert>
 #include <fstream>
 
+#if defined(__APPLE__)
+#include <unordered_map>
+#include <mach-o/dyld.h>
+#endif
+
 // =============================================================================
 // Static globals
 // =============================================================================
@@ -608,12 +613,17 @@ void Window::ImGuiRenderDrawData(VulkanRenderer* pRenderer, VkCommandBuffer cmdB
 // =============================================================================
 // Platform functions
 // =============================================================================
-#if defined(WIN32)
-HWND Window::GetHWND() const
+
+void* Window::GetNativeWindow() const
 {
-    return glfwGetWin32Window(mWindow);
-}
+#if defined(WIN32)
+   return glfwGetWin32Window(mWindow);
 #endif
+   
+#if defined(__APPLE__)
+   return glfwGetCocoaWindow(mWindow);
+#endif
+}
 
 bool Window::PollEvents()
 {
@@ -641,6 +651,12 @@ fs::path GetExecutablePath()
     std::memset(buf, 0, MAX_PATH);
     GetModuleFileNameA(this_win32_module, buf, MAX_PATH);
     path = fs::path(buf);
+#elif defined(__APPLE__)
+   char buf[PATH_MAX];
+   uint32_t size = sizeof(buf);
+   std::memset(buf, 0, size);
+   _NSGetExecutablePath(buf, &size);
+   path = fs::path(buf);
 #else
 #    error "unsupported platform"
 #endif
@@ -654,6 +670,8 @@ uint32_t GetProcessId()
     pid = static_cast<uint32_t>(getpid());
 #elif defined(WIN32)
     pid  = static_cast<uint32_t>(::GetCurrentProcessId());
+#elif defined(__APPLE__)
+   pid = static_cast<uint32_t>(getpid());
 #endif
     return pid;
 }

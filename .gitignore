@@ -8,6 +8,7 @@ bin/
 include/
 lib/
 build-vs2022/
+build/
 
 **/CMakeFiles
 **/*.sln
