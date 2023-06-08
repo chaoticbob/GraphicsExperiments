@@ -7,7 +7,7 @@ The graphics API objects are not always properly cleaned up. Just keep that in
 mind if you make use of the code.
 
 #### What kinds of experiments are in here?
-Graphics experiments for rendering, [ray tracing](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/raytracing), [PBR](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/pbr), geometry generation, procedural textures, normal mapping, parallax occlusion mapping, etc.
+Graphics experiments for rendering, [ray tracing](https://github.com/chaoticbob/GraphicsExperiments/tree/main/projects/raytracing), [PBR](https://github.com/chaoticbob/GraphicsExperiments/tree/main/projects/pbr), geometry generation, procedural textures, normal mapping, parallax occlusion mapping, etc.
 Pretty much anything that's graphically interesting. Everything can be foundin the [projects](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects) directory.
 
 # Some Stuff
