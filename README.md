@@ -1,4 +1,4 @@
-![alt text](images/screenshots/raytracing/path_trace__pbr.png?raw=true)
+![alt text](images/screenshots/raytracing/path_trace_pbr_main_page.png?raw=true)
 
 # Graphics Experiments
 Collection of small and mostly self contained graphics experiments for reference. 
