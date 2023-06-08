@@ -62,7 +62,7 @@ First pass implementation of the [Google Filament](https://github.com/google/fil
 
 Knob is borrowed from [Google Filament](https://github.com/google/filament) and monkey is generated from [Blender](https://www.blender.org/).
 
-Shaders are found in the [assets/projects/253_pbr_material_properties_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/253_pbr_material_properties_d3d12) directory.
+Shaders are found in the [assets/projects/253_254_pbr_material_properties](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/253_254_pbr_material_properties) directory.
 
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
