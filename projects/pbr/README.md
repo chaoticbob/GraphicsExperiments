@@ -25,7 +25,7 @@ Notes:
 PBR render of a [camera model](https://sketchfab.com/3d-models/dae-bilora-bella-46-camera-game-ready-asset-eeb9d9f0627f4783b5d16a8732f0d1a4)
 with normal mapping. Tangent and bitangent are calculated using [MikkTSpace](https://github.com/mmikk/MikkTSpace).
 
-Shaders are found in the [assets/projects/203_pbr_camera_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/203_pbr_camera_d3d12) directory.
+Shaders are found in the [assets/projects/203_204_pbr_camera](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/203_204_pbr_camera) directory.
 
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 

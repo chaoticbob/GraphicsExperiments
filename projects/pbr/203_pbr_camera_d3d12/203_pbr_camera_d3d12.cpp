@@ -152,7 +152,7 @@ int main(int argc, char** argv)
     std::vector<char> dxilVS;
     std::vector<char> dxilPS;
     {
-        std::string shaderSource = LoadString("projects/203_pbr_camera_d3d12/shaders.hlsl");
+        std::string shaderSource = LoadString("projects/203_204_pbr_camera/shaders.hlsl");
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &dxilVS, &errorMsg);
@@ -179,7 +179,7 @@ int main(int argc, char** argv)
     std::vector<char> drawTextureDxilVS;
     std::vector<char> drawTextureDxilPS;
     {
-        std::string shaderSource = LoadString("projects/203_pbr_camera_d3d12/drawtexture.hlsl");
+        std::string shaderSource = LoadString("projects/203_204_pbr_camera/drawtexture.hlsl");
         if (shaderSource.empty()) {
             assert(false && "no shader source");
             return EXIT_FAILURE;
