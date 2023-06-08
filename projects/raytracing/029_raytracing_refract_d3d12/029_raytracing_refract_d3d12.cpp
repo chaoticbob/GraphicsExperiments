@@ -33,8 +33,8 @@ const uint32_t kIBLTextureOffset      = 3;
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth  = 1920;
-static uint32_t gWindowHeight = 1080;
+static uint32_t gWindowWidth  = 1280;
+static uint32_t gWindowHeight = 720;
 static bool     gEnableDebug  = true;
 
 static LPCWSTR gHitGroupName         = L"MyHitGroup";
@@ -172,7 +172,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     std::vector<char> rayTraceDxil;
     {
-        auto source = LoadString("projects/029_raytracing_refract_d3d12/shaders.hlsl");
+        auto source = LoadString("projects/029_30_raytracing_refract/shaders.hlsl");
         assert((!source.empty()) && "no shader source!");
 
         std::string errorMsg;
@@ -824,16 +824,7 @@ void CreateGeometries(
 {
     // Sphere
     {
-        TriMesh::Options options = {.enableNormals = true};
-
-        TriMesh mesh;
-        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/monkey_lowres.obj").string(), "", options, &mesh);
-        if (!res) {
-            assert(false && "failed to load model");
-        }
-        mesh.ScaleToFit(1.2f);
-
-        // mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
+        TriMesh mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
 
         Geometry& geo = outSphereGeometry;
 

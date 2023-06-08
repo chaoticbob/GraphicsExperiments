@@ -191,7 +191,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     std::vector<uint32_t> rayTraceSpirv;
     {
-        auto source = LoadString("projects/029_raytracing_refract_d3d12/shaders.hlsl");
+        auto source = LoadString("projects/029_30_raytracing_refract/shaders.hlsl");
         assert((!source.empty()) && "no shader source!");
 
         std::string errorMsg;
@@ -906,16 +906,7 @@ void CreateGeometries(
 
    // Sphere
    {
-      TriMesh::Options options = { .enableNormals = true };
-
-      TriMesh mesh;
-      bool    res = TriMesh::LoadOBJ(GetAssetPath("models/monkey_lowres.obj").string(), "", options, &mesh);
-      if (!res) {
-         assert(false && "failed to load model");
-      }
-      mesh.ScaleToFit(1.2f);
-
-      // mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
+      TriMesh mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
 
       Geometry& geo = outSphereGeometry;
 

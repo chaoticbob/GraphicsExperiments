@@ -193,7 +193,7 @@ to achieve the look you want.
 There are no punctual lights in this sample, all the lighting is done via IBL. Punctual lights might
 get added later.
 
-Shaders are found in the [assets/projects/029_raytracing_refract_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/029_raytracing_refract_d3d12) directory.
+Shaders are found in the [assets/projects/029_30_raytracing_refract](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/029_30_raytracing_refract) directory.
 
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
