@@ -294,7 +294,7 @@ int main(int argc, char** argv)
     std::vector<uint32_t> spirvVS;
     std::vector<uint32_t> spirvFS;
     {
-        std::string shaderSource = LoadString("projects/251_pbr_explorer_d3d12/shaders.hlsl");
+        std::string shaderSource = LoadString("projects/251_252_pbr_explorer/shaders.hlsl");
         if (shaderSource.empty()) {
             assert(false && "no shader source");
             return EXIT_FAILURE;
@@ -344,7 +344,7 @@ int main(int argc, char** argv)
     std::vector<uint32_t> drawTextureSpirvVS;
     std::vector<uint32_t> drawTextureSpirvFS;
     {
-        std::string shaderSource = LoadString("projects/251_pbr_explorer_d3d12/drawtexture.hlsl");
+        std::string shaderSource = LoadString("projects/251_252_pbr_explorer/drawtexture.hlsl");
         if (shaderSource.empty()) {
             assert(false && "no shader source");
             return EXIT_FAILURE;
