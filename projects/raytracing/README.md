@@ -177,7 +177,7 @@ since there's a large number of samples for both the diffuse and specular calcul
 There are no punctual lights in this sample, all the lighting is done via IBL. Punctual lights might
 get added later.
 
-Shaders are found in the [assets/projects/027_raytracing_pbr_spheres_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/027_raytracing_pbr_spheres_d3d12) directory.
+Shaders are found in the [assets/projects/027_28_raytracing_pbr_spheres](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/027_28_raytracing_pbr_spheres) directory.
 
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
