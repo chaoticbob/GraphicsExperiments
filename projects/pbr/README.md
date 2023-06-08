@@ -8,7 +8,7 @@
 Renders the typical sphere grid of metalness on X-axis and roughness on Y-axis. 
 Uses IBL lighting by default, point lights can be turned optionally turned on.
 
-Shaders are found in the [assets/projects/201_pbr_spheres_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/201_pbr_spheres_d3d12) directory.
+Shaders are found in the [assets/projects/201_202_pbr_spheres](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/201_202_pbr_spheres) directory.
 
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
