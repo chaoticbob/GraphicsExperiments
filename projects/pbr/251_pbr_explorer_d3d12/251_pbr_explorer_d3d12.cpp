@@ -157,6 +157,7 @@ const std::vector<std::string> gModelNames = {
     "Sphere",
     "Knob",
     "Monkey",
+    "Teapot",
 };
 
 // =============================================================================
@@ -1205,6 +1206,44 @@ void CreateMaterialModels(
             return;
         }
         // mesh.ScaleToUnit();
+
+        GeometryBuffers buffers = {};
+
+        buffers.numIndices = 3 * mesh.GetNumTriangles();
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTriangles()),
+            DataPtr(mesh.GetTriangles()),
+            &buffers.indexBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetPositions()),
+            DataPtr(mesh.GetPositions()),
+            &buffers.positionBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetNormals()),
+            DataPtr(mesh.GetNormals()),
+            &buffers.normalBuffer));
+
+        outGeomtryBuffers.push_back(buffers);
+    }
+
+    // Teapot
+    {
+        TriMesh::Options options = {};
+        options.enableNormals    = true;
+        options.applyTransform   = true;
+        options.transformRotate  = glm::vec3(0, glm::radians(135.0f), 0);
+
+        TriMesh mesh;
+        if (!TriMesh::LoadOBJ(GetAssetPath("models/teapot.obj").string(), "", options, &mesh)) {
+            return;
+        }
+        mesh.ScaleToFit(2.0f);
 
         GeometryBuffers buffers = {};
 
