@@ -3,14 +3,15 @@
 #include "config.h"
 
 #include <Metal/Metal.hpp>
-#include "QuartzCore/QuartzCore.hpp"
+#include <AppKit/AppKit.hpp>
+#include <MetalKit/MetalKit.hpp>
 
 struct MetalRenderer
 {
     bool               DebugEnabled = false;
     MTL::Device*       Device       = nullptr;
     MTL::CommandQueue* Queue        = nullptr;
-    CA::MetalLayer*    Swapchain    = nullptr;
+    MTK::View*         Swapchain    = nullptr;
 
     MetalRenderer();
     ~MetalRenderer();

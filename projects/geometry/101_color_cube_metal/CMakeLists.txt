@@ -8,8 +8,6 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/mt_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/mt_renderer.cpp
-    ${GREX_PROJECTS_COMMON_DIR}/mt_renderer_utils.h
-    ${GREX_PROJECTS_COMMON_DIR}/mt_renderer_utils.mm
     ${GREX_PROJECTS_COMMON_DIR}/window.h
     ${GREX_PROJECTS_COMMON_DIR}/window.cpp
     ${GREX_PROJECTS_COMMON_DIR}/tri_mesh.h
@@ -24,17 +22,18 @@ target_include_directories(
            ${GREX_THIRD_PARTY_DIR}/glm
            ${GREX_THIRD_PARTY_DIR}/tinyobjloader
            ${GREX_THIRD_PARTY_DIR}/stb
-		   ${GREX_THIRD_PARTY_DIR}/metal-cpp
+           ${GREX_THIRD_PARTY_DIR}/metal-cpp
+           ${GREX_THIRD_PARTY_DIR}/metal-cpp-extensions
 )
 
+FIND_LIBRARY(FOUNDATION_LIBRARY Foundation)
 FIND_LIBRARY(METAL_LIBRARY Metal)
-FIND_LIBRARY(QUARTZCORE_LIBRARY QuartzCore)
-FIND_LIBRARY(APPKIT_LIBRARY Appkit)
+FIND_LIBRARY(METALKIT_LIBRARY MetalKit)
 
 target_link_libraries(
     101_color_cube_metal
     PUBLIC glfw
-	${METAL_LIBRARY}
-	${QUARTZCORE_LIBRARY}
-	${APPKIT_LIBRARY}
+    ${FOUNDATION_LIBRARY}
+    ${METAL_LIBRARY}
+    ${METALKIT_LIBRARY}
 )

@@ -4,13 +4,13 @@
 #define MTK_PRIVATE_IMPLEMENTATION
 #define CA_PRIVATE_IMPLEMENTATION
 #include <Metal/Metal.hpp>
-#include "QuartzCore/QuartzCore.hpp"
+#include <AppKit/AppKit.hpp>
+#include <MetalKit/MetalKit.hpp>
 
 #include "mt_renderer.h"
-#include "mt_renderer_utils.h"
 
 // NOCHECKIN We should put this in the header
-#define GREX_DEFAULT_RTV_FORMAT MTL::PixelFormatBGRA8Unorm
+#define GREX_DEFAULT_RTV_FORMAT MTL::PixelFormatBGRA8Unorm_sRGB
 
 // =================================================================================================
 // MetalRenderer
@@ -21,6 +21,11 @@ MetalRenderer::MetalRenderer()
 
 MetalRenderer::~MetalRenderer()
 {
+    if (Swapchain != nullptr) {
+        Swapchain->release();
+        Swapchain = nullptr;
+    }
+
     if (Queue != nullptr) {
         Queue->release();
         Queue = nullptr;
@@ -41,7 +46,8 @@ bool InitMetal(
     }
 
     pRenderer->DebugEnabled = enableDebug;
-    pRenderer->Device       = MTL::CreateSystemDefaultDevice();
+
+    pRenderer->Device = MTL::CreateSystemDefaultDevice();
 
     pRenderer->Queue = pRenderer->Device->newCommandQueue();
 
@@ -54,14 +60,16 @@ bool InitSwapchain(
     uint32_t       width,
     uint32_t       height)
 {
-	CA::MetalLayer* layer = CA::MetalLayer::layer();
-    layer->setDevice(pRenderer->Device);
-    layer->setPixelFormat(GREX_DEFAULT_RTV_FORMAT);
-	layer->setDrawableSize(CGSizeMake(width, height));
+    CGRect frame = (CGRect){
+        {0,            0            },
+        {(float)width, (float)height}
+    };
 
-   pRenderer->Swapchain = layer;
+    pRenderer->Swapchain = MTK::View::alloc()->init(frame, pRenderer->Device);
+    pRenderer->Swapchain->setColorPixelFormat(GREX_DEFAULT_RTV_FORMAT);
 
-   MetalSetNSWindowSwapchain(cocoaWindow, pRenderer->Swapchain);
-   
-   return true;
+    NS::Window* nsWindow = reinterpret_cast<NS::Window*>(cocoaWindow);
+    nsWindow->setContentView(pRenderer->Swapchain);
+
+    return true;
 }

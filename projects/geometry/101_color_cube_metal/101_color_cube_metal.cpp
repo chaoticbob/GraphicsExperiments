@@ -59,29 +59,20 @@ int main(int argc, char** argv)
     }
 
     // *************************************************************************
-    // Render pass
-    // *************************************************************************
-    MTL::RenderPassDescriptor* renderPassDescriptor = MTL::RenderPassDescriptor::renderPassDescriptor();
-
-    // *************************************************************************
     // Main loop
     // *************************************************************************
     MTL::ClearColor clearColor(1, 0, 0, 1);
+
     while (window->PollEvents()) {
-       CA::MetalDrawable* drawable = renderer->Swapchain->nextDrawable();
+        renderer->Swapchain->setClearColor(clearColor);
 
-        MTL::RenderPassColorAttachmentDescriptor* colorTarget = renderPassDescriptor->colorAttachments()->object(0);
-        colorTarget->setClearColor(clearColor);
-        colorTarget->setTexture(drawable->texture());
-        colorTarget->setLoadAction(MTL::LoadActionClear);
-        colorTarget->setStoreAction(MTL::StoreActionStore);
-
-        MTL::CommandBuffer*        commandBuffer = renderer->Queue->commandBuffer();
-        MTL::RenderCommandEncoder* renderEncoder = commandBuffer->renderCommandEncoder(renderPassDescriptor);
+        MTL::CommandBuffer*        commandBuffer        = renderer->Queue->commandBuffer();
+        MTL::RenderPassDescriptor* renderPassDescriptor = renderer->Swapchain->currentRenderPassDescriptor();
+        MTL::RenderCommandEncoder* renderEncoder        = commandBuffer->renderCommandEncoder(renderPassDescriptor);
 
         renderEncoder->endEncoding();
 
-        commandBuffer->presentDrawable(drawable);
+        commandBuffer->presentDrawable(renderer->Swapchain->currentDrawable());
         commandBuffer->commit();
     }
 
