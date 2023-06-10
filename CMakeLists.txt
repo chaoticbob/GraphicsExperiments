@@ -5,16 +5,16 @@ project(GraphicsExperiments)
 # ------------------------------------------------------------------------------
 # Options
 # ------------------------------------------------------------------------------
-# Choose between D3D12 and Metal Since each can only be run on its own platform
 if (APPLE)
 	option(GREX_ENABLE_D3D12  "Build DirectX 12 projects" OFF)
 	option(GREX_ENABLE_METAL  "Build Metal projects" ON)
+	option(GREX_ENABLE_VULKAN "Build Vulkan projects" OFF)
 else()
 	option(GREX_ENABLE_D3D12  "Build DirectX 12 projects" ON)
 	option(GREX_ENABLE_METAL  "Build Metal projects" OFF)
+	option(GREX_ENABLE_VULKAN "Build Vulkan projects" ON)
 endif()
 
-option(GREX_ENABLE_VULKAN "Build Vulkan projects" ON)
 
 # ------------------------------------------------------------------------------
 # Detect Linux

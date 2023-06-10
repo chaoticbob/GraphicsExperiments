@@ -1,5 +1,6 @@
 #include "window.h"
 
+#include "mt_renderer.h"
 #include "tri_mesh.h"
 
 #include <glm/glm.hpp>
@@ -34,6 +35,12 @@ static bool     gEnableDebug  = true;
 // =============================================================================
 int main(int argc, char** argv)
 {
+    std::unique_ptr<MetalRenderer> renderer = std::make_unique<MetalRenderer>();
+
+    if (!InitMetal(renderer.get(), gEnableDebug)) {
+        return EXIT_FAILURE;
+    }
+
     // *************************************************************************
     // Window
     // *************************************************************************
@@ -44,10 +51,39 @@ int main(int argc, char** argv)
     }
 
     // *************************************************************************
+    // Swapchain
+    // *************************************************************************
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindow(), window->GetWidth(), window->GetHeight())) {
+        assert(false && "InitSwapchain failed");
+        return EXIT_FAILURE;
+    }
+
+    // *************************************************************************
+    // Render pass
+    // *************************************************************************
+    MTL::RenderPassDescriptor* renderPassDescriptor = MTL::RenderPassDescriptor::renderPassDescriptor();
+
+    // *************************************************************************
     // Main loop
     // *************************************************************************
-    while (window->PollEvents()) {}
+    MTL::ClearColor clearColor(1, 0, 0, 1);
+    while (window->PollEvents()) {
+       CA::MetalDrawable* drawable = renderer->Swapchain->nextDrawable();
+
+        MTL::RenderPassColorAttachmentDescriptor* colorTarget = renderPassDescriptor->colorAttachments()->object(0);
+        colorTarget->setClearColor(clearColor);
+        colorTarget->setTexture(drawable->texture());
+        colorTarget->setLoadAction(MTL::LoadActionClear);
+        colorTarget->setStoreAction(MTL::StoreActionStore);
+
+        MTL::CommandBuffer*        commandBuffer = renderer->Queue->commandBuffer();
+        MTL::RenderCommandEncoder* renderEncoder = commandBuffer->renderCommandEncoder(renderPassDescriptor);
+
+        renderEncoder->endEncoding();
+
+        commandBuffer->presentDrawable(drawable);
+        commandBuffer->commit();
+    }
 
     return 0;
 }
-
