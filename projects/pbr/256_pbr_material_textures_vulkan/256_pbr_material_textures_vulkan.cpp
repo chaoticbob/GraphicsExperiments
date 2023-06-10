@@ -2120,7 +2120,7 @@ void WritePBRDescriptors(
         samplerInfo.minFilter               = VK_FILTER_LINEAR;
         samplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
         samplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        samplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         samplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
         samplerInfo.mipLodBias              = 0;
         samplerInfo.anisotropyEnable        = VK_FALSE;
