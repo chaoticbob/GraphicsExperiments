@@ -9,12 +9,12 @@
 
 #include "mt_renderer.h"
 
-// NOCHECKIN We should put this in the header
-#define GREX_DEFAULT_RTV_FORMAT MTL::PixelFormatBGRA8Unorm_sRGB
-
 // =================================================================================================
 // MetalRenderer
 // =================================================================================================
+
+const int MetalRenderer::kMaxFramesInFlight = 3;
+
 MetalRenderer::MetalRenderer()
 {
 }
@@ -51,6 +51,8 @@ bool InitMetal(
 
     pRenderer->Queue = pRenderer->Device->newCommandQueue();
 
+    pRenderer->Fence = dispatch_semaphore_create(MetalRenderer::kMaxFramesInFlight);
+
     return true;
 }
 
@@ -67,9 +69,84 @@ bool InitSwapchain(
 
     pRenderer->Swapchain = MTK::View::alloc()->init(frame, pRenderer->Device);
     pRenderer->Swapchain->setColorPixelFormat(GREX_DEFAULT_RTV_FORMAT);
+    pRenderer->Swapchain->setPaused(false);
+    pRenderer->Swapchain->setEnableSetNeedsDisplay(false);
 
     NS::Window* nsWindow = reinterpret_cast<NS::Window*>(cocoaWindow);
     nsWindow->setContentView(pRenderer->Swapchain);
 
     return true;
+}
+
+NS::Error* CreateBuffer(
+    MetalRenderer* pRenderer,
+    size_t         srcSize,
+    const void*    pSrcData,
+    MTL::Buffer**  ppResource)
+{
+    MTL::Buffer* pBuffer = pRenderer->Device->newBuffer(srcSize, MTL::ResourceStorageModeManaged);
+
+    memcpy(pBuffer->contents(), pSrcData, srcSize);
+
+    pBuffer->didModifyRange(NS::Range::Make(0, pBuffer->length()));
+
+    *ppResource = pBuffer;
+
+    return nullptr;
+}
+
+NS::Error* CreateDrawVertexColorPipeline(
+    MetalRenderer*             pRenderer,
+    MTL::Function*             vsShaderModule,
+    MTL::Function*             fsShaderModule,
+    MTL::PixelFormat           rtvFormat,
+    MTL::PixelFormat           dsvFormat,
+    MTL::RenderPipelineState** ppPipeline)
+{
+    MTL::VertexDescriptor* vertexDescriptor = MTL::VertexDescriptor::alloc()->init();
+    {
+        // Position Buffer
+        {
+            MTL::VertexAttributeDescriptor* vertexAttribute = MTL::VertexAttributeDescriptor::alloc()->init();
+            vertexAttribute->setOffset(0);
+            vertexAttribute->setFormat(MTL::VertexFormatFloat3);
+            vertexAttribute->setBufferIndex(0);
+            vertexDescriptor->attributes()->setObject(vertexAttribute, 0);
+
+            MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = MTL::VertexBufferLayoutDescriptor::alloc()->init();
+            vertexBufferLayout->setStride(12);
+            vertexBufferLayout->setStepRate(1);
+            vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+            vertexDescriptor->layouts()->setObject(vertexBufferLayout, 0);
+        }
+        // Vertex Color Buffer
+        {
+            MTL::VertexAttributeDescriptor* vertexAttribute = MTL::VertexAttributeDescriptor::alloc()->init();
+            vertexAttribute->setOffset(0);
+            vertexAttribute->setFormat(MTL::VertexFormatFloat3);
+            vertexAttribute->setBufferIndex(1);
+            vertexDescriptor->attributes()->setObject(vertexAttribute, 1);
+
+            MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = MTL::VertexBufferLayoutDescriptor::alloc()->init();
+            vertexBufferLayout->setStride(12);
+            vertexBufferLayout->setStepRate(1);
+            vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+            vertexDescriptor->layouts()->setObject(vertexBufferLayout, 1);
+        }
+    }
+
+    MTL::RenderPipelineDescriptor* pDesc = MTL::RenderPipelineDescriptor::alloc()->init();
+    pDesc->setVertexFunction(vsShaderModule);
+    pDesc->setFragmentFunction(fsShaderModule);
+    pDesc->colorAttachments()->object(0)->setPixelFormat(rtvFormat);
+    pDesc->setVertexDescriptor(vertexDescriptor);
+
+    NS::Error*                pError = nullptr;
+    MTL::RenderPipelineState* pPSO   = pRenderer->Device->newRenderPipelineState(pDesc, &pError);
+
+    pDesc->release();
+    vertexDescriptor->release();
+
+    *ppPipeline = pPSO;
+    return pError;
 }
