@@ -13,8 +13,6 @@
 // MetalRenderer
 // =================================================================================================
 
-const int MetalRenderer::kMaxFramesInFlight = 3;
-
 MetalRenderer::MetalRenderer()
 {
 }
@@ -51,8 +49,6 @@ bool InitMetal(
 
     pRenderer->Queue = pRenderer->Device->newCommandQueue();
 
-    pRenderer->Fence = dispatch_semaphore_create(MetalRenderer::kMaxFramesInFlight);
-
     return true;
 }
 
@@ -69,6 +65,7 @@ bool InitSwapchain(
 
     pRenderer->Swapchain = MTK::View::alloc()->init(frame, pRenderer->Device);
     pRenderer->Swapchain->setColorPixelFormat(GREX_DEFAULT_RTV_FORMAT);
+    pRenderer->Swapchain->setDepthStencilPixelFormat(GREX_DEFAULT_DSV_FORMAT);
     pRenderer->Swapchain->setPaused(false);
     pRenderer->Swapchain->setEnableSetNeedsDisplay(false);
 
@@ -101,7 +98,8 @@ NS::Error* CreateDrawVertexColorPipeline(
     MTL::Function*             fsShaderModule,
     MTL::PixelFormat           rtvFormat,
     MTL::PixelFormat           dsvFormat,
-    MTL::RenderPipelineState** ppPipeline)
+    MTL::RenderPipelineState** ppPipeline,
+    MTL::DepthStencilState**   ppDepthStencilState)
 {
     MTL::VertexDescriptor* vertexDescriptor = MTL::VertexDescriptor::alloc()->init();
     {
@@ -138,15 +136,23 @@ NS::Error* CreateDrawVertexColorPipeline(
     MTL::RenderPipelineDescriptor* pDesc = MTL::RenderPipelineDescriptor::alloc()->init();
     pDesc->setVertexFunction(vsShaderModule);
     pDesc->setFragmentFunction(fsShaderModule);
-    pDesc->colorAttachments()->object(0)->setPixelFormat(rtvFormat);
     pDesc->setVertexDescriptor(vertexDescriptor);
+    pDesc->colorAttachments()->object(0)->setPixelFormat(rtvFormat);
+    pDesc->setDepthAttachmentPixelFormat(dsvFormat);
 
-    NS::Error*                pError = nullptr;
-    MTL::RenderPipelineState* pPSO   = pRenderer->Device->newRenderPipelineState(pDesc, &pError);
+    NS::Error* pError = nullptr;
+    *ppPipeline       = pRenderer->Device->newRenderPipelineState(pDesc, &pError);
+
+    if (pError == nullptr) {
+        MTL::DepthStencilDescriptor* pDepthStateDesc = MTL::DepthStencilDescriptor::alloc()->init();
+        pDepthStateDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
+        pDepthStateDesc->setDepthWriteEnabled(true);
+
+        *ppDepthStencilState = pRenderer->Device->newDepthStencilState(pDepthStateDesc);
+    }
 
     pDesc->release();
     vertexDescriptor->release();
 
-    *ppPipeline = pPSO;
     return pError;
 }

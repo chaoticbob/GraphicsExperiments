@@ -7,15 +7,14 @@
 #include <MetalKit/MetalKit.hpp>
 
 #define GREX_DEFAULT_RTV_FORMAT MTL::PixelFormatBGRA8Unorm_sRGB
-#define GREX_DEFAULT_DSV_FORMAT MTL::PixelFormatR32Float
+#define GREX_DEFAULT_DSV_FORMAT MTL::PixelFormatDepth32Float
 
 struct MetalRenderer
 {
-    bool                 DebugEnabled = false;
-    MTL::Device*         Device       = nullptr;
-    MTL::CommandQueue*   Queue        = nullptr;
-    MTK::View*           Swapchain    = nullptr;
-    dispatch_semaphore_t Fence;
+    bool               DebugEnabled = false;
+    MTL::Device*       Device       = nullptr;
+    MTL::CommandQueue* Queue        = nullptr;
+    MTK::View*         Swapchain    = nullptr;
 
     static const int kMaxFramesInFlight;
 
@@ -34,4 +33,5 @@ NS::Error* CreateDrawVertexColorPipeline(
     MTL::Function*             fsShaderModule,
     MTL::PixelFormat           rtvFormat,
     MTL::PixelFormat           dsvFormat,
-    MTL::RenderPipelineState** ppPipeline);
+    MTL::RenderPipelineState** ppPipeline,
+    MTL::DepthStencilState**   ppDepthStencilState);

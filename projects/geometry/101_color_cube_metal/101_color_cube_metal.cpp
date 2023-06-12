@@ -41,21 +41,18 @@ const char* gShaders = R"(
 	};
 
 	struct VertexData {
-		device float3* PositionOS [[id(0)]];
-		device float3* Color [[id(1)]];
+		float3 PositionOS [[attribute(0)]];
+		float3 Color [[attribute(1)]];
 	};
 
    VSOutput vertex vertexMain(
-		device const VertexData* vertexData [[buffer(0)]],
-		constant Camera* Cam [[buffer(1)]],
-		uint vertexId [[vertex_id]])
+		VertexData vertexData [[stage_in]],
+		constant Camera &Cam [[buffer(2)]])
 	{
 		VSOutput output;
-      float3 position = vertexData->PositionOS[vertexId];
-      position *= 2;
-      position /= 2;
-		output.PositionCS = Cam->MVP * float4(vertexData->PositionOS[vertexId], 1.0f);
-		output.Color = vertexData->Color[vertexId];
+		float3 position = vertexData.PositionOS;
+		output.PositionCS = Cam.MVP * float4(position, 1.0f);
+		output.Color = vertexData.Color;
 		return output;
 	}
 
@@ -77,12 +74,6 @@ void CreateGeometryBuffers(
     MTL::Buffer**  ppIndexBuffer,
     MTL::Buffer**  ppPositionBuffer,
     MTL::Buffer**  ppVertexColorBuffer);
-void CreateArgumentBuffer(
-    MetalRenderer* pRenderer,
-    MTL::Function* metalFunction,
-    MTL::Buffer*   pPositionBuffer,
-    MTL::Buffer*   pVertexColorBuffer,
-    MTL::Buffer**  ppArgumentBuffer);
 
 // =============================================================================
 // main()
@@ -119,14 +110,19 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Graphics pipeline state object
     // *************************************************************************
-    MTL::RenderPipelineState* pipelineState = nullptr;
+    MTL::RenderPipelineState* pipelineState     = nullptr;
+    MTL::DepthStencilState*   depthStencilState = nullptr;
     CHECK_CALL(CreateDrawVertexColorPipeline(
         renderer.get(),
         metalVS,
         metalFS,
         GREX_DEFAULT_RTV_FORMAT,
         GREX_DEFAULT_DSV_FORMAT,
-        &pipelineState));
+        &pipelineState,
+        &depthStencilState));
+
+    metalVS->release();
+    metalFS->release();
 
     // *************************************************************************
     // Geometry data
@@ -135,20 +131,6 @@ int main(int argc, char** argv)
     MTL::Buffer* positionBuffer    = nullptr;
     MTL::Buffer* vertexColorBuffer = nullptr;
     CreateGeometryBuffers(renderer.get(), &indexBuffer, &positionBuffer, &vertexColorBuffer);
-
-    // *************************************************************************
-    // Argument Buffers
-    // *************************************************************************
-    MTL::Buffer* argumentBuffer = nullptr;
-    CreateArgumentBuffer(
-        renderer.get(),
-        metalVS,
-        positionBuffer,
-        vertexColorBuffer,
-        &argumentBuffer);
-
-    metalVS->release();
-    metalFS->release();
 
     // *************************************************************************
     // Window
@@ -170,12 +152,10 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
-    MTL::ClearColor clearColor(59.0 / 255.0, 21.0 / 255.0, 188.0 / 255.0, 1);
+    MTL::ClearColor clearColor(0.23f, 0.23f, 0.31f, 0);
 
     while (window->PollEvents()) {
         renderer->Swapchain->setClearColor(clearColor);
-
-        dispatch_semaphore_wait(renderer->Fence, DISPATCH_TIME_FOREVER);
 
         MTL::CommandBuffer* commandBuffer = renderer->Queue->commandBuffer();
 
@@ -183,10 +163,10 @@ int main(int argc, char** argv)
         MTL::RenderCommandEncoder* renderEncoder        = commandBuffer->renderCommandEncoder(renderPassDescriptor);
 
         renderEncoder->setRenderPipelineState(pipelineState);
+        renderEncoder->setDepthStencilState(depthStencilState);
 
-        renderEncoder->setVertexBuffer(argumentBuffer, 0, 0);
-        renderEncoder->useResource(positionBuffer, MTL::ResourceUsageRead);
-        renderEncoder->useResource(vertexColorBuffer, MTL::ResourceUsageRead);
+        renderEncoder->setVertexBuffer(positionBuffer, 0, 0);
+        renderEncoder->setVertexBuffer(vertexColorBuffer, 0, 1);
 
         // Update the camera model view projection matrix
         mat4 modelMat = rotate(static_cast<float>(glfwGetTime()), vec3(0, 1, 0)) *
@@ -196,16 +176,11 @@ int main(int argc, char** argv)
 
         mat4 mvpMat = projMat * viewMat * modelMat;
 
-        renderEncoder->setVertexBytes(&mvpMat, sizeof(glm::mat4), 1);
+        renderEncoder->setVertexBytes(&mvpMat, sizeof(glm::mat4), 2);
 
         renderEncoder->drawIndexedPrimitives(MTL::PrimitiveType::PrimitiveTypeTriangle, 36, MTL::IndexTypeUInt32, indexBuffer, 0);
 
         renderEncoder->endEncoding();
-
-        MetalRenderer* pRenderer = renderer.get();
-        commandBuffer->addCompletedHandler(^void(MTL::CommandBuffer* pCmd) {
-          dispatch_semaphore_signal(pRenderer->Fence);
-        });
 
         commandBuffer->presentDrawable(renderer->Swapchain->currentDrawable());
         commandBuffer->commit();
@@ -244,27 +219,4 @@ void CreateGeometryBuffers(
         SizeInBytes(mesh.GetVertexColors()),
         DataPtr(mesh.GetVertexColors()),
         ppVertexColorBuffer));
-}
-
-void CreateArgumentBuffer(
-    MetalRenderer* pRenderer,
-    MTL::Function* metalFunction,
-    MTL::Buffer*   pPositionBuffer,
-    MTL::Buffer*   pVertexColorBuffer,
-    MTL::Buffer**  ppArgumentBuffer)
-{
-    MTL::ArgumentEncoder* pArgEncoder = metalFunction->newArgumentEncoder(0);
-
-    MTL::Buffer* pArgumentBuffer = pRenderer->Device->newBuffer(pArgEncoder->encodedLength(), MTL::ResourceStorageModeManaged);
-
-    pArgEncoder->setArgumentBuffer(pArgumentBuffer, 0);
-
-    pArgEncoder->setBuffer(pPositionBuffer, 0, 0);
-    pArgEncoder->setBuffer(pVertexColorBuffer, 0, 1);
-
-    pArgumentBuffer->didModifyRange(NS::Range::Make(0, pArgumentBuffer->length()));
-
-    pArgEncoder->release();
-
-    *ppArgumentBuffer = pArgumentBuffer;
 }
