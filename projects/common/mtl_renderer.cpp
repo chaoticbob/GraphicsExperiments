@@ -1,13 +1,12 @@
 
 #define NS_PRIVATE_IMPLEMENTATION
 #define MTL_PRIVATE_IMPLEMENTATION
-#define MTK_PRIVATE_IMPLEMENTATION
 #define CA_PRIVATE_IMPLEMENTATION
 #include <Metal/Metal.hpp>
-#include <AppKit/AppKit.hpp>
-#include <MetalKit/MetalKit.hpp>
+#include <QuartzCore/QuartzCore.hpp>
 
-#include "mt_renderer.h"
+#include "mtl_renderer.h"
+#include "mtl_renderer_utils.h"
 
 // =================================================================================================
 // MetalRenderer
@@ -19,6 +18,11 @@ MetalRenderer::MetalRenderer()
 
 MetalRenderer::~MetalRenderer()
 {
+    for (auto dsvBuffer : SwapchainDSVBuffers) {
+        dsvBuffer->release();
+    }
+    SwapchainBufferCount = 0;
+
     if (Swapchain != nullptr) {
         Swapchain->release();
         Swapchain = nullptr;
@@ -53,24 +57,40 @@ bool InitMetal(
 }
 
 bool InitSwapchain(
-    MetalRenderer* pRenderer,
-    void*          cocoaWindow,
-    uint32_t       width,
-    uint32_t       height)
+    MetalRenderer*   pRenderer,
+    void*            cocoaWindow,
+    uint32_t         width,
+    uint32_t         height,
+    uint32_t         bufferCount,
+    MTL::PixelFormat dsvFormat)
 {
-    CGRect frame = (CGRect){
-        {0,            0            },
-        {(float)width, (float)height}
-    };
+    CGSize layerSize = {(float)width, (float)height};
 
-    pRenderer->Swapchain = MTK::View::alloc()->init(frame, pRenderer->Device);
-    pRenderer->Swapchain->setColorPixelFormat(GREX_DEFAULT_RTV_FORMAT);
-    pRenderer->Swapchain->setDepthStencilPixelFormat(GREX_DEFAULT_DSV_FORMAT);
-    pRenderer->Swapchain->setPaused(false);
-    pRenderer->Swapchain->setEnableSetNeedsDisplay(false);
+    CA::MetalLayer* layer = CA::MetalLayer::layer();
+    layer->setDevice(pRenderer->Device);
+    layer->setPixelFormat(GREX_DEFAULT_RTV_FORMAT);
+    layer->setDrawableSize(layerSize);
 
-    NS::Window* nsWindow = reinterpret_cast<NS::Window*>(cocoaWindow);
-    nsWindow->setContentView(pRenderer->Swapchain);
+    MetalSetNSWindowSwapchain(cocoaWindow, layer);
+
+    pRenderer->Swapchain = layer;
+
+    if (dsvFormat != MTL::PixelFormatInvalid) {
+        for (int dsvIndex = 0; dsvIndex < bufferCount; dsvIndex++) {
+            MTL::TextureDescriptor* pDepthBufferDesc = MTL::TextureDescriptor::alloc()->init();
+
+            pDepthBufferDesc->setPixelFormat(dsvFormat);
+            pDepthBufferDesc->setWidth(width);
+            pDepthBufferDesc->setHeight(height);
+            pDepthBufferDesc->setMipmapLevelCount(1);
+            pDepthBufferDesc->setResourceOptions(MTL::ResourceStorageModePrivate);
+            pDepthBufferDesc->setUsage(MTL::TextureUsageRenderTarget);
+
+            pRenderer->SwapchainDSVBuffers.push_back(pRenderer->Device->newTexture(pDepthBufferDesc));
+
+            pDepthBufferDesc->release();
+        }
+    }
 
     return true;
 }
@@ -133,15 +153,19 @@ NS::Error* CreateDrawVertexColorPipeline(
         }
     }
 
-    MTL::RenderPipelineDescriptor* pDesc = MTL::RenderPipelineDescriptor::alloc()->init();
-    pDesc->setVertexFunction(vsShaderModule);
-    pDesc->setFragmentFunction(fsShaderModule);
-    pDesc->setVertexDescriptor(vertexDescriptor);
-    pDesc->colorAttachments()->object(0)->setPixelFormat(rtvFormat);
-    pDesc->setDepthAttachmentPixelFormat(dsvFormat);
-
     NS::Error* pError = nullptr;
-    *ppPipeline       = pRenderer->Device->newRenderPipelineState(pDesc, &pError);
+    {
+        MTL::RenderPipelineDescriptor* pDesc = MTL::RenderPipelineDescriptor::alloc()->init();
+        pDesc->setVertexFunction(vsShaderModule);
+        pDesc->setFragmentFunction(fsShaderModule);
+        pDesc->setVertexDescriptor(vertexDescriptor);
+        pDesc->colorAttachments()->object(0)->setPixelFormat(rtvFormat);
+        pDesc->setDepthAttachmentPixelFormat(dsvFormat);
+
+        *ppPipeline = pRenderer->Device->newRenderPipelineState(pDesc, &pError);
+
+        pDesc->release();
+    }
 
     if (pError == nullptr) {
         MTL::DepthStencilDescriptor* pDepthStateDesc = MTL::DepthStencilDescriptor::alloc()->init();
@@ -149,9 +173,10 @@ NS::Error* CreateDrawVertexColorPipeline(
         pDepthStateDesc->setDepthWriteEnabled(true);
 
         *ppDepthStencilState = pRenderer->Device->newDepthStencilState(pDepthStateDesc);
+
+        pDepthStateDesc->release();
     }
 
-    pDesc->release();
     vertexDescriptor->release();
 
     return pError;

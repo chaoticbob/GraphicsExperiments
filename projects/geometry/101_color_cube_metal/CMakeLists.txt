@@ -6,8 +6,10 @@ add_executable(
     101_color_cube_metal
     101_color_cube_metal.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
-    ${GREX_PROJECTS_COMMON_DIR}/mt_renderer.h
-    ${GREX_PROJECTS_COMMON_DIR}/mt_renderer.cpp
+    ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer.h
+    ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer.cpp
+    ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer_utils.h
+    ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer_utils.mm
     ${GREX_PROJECTS_COMMON_DIR}/window.h
     ${GREX_PROJECTS_COMMON_DIR}/window.cpp
     ${GREX_PROJECTS_COMMON_DIR}/tri_mesh.h
