@@ -613,17 +613,19 @@ void Window::ImGuiRenderDrawData(VulkanRenderer* pRenderer, VkCommandBuffer cmdB
 // =============================================================================
 // Platform functions
 // =============================================================================
+#if defined(WIN32)
+HWND Window::GetHWND() const
+{
+    return glfwGetWin32Window(mWindow);
+}
+#endif
 
+#if defined(__APPLE__)
 void* Window::GetNativeWindow() const
 {
-#if defined(WIN32)
-   return glfwGetWin32Window(mWindow);
-#endif
-   
-#if defined(__APPLE__)
    return glfwGetCocoaWindow(mWindow);
-#endif
 }
+#endif
 
 bool Window::PollEvents()
 {

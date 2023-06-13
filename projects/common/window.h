@@ -53,7 +53,14 @@ public:
     uint32_t    GetWidth() const { return mWidth; }
     uint32_t    GetHeight() const { return mHeight; }
     GLFWwindow* GetWindow() const { return mWindow; }
-    void*       GetNativeWindow() const;
+
+#if defined(WIN32)
+    HWND GetHWND() const;
+#endif
+
+#if defined(__APPLE__)
+    void* GetNativeWindow() const;
+#endif
 
     bool PollEvents();
 
