@@ -71,9 +71,9 @@ static bool     gEnableDebug  = true;
 
 void CreateGeometryBuffers(
     MetalRenderer* pRenderer,
-    MTL::Buffer**  ppIndexBuffer,
-    MTL::Buffer**  ppPositionBuffer,
-    MTL::Buffer**  ppVertexColorBuffer);
+    MetalBuffer*   pIndexBuffer,
+    MetalBuffer*   pPositionBuffer,
+    MetalBuffer*   pVertexColorBuffer);
 
 // =============================================================================
 // main()
@@ -89,47 +89,63 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Compile shaders
     // *************************************************************************
-    NS::Error*    pError   = nullptr;
-    MTL::Library* pLibrary = renderer->Device->newLibrary(
-        NS::String::string(gShaders, NS::UTF8StringEncoding),
-        nullptr,
-        &pError);
+    MetalShader vsShader;
+    MetalShader fsShader;
+    {
+        NS::Error*    pError   = nullptr;
+        MTL::Library* pLibrary = renderer->Device->newLibrary(
+            NS::String::string(gShaders, NS::UTF8StringEncoding),
+            nullptr,
+            &pError);
 
-    if (!pLibrary) {
-        std::stringstream ss;
-        ss << "\n"
-           << "Shader compiler error (VS): " << pError->localizedDescription()->utf8String() << "\n";
-        GREX_LOG_ERROR(ss.str().c_str());
-        assert(false);
-        return EXIT_FAILURE;
+        if (!pLibrary) {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (VS): " << pError->localizedDescription()->utf8String() << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            assert(false);
+            return EXIT_FAILURE;
+        }
+
+        MTL::Function* metalVS = pLibrary->newFunction(NS::String::string("vertexMain", NS::UTF8StringEncoding));
+        if (metalVS != nullptr) {
+            vsShader.Function = NS::TransferPtr(metalVS);
+        }
+        else {
+            assert(false && "VS Shader MTL::Library::newFunction() failed");
+            return EXIT_FAILURE;
+        }
+
+        MTL::Function* metalFS = pLibrary->newFunction(NS::String::string("fragmentMain", NS::UTF8StringEncoding));
+        if (metalFS != nullptr) {
+            fsShader.Function = NS::TransferPtr(metalFS);
+        }
+        else {
+            assert(false && "FS Shader MTL::Library::newFunction() failed");
+            return EXIT_FAILURE;
+        }
     }
-
-    MTL::Function* metalVS = pLibrary->newFunction(NS::String::string("vertexMain", NS::UTF8StringEncoding));
-    MTL::Function* metalFS = pLibrary->newFunction(NS::String::string("fragmentMain", NS::UTF8StringEncoding));
 
     // *************************************************************************
     // Graphics pipeline state object
     // *************************************************************************
-    MTL::RenderPipelineState* pRenderPipelineState = nullptr;
-    MTL::DepthStencilState*   pDepthStencilState   = nullptr;
+    MetalPipelineRenderState renderPipelineState;
+    MetalDepthStencilState   depthStencilState;
     CHECK_CALL(CreateDrawVertexColorPipeline(
         renderer.get(),
-        metalVS,
-        metalFS,
+        &vsShader,
+        &fsShader,
         GREX_DEFAULT_RTV_FORMAT,
         GREX_DEFAULT_DSV_FORMAT,
-        &pRenderPipelineState,
-        &pDepthStencilState));
-
-    metalVS->release();
-    metalFS->release();
+        &renderPipelineState,
+        &depthStencilState));
 
     // *************************************************************************
     // Geometry data
     // *************************************************************************
-    MTL::Buffer* pIndexBuffer       = nullptr;
-    MTL::Buffer* pPositionBuffer    = nullptr;
-    MTL::Buffer* pVertexColorBuffer = nullptr;
+    MetalBuffer pIndexBuffer;
+    MetalBuffer pPositionBuffer;
+    MetalBuffer pVertexColorBuffer;
     CreateGeometryBuffers(renderer.get(), &pIndexBuffer, &pPositionBuffer, &pVertexColorBuffer);
 
     // *************************************************************************
@@ -161,6 +177,8 @@ int main(int argc, char** argv)
     uint32_t        frameIndex = 0;
 
     while (window->PollEvents()) {
+        NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
+
         CA::MetalDrawable* pDrawable = renderer->Swapchain->nextDrawable();
 
         // nextDrawable() will return nil if there are no free swapchain buffers to render to
@@ -176,7 +194,7 @@ int main(int argc, char** argv)
 
             MTL::RenderPassDepthAttachmentDescriptor* pDepthTargetDesc = MTL::RenderPassDepthAttachmentDescriptor::alloc()->init();
             pDepthTargetDesc->setClearDepth(1);
-            pDepthTargetDesc->setTexture(renderer->SwapchainDSVBuffers[swapchainIndex]);
+            pDepthTargetDesc->setTexture(renderer->SwapchainDSVBuffers[swapchainIndex].get());
             pDepthTargetDesc->setLoadAction(MTL::LoadActionClear);
             pDepthTargetDesc->setStoreAction(MTL::StoreActionDontCare);
             pRenderPassDescriptor->setDepthAttachment(pDepthTargetDesc);
@@ -184,8 +202,8 @@ int main(int argc, char** argv)
             MTL::CommandBuffer*        pCommandBuffer = renderer->Queue->commandBuffer();
             MTL::RenderCommandEncoder* pRenderEncoder = pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
 
-            pRenderEncoder->setRenderPipelineState(pRenderPipelineState);
-            pRenderEncoder->setDepthStencilState(pDepthStencilState);
+            pRenderEncoder->setRenderPipelineState(renderPipelineState.State.get());
+            pRenderEncoder->setDepthStencilState(depthStencilState.State.get());
 
             // Update the camera model view projection matrix
             mat4 modelMat = rotate(static_cast<float>(glfwGetTime()), vec3(0, 1, 0)) *
@@ -197,18 +215,20 @@ int main(int argc, char** argv)
 
             pRenderEncoder->setVertexBytes(&mvpMat, sizeof(glm::mat4), 2);
 
-            MTL::Buffer* vbvs[2]    = {pPositionBuffer, pVertexColorBuffer};
+            MTL::Buffer* vbvs[2]    = {pPositionBuffer.Buffer.get(), pVertexColorBuffer.Buffer.get()};
             NS::UInteger offsets[2] = {0, 0};
             NS::Range    vbRange(0, 2);
             pRenderEncoder->setVertexBuffers(vbvs, offsets, vbRange);
 
-            pRenderEncoder->drawIndexedPrimitives(MTL::PrimitiveType::PrimitiveTypeTriangle, 36, MTL::IndexTypeUInt32, pIndexBuffer, 0);
+            pRenderEncoder->drawIndexedPrimitives(MTL::PrimitiveType::PrimitiveTypeTriangle, 36, MTL::IndexTypeUInt32, pIndexBuffer.Buffer.get(), 0);
 
             pRenderEncoder->endEncoding();
 
             pCommandBuffer->presentDrawable(pDrawable);
             pCommandBuffer->commit();
         }
+
+        pPoolAllocator->release();
     }
 
     return 0;
@@ -216,9 +236,9 @@ int main(int argc, char** argv)
 
 void CreateGeometryBuffers(
     MetalRenderer* pRenderer,
-    MTL::Buffer**  ppIndexBuffer,
-    MTL::Buffer**  ppPositionBuffer,
-    MTL::Buffer**  ppVertexColorBuffer)
+    MetalBuffer*   pIndexBuffer,
+    MetalBuffer*   pPositionBuffer,
+    MetalBuffer*   pVertexColorBuffer)
 {
     TriMesh::Options options;
     options.enableVertexColors = true;
@@ -229,17 +249,17 @@ void CreateGeometryBuffers(
         pRenderer,
         SizeInBytes(mesh.GetTriangles()),
         DataPtr(mesh.GetTriangles()),
-        ppIndexBuffer));
+        pIndexBuffer));
 
     CHECK_CALL(CreateBuffer(
         pRenderer,
         SizeInBytes(mesh.GetPositions()),
         DataPtr(mesh.GetPositions()),
-        ppPositionBuffer));
+        pPositionBuffer));
 
     CHECK_CALL(CreateBuffer(
         pRenderer,
         SizeInBytes(mesh.GetVertexColors()),
         DataPtr(mesh.GetVertexColors()),
-        ppVertexColorBuffer));
+        pVertexColorBuffer));
 }

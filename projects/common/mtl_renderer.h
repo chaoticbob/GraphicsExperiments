@@ -10,12 +10,12 @@
 
 struct MetalRenderer
 {
-    bool                       DebugEnabled         = false;
-    MTL::Device*               Device               = nullptr;
-    MTL::CommandQueue*         Queue                = nullptr;
-    CA::MetalLayer*            Swapchain            = nullptr;
-    uint32_t                   SwapchainBufferCount = 0;
-    std::vector<MTL::Texture*> SwapchainDSVBuffers  = {};
+    bool                                     DebugEnabled = false;
+    NS::SharedPtr<MTL::Device>               Device;
+    NS::SharedPtr<MTL::CommandQueue>         Queue;
+    CA::MetalLayer*                          Swapchain = nullptr;
+    std::vector<NS::SharedPtr<MTL::Texture>> SwapchainDSVBuffers;
+    uint32_t                                 SwapchainBufferCount = 0;
 
     MetalRenderer();
     ~MetalRenderer();
@@ -24,13 +24,33 @@ struct MetalRenderer
 bool InitMetal(MetalRenderer* pRenderer, bool enableDebug);
 bool InitSwapchain(MetalRenderer* pRenderer, void* cocoaWindow, uint32_t width, uint32_t height, uint32_t bufferCount = 2, MTL::PixelFormat dsvFormat = MTL::PixelFormatInvalid);
 
-NS::Error* CreateBuffer(MetalRenderer* pRenderer, size_t srcSize, const void* pSrcData, MTL::Buffer** ppResource);
+struct MetalBuffer
+{
+    NS::SharedPtr<MTL::Buffer> Buffer;
+};
+
+struct MetalPipelineRenderState
+{
+    NS::SharedPtr<MTL::RenderPipelineState> State;
+};
+
+struct MetalDepthStencilState
+{
+    NS::SharedPtr<MTL::DepthStencilState> State;
+};
+
+struct MetalShader
+{
+    NS::SharedPtr<MTL::Function> Function;
+};
+
+NS::Error* CreateBuffer(MetalRenderer* pRenderer, size_t srcSize, const void* pSrcData, MetalBuffer* pBuffer);
 
 NS::Error* CreateDrawVertexColorPipeline(
-    MetalRenderer*             pRenderer,
-    MTL::Function*             vsShaderModule,
-    MTL::Function*             fsShaderModule,
-    MTL::PixelFormat           rtvFormat,
-    MTL::PixelFormat           dsvFormat,
-    MTL::RenderPipelineState** ppPipeline,
-    MTL::DepthStencilState**   ppDepthStencilState);
+    MetalRenderer*            pRenderer,
+    MetalShader*              vsShaderModule,
+    MetalShader*              fsShaderModule,
+    MTL::PixelFormat          rtvFormat,
+    MTL::PixelFormat          dsvFormat,
+    MetalPipelineRenderState* pPipeline,
+    MetalDepthStencilState*   pDepthStencilState);
