@@ -5,8 +5,16 @@ project(GraphicsExperiments)
 # ------------------------------------------------------------------------------
 # Options
 # ------------------------------------------------------------------------------
-option(GREX_ENABLE_D3D12  "Build DirectX 12 projects" ON)
-option(GREX_ENABLE_VULKAN "Build Vulkan projects" ON)
+if (APPLE)
+	option(GREX_ENABLE_D3D12  "Build DirectX 12 projects" OFF)
+	option(GREX_ENABLE_METAL  "Build Metal projects" ON)
+	option(GREX_ENABLE_VULKAN "Build Vulkan projects" OFF)
+else()
+	option(GREX_ENABLE_D3D12  "Build DirectX 12 projects" ON)
+	option(GREX_ENABLE_METAL  "Build Metal projects" OFF)
+	option(GREX_ENABLE_VULKAN "Build Vulkan projects" ON)
+endif()
+
 
 # ------------------------------------------------------------------------------
 # Detect Linux
@@ -104,22 +112,19 @@ if (NOT VULKAN_LIBRARY_DIR)
 endif()
     
 # Bail if Vulkan's include directory is not set
-if (NOT VULKAN_INCLUDE_DIR)
+if ((NOT VULKAN_INCLUDE_DIR) AND (NOT APPLE))
     message(FATAL_ERROR "VULKAN_INCLUDE_DIR not specified and could not be determined using environment variable VULKAN_SDK")
 endif()
     
-# Bail if Vulkan's library directory is not set
-if (NOT VULKAN_LIBRARY_DIR)
-    message(FATAL_ERROR "VULKAN_LIBRARY_DIR not specified and could not be determined using environment variable VULKAN_SDK")
+if (VULKAN_INCLUDE_DIR)
+	# Convert paths to something CMake can use
+	file(TO_CMAKE_PATH "${VULKAN_INCLUDE_DIR}" VULKAN_INCLUDE_DIR)
+	file(TO_CMAKE_PATH "${VULKAN_LIBRARY_DIR}" VULKAN_LIBRARY_DIR)
+
+	message("Found Vulkan:")
+	message("  Vulkan include directory: ${VULKAN_INCLUDE_DIR}")
+	message("  Vulkan library directory: ${VULKAN_LIBRARY_DIR}")
 endif()
-
-# Convert paths to something CMake can use
-file(TO_CMAKE_PATH "${VULKAN_INCLUDE_DIR}" VULKAN_INCLUDE_DIR)
-file(TO_CMAKE_PATH "${VULKAN_LIBRARY_DIR}" VULKAN_LIBRARY_DIR)
-
-message("Found Vulkan:")
-message("  Vulkan include directory: ${VULKAN_INCLUDE_DIR}")
-message("  Vulkan library directory: ${VULKAN_LIBRARY_DIR}")
 
 # ------------------------------------------------------------------------------
 # glslang

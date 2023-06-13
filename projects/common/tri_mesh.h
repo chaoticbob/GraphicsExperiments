@@ -68,6 +68,8 @@ public:
         glm::vec3 transformTranslate = glm::vec3(0);
         glm::vec3 transformRotate    = glm::vec3(0);
         glm::vec3 transformScale     = glm::vec3(1);
+
+        Options(){};
     };
 
     // -------------------------------------------------------------------------

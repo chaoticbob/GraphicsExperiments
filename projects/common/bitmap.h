@@ -509,7 +509,7 @@ public:
         BitmapSampleMode          modeU = BITMAP_SAMPLE_MODE_BORDER,
         BitmapSampleMode          modeV = BITMAP_SAMPLE_MODE_BORDER) const
     {
-        using PixelT32f = SelectPixel32f<PixelT>::type;
+        using PixelT32f = typename SelectPixel32f<PixelT>::type;
 
         int32_t kernelSize = static_cast<int32_t>(sqrt(static_cast<float>(kernel.size())));
         float   radius     = kernelSize / 2.0f;
@@ -839,7 +839,7 @@ template <typename MipBitmapT>
 class MipmapT
 {
 public:
-    using PixelT = MipBitmapT::PixelT;
+    using PixelT = typename MipBitmapT::PixelT;
 
     MipmapT() {}
 
