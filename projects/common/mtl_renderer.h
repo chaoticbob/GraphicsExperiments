@@ -54,3 +54,12 @@ NS::Error* CreateDrawVertexColorPipeline(
     MTL::PixelFormat          dsvFormat,
     MetalPipelineRenderState* pPipeline,
     MetalDepthStencilState*   pDepthStencilState);
+
+NS::Error* CreateDrawNormalPipeline(
+    MetalRenderer*            pRenderer,
+    MetalShader*              vsShaderModule,
+    MetalShader*              fsShaderModule,
+    MTL::PixelFormat          rtvFormat,
+    MTL::PixelFormat          dsvFormat,
+    MetalPipelineRenderState* pPipeline,
+    MetalDepthStencilState*   pDepthStencilState);
