@@ -29,34 +29,21 @@ bool InitMetal(
         return false;
     }
 
-    NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
-    bool                 success        = true;
-
     pRenderer->DebugEnabled = enableDebug;
 
-    MTL::Device* localDevice = MTL::CreateSystemDefaultDevice();
-    if (localDevice != nullptr) {
-        pRenderer->Device = NS::TransferPtr(localDevice);
-    }
-    else {
+    pRenderer->Device = NS::TransferPtr(MTL::CreateSystemDefaultDevice());
+    if (pRenderer->Device.get() == nullptr) {
         assert(false && "MTL::CreateSystemDefaultDevice() failed");
-        success = false;
+        return false;
     }
 
-    if (success) {
-        MTL::CommandQueue* localCommandQueue = pRenderer->Device->newCommandQueue();
-        if (localCommandQueue != nullptr) {
-            pRenderer->Queue = NS::TransferPtr(localCommandQueue);
-        }
-        else {
-            assert(false && "MTL::Device::newCommandQueue() failed");
-            success = false;
-        }
+    pRenderer->Queue = NS::TransferPtr(pRenderer->Device->newCommandQueue());
+    if (pRenderer->Queue.get() == nullptr) {
+        assert(false && "MTL::Device::newCommandQueue() failed");
+        return false;
     }
 
-    pPoolAllocator->release();
-
-    return success;
+    return true;
 }
 
 bool InitSwapchain(
@@ -67,13 +54,10 @@ bool InitSwapchain(
     uint32_t         bufferCount,
     MTL::PixelFormat dsvFormat)
 {
-    NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
-    bool                 success        = true;
-
     CGSize layerSize = {(float)width, (float)height};
 
-	// Don't need to Retain/Release the swapchain as the function doesn't match the 
-	// naming templated named in metal-cpp README.md
+    // Don't need to Retain/Release the swapchain as the function doesn't match the
+    // naming template given in the metal-cpp README.md
     CA::MetalLayer* layer = CA::MetalLayer::layer();
 
     if (layer != nullptr) {
@@ -87,38 +71,34 @@ bool InitSwapchain(
         pRenderer->SwapchainBufferCount = bufferCount;
 
         if (dsvFormat != MTL::PixelFormatInvalid) {
-            for (int dsvIndex = 0; success && (dsvIndex < bufferCount); dsvIndex++) {
-                MTL::TextureDescriptor* pDepthBufferDesc = MTL::TextureDescriptor::alloc()->init();
+            for (int dsvIndex = 0; (dsvIndex < bufferCount); dsvIndex++) {
+                auto depthBufferDesc = NS::TransferPtr(MTL::TextureDescriptor::alloc()->init());
 
-                pDepthBufferDesc->setPixelFormat(dsvFormat);
-                pDepthBufferDesc->setWidth(width);
-                pDepthBufferDesc->setHeight(height);
-                pDepthBufferDesc->setMipmapLevelCount(1);
-                pDepthBufferDesc->setResourceOptions(MTL::ResourceStorageModePrivate);
-                pDepthBufferDesc->setUsage(MTL::TextureUsageRenderTarget);
+                depthBufferDesc->setPixelFormat(dsvFormat);
+                depthBufferDesc->setWidth(width);
+                depthBufferDesc->setHeight(height);
+                depthBufferDesc->setMipmapLevelCount(1);
+                depthBufferDesc->setResourceOptions(MTL::ResourceStorageModePrivate);
+                depthBufferDesc->setUsage(MTL::TextureUsageRenderTarget);
 
-                MTL::Texture* localTexture = pRenderer->Device->newTexture(pDepthBufferDesc);
+                auto localTexture = NS::TransferPtr(pRenderer->Device->newTexture(depthBufferDesc.get()));
 
-                if (localTexture != nullptr) {
-                    pRenderer->SwapchainDSVBuffers.push_back(NS::TransferPtr(localTexture));
+                if (localTexture.get() != nullptr) {
+                    pRenderer->SwapchainDSVBuffers.push_back(localTexture);
                 }
                 else {
                     assert(false && "Depth Buffer MTL::Device::newTexture() failed");
-                    success = false;
+                    return false;
                 }
-
-                pDepthBufferDesc->release();
             }
         }
     }
     else {
         assert(false && "Swapchain creation CA::MetalLayer::layer() failed");
-        success = false;
+        return false;
     }
 
-    pPoolAllocator->release();
-
-    return success;
+    return true;
 }
 
 NS::Error* CreateBuffer(
@@ -127,22 +107,15 @@ NS::Error* CreateBuffer(
     const void*    pSrcData,
     MetalBuffer*   pBuffer)
 {
-    NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
+    pBuffer->Buffer = NS::TransferPtr(pRenderer->Device->newBuffer(srcSize, MTL::ResourceStorageModeManaged));
 
-    MTL::Buffer* pLocalBuffer = pRenderer->Device->newBuffer(srcSize, MTL::ResourceStorageModeManaged);
-
-    if (pLocalBuffer != nullptr) {
-        pBuffer->Buffer = NS::TransferPtr(pLocalBuffer);
-
+    if (pBuffer->Buffer.get() != nullptr) {
         memcpy(pBuffer->Buffer->contents(), pSrcData, srcSize);
-
         pBuffer->Buffer->didModifyRange(NS::Range::Make(0, pBuffer->Buffer->length()));
     }
     else {
         assert(false && "CreateBuffer() - MTL::Device::newBuffer() failed");
     }
-
-    pPoolAllocator->release();
 
     return nullptr;
 }
@@ -156,30 +129,28 @@ NS::Error* CreateDrawVertexColorPipeline(
     MetalPipelineRenderState* pPipelineRenderState,
     MetalDepthStencilState*   pDepthStencilState)
 {
-    NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
-
-    MTL::VertexDescriptor* pVertexDescriptor = MTL::VertexDescriptor::alloc()->init();
-    if (pVertexDescriptor != nullptr) {
+    auto vertexDescriptor = NS::TransferPtr(MTL::VertexDescriptor::alloc()->init());
+    if (vertexDescriptor.get() != nullptr) {
         // Position Buffer
         {
-            MTL::VertexAttributeDescriptor* vertexAttribute = pVertexDescriptor->attributes()->object(0);
+            MTL::VertexAttributeDescriptor* vertexAttribute = vertexDescriptor->attributes()->object(0);
             vertexAttribute->setOffset(0);
             vertexAttribute->setFormat(MTL::VertexFormatFloat3);
             vertexAttribute->setBufferIndex(0);
 
-            MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = pVertexDescriptor->layouts()->object(0);
+            MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = vertexDescriptor->layouts()->object(0);
             vertexBufferLayout->setStride(12);
             vertexBufferLayout->setStepRate(1);
             vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
         }
         // Vertex Color Buffer
         {
-            MTL::VertexAttributeDescriptor* vertexAttribute = pVertexDescriptor->attributes()->object(1);
+            MTL::VertexAttributeDescriptor* vertexAttribute = vertexDescriptor->attributes()->object(1);
             vertexAttribute->setOffset(0);
             vertexAttribute->setFormat(MTL::VertexFormatFloat3);
             vertexAttribute->setBufferIndex(1);
 
-            MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = pVertexDescriptor->layouts()->object(1);
+            MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = vertexDescriptor->layouts()->object(1);
             vertexBufferLayout->setStride(12);
             vertexBufferLayout->setStepRate(1);
             vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
@@ -187,55 +158,42 @@ NS::Error* CreateDrawVertexColorPipeline(
     }
     else {
         assert(false && "CreateDrawVertexColorPipeline() - MTL::VertexDescriptor::alloc::init() failed");
+        return nullptr;
     }
 
-    NS::Error* pError = nullptr;
-    {
-        MTL::RenderPipelineDescriptor* pDesc = MTL::RenderPipelineDescriptor::alloc()->init();
+    auto desc = NS::TransferPtr(MTL::RenderPipelineDescriptor::alloc()->init());
 
-        if (pDesc != nullptr) {
-            pDesc->setVertexFunction(pVsShaderModule->Function.get());
-            pDesc->setFragmentFunction(pFsShaderModule->Function.get());
-            pDesc->setVertexDescriptor(pVertexDescriptor);
-            pDesc->colorAttachments()->object(0)->setPixelFormat(rtvFormat);
-            pDesc->setDepthAttachmentPixelFormat(dsvFormat);
+    if (desc.get() != nullptr) {
+        desc->setVertexFunction(pVsShaderModule->Function.get());
+        desc->setFragmentFunction(pFsShaderModule->Function.get());
+        desc->setVertexDescriptor(vertexDescriptor.get());
+        desc->colorAttachments()->object(0)->setPixelFormat(rtvFormat);
+        desc->setDepthAttachmentPixelFormat(dsvFormat);
 
-            MTL::RenderPipelineState* pLocalPipelineState = pRenderer->Device->newRenderPipelineState(pDesc, &pError);
-            if (pLocalPipelineState != nullptr) {
-                pPipelineRenderState->State = NS::TransferPtr(pLocalPipelineState);
-            }
-            else {
-                assert(false && "CreateDrawVertexColorPipeline() - MTL::Device::newRenderPipelineState() failed");
-            }
-
-            pDesc->release();
-        }
-        else {
-            assert(false && "CreateDrawVertexColorPipeline() - MTL::RenderPipelineDescriptor::alloc()->init() failed");
+        NS::Error* pError           = nullptr;
+        pPipelineRenderState->State = NS::TransferPtr(pRenderer->Device->newRenderPipelineState(desc.get(), &pError));
+        if (pPipelineRenderState->State.get() == nullptr) {
+            assert(false && "CreateDrawVertexColorPipeline() - MTL::Device::newRenderPipelineState() failed");
+            return pError;
         }
     }
+    else {
+        assert(false && "CreateDrawVertexColorPipeline() - MTL::RenderPipelineDescriptor::alloc()->init() failed");
+        return nullptr;
+    }
 
-    if (pError == nullptr) {
-        MTL::DepthStencilDescriptor* pDepthStateDesc = MTL::DepthStencilDescriptor::alloc()->init();
+    auto depthStateDesc = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
 
-        if (pDepthStateDesc != nullptr) {
-            pDepthStateDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
-            pDepthStateDesc->setDepthWriteEnabled(true);
+    if (depthStateDesc.get() != nullptr) {
+        depthStateDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
+        depthStateDesc->setDepthWriteEnabled(true);
 
-            MTL::DepthStencilState* pLocalDepthState = pRenderer->Device->newDepthStencilState(pDepthStateDesc);
-            if (pLocalDepthState != nullptr) {
-                pDepthStencilState->State = NS::TransferPtr(pLocalDepthState);
-            }
-            else {
-                assert(false && "CreateDrawVertexColorPipeline() - MTL::Device::newDepthStencilState() failed");
-            }
-
-            pDepthStateDesc->release();
+        pDepthStencilState->State = NS::TransferPtr(pRenderer->Device->newDepthStencilState(depthStateDesc.get()));
+        if (pDepthStencilState->State.get() == nullptr) {
+            assert(false && "CreateDrawVertexColorPipeline() - MTL::Device::newDepthStencilState() failed");
+            return nullptr;
         }
     }
 
-    pVertexDescriptor->release();
-    pPoolAllocator->release();
-
-    return pError;
+    return nullptr;
 }
