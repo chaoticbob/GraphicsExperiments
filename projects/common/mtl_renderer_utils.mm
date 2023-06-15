@@ -4,12 +4,12 @@
 #include <QuartzCore/QuartzCore.h>	
 
 void MetalSetNSWindowSwapchain(	
-   void* cocoaWindow,	
-   void* caMetalLayer)	
+   void* pCocoaWindow,	
+   void* pCAMetalLayer)	
 {	
-   NSWindow* nsWindow = reinterpret_cast<NSWindow*>(cocoaWindow);	
-   CAMetalLayer* swapchain = reinterpret_cast<CAMetalLayer*>(caMetalLayer);	
+   NSWindow* pNSWindow = reinterpret_cast<NSWindow*>(pCocoaWindow);	
+   CAMetalLayer* pSwapchain = reinterpret_cast<CAMetalLayer*>(pCAMetalLayer);	
 
-   nsWindow.contentView.layer = swapchain;	
-   nsWindow.contentView.wantsLayer = YES;	
+   pNSWindow.contentView.layer = pSwapchain;
+   pNSWindow.contentView.wantsLayer = YES;	
 }

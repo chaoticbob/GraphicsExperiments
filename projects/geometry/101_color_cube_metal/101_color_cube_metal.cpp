@@ -91,39 +91,31 @@ int main(int argc, char** argv)
     // *************************************************************************
     MetalShader vsShader;
     MetalShader fsShader;
-    {
-        NS::Error*    pError   = nullptr;
-        MTL::Library* pLibrary = renderer->Device->newLibrary(
-            NS::String::string(gShaders, NS::UTF8StringEncoding),
-            nullptr,
-            &pError);
+    NS::Error*  pError  = nullptr;
+    auto        library = NS::TransferPtr(renderer->Device->newLibrary(
+        NS::String::string(gShaders, NS::UTF8StringEncoding),
+        nullptr,
+        &pError));
 
-        if (!pLibrary) {
-            std::stringstream ss;
-            ss << "\n"
-               << "Shader compiler error (VS): " << pError->localizedDescription()->utf8String() << "\n";
-            GREX_LOG_ERROR(ss.str().c_str());
-            assert(false);
-            return EXIT_FAILURE;
-        }
+    if (library.get() == nullptr) {
+        std::stringstream ss;
+        ss << "\n"
+           << "Shader compiler error (VS): " << pError->localizedDescription()->utf8String() << "\n";
+        GREX_LOG_ERROR(ss.str().c_str());
+        assert(false);
+        return EXIT_FAILURE;
+    }
 
-        MTL::Function* metalVS = pLibrary->newFunction(NS::String::string("vertexMain", NS::UTF8StringEncoding));
-        if (metalVS != nullptr) {
-            vsShader.Function = NS::TransferPtr(metalVS);
-        }
-        else {
-            assert(false && "VS Shader MTL::Library::newFunction() failed");
-            return EXIT_FAILURE;
-        }
+    vsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("vertexMain", NS::UTF8StringEncoding)));
+    if (vsShader.Function.get() == nullptr) {
+        assert(false && "VS Shader MTL::Library::newFunction() failed");
+        return EXIT_FAILURE;
+    }
 
-        MTL::Function* metalFS = pLibrary->newFunction(NS::String::string("fragmentMain", NS::UTF8StringEncoding));
-        if (metalFS != nullptr) {
-            fsShader.Function = NS::TransferPtr(metalFS);
-        }
-        else {
-            assert(false && "FS Shader MTL::Library::newFunction() failed");
-            return EXIT_FAILURE;
-        }
+    fsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("fragmentMain", NS::UTF8StringEncoding)));
+    if (fsShader.Function.get() == nullptr) {
+        assert(false && "FS Shader MTL::Library::newFunction() failed");
+        return EXIT_FAILURE;
     }
 
     // *************************************************************************
@@ -177,27 +169,25 @@ int main(int argc, char** argv)
     uint32_t        frameIndex = 0;
 
     while (window->PollEvents()) {
-        NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
-
         CA::MetalDrawable* pDrawable = renderer->Swapchain->nextDrawable();
 
         // nextDrawable() will return nil if there are no free swapchain buffers to render to
         if (pDrawable) {
             uint32_t swapchainIndex = (frameIndex % renderer->SwapchainBufferCount);
 
-            MTL::RenderPassColorAttachmentDescriptor* pColorTargetDesc = MTL::RenderPassColorAttachmentDescriptor::alloc()->init();
-            pColorTargetDesc->setClearColor(clearColor);
-            pColorTargetDesc->setTexture(pDrawable->texture());
-            pColorTargetDesc->setLoadAction(MTL::LoadActionClear);
-            pColorTargetDesc->setStoreAction(MTL::StoreActionStore);
-            pRenderPassDescriptor->colorAttachments()->setObject(pColorTargetDesc, 0);
+            auto colorTargetDesc = NS::TransferPtr(MTL::RenderPassColorAttachmentDescriptor::alloc()->init());
+            colorTargetDesc->setClearColor(clearColor);
+            colorTargetDesc->setTexture(pDrawable->texture());
+            colorTargetDesc->setLoadAction(MTL::LoadActionClear);
+            colorTargetDesc->setStoreAction(MTL::StoreActionStore);
+            pRenderPassDescriptor->colorAttachments()->setObject(colorTargetDesc.get(), 0);
 
-            MTL::RenderPassDepthAttachmentDescriptor* pDepthTargetDesc = MTL::RenderPassDepthAttachmentDescriptor::alloc()->init();
-            pDepthTargetDesc->setClearDepth(1);
-            pDepthTargetDesc->setTexture(renderer->SwapchainDSVBuffers[swapchainIndex].get());
-            pDepthTargetDesc->setLoadAction(MTL::LoadActionClear);
-            pDepthTargetDesc->setStoreAction(MTL::StoreActionDontCare);
-            pRenderPassDescriptor->setDepthAttachment(pDepthTargetDesc);
+            auto depthTargetDesc = NS::TransferPtr(MTL::RenderPassDepthAttachmentDescriptor::alloc()->init());
+            depthTargetDesc->setClearDepth(1);
+            depthTargetDesc->setTexture(renderer->SwapchainDSVBuffers[swapchainIndex].get());
+            depthTargetDesc->setLoadAction(MTL::LoadActionClear);
+            depthTargetDesc->setStoreAction(MTL::StoreActionDontCare);
+            pRenderPassDescriptor->setDepthAttachment(depthTargetDesc.get());
 
             MTL::CommandBuffer*        pCommandBuffer = renderer->Queue->commandBuffer();
             MTL::RenderCommandEncoder* pRenderEncoder = pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
@@ -227,8 +217,6 @@ int main(int argc, char** argv)
             pCommandBuffer->presentDrawable(pDrawable);
             pCommandBuffer->commit();
         }
-
-        pPoolAllocator->release();
     }
 
     return 0;
