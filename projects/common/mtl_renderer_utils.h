@@ -1,3 +1,3 @@
 #pragma once	
 
-void MetalSetNSWindowSwapchain(void* cocoaWindow, void* caMetalLayer);
+void MetalSetNSWindowSwapchain(void* pCocoaWindow, void* pCAMetalLayer);

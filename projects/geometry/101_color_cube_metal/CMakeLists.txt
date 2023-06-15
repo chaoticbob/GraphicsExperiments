@@ -25,7 +25,6 @@ target_include_directories(
            ${GREX_THIRD_PARTY_DIR}/tinyobjloader
            ${GREX_THIRD_PARTY_DIR}/stb
            ${GREX_THIRD_PARTY_DIR}/metal-cpp
-           ${GREX_THIRD_PARTY_DIR}/metal-cpp-extensions
 )
 
 FIND_LIBRARY(FOUNDATION_LIBRARY Foundation)
