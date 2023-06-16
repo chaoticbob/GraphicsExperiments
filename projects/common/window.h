@@ -33,6 +33,12 @@ namespace fs = std::filesystem;
 #    include "backends/imgui_impl_vulkan.h"
 #endif // defined(ENABLE_IMGUI_VULKAN)
 
+#if defined(ENABLE_IMGUI_METAL)
+#    include "mtl_renderer.h"
+#    include "backends/imgui_impl_glfw.h"
+#    include "backends/imgui_impl_metal.h"
+#endif // defined(ENABLE_IMGUI_VULKAN)
+
 enum MouseButton
 {
     MOUSE_BUTTON_LEFT   = 0x1,
@@ -85,6 +91,12 @@ public:
     bool InitImGuiForVulkan(VulkanRenderer* pRenderer, VkRenderPass renderPass);
     void ImGuiNewFrameVulkan();
     void ImGuiRenderDrawData(VulkanRenderer* pRenderer, VkCommandBuffer cmdBuf);
+#endif // defined(ENABLE_IMGUI_VULKAN)
+
+#if defined(ENABLE_IMGUI_METAL)
+    bool InitImGuiForMetal(MetalRenderer* pRenderer);
+	void ImGuiNewFrameMetal(MTL::RenderPassDescriptor* pRenderPassDescriptor);
+	void ImGuiRenderDrawData(MetalRenderer* pRenderer, MTL::CommandBuffer* pCommandBuffer, MTL::RenderCommandEncoder* pRenderEncoder);
 #endif // defined(ENABLE_IMGUI_VULKAN)
 
 private:

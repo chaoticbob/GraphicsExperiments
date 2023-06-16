@@ -232,6 +232,14 @@ Window::~Window()
     }
 #endif
 
+#if defined(ENABLE_IMGUI_VULKAN)
+    if (mImGuiEnabled) {
+        ImGui_ImplMetal_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
+    }
+#endif
+
     glfwDestroyWindow(mWindow);
     mWindow = nullptr;
 
@@ -267,7 +275,7 @@ void Window::WindowResizeEvent(int width, int height)
 
 void Window::MouseDownEvent(int x, int y, int buttons)
 {
-#if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN)
+#if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN) || defined(ENABLE_IMGUI_METAL)
     if (mImGuiEnabled) {
         ImGuiIO& io = ImGui::GetIO();
         if (io.WantCaptureMouse) {
@@ -283,7 +291,7 @@ void Window::MouseDownEvent(int x, int y, int buttons)
 
 void Window::MouseUpEvent(int x, int y, int buttons)
 {
-#if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN)
+#if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN) || defined(ENABLE_IMGUI_METAL)
     if (mImGuiEnabled) {
         ImGuiIO& io = ImGui::GetIO();
         if (io.WantCaptureMouse) {
@@ -299,7 +307,7 @@ void Window::MouseUpEvent(int x, int y, int buttons)
 
 void Window::MouseMoveEvent(int x, int y, int buttons)
 {
-#if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN)
+#if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN) || defined(ENABLE_IMGUI_METAL)
     if (mImGuiEnabled) {
         ImGuiIO& io = ImGui::GetIO();
         if (io.WantCaptureMouse) {
@@ -607,6 +615,47 @@ void Window::ImGuiRenderDrawData(VulkanRenderer* pRenderer, VkCommandBuffer cmdB
 {
     ImGui::Render();
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuf);
+}
+#endif // defined(ENABLE_IMGUI_VULKAN)
+
+#if defined(ENABLE_IMGUI_METAL)
+bool Window::InitImGuiForMetal(MetalRenderer* pRenderer)
+{
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+   
+   ImGuiIO& io = ImGui::GetIO();
+   io.DisplayFramebufferScale = ImVec2(1, 1);
+   
+   bool res = ImGui_ImplGlfw_InitForOther(mWindow, true);
+   if (res == false) {
+       assert(false && "ImGui init GLFW for Vulkan failed!");
+       return false;
+   }
+
+    res = ImGui_ImplMetal_Init(pRenderer->Device.get());
+    if (res == false) {
+        assert(false && "ImGui init Metal failed!");
+        return false;
+    }
+
+    // mImGuiEnabled = ImGui_ImplMetal_CreateFontsTexture(pRenderer->Device.get());
+    // mImGuiEnabled = mImGuiEnabled && ImGui_ImplMetal_CreateDeviceObjects(pRenderer->Device.get());
+
+    return mImGuiEnabled = true;
+}
+
+void Window::ImGuiNewFrameMetal(MTL::RenderPassDescriptor* pRenderPassDescriptor)
+{
+    ImGui_ImplMetal_NewFrame(pRenderPassDescriptor);
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+}
+
+void Window::ImGuiRenderDrawData(MetalRenderer* pRenderer, MTL::CommandBuffer* pCommandBuffer, MTL::RenderCommandEncoder* pRenderEncoder)
+{
+    ImGui::Render();
+    ImGui_ImplMetal_RenderDrawData(ImGui::GetDrawData(), pCommandBuffer, pRenderEncoder);
 }
 #endif // defined(ENABLE_IMGUI_VULKAN)
 
