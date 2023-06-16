@@ -8,6 +8,11 @@
 #define GREX_DEFAULT_RTV_FORMAT MTL::PixelFormatBGRA8Unorm_sRGB
 #define GREX_DEFAULT_DSV_FORMAT MTL::PixelFormatDepth32Float
 
+enum MtlPipelineFlags
+{
+    METAL_PIPELINE_FLAGS_INTERLEAVED_ATTRS = 0x00000001
+};
+
 struct MetalRenderer
 {
     bool                                     DebugEnabled = false;
@@ -47,13 +52,15 @@ struct MetalShader
 NS::Error* CreateBuffer(MetalRenderer* pRenderer, size_t srcSize, const void* pSrcData, MetalBuffer* pBuffer);
 
 NS::Error* CreateDrawVertexColorPipeline(
-    MetalRenderer*            pRenderer,
-    MetalShader*              vsShaderModule,
-    MetalShader*              fsShaderModule,
-    MTL::PixelFormat          rtvFormat,
-    MTL::PixelFormat          dsvFormat,
-    MetalPipelineRenderState* pPipeline,
-    MetalDepthStencilState*   pDepthStencilState);
+    MetalRenderer*              pRenderer,
+    MetalShader*                vsShaderModule,
+    MetalShader*                fsShaderModule,
+    MTL::PixelFormat            rtvFormat,
+    MTL::PixelFormat            dsvFormat,
+    MetalPipelineRenderState*   pPipeline,
+    MetalDepthStencilState*     pDepthStencilState,
+    MTL::PrimitiveTopologyClass topologyType  = MTL::PrimitiveTopologyClassTriangle,
+    uint32_t                    pipelineFlags = 0);
 
 NS::Error* CreateDrawNormalPipeline(
     MetalRenderer*            pRenderer,
