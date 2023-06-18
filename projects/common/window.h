@@ -37,7 +37,7 @@ namespace fs = std::filesystem;
 #    include "mtl_renderer.h"
 #    include "backends/imgui_impl_glfw.h"
 #    include "backends/imgui_impl_metal.h"
-#endif // defined(ENABLE_IMGUI_VULKAN)
+#endif // defined(ENABLE_IMGUI_METAL)
 
 enum MouseButton
 {
@@ -97,7 +97,7 @@ public:
     bool InitImGuiForMetal(MetalRenderer* pRenderer);
 	void ImGuiNewFrameMetal(MTL::RenderPassDescriptor* pRenderPassDescriptor);
 	void ImGuiRenderDrawData(MetalRenderer* pRenderer, MTL::CommandBuffer* pCommandBuffer, MTL::RenderCommandEncoder* pRenderEncoder);
-#endif // defined(ENABLE_IMGUI_VULKAN)
+#endif // defined(ENABLE_IMGUI_METAL)
 
 private:
     uint32_t    mWidth        = 0;

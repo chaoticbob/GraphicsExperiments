@@ -274,7 +274,8 @@ int main(int argc, char** argv)
 
         // nextDrawable() will return nil if there are no free swapchain buffers to render to
         if (pDrawable) {
-            uint32_t swapchainIndex = (frameIndex++ % renderer->SwapchainBufferCount);
+            uint32_t swapchainIndex = (frameIndex % renderer->SwapchainBufferCount);
+           frameIndex++;
 
             auto colorTargetDesc = NS::TransferPtr(MTL::RenderPassColorAttachmentDescriptor::alloc()->init());
             colorTargetDesc->setClearColor(clearColor);
