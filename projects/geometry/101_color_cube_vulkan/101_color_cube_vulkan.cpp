@@ -180,7 +180,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "102_color_cube_vulkan");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "101_color_cube_vulkan");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
