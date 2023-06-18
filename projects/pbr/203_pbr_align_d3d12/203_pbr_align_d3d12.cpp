@@ -38,39 +38,19 @@ struct SceneParameters
     vec3     eyePosition;
     uint32_t numLights;
     Light    lights[8];
-    uint     iblEnvNumLevels;
-};
-
-struct DrawParameters
-{
-    mat4     modelMatrix;
-    uint32_t materialIndex = 0;
-
-    uint32_t               numIndices  = 0;
-    ComPtr<ID3D12Resource> indexBuffer = nullptr;
+    uint     iblEnvironmentNumLevels;
 };
 
 struct MaterialParameters
 {
-    uint32_t UseGeometricNormal;
+    vec3  baseColor;
+    float roughness;
+    float metallic;
 };
 
-struct MaterialTextures
+struct PBRImplementationInfo
 {
-    ComPtr<ID3D12Resource> baseColorTexture;
-    ComPtr<ID3D12Resource> normalTexture;
-    ComPtr<ID3D12Resource> roughnessTexture;
-    ComPtr<ID3D12Resource> metallicTexture;
-    ComPtr<ID3D12Resource> aoTexture;
-};
-
-struct VertexBuffers
-{
-    ComPtr<ID3D12Resource> positionBuffer;
-    ComPtr<ID3D12Resource> texCoordBuffer;
-    ComPtr<ID3D12Resource> normalBuffer;
-    ComPtr<ID3D12Resource> tangentBuffer;
-    ComPtr<ID3D12Resource> bitangentBuffer;
+    std::string description;
 };
 
 // =============================================================================
@@ -83,40 +63,34 @@ static bool     gEnableDebug  = true;
 static LPCWSTR gVSShaderName = L"vsmain";
 static LPCWSTR gPSShaderName = L"psmain";
 
-float gTargetAngle = 0.0f;
-float gAngle       = 0.0f;
+static float gTargetAngle = 0.0f;
+static float gAngle       = 0.0f;
 
 static uint32_t gNumLights = 0;
 
-void CreateRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
+void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
 void CreateEnvironmentRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
-void CreateIBLTextures(
+void CreateMaterialSphereVertexBuffers(
     DxRenderer*      pRenderer,
-    ID3D12Resource** ppBRDFLUT,
-    ID3D12Resource** ppIrradianceTexture,
-    ID3D12Resource** ppEnvironmentTexture,
-    uint32_t*        pEnvNumLevels);
-void CreateCameraMaterials(
-    DxRenderer*                    pRenderer,
-    const TriMesh*                 pMesh,
-    const fs::path&                textureDir,
-    ID3D12Resource**               ppMaterialParamsBuffer,
-    MaterialTextures&              outDefaultMaterialTextures,
-    std::vector<MaterialTextures>& outMatrialTextures);
-void CreateDescriptorHeap(
-    DxRenderer*            pRenderer,
-    ID3D12DescriptorHeap** ppHeap);
-void CreateCameraVertexBuffers(
-    DxRenderer*                  pRenderer,
-    const TriMesh*               pMesh,
-    std::vector<DrawParameters>& outDrawParams,
-    VertexBuffers&               outVertexBuffers);
+    uint32_t*        pNumIndices,
+    ID3D12Resource** ppIndexBuffer,
+    ID3D12Resource** ppPositionBuffer,
+    ID3D12Resource** ppNormalBuffer);
 void CreateEnvironmentVertexBuffers(
     DxRenderer*      pRenderer,
     uint32_t*        pNumIndices,
     ID3D12Resource** ppIndexBuffer,
     ID3D12Resource** ppPositionBuffer,
     ID3D12Resource** ppTexCoordBuffer);
+void CreateIBLTextures(
+    DxRenderer*      pRenderer,
+    ID3D12Resource** ppBRDFLUT,
+    ID3D12Resource** ppIrradianceTexture,
+    ID3D12Resource** ppEnvironmentTexture,
+    uint32_t*        pEnvNumLevels);
+void CreateDescriptorHeap(
+    DxRenderer*            pRenderer,
+    ID3D12DescriptorHeap** ppHeap);
 
 void MouseMove(int x, int y, int buttons)
 {
@@ -152,7 +126,7 @@ int main(int argc, char** argv)
     std::vector<char> dxilVS;
     std::vector<char> dxilPS;
     {
-        std::string shaderSource = LoadString("projects/203_204_pbr_camera/shaders.hlsl");
+        std::string shaderSource = LoadString("projects/203_pbr_align/shaders.hlsl");
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &dxilVS, &errorMsg);
@@ -179,7 +153,7 @@ int main(int argc, char** argv)
     std::vector<char> drawTextureDxilVS;
     std::vector<char> drawTextureDxilPS;
     {
-        std::string shaderSource = LoadString("projects/203_204_pbr_camera/drawtexture.hlsl");
+        std::string shaderSource = LoadString("projects/203_pbr_align/drawtexture.hlsl");
         if (shaderSource.empty()) {
             assert(false && "no shader source");
             return EXIT_FAILURE;
@@ -211,7 +185,7 @@ int main(int argc, char** argv)
     // PBR root signature
     // *************************************************************************
     ComPtr<ID3D12RootSignature> pbrRootSig;
-    CreateRootSig(renderer.get(), &pbrRootSig);
+    CreatePBRRootSig(renderer.get(), &pbrRootSig);
 
     // *************************************************************************
     // Environment root signature
@@ -223,7 +197,7 @@ int main(int argc, char** argv)
     // PBR pipeline state object
     // *************************************************************************
     ComPtr<ID3D12PipelineState> pbrPipelineState;
-    CHECK_CALL(CreateGraphicsPipeline1(
+    CHECK_CALL(CreateDrawNormalPipeline(
         renderer.get(),
         pbrRootSig.Get(),
         dxilVS,
@@ -257,111 +231,18 @@ int main(int argc, char** argv)
         &constantBuffer));
 
     // *************************************************************************
-    // Load mesh
+    // Material sphere vertex buffers
     // *************************************************************************
-    const fs::path           modelDir  = "models/camera";
-    const fs::path           modelFile = modelDir / "camera.obj";
-    std::unique_ptr<TriMesh> mesh;
-    {
-        TriMesh::Options options = {};
-        options.enableTexCoords  = true;
-        options.enableNormals    = true;
-        options.enableTangents   = true;
-        options.invertTexCoordsV = true;
-
-        mesh = std::make_unique<TriMesh>(options);
-        if (!mesh) {
-            assert(false && "allocated mesh failed");
-            return EXIT_FAILURE;
-        }
-
-        if (!TriMesh::LoadOBJ(GetAssetPath(modelFile).string(), GetAssetPath(modelDir).string(), options, mesh.get())) {
-            assert(false && "OBJ load failed");
-            return EXIT_FAILURE;
-        }
-
-        mesh->Recenter();
-
-        auto bounds = mesh->GetBounds();
-
-        std::stringstream ss;
-        ss << "mesh bounding box: "
-           << "min = (" << bounds.min.x << ", " << bounds.min.y << ", " << bounds.min.z << ")"
-           << " "
-           << "max = (" << bounds.max.x << ", " << bounds.max.y << ", " << bounds.max.z << ")";
-        GREX_LOG_INFO(ss.str());
-    }
-
-    // *************************************************************************
-    // Materials
-    // *************************************************************************
-    ComPtr<ID3D12Resource>        materialParamsBuffer;
-    MaterialTextures              defaultMaterialTextures = {};
-    std::vector<MaterialTextures> materialTexturesSets    = {};
-    CreateCameraMaterials(
+    uint32_t               materialSphereNumIndices = 0;
+    ComPtr<ID3D12Resource> materialSphereIndexBuffer;
+    ComPtr<ID3D12Resource> materialSpherePositionBuffer;
+    ComPtr<ID3D12Resource> materialSphereNormalBuffer;
+    CreateMaterialSphereVertexBuffers(
         renderer.get(),
-        mesh.get(),
-        GetAssetPath(fs::path(modelDir)),
-        &materialParamsBuffer,
-        defaultMaterialTextures,
-        materialTexturesSets);
-
-    // *************************************************************************
-    // Environment texture
-    // *************************************************************************
-    ComPtr<ID3D12Resource> brdfLUT;
-    ComPtr<ID3D12Resource> irrTexture;
-    ComPtr<ID3D12Resource> envTexture;
-    uint32_t               envNumLevels = 0;
-    CreateIBLTextures(renderer.get(), &brdfLUT, &irrTexture, &envTexture, &envNumLevels);
-
-    // *************************************************************************
-    // Descriptor heap
-    // *************************************************************************
-    ComPtr<ID3D12DescriptorHeap> descriptorHeap;
-    CreateDescriptorHeap(renderer.get(), &descriptorHeap);
-    {
-        D3D12_CPU_DESCRIPTOR_HANDLE descriptor = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
-        // IBL integration LUT
-        CreateDescriptorTexture2D(renderer.get(), brdfLUT.Get(), descriptor);
-        descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        // Irradiance map
-        CreateDescriptorTexture2D(renderer.get(), irrTexture.Get(), descriptor);
-        descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        // Environment map
-        CreateDescriptorTexture2D(renderer.get(), envTexture.Get(), descriptor, 0, envNumLevels);
-        descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-        // Material textures
-        for (auto& materialTextures : materialTexturesSets) {
-            // Albedo
-            CreateDescriptorTexture2D(renderer.get(), materialTextures.baseColorTexture.Get(), descriptor);
-            descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            // Normal
-            CreateDescriptorTexture2D(renderer.get(), materialTextures.normalTexture.Get(), descriptor);
-            descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            // Roughness
-            CreateDescriptorTexture2D(renderer.get(), materialTextures.roughnessTexture.Get(), descriptor);
-            descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            // Metalness
-            CreateDescriptorTexture2D(renderer.get(), materialTextures.metallicTexture.Get(), descriptor);
-            descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            // Ambient Occlusion
-            CreateDescriptorTexture2D(renderer.get(), materialTextures.aoTexture.Get(), descriptor);
-            descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        }
-    }
-
-    // *************************************************************************
-    // Camera Vertex buffers
-    // *************************************************************************
-    std::vector<DrawParameters> cameraDrawParams    = {};
-    VertexBuffers               cameraVertexBuffers = {};
-    CreateCameraVertexBuffers(
-        renderer.get(),
-        mesh.get(),
-        cameraDrawParams,
-        cameraVertexBuffers);
+        &materialSphereNumIndices,
+        &materialSphereIndexBuffer,
+        &materialSpherePositionBuffer,
+        &materialSphereNormalBuffer);
 
     // *************************************************************************
     // Environment vertex buffers
@@ -378,9 +259,38 @@ int main(int argc, char** argv)
         &envTexCoordBuffer);
 
     // *************************************************************************
+    // IBL texture
+    // *************************************************************************
+    ComPtr<ID3D12Resource> brdfLUT;
+    ComPtr<ID3D12Resource> irrTexture;
+    ComPtr<ID3D12Resource> envTexture;
+    uint32_t               envNumLevels = 0;
+    CreateIBLTextures(renderer.get(), &brdfLUT, &irrTexture, &envTexture, &envNumLevels);
+
+    // *************************************************************************
+    // Descriptor heaps
+    // *************************************************************************
+    ComPtr<ID3D12DescriptorHeap> descriptorHeap;
+    CreateDescriptorHeap(renderer.get(), &descriptorHeap);
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE descriptor = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+
+        // LUT
+        CreateDescriptorTexture2D(renderer.get(), brdfLUT.Get(), descriptor);
+        descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+        // Irradiance
+        CreateDescriptorTexture2D(renderer.get(), irrTexture.Get(), descriptor);
+        descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+        // Environment
+        CreateDescriptorTexture2D(renderer.get(), envTexture.Get(), descriptor, 0, envNumLevels);
+    }
+
+    // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "203_pbr_camera_d3d12");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "205_pbr_align_d3d12");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -452,9 +362,9 @@ int main(int argc, char** argv)
         CHECK_CALL(commandAllocator->Reset());
         CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
 
-        // Set descriptor heaps
-        ID3D12DescriptorHeap* pDescriptorHeaps[12] = {descriptorHeap.Get()};
-        commandList->SetDescriptorHeaps(1, pDescriptorHeaps);
+        // Descriptor heap
+        ID3D12DescriptorHeap* heaps[1] = {descriptorHeap.Get()};
+        commandList->SetDescriptorHeaps(1, heaps);
 
         D3D12_RESOURCE_BARRIER preRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
         commandList->ResourceBarrier(1, &preRenderBarrier);
@@ -480,28 +390,29 @@ int main(int argc, char** argv)
             gAngle += (gTargetAngle - gAngle) * 0.1f;
 
             // Camera matrices
-            vec3 eyePosition = vec3(0, 4.5f, 8);
-            mat4 modelMat    = glm::rotate(glm::radians(gAngle), vec3(0, 1, 0));
-            mat4 viewMat     = glm::lookAt(eyePosition, vec3(0, -0.25f, 0), vec3(0, 1, 0));
-            mat4 projMat     = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+            mat4 transformEyeMat     = glm::rotate(glm::radians(-gAngle), vec3(0, 1, 0));
+            vec3 startingEyePosition = vec3(0, 0, 4);
+            vec3 eyePosition         = transformEyeMat * vec4(startingEyePosition, 1);
+            mat4 viewMat             = glm::lookAt(eyePosition, vec3(0, 0, 0), vec3(0, 1, 0));
+            mat4 projMat             = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
 
             // Set constant buffer values
-            pSceneParams->viewProjectionMatrix = projMat * viewMat;
-            pSceneParams->eyePosition          = eyePosition;
-            pSceneParams->numLights            = gNumLights;
-            pSceneParams->lights[0].position   = vec3(5, 7, 32);
-            pSceneParams->lights[0].color      = vec3(1.00f, 0.70f, 0.00f);
-            pSceneParams->lights[0].intensity  = 0.2f;
-            pSceneParams->lights[1].position   = vec3(-8, 1, 4);
-            pSceneParams->lights[1].color      = vec3(1.00f, 0.00f, 0.00f);
-            pSceneParams->lights[1].intensity  = 0.4f;
-            pSceneParams->lights[2].position   = vec3(0, 8, -8);
-            pSceneParams->lights[2].color      = vec3(0.00f, 1.00f, 0.00f);
-            pSceneParams->lights[2].intensity  = 0.4f;
-            pSceneParams->lights[3].position   = vec3(15, 8, 0);
-            pSceneParams->lights[3].color      = vec3(0.00f, 0.00f, 1.00f);
-            pSceneParams->lights[3].intensity  = 0.4f;
-            pSceneParams->iblEnvNumLevels      = envNumLevels;
+            pSceneParams->viewProjectionMatrix    = projMat * viewMat;
+            pSceneParams->eyePosition             = eyePosition;
+            pSceneParams->numLights               = gNumLights;
+            pSceneParams->lights[0].position      = vec3(5, 7, 32);
+            pSceneParams->lights[0].color         = vec3(0.98f, 0.85f, 0.71f);
+            pSceneParams->lights[0].intensity     = 0.5f;
+            pSceneParams->lights[1].position      = vec3(-8, 1, 4);
+            pSceneParams->lights[1].color         = vec3(1.00f, 0.00f, 0.00f);
+            pSceneParams->lights[1].intensity     = 0.5f;
+            pSceneParams->lights[2].position      = vec3(0, 8, -8);
+            pSceneParams->lights[2].color         = vec3(0.00f, 1.00f, 0.00f);
+            pSceneParams->lights[2].intensity     = 0.5f;
+            pSceneParams->lights[3].position      = vec3(15, 8, 0);
+            pSceneParams->lights[3].color         = vec3(0.00f, 0.00f, 1.00f);
+            pSceneParams->lights[3].intensity     = 0.5f;
+            pSceneParams->iblEnvironmentNumLevels = envNumLevels;
 
             // Draw environment
             {
@@ -542,62 +453,116 @@ int main(int argc, char** argv)
                 commandList->DrawIndexedInstanced(envNumIndices, 1, 0, 0, 0);
             }
 
-            // Draw camera
+            // Draw material sphere
             {
                 commandList->SetGraphicsRootSignature(pbrRootSig.Get());
                 // SceneParams (b0)
                 commandList->SetGraphicsRootConstantBufferView(0, constantBuffer->GetGPUVirtualAddress());
-                // MaterialParams (t2)
-                commandList->SetGraphicsRootShaderResourceView(2, materialParamsBuffer->GetGPUVirtualAddress());
                 // IBL textures (t3, t4, t5)
-                D3D12_GPU_DESCRIPTOR_HANDLE tableStart = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
                 commandList->SetGraphicsRootDescriptorTable(3, descriptorHeap->GetGPUDescriptorHandleForHeapStart());
-                // MaterialTextures (t10)
-                tableStart.ptr += 3 * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-                commandList->SetGraphicsRootDescriptorTable(4, tableStart);
+
+                // Index buffer
+                D3D12_INDEX_BUFFER_VIEW ibv = {};
+                ibv.BufferLocation          = materialSphereIndexBuffer->GetGPUVirtualAddress();
+                ibv.SizeInBytes             = static_cast<UINT>(materialSphereIndexBuffer->GetDesc().Width);
+                ibv.Format                  = DXGI_FORMAT_R32_UINT;
+                commandList->IASetIndexBuffer(&ibv);
 
                 // Vertex buffers
-                D3D12_VERTEX_BUFFER_VIEW vbvs[5] = {};
+                D3D12_VERTEX_BUFFER_VIEW vbvs[2] = {};
                 // Position
-                vbvs[0].BufferLocation = cameraVertexBuffers.positionBuffer->GetGPUVirtualAddress();
-                vbvs[0].SizeInBytes    = static_cast<UINT>(cameraVertexBuffers.positionBuffer->GetDesc().Width);
+                vbvs[0].BufferLocation = materialSpherePositionBuffer->GetGPUVirtualAddress();
+                vbvs[0].SizeInBytes    = static_cast<UINT>(materialSpherePositionBuffer->GetDesc().Width);
                 vbvs[0].StrideInBytes  = 12;
-                // TexCoord
-                vbvs[1].BufferLocation = cameraVertexBuffers.texCoordBuffer->GetGPUVirtualAddress();
-                vbvs[1].SizeInBytes    = static_cast<UINT>(cameraVertexBuffers.texCoordBuffer->GetDesc().Width);
-                vbvs[1].StrideInBytes  = 8;
                 // Normal
-                vbvs[2].BufferLocation = cameraVertexBuffers.normalBuffer->GetGPUVirtualAddress();
-                vbvs[2].SizeInBytes    = static_cast<UINT>(cameraVertexBuffers.normalBuffer->GetDesc().Width);
-                vbvs[2].StrideInBytes  = 12;
-                // Tangent
-                vbvs[3].BufferLocation = cameraVertexBuffers.tangentBuffer->GetGPUVirtualAddress();
-                vbvs[3].SizeInBytes    = static_cast<UINT>(cameraVertexBuffers.tangentBuffer->GetDesc().Width);
-                vbvs[3].StrideInBytes  = 12;
-                // Bitangent
-                vbvs[4].BufferLocation = cameraVertexBuffers.bitangentBuffer->GetGPUVirtualAddress();
-                vbvs[4].SizeInBytes    = static_cast<UINT>(cameraVertexBuffers.bitangentBuffer->GetDesc().Width);
-                vbvs[4].StrideInBytes  = 12;
+                vbvs[1].BufferLocation = materialSphereNormalBuffer->GetGPUVirtualAddress();
+                vbvs[1].SizeInBytes    = static_cast<UINT>(materialSphereNormalBuffer->GetDesc().Width);
+                vbvs[1].StrideInBytes  = 12;
 
-                commandList->IASetVertexBuffers(0, 5, vbvs);
+                commandList->IASetVertexBuffers(0, 2, vbvs);
                 commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
                 // Pipeline state
                 commandList->SetPipelineState(pbrPipelineState.Get());
 
-                for (auto& draw : cameraDrawParams) {
-                    // Index buffer
-                    D3D12_INDEX_BUFFER_VIEW ibv = {};
-                    ibv.BufferLocation          = draw.indexBuffer->GetGPUVirtualAddress();
-                    ibv.SizeInBytes             = static_cast<UINT>(draw.indexBuffer->GetDesc().Width);
-                    ibv.Format                  = DXGI_FORMAT_R32_UINT;
-                    commandList->IASetIndexBuffer(&ibv);
+                // Shiny pastic
+                {
+                    MaterialParameters materialParams = {};
+                    materialParams.baseColor          = vec3(1.0f, 1.0f, 1.0f);
+                    materialParams.roughness          = 0;
+                    materialParams.metallic           = 0;
 
+                    float x = -2.25f;
+                    float y = 0;
+                    float z = 0;
+
+                    glm::mat4 modelMat = glm::translate(vec3(x, y, z));
                     // DrawParams (b1)
                     commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
-                    commandList->SetGraphicsRoot32BitConstants(1, 1, &draw.materialIndex, 16);
+                    // MaterialParams (b2)
+                    commandList->SetGraphicsRoot32BitConstants(2, 8, &materialParams, 0);
 
-                    commandList->DrawIndexedInstanced(draw.numIndices, 1, 0, 0, 0);
+                    commandList->DrawIndexedInstanced(materialSphereNumIndices, 1, 0, 0, 0);
+                }
+
+                // Rough plastic
+                {
+                    MaterialParameters materialParams = {};
+                    materialParams.baseColor          = vec3(1.0f, 1.0f, 1.0f);
+                    materialParams.roughness          = 1;
+                    materialParams.metallic           = 0;
+
+                    float x = -0.75f;
+                    float y = 0;
+                    float z = 0;
+
+                    glm::mat4 modelMat = glm::translate(vec3(x, y, z));
+                    // DrawParams (b1)
+                    commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
+                    // MaterialParams (b2)
+                    commandList->SetGraphicsRoot32BitConstants(2, 8, &materialParams, 0);
+
+                    commandList->DrawIndexedInstanced(materialSphereNumIndices, 1, 0, 0, 0);
+                }
+
+                // Shiny metal
+                {
+                    MaterialParameters materialParams = {};
+                    materialParams.baseColor          = F0_MetalGold;
+                    materialParams.roughness          = 0;
+                    materialParams.metallic           = 1;
+
+                    float x = 0.75f;
+                    float y = 0;
+                    float z = 0;
+
+                    glm::mat4 modelMat = glm::translate(vec3(x, y, z));
+                    // DrawParams (b1)
+                    commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
+                    // MaterialParams (b2)
+                    commandList->SetGraphicsRoot32BitConstants(2, 8, &materialParams, 0);
+
+                    commandList->DrawIndexedInstanced(materialSphereNumIndices, 1, 0, 0, 0);
+                }
+
+                // Rough metal
+                {
+                    MaterialParameters materialParams = {};
+                    materialParams.baseColor          = vec3(0.5f, 0.5f, 0.5f);
+                    materialParams.roughness          = 1;
+                    materialParams.metallic           = 1;
+
+                    float x = 2.25f;
+                    float y = 0;
+                    float z = 0;
+
+                    glm::mat4 modelMat = glm::translate(vec3(x, y, z));
+                    // DrawParams (b1)
+                    commandList->SetGraphicsRoot32BitConstants(1, 16, &modelMat, 0);
+                    // MaterialParams (b2)
+                    commandList->SetGraphicsRoot32BitConstants(2, 8, &materialParams, 0);
+
+                    commandList->DrawIndexedInstanced(materialSphereNumIndices, 1, 0, 0, 0);
                 }
             }
 
@@ -627,25 +592,17 @@ int main(int argc, char** argv)
     return 0;
 }
 
-void CreateRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
+void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 {
     // IBL textures (t3, t4, t5)
-    D3D12_DESCRIPTOR_RANGE iblRange            = {};
-    iblRange.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    iblRange.NumDescriptors                    = 3;
-    iblRange.BaseShaderRegister                = 3;
-    iblRange.RegisterSpace                     = 0;
-    iblRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    D3D12_DESCRIPTOR_RANGE range            = {};
+    range.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    range.NumDescriptors                    = 3;
+    range.BaseShaderRegister                = 3;
+    range.RegisterSpace                     = 0;
+    range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    // MaterialTextures (t10)
-    D3D12_DESCRIPTOR_RANGE materialRange            = {};
-    materialRange.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    materialRange.NumDescriptors                    = 10;
-    materialRange.BaseShaderRegister                = 10;
-    materialRange.RegisterSpace                     = 0;
-    materialRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-    D3D12_ROOT_PARAMETER rootParameters[5] = {};
+    D3D12_ROOT_PARAMETER rootParameters[4] = {};
     // SceneParams (b0)
     rootParameters[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[0].Descriptor.ShaderRegister = 0;
@@ -653,28 +610,24 @@ void CreateRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     rootParameters[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
     // DrawParams (b1)
     rootParameters[1].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    rootParameters[1].Constants.Num32BitValues = 17;
+    rootParameters[1].Constants.Num32BitValues = 16;
     rootParameters[1].Constants.ShaderRegister = 1;
     rootParameters[1].Constants.RegisterSpace  = 0;
     rootParameters[1].ShaderVisibility         = D3D12_SHADER_VISIBILITY_ALL;
     // MaterialParams (t2)
-    rootParameters[2].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[2].Descriptor.ShaderRegister = 2;
-    rootParameters[2].Descriptor.RegisterSpace  = 0;
-    rootParameters[2].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[2].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    rootParameters[2].Constants.Num32BitValues = 8;
+    rootParameters[2].Constants.ShaderRegister = 2;
+    rootParameters[2].Constants.RegisterSpace  = 0;
+    rootParameters[2].ShaderVisibility         = D3D12_SHADER_VISIBILITY_ALL;
     // IBL textures (t3, t4, t5)
     rootParameters[3].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[3].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[3].DescriptorTable.pDescriptorRanges   = &iblRange;
-    rootParameters[3].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_PIXEL;
-    // MaterialTextures (t10)
-    rootParameters[4].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[4].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[4].DescriptorTable.pDescriptorRanges   = &materialRange;
-    rootParameters[4].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[3].DescriptorTable.pDescriptorRanges   = &range;
+    rootParameters[3].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
 
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[3] = {};
-    // IBLIntegrationSampler (s6)
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {};
+    // ClampedSampler (s6)
     staticSamplers[0].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
     staticSamplers[0].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[0].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -687,12 +640,12 @@ void CreateRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     staticSamplers[0].ShaderRegister   = 6;
     staticSamplers[0].RegisterSpace    = 0;
     staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    // IBLMapSampler (s7)
+    // UWrapSampler (s7)
     staticSamplers[1].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
     staticSamplers[1].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[1].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[1].MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
+    staticSamplers[1].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[1].MipLODBias       = 0.5f; // D3D12_DEFAULT_MIP_LOD_BIAS;
     staticSamplers[1].MaxAnisotropy    = 0;
     staticSamplers[1].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     staticSamplers[1].MinLOD           = 0;
@@ -700,24 +653,11 @@ void CreateRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     staticSamplers[1].ShaderRegister   = 7;
     staticSamplers[1].RegisterSpace    = 0;
     staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    // MaterialSampler (s9)
-    staticSamplers[2].Filter           = D3D12_FILTER_MIN_MAG_MIP_POINT;
-    staticSamplers[2].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[2].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[2].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[2].MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
-    staticSamplers[2].MaxAnisotropy    = 0;
-    staticSamplers[2].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    staticSamplers[2].MinLOD           = 0;
-    staticSamplers[2].MaxLOD           = 1;
-    staticSamplers[2].ShaderRegister   = 9;
-    staticSamplers[2].RegisterSpace    = 0;
-    staticSamplers[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-    rootSigDesc.NumParameters             = 5;
+    rootSigDesc.NumParameters             = 4;
     rootSigDesc.pParameters               = rootParameters;
-    rootSigDesc.NumStaticSamplers         = 3;
+    rootSigDesc.NumStaticSamplers         = 2;
     rootSigDesc.pStaticSamplers           = staticSamplers;
     rootSigDesc.Flags                     = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
@@ -733,7 +673,7 @@ void CreateRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 
 void CreateEnvironmentRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 {
-    // Textures (t2)
+    // IBLEnvironmentMap (t2)
     D3D12_DESCRIPTOR_RANGE range            = {};
     range.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     range.NumDescriptors                    = 1;
@@ -744,27 +684,27 @@ void CreateEnvironmentRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRoo
     D3D12_ROOT_PARAMETER rootParameters[4] = {};
     // SceneParams (b0)
     rootParameters[0].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    rootParameters[0].Constants.Num32BitValues = 17;
+    rootParameters[0].Constants.Num32BitValues = 16;
     rootParameters[0].Constants.ShaderRegister = 0;
     rootParameters[0].Constants.RegisterSpace  = 0;
     rootParameters[0].ShaderVisibility         = D3D12_SHADER_VISIBILITY_ALL;
-    // Textures (t2)
+    // IBLEnvironmentMap (t2)
     rootParameters[1].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
     rootParameters[1].DescriptorTable.pDescriptorRanges   = &range;
     rootParameters[1].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
 
     D3D12_STATIC_SAMPLER_DESC staticSampler = {};
-    // Sampler0 (s1)
+    // IBLMapSampler (s1)
     staticSampler.Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSampler.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSampler.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSampler.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSampler.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSampler.MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
     staticSampler.MaxAnisotropy    = 0;
-    staticSampler.ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    staticSampler.ComparisonFunc   = D3D12_COMPARISON_FUNC_NEVER;
     staticSampler.MinLOD           = 0;
-    staticSampler.MaxLOD           = 1;
+    staticSampler.MaxLOD           = D3D12_FLOAT32_MAX;
     staticSampler.ShaderRegister   = 1;
     staticSampler.RegisterSpace    = 0;
     staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
@@ -786,120 +726,64 @@ void CreateEnvironmentRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRoo
         IID_PPV_ARGS(ppRootSig))); // riid, ppvRootSignature
 }
 
-void CreateCameraMaterials(
-    DxRenderer*                    pRenderer,
-    const TriMesh*                 pMesh,
-    const fs::path&                textureDir,
-    ID3D12Resource**               ppMaterialParamsBuffer,
-    MaterialTextures&              outDefaultMaterialTextures,
-    std::vector<MaterialTextures>& outMatrialTexturesSets)
+void CreateMaterialSphereVertexBuffers(
+    DxRenderer*      pRenderer,
+    uint32_t*        pNumIndices,
+    ID3D12Resource** ppIndexBuffer,
+    ID3D12Resource** ppPositionBuffer,
+    ID3D12Resource** ppNormalBuffer)
 {
-    // Default material textures
-    {
-        PixelRGBA8u purplePixel = {0, 0, 0, 255};
-        PixelRGBA8u blackPixel  = {0, 0, 0, 255};
-        PixelRGBA8u whitePixel  = {255, 255, 255, 255};
+    TriMesh mesh = TriMesh::Sphere(0.6f, 256, 256, {.enableNormals = true});
 
-        CHECK_CALL(CreateTexture(pRenderer, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &purplePixel, &outDefaultMaterialTextures.baseColorTexture));
-        CHECK_CALL(CreateTexture(pRenderer, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &blackPixel, &outDefaultMaterialTextures.normalTexture));
-        CHECK_CALL(CreateTexture(pRenderer, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &blackPixel, &outDefaultMaterialTextures.roughnessTexture));
-        CHECK_CALL(CreateTexture(pRenderer, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &blackPixel, &outDefaultMaterialTextures.metallicTexture));
-        CHECK_CALL(CreateTexture(pRenderer, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &whitePixel, &outDefaultMaterialTextures.aoTexture));
-    }
-
-    // Materials
-    std::vector<MaterialParameters> materialParamsList;
-    for (uint32_t materialIndex = 0; materialIndex < pMesh->GetNumMaterials(); ++materialIndex) {
-        auto& material = pMesh->GetMaterial(materialIndex);
-
-        // Material params
-        MaterialParameters materialParams = {};
-        if (material.name == "LensMaterial") {
-            materialParams.UseGeometricNormal = 1;
-        }
-        materialParamsList.push_back(materialParams);
-
-        // Material textures
-        MaterialTextures materialTextures = outDefaultMaterialTextures;
-        if (!material.albedoTexture.empty()) {
-            BitmapRGBA8u bitmap = LoadImage8u(textureDir / material.albedoTexture);
-            if (bitmap.GetSizeInBytes() == 0) {
-                assert(false && "texture load (albedo) false");
-            }
-            CHECK_CALL(CreateTexture(
-                pRenderer,
-                bitmap.GetWidth(),
-                bitmap.GetHeight(),
-                DXGI_FORMAT_R8G8B8A8_UNORM,
-                bitmap.GetSizeInBytes(),
-                bitmap.GetPixels(),
-                &materialTextures.baseColorTexture));
-        }
-        if (!material.normalTexture.empty()) {
-            BitmapRGBA8u bitmap = LoadImage8u(textureDir / material.normalTexture);
-            if (bitmap.GetSizeInBytes() == 0) {
-                assert(false && "texture load (normal) false");
-            }
-            CHECK_CALL(CreateTexture(
-                pRenderer,
-                bitmap.GetWidth(),
-                bitmap.GetHeight(),
-                DXGI_FORMAT_R8G8B8A8_UNORM,
-                bitmap.GetSizeInBytes(),
-                bitmap.GetPixels(),
-                &materialTextures.normalTexture));
-        }
-        if (!material.roughnessTexture.empty()) {
-            BitmapRGBA8u bitmap = LoadImage8u(textureDir / material.roughnessTexture);
-            if (bitmap.GetSizeInBytes() == 0) {
-                assert(false && "texture load (roughness) false");
-            }
-            CHECK_CALL(CreateTexture(
-                pRenderer,
-                bitmap.GetWidth(),
-                bitmap.GetHeight(),
-                DXGI_FORMAT_R8G8B8A8_UNORM,
-                bitmap.GetSizeInBytes(),
-                bitmap.GetPixels(),
-                &materialTextures.roughnessTexture));
-        }
-        if (!material.metalnessTexture.empty()) {
-            BitmapRGBA8u bitmap = LoadImage8u(textureDir / material.metalnessTexture);
-            if (bitmap.GetSizeInBytes() == 0) {
-                assert(false && "texture load (metalness) false");
-            }
-            CHECK_CALL(CreateTexture(
-                pRenderer,
-                bitmap.GetWidth(),
-                bitmap.GetHeight(),
-                DXGI_FORMAT_R8G8B8A8_UNORM,
-                bitmap.GetSizeInBytes(),
-                bitmap.GetPixels(),
-                &materialTextures.metallicTexture));
-        }
-        if (!material.aoTexture.empty()) {
-            BitmapRGBA8u bitmap = LoadImage8u(textureDir / material.aoTexture);
-            if (bitmap.GetSizeInBytes() == 0) {
-                assert(false && "texture load (ambient occlusion) false");
-            }
-            CHECK_CALL(CreateTexture(
-                pRenderer,
-                bitmap.GetWidth(),
-                bitmap.GetHeight(),
-                DXGI_FORMAT_R8G8B8A8_UNORM,
-                bitmap.GetSizeInBytes(),
-                bitmap.GetPixels(),
-                &materialTextures.aoTexture));
-        }
-
-        outMatrialTexturesSets.push_back(materialTextures);
-    }
+    *pNumIndices = 3 * mesh.GetNumTriangles();
 
     CHECK_CALL(CreateBuffer(
         pRenderer,
-        SizeInBytes(materialParamsList),
-        DataPtr(materialParamsList),
-        ppMaterialParamsBuffer));
+        SizeInBytes(mesh.GetTriangles()),
+        DataPtr(mesh.GetTriangles()),
+        ppIndexBuffer));
+
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(mesh.GetPositions()),
+        DataPtr(mesh.GetPositions()),
+        ppPositionBuffer));
+
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(mesh.GetNormals()),
+        DataPtr(mesh.GetNormals()),
+        ppNormalBuffer));
+}
+
+void CreateEnvironmentVertexBuffers(
+    DxRenderer*      pRenderer,
+    uint32_t*        pNumIndices,
+    ID3D12Resource** ppIndexBuffer,
+    ID3D12Resource** ppPositionBuffer,
+    ID3D12Resource** ppTexCoordBuffer)
+{
+    TriMesh mesh = TriMesh::Sphere(100, 64, 64, {.enableTexCoords = true, .faceInside = true});
+
+    *pNumIndices = 3 * mesh.GetNumTriangles();
+
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(mesh.GetTriangles()),
+        DataPtr(mesh.GetTriangles()),
+        ppIndexBuffer));
+
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(mesh.GetPositions()),
+        DataPtr(mesh.GetPositions()),
+        ppPositionBuffer));
+
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(mesh.GetTexCoords()),
+        DataPtr(mesh.GetTexCoords()),
+        ppTexCoordBuffer));
 }
 
 void CreateIBLTextures(
@@ -929,7 +813,7 @@ void CreateIBLTextures(
     }
 
     // IBL file
-    auto iblFile = GetAssetPath("IBL/palermo_square_4k.ibl");
+    auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
 
     IBLMaps ibl = {};
     if (!LoadIBLMaps32f(iblFile, &ibl)) {
@@ -995,89 +879,7 @@ void CreateDescriptorHeap(
     desc.NumDescriptors             = 256;
     desc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 
-    CHECK_CALL(pRenderer->Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(ppHeap)));
-}
-
-void CreateCameraVertexBuffers(
-    DxRenderer*                  pRenderer,
-    const TriMesh*               pMesh,
-    std::vector<DrawParameters>& outDrawParams,
-    VertexBuffers&               outVertexBuffers)
-{
-    // Group draws based on material indices
-    for (uint32_t materialIndex = 0; materialIndex < pMesh->GetNumMaterials(); ++materialIndex) {
-        auto triangles = pMesh->GetTrianglesForMaterial(materialIndex);
-
-        DrawParameters params = {};
-        params.numIndices     = static_cast<uint32_t>(3 * triangles.size());
-        params.materialIndex  = materialIndex;
-
-        CHECK_CALL(CreateBuffer(
-            pRenderer,
-            SizeInBytes(triangles),
-            DataPtr(triangles),
-            &params.indexBuffer));
-
-        outDrawParams.push_back(params);
-    }
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(pMesh->GetPositions()),
-        DataPtr(pMesh->GetPositions()),
-        &outVertexBuffers.positionBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(pMesh->GetTexCoords()),
-        DataPtr(pMesh->GetTexCoords()),
-        &outVertexBuffers.texCoordBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(pMesh->GetNormals()),
-        DataPtr(pMesh->GetNormals()),
-        &outVertexBuffers.normalBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(pMesh->GetTangents()),
-        DataPtr(pMesh->GetTangents()),
-        &outVertexBuffers.tangentBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(pMesh->GetBitangents()),
-        DataPtr(pMesh->GetBitangents()),
-        &outVertexBuffers.bitangentBuffer));
-}
-
-void CreateEnvironmentVertexBuffers(
-    DxRenderer*      pRenderer,
-    uint32_t*        pNumIndices,
-    ID3D12Resource** ppIndexBuffer,
-    ID3D12Resource** ppPositionBuffer,
-    ID3D12Resource** ppTexCoordBuffer)
-{
-    TriMesh mesh = TriMesh::Sphere(100, 64, 64, {.enableTexCoords = true, .faceInside = true});
-
-    *pNumIndices = 3 * mesh.GetNumTriangles();
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTriangles()),
-        DataPtr(mesh.GetTriangles()),
-        ppIndexBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetPositions()),
-        DataPtr(mesh.GetPositions()),
-        ppPositionBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTexCoords()),
-        DataPtr(mesh.GetTexCoords()),
-        ppTexCoordBuffer));
+    CHECK_CALL(pRenderer->Device->CreateDescriptorHeap(
+        &desc,
+        IID_PPV_ARGS(ppHeap)));
 }

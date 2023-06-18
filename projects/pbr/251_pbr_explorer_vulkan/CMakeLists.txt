@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.0)
 
-project(256_pbr_material_textures_vulkan)
+project(251_pbr_explorer_vulkan)
 
 add_executable(
-    256_pbr_material_textures_vulkan
-    256_pbr_material_textures_vulkan.cpp
+    251_pbr_explorer_vulkan
+    251_pbr_explorer_vulkan.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.cpp
@@ -17,20 +17,17 @@ add_executable(
     ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/resource_limits_c.cpp
     ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/ResourceLimits.cpp
     ${IMGUI_VULKAN_FILES}
-    ${GREX_THIRD_PARTY_DIR}/MikkTSpace/mikktspace.h
-    ${GREX_THIRD_PARTY_DIR}/MikkTSpace/mikktspace.c
 )
 
-set_target_properties(256_pbr_material_textures_vulkan PROPERTIES FOLDER "pbr")
+set_target_properties(251_pbr_explorer_vulkan PROPERTIES FOLDER "pbr")
 
 target_compile_definitions(
-    256_pbr_material_textures_vulkan
+    251_pbr_explorer_vulkan
     PUBLIC ENABLE_IMGUI_VULKAN
-           TRIMESH_USE_MIKKTSPACE
 )
 
 target_include_directories(
-    256_pbr_material_textures_vulkan
+    251_pbr_explorer_vulkan
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
            ${GREX_THIRD_PARTY_DIR}/glslang # This needs to come before ${VULKAN_INCLUDE_DIR}
 		   ${VULKAN_INCLUDE_DIR}
@@ -38,12 +35,11 @@ target_include_directories(
            ${GREX_THIRD_PARTY_DIR}/glm
            ${GREX_THIRD_PARTY_DIR}/stb
            ${GREX_THIRD_PARTY_DIR}/tinyobjloader
-           ${IMGUI_INC_DIR}
-           ${GREX_THIRD_PARTY_DIR}/MikkTSpace
+            ${IMGUI_INC_DIR}
 )
 
 target_link_libraries(
-    256_pbr_material_textures_vulkan
+    251_pbr_explorer_vulkan
     PUBLIC glfw
            glslang
            SPIRV
@@ -52,12 +48,12 @@ target_link_libraries(
 
 if(WIN32)
     target_compile_definitions(
-        256_pbr_material_textures_vulkan
+        251_pbr_explorer_vulkan
         PUBLIC VK_USE_PLATFORM_WIN32_KHR
     )
 
     target_link_libraries(
-        256_pbr_material_textures_vulkan
+        251_pbr_explorer_vulkan
         PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
     )
 endif()
