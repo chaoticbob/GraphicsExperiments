@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.0)
 
-project(106_cone_vulkan)
+project(102_cornell_box_vulkan)
 
 add_executable(
-    106_cone_vulkan
-    106_cone_vulkan.cpp
+    102_cornell_box_vulkan
+    102_cornell_box_vulkan.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.cpp
@@ -16,10 +16,10 @@ add_executable(
     ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/ResourceLimits.cpp
 )
 
-set_target_properties(106_cone_vulkan PROPERTIES FOLDER "geometry")
+set_target_properties(102_cornell_box_vulkan PROPERTIES FOLDER "geometry")
 
 target_include_directories(
-    106_cone_vulkan
+    102_cornell_box_vulkan
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
            ${GREX_THIRD_PARTY_DIR}/glslang # This needs to come before ${VULKAN_INCLUDE_DIR}
            ${VULKAN_INCLUDE_DIR}
@@ -30,7 +30,7 @@ target_include_directories(
 )
 
 target_link_libraries(
-    106_cone_vulkan
+    102_cornell_box_vulkan
     PUBLIC glfw
            glslang
            SPIRV
@@ -39,12 +39,12 @@ target_link_libraries(
 
 if(WIN32)
     target_compile_definitions(
-		106_cone_vulkan
-		PUBLIC VK_USE_PLATFORM_WIN32_KHR
-	)
+        102_cornell_box_vulkan
+        PUBLIC VK_USE_PLATFORM_WIN32_KHR
+    )
 
-	target_link_libraries(
-		106_cone_vulkan
-		PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
-	)
+    target_link_libraries(
+        102_cornell_box_vulkan
+        PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
+    )
 endif()
