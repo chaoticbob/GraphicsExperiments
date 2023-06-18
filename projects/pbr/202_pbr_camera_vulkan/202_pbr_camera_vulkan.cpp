@@ -437,7 +437,7 @@ int main(int argc, char** argv)
    // *************************************************************************
    // Window
    // *************************************************************************
-   auto window = Window::Create(gWindowWidth, gWindowHeight, "204_pbr_camera_vulkan");
+   auto window = Window::Create(gWindowWidth, gWindowHeight, "202_pbr_camera_vulkan");
    if (!window) {
       assert(false && "Window::Create failed");
       return EXIT_FAILURE;

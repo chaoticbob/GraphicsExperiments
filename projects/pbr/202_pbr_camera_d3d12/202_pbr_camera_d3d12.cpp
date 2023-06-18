@@ -380,7 +380,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "203_pbr_camera_d3d12");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "202_pbr_camera_d3d12");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
