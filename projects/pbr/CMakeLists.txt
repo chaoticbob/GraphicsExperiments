@@ -14,6 +14,10 @@ if (GREX_ENABLE_D3D12)
     add_subdirectory(255_pbr_material_textures_d3d12)
 endif()
 
+if (GREX_ENABLE_METAL)
+    add_subdirectory(201_pbr_spheres_metal)
+endif()
+
 if (GREX_ENABLE_VULKAN)
     add_subdirectory(202_pbr_spheres_vulkan)
     add_subdirectory(204_pbr_camera_vulkan)

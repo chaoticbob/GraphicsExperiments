@@ -8,6 +8,14 @@
 #include "mtl_renderer.h"
 #include "mtl_renderer_utils.h"
 
+uint32_t BitsPerPixel(MTL::PixelFormat fmt);
+
+uint32_t PixelStride(MTL::PixelFormat fmt)
+{
+	uint32_t nbytes = BitsPerPixel(fmt) / 8;
+	return nbytes;
+}
+
 // =================================================================================================
 // MetalRenderer
 // =================================================================================================
@@ -118,6 +126,67 @@ NS::Error* CreateBuffer(
     }
 
     return nullptr;
+}
+
+NS::Error* CreateTexture(
+    MetalRenderer*                pRenderer,
+    uint32_t                      width,
+    uint32_t                     height,
+    MTL::PixelFormat              format,
+    const std::vector<MipOffset>& mipOffsets,
+    uint64_t                      srcSizeBytes,
+    const void*                   pSrcData,
+    MetalTexture*                 pResource)
+{
+    auto pTextureDesc = NS::TransferPtr(MTL::TextureDescriptor::alloc()->init());
+    pTextureDesc->setWidth(width);
+    pTextureDesc->setHeight(height);
+    pTextureDesc->setPixelFormat(format);
+    pTextureDesc->setTextureType(MTL::TextureType2D);
+    pTextureDesc->setStorageMode(MTL::StorageModeManaged);
+    pTextureDesc->setUsage(MTL::ResourceUsageSample | MTL::ResourceUsageRead);
+   pTextureDesc->setMipmapLevelCount(CountU32(mipOffsets));
+
+    pResource->Texture = NS::TransferPtr(pRenderer->Device->newTexture(pTextureDesc.get()));
+
+    uint32_t mipIndex  = 0;
+    uint32_t mipWidth  = width;
+    uint32_t mipHeight = height;
+    for (const auto& mipOffset : mipOffsets) {
+        auto        region         = MTL::Region::Make2D(0, 0, mipWidth, mipHeight);
+        const void* mipData        = reinterpret_cast<const char*>(pSrcData) + mipOffset.Offset;
+
+        pResource->Texture->replaceRegion(region, mipIndex, mipData, mipOffset.RowStride);
+
+        mipWidth >>= 1;
+        mipHeight >>= 1;
+    }
+
+    return nullptr;
+}
+
+NS::Error* CreateTexture(
+    MetalRenderer*   pRenderer,
+    uint32_t         width,
+    uint32_t         height,
+    MTL::PixelFormat format,
+    uint64_t         srcSizeBytes,
+    const void*      pSrcData,
+    MetalTexture*    pResource)
+{
+    MipOffset mipOffset = {};
+    mipOffset.Offset    = 0;
+    mipOffset.RowStride = width * PixelStride(format);
+
+    return CreateTexture(
+        pRenderer,
+        width,
+        height,
+        format,
+        {mipOffset},
+        srcSizeBytes,
+        pSrcData,
+        pResource);
 }
 
 NS::Error* CreateDrawVertexColorPipeline(
@@ -314,4 +383,263 @@ NS::Error* CreateDrawNormalPipeline(
     pPoolAllocator->release();
 
     return pError;
+}
+
+NS::Error* CreateDrawTexturePipeline(
+    MetalRenderer*            pRenderer,
+    MetalShader*              pVsShaderModule,
+    MetalShader*              pFsShaderModule,
+    MTL::PixelFormat          rtvFormat,
+    MTL::PixelFormat          dsvFormat,
+    MetalPipelineRenderState* pPipelineRenderState,
+    MetalDepthStencilState*   pDepthStencilState)
+{
+    NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
+
+    MTL::VertexDescriptor* pVertexDescriptor = MTL::VertexDescriptor::alloc()->init();
+    if (pVertexDescriptor != nullptr) {
+        // Position Buffer
+        {
+            MTL::VertexAttributeDescriptor* vertexAttribute = pVertexDescriptor->attributes()->object(0);
+            vertexAttribute->setOffset(0);
+            vertexAttribute->setFormat(MTL::VertexFormatFloat3);
+            vertexAttribute->setBufferIndex(0);
+
+            MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = pVertexDescriptor->layouts()->object(0);
+            vertexBufferLayout->setStride(12);
+            vertexBufferLayout->setStepRate(1);
+            vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+        }
+        // TexCoord Buffer
+        {
+            MTL::VertexAttributeDescriptor* vertexAttribute = pVertexDescriptor->attributes()->object(1);
+            vertexAttribute->setOffset(0);
+            vertexAttribute->setFormat(MTL::VertexFormatFloat2);
+            vertexAttribute->setBufferIndex(1);
+
+            MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = pVertexDescriptor->layouts()->object(1);
+            vertexBufferLayout->setStride(8);
+            vertexBufferLayout->setStepRate(1);
+            vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+        }
+    }
+    else {
+        assert(false && "CreateDrawTexturePipeline() - MTL::VertexDescriptor::alloc::init() failed");
+    }
+
+    NS::Error* pError = nullptr;
+    {
+        MTL::RenderPipelineDescriptor* pDesc = MTL::RenderPipelineDescriptor::alloc()->init();
+
+        if (pDesc != nullptr) {
+            pDesc->setVertexFunction(pVsShaderModule->Function.get());
+            pDesc->setFragmentFunction(pFsShaderModule->Function.get());
+            pDesc->setVertexDescriptor(pVertexDescriptor);
+            pDesc->colorAttachments()->object(0)->setPixelFormat(rtvFormat);
+            pDesc->setDepthAttachmentPixelFormat(dsvFormat);
+
+            MTL::RenderPipelineState* pLocalPipelineState = pRenderer->Device->newRenderPipelineState(pDesc, &pError);
+            if (pLocalPipelineState != nullptr) {
+                pPipelineRenderState->State = NS::TransferPtr(pLocalPipelineState);
+            }
+            else {
+                assert(false && "CreateDrawTexturePipeline() - MTL::Device::newRenderPipelineState() failed");
+            }
+
+            pDesc->release();
+        }
+        else {
+            assert(false && "CreateDrawTexturePipeline() - MTL::RenderPipelineDescriptor::alloc()->init() failed");
+        }
+    }
+
+    if (pError == nullptr) {
+        MTL::DepthStencilDescriptor* pDepthStateDesc = MTL::DepthStencilDescriptor::alloc()->init();
+
+        if (pDepthStateDesc != nullptr) {
+            pDepthStateDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
+            pDepthStateDesc->setDepthWriteEnabled(true);
+
+            MTL::DepthStencilState* pLocalDepthState = pRenderer->Device->newDepthStencilState(pDepthStateDesc);
+            if (pLocalDepthState != nullptr) {
+                pDepthStencilState->State = NS::TransferPtr(pLocalDepthState);
+            }
+            else {
+                assert(false && "CreateDrawTexturePipeline() - MTL::Device::newDepthStencilState() failed");
+            }
+
+            pDepthStateDesc->release();
+        }
+    }
+
+    pVertexDescriptor->release();
+    pPoolAllocator->release();
+
+    return pError;
+}
+
+uint32_t BitsPerPixel(MTL::PixelFormat fmt)
+{
+    switch (static_cast<int>(fmt)) {
+        case MTL::PixelFormatInvalid:
+            return 0xFFFF;
+
+        case MTL::PixelFormatBC1_RGBA:
+        case MTL::PixelFormatBC1_RGBA_sRGB:
+            return 4;
+
+        case MTL::PixelFormatPVRTC_RGB_2BPP:
+        case MTL::PixelFormatPVRTC_RGB_2BPP_sRGB:
+            return 6;
+
+        case MTL::PixelFormatA8Unorm:
+        case MTL::PixelFormatR8Unorm:
+        case MTL::PixelFormatR8Unorm_sRGB:
+        case MTL::PixelFormatR8Snorm:
+        case MTL::PixelFormatR8Uint:
+        case MTL::PixelFormatR8Sint:
+        case MTL::PixelFormatBC2_RGBA:
+        case MTL::PixelFormatBC2_RGBA_sRGB:
+        case MTL::PixelFormatBC3_RGBA:
+        case MTL::PixelFormatBC3_RGBA_sRGB:
+        case MTL::PixelFormatBC4_RUnorm:
+        case MTL::PixelFormatBC4_RSnorm:
+        case MTL::PixelFormatBC5_RGUnorm:
+        case MTL::PixelFormatBC5_RGSnorm:
+        case MTL::PixelFormatBC6H_RGBFloat:
+        case MTL::PixelFormatBC6H_RGBUfloat:
+        case MTL::PixelFormatBC7_RGBAUnorm:
+        case MTL::PixelFormatBC7_RGBAUnorm_sRGB:
+        case MTL::PixelFormatPVRTC_RGBA_2BPP:
+        case MTL::PixelFormatPVRTC_RGBA_2BPP_sRGB:
+        case MTL::PixelFormatEAC_R11Unorm:
+        case MTL::PixelFormatEAC_R11Snorm:
+        case MTL::PixelFormatStencil8:
+            return 8;
+
+        case MTL::PixelFormatPVRTC_RGB_4BPP:
+        case MTL::PixelFormatPVRTC_RGB_4BPP_sRGB:
+            return 12;
+
+        case MTL::PixelFormatR16Unorm:
+        case MTL::PixelFormatR16Snorm:
+        case MTL::PixelFormatR16Uint:
+        case MTL::PixelFormatR16Sint:
+        case MTL::PixelFormatR16Float:
+        case MTL::PixelFormatRG8Unorm:
+        case MTL::PixelFormatRG8Unorm_sRGB:
+        case MTL::PixelFormatRG8Snorm:
+        case MTL::PixelFormatRG8Uint:
+        case MTL::PixelFormatRG8Sint:
+        case MTL::PixelFormatB5G6R5Unorm:
+        case MTL::PixelFormatA1BGR5Unorm:
+        case MTL::PixelFormatABGR4Unorm:
+        case MTL::PixelFormatBGR5A1Unorm:
+        case MTL::PixelFormatPVRTC_RGBA_4BPP:
+        case MTL::PixelFormatPVRTC_RGBA_4BPP_sRGB:
+        case MTL::PixelFormatDepth16Unorm:
+        case MTL::PixelFormatEAC_RG11Unorm:
+        case MTL::PixelFormatEAC_RG11Snorm:
+            return 16;
+
+        case MTL::PixelFormatETC2_RGB8:
+        case MTL::PixelFormatETC2_RGB8_sRGB:
+            return 24;
+
+        case MTL::PixelFormatR32Uint:
+        case MTL::PixelFormatR32Sint:
+        case MTL::PixelFormatR32Float:
+        case MTL::PixelFormatRG16Unorm:
+        case MTL::PixelFormatRG16Snorm:
+        case MTL::PixelFormatRG16Uint:
+        case MTL::PixelFormatRG16Sint:
+        case MTL::PixelFormatRG16Float:
+        case MTL::PixelFormatRGBA8Unorm:
+        case MTL::PixelFormatRGBA8Unorm_sRGB:
+        case MTL::PixelFormatRGBA8Snorm:
+        case MTL::PixelFormatRGBA8Uint:
+        case MTL::PixelFormatRGBA8Sint:
+        case MTL::PixelFormatBGRA8Unorm:
+        case MTL::PixelFormatBGRA8Unorm_sRGB:
+        case MTL::PixelFormatRGB10A2Unorm:
+        case MTL::PixelFormatRGB10A2Uint:
+        case MTL::PixelFormatRG11B10Float:
+        case MTL::PixelFormatRGB9E5Float:
+        case MTL::PixelFormatBGR10A2Unorm:
+        case MTL::PixelFormatEAC_RGBA8:
+        case MTL::PixelFormatEAC_RGBA8_sRGB:
+        case MTL::PixelFormatDepth32Float:
+        case MTL::PixelFormatDepth24Unorm_Stencil8:
+        case MTL::PixelFormatX24_Stencil8:
+        case MTL::PixelFormatBGR10_XR:
+        case MTL::PixelFormatBGR10_XR_sRGB:
+        case MTL::PixelFormatGBGR422:
+        case MTL::PixelFormatBGRG422:
+        case MTL::PixelFormatETC2_RGB8A1:
+        case MTL::PixelFormatETC2_RGB8A1_sRGB:
+            return 32;
+
+        case MTL::PixelFormatDepth32Float_Stencil8:
+        case MTL::PixelFormatX32_Stencil8:
+            return 40;
+
+        case MTL::PixelFormatRG32Uint:
+        case MTL::PixelFormatRG32Sint:
+        case MTL::PixelFormatRG32Float:
+        case MTL::PixelFormatRGBA16Unorm:
+        case MTL::PixelFormatRGBA16Snorm:
+        case MTL::PixelFormatRGBA16Uint:
+        case MTL::PixelFormatRGBA16Sint:
+        case MTL::PixelFormatRGBA16Float:
+        case MTL::PixelFormatBGRA10_XR:
+        case MTL::PixelFormatBGRA10_XR_sRGB:
+            return 64;
+
+        case MTL::PixelFormatRGBA32Uint:
+        case MTL::PixelFormatRGBA32Sint:
+        case MTL::PixelFormatRGBA32Float:
+        case MTL::PixelFormatASTC_4x4_sRGB:
+        case MTL::PixelFormatASTC_5x4_sRGB:
+        case MTL::PixelFormatASTC_5x5_sRGB:
+        case MTL::PixelFormatASTC_6x5_sRGB:
+        case MTL::PixelFormatASTC_6x6_sRGB:
+        case MTL::PixelFormatASTC_8x5_sRGB:
+        case MTL::PixelFormatASTC_8x6_sRGB:
+        case MTL::PixelFormatASTC_8x8_sRGB:
+        case MTL::PixelFormatASTC_10x5_sRGB:
+        case MTL::PixelFormatASTC_10x6_sRGB:
+        case MTL::PixelFormatASTC_10x8_sRGB:
+        case MTL::PixelFormatASTC_10x10_sRGB:
+        case MTL::PixelFormatASTC_12x10_sRGB:
+        case MTL::PixelFormatASTC_12x12_sRGB:
+        case MTL::PixelFormatASTC_4x4_LDR:
+        case MTL::PixelFormatASTC_5x4_LDR:
+        case MTL::PixelFormatASTC_5x5_LDR:
+        case MTL::PixelFormatASTC_6x5_LDR:
+        case MTL::PixelFormatASTC_6x6_LDR:
+        case MTL::PixelFormatASTC_8x5_LDR:
+        case MTL::PixelFormatASTC_8x6_LDR:
+        case MTL::PixelFormatASTC_8x8_LDR:
+        case MTL::PixelFormatASTC_10x5_LDR:
+        case MTL::PixelFormatASTC_10x6_LDR:
+        case MTL::PixelFormatASTC_10x8_LDR:
+        case MTL::PixelFormatASTC_10x10_LDR:
+        case MTL::PixelFormatASTC_12x10_LDR:
+        case MTL::PixelFormatASTC_12x12_LDR:
+        case MTL::PixelFormatASTC_4x4_HDR:
+        case MTL::PixelFormatASTC_5x4_HDR:
+        case MTL::PixelFormatASTC_5x5_HDR:
+        case MTL::PixelFormatASTC_6x5_HDR:
+        case MTL::PixelFormatASTC_6x6_HDR:
+        case MTL::PixelFormatASTC_8x5_HDR:
+        case MTL::PixelFormatASTC_8x6_HDR:
+        case MTL::PixelFormatASTC_8x8_HDR:
+        case MTL::PixelFormatASTC_10x5_HDR:
+        case MTL::PixelFormatASTC_10x6_HDR:
+        case MTL::PixelFormatASTC_10x8_HDR:
+        case MTL::PixelFormatASTC_10x10_HDR:
+        case MTL::PixelFormatASTC_12x10_HDR:
+        case MTL::PixelFormatASTC_12x12_HDR:
+            return 128;
+    }
 }
