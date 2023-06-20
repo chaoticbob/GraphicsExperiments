@@ -36,7 +36,7 @@ struct MetalBuffer
 
 struct MetalTexture
 {
-	NS::SharedPtr<MTL::Texture> Texture;
+    NS::SharedPtr<MTL::Texture> Texture;
 };
 
 struct MetalPipelineRenderState
@@ -59,7 +59,7 @@ NS::Error* CreateBuffer(MetalRenderer* pRenderer, size_t srcSize, const void* pS
 NS::Error* CreateTexture(
     MetalRenderer*                pRenderer,
     uint32_t                      width,
-    uint32_t                     height,
+    uint32_t                      height,
     MTL::PixelFormat              format,
     const std::vector<MipOffset>& mipOffsets,
     uint64_t                      srcSizeBytes,
@@ -67,13 +67,13 @@ NS::Error* CreateTexture(
     MetalTexture*                 pResource);
 
 NS::Error* CreateTexture(
-    MetalRenderer*                pRenderer,
-    uint32_t                      width,
-    uint32_t                     height,
-    MTL::PixelFormat              format,
-    uint64_t                      srcSizeBytes,
-    const void*                   pSrcData,
-    MetalTexture*                 pResource);
+    MetalRenderer*   pRenderer,
+    uint32_t         width,
+    uint32_t         height,
+    MTL::PixelFormat format,
+    uint64_t         srcSizeBytes,
+    const void*      pSrcData,
+    MetalTexture*    pResource);
 
 NS::Error* CreateDrawVertexColorPipeline(
     MetalRenderer*              pRenderer,

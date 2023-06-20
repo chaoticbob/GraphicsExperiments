@@ -12,8 +12,8 @@ uint32_t BitsPerPixel(MTL::PixelFormat fmt);
 
 uint32_t PixelStride(MTL::PixelFormat fmt)
 {
-	uint32_t nbytes = BitsPerPixel(fmt) / 8;
-	return nbytes;
+    uint32_t nbytes = BitsPerPixel(fmt) / 8;
+    return nbytes;
 }
 
 // =================================================================================================
@@ -131,7 +131,7 @@ NS::Error* CreateBuffer(
 NS::Error* CreateTexture(
     MetalRenderer*                pRenderer,
     uint32_t                      width,
-    uint32_t                     height,
+    uint32_t                      height,
     MTL::PixelFormat              format,
     const std::vector<MipOffset>& mipOffsets,
     uint64_t                      srcSizeBytes,
@@ -145,7 +145,7 @@ NS::Error* CreateTexture(
     pTextureDesc->setTextureType(MTL::TextureType2D);
     pTextureDesc->setStorageMode(MTL::StorageModeManaged);
     pTextureDesc->setUsage(MTL::ResourceUsageSample | MTL::ResourceUsageRead);
-   pTextureDesc->setMipmapLevelCount(CountU32(mipOffsets));
+    pTextureDesc->setMipmapLevelCount(CountU32(mipOffsets));
 
     pResource->Texture = NS::TransferPtr(pRenderer->Device->newTexture(pTextureDesc.get()));
 
@@ -153,14 +153,14 @@ NS::Error* CreateTexture(
     uint32_t mipWidth  = width;
     uint32_t mipHeight = height;
     for (const auto& mipOffset : mipOffsets) {
-        auto        region         = MTL::Region::Make2D(0, 0, mipWidth, mipHeight);
-        const void* mipData        = reinterpret_cast<const char*>(pSrcData) + mipOffset.Offset;
+        auto        region  = MTL::Region::Make2D(0, 0, mipWidth, mipHeight);
+        const void* mipData = reinterpret_cast<const char*>(pSrcData) + mipOffset.Offset;
 
         pResource->Texture->replaceRegion(region, mipIndex, mipData, mipOffset.RowStride);
 
         mipWidth >>= 1;
         mipHeight >>= 1;
-       mipIndex++;
+        mipIndex++;
     }
 
     return nullptr;
@@ -202,54 +202,54 @@ NS::Error* CreateDrawVertexColorPipeline(
     uint32_t                    pipelineFlags)
 {
     auto vertexDescriptor = NS::TransferPtr(MTL::VertexDescriptor::alloc()->init());
-   if (vertexDescriptor.get() != nullptr) {
-      if (pipelineFlags & METAL_PIPELINE_FLAGS_INTERLEAVED_ATTRS) {
-         {
-            // Position Buffer
-            MTL::VertexAttributeDescriptor* vertexAttribute0 = vertexDescriptor->attributes()->object(0);
-            vertexAttribute0->setOffset(0);
-            vertexAttribute0->setFormat(MTL::VertexFormatFloat3);
-            vertexAttribute0->setBufferIndex(0);
-            
-            // Vertex Color Buffer
-            MTL::VertexAttributeDescriptor* vertexAttribute1 = vertexDescriptor->attributes()->object(1);
-            vertexAttribute1->setOffset(12);
-            vertexAttribute1->setFormat(MTL::VertexFormatFloat3);
-            vertexAttribute1->setBufferIndex(0);
-         }
-         
-         MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = vertexDescriptor->layouts()->object(0);
-         vertexBufferLayout->setStride(24);
-         vertexBufferLayout->setStepRate(1);
-         vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
-      }
-      else {
-         // Position Buffer
-         {
-            MTL::VertexAttributeDescriptor* vertexAttribute = vertexDescriptor->attributes()->object(0);
-            vertexAttribute->setOffset(0);
-            vertexAttribute->setFormat(MTL::VertexFormatFloat3);
-            vertexAttribute->setBufferIndex(0);
-            
+    if (vertexDescriptor.get() != nullptr) {
+        if (pipelineFlags & METAL_PIPELINE_FLAGS_INTERLEAVED_ATTRS) {
+            {
+                // Position Buffer
+                MTL::VertexAttributeDescriptor* vertexAttribute0 = vertexDescriptor->attributes()->object(0);
+                vertexAttribute0->setOffset(0);
+                vertexAttribute0->setFormat(MTL::VertexFormatFloat3);
+                vertexAttribute0->setBufferIndex(0);
+
+                // Vertex Color Buffer
+                MTL::VertexAttributeDescriptor* vertexAttribute1 = vertexDescriptor->attributes()->object(1);
+                vertexAttribute1->setOffset(12);
+                vertexAttribute1->setFormat(MTL::VertexFormatFloat3);
+                vertexAttribute1->setBufferIndex(0);
+            }
+
             MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = vertexDescriptor->layouts()->object(0);
-            vertexBufferLayout->setStride(12);
+            vertexBufferLayout->setStride(24);
             vertexBufferLayout->setStepRate(1);
             vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
-         }
-         // Vertex Color Buffer
-         {
-            MTL::VertexAttributeDescriptor* vertexAttribute = vertexDescriptor->attributes()->object(1);
-            vertexAttribute->setOffset(0);
-            vertexAttribute->setFormat(MTL::VertexFormatFloat3);
-            vertexAttribute->setBufferIndex(1);
-            
-            MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = vertexDescriptor->layouts()->object(1);
-            vertexBufferLayout->setStride(12);
-            vertexBufferLayout->setStepRate(1);
-            vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
-         }
-      }
-   }
+        }
+        else {
+            // Position Buffer
+            {
+                MTL::VertexAttributeDescriptor* vertexAttribute = vertexDescriptor->attributes()->object(0);
+                vertexAttribute->setOffset(0);
+                vertexAttribute->setFormat(MTL::VertexFormatFloat3);
+                vertexAttribute->setBufferIndex(0);
+
+                MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = vertexDescriptor->layouts()->object(0);
+                vertexBufferLayout->setStride(12);
+                vertexBufferLayout->setStepRate(1);
+                vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+            }
+            // Vertex Color Buffer
+            {
+                MTL::VertexAttributeDescriptor* vertexAttribute = vertexDescriptor->attributes()->object(1);
+                vertexAttribute->setOffset(0);
+                vertexAttribute->setFormat(MTL::VertexFormatFloat3);
+                vertexAttribute->setBufferIndex(1);
+
+                MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = vertexDescriptor->layouts()->object(1);
+                vertexBufferLayout->setStride(12);
+                vertexBufferLayout->setStepRate(1);
+                vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+            }
+        }
+    }
     else {
         assert(false && "CreateDrawVertexColorPipeline() - MTL::VertexDescriptor::alloc::init() failed");
         return nullptr;

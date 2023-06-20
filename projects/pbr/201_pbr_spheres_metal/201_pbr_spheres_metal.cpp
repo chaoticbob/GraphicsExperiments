@@ -30,30 +30,30 @@ struct Light
     vec3     position;
     uint32_t __pad0;
     vec3     color;
-   uint32_t __pad1;
+    uint32_t __pad1;
     float    intensity;
-   uint32_t __pad2[3];
+    uint32_t __pad2[3];
 };
 
 struct SceneParameters
 {
     mat4     viewProjectionMatrix;
     vec3     eyePosition;
-   uint32_t __pad0;
+    uint32_t __pad0;
     uint32_t numLights;
-   uint32_t __pad1[3];
+    uint32_t __pad1[3];
     Light    lights[8];
     uint     iblEnvironmentNumLevels;
-   uint32_t __pad2[3];
+    uint32_t __pad2[3];
 };
 
 struct MaterialParameters
 {
-    vec3  baseColor;
-   uint32_t __pad0;
-    float roughness;
-    float metallic;
-   uint32_t __pad1[2];
+    vec3     baseColor;
+    uint32_t __pad0;
+    float    roughness;
+    float    metallic;
+    uint32_t __pad1[2];
 };
 
 // =============================================================================
@@ -120,7 +120,7 @@ int main(int argc, char** argv)
     // PBR shaders
     MetalShader pbrVsShader;
     MetalShader pbrFsShader;
-    NS::Error*  pError  = nullptr;
+    NS::Error*  pError = nullptr;
     {
         std::string shaderSource = LoadString("projects/201_202_pbr_spheres/shaders.metal");
         if (shaderSource.empty()) {
@@ -191,7 +191,6 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
     }
-
 
     // *************************************************************************
     // PBR pipeline state object
@@ -269,9 +268,9 @@ int main(int argc, char** argv)
     window->AddMouseMoveCallbacks(MouseMove);
 
     // *************************************************************************
-	// Render Pass Description
+    // Render Pass Description
     // *************************************************************************
-	MTL::RenderPassDescriptor* pRenderPassDescriptor = MTL::RenderPassDescriptor::renderPassDescriptor();
+    MTL::RenderPassDescriptor* pRenderPassDescriptor = MTL::RenderPassDescriptor::renderPassDescriptor();
 
     // *************************************************************************
     // Swapchain
@@ -382,9 +381,9 @@ int main(int argc, char** argv)
                 vbvs[1]    = envTexCoordBuffer.Buffer.get();
                 offsets[1] = 0;
                 pRenderEncoder->setVertexBuffers(vbvs, offsets, vbRange);
-               
-               pRenderEncoder->setFrontFacingWinding(MTL::WindingCounterClockwise);
-               pRenderEncoder->setCullMode(MTL::CullModeFront);
+
+                pRenderEncoder->setFrontFacingWinding(MTL::WindingCounterClockwise);
+                pRenderEncoder->setCullMode(MTL::CullModeFront);
 
                 pRenderEncoder->drawIndexedPrimitives(
                     MTL::PrimitiveType::PrimitiveTypeTriangle,
@@ -492,8 +491,8 @@ void CreateMaterialSphereVertexBuffers(
     MetalBuffer*   pPositionBuffer,
     MetalBuffer*   pNormalBuffer)
 {
-	TriMesh::Options options;
-	options.enableNormals = true;
+    TriMesh::Options options;
+    options.enableNormals = true;
 
     TriMesh mesh = TriMesh::Sphere(0.42f, 256, 256, options);
 
@@ -525,9 +524,9 @@ void CreateEnvironmentVertexBuffers(
     MetalBuffer*   pPositionBuffer,
     MetalBuffer*   pTexCoordBuffer)
 {
-	TriMesh::Options options;
-	options.enableTexCoords = true;
-	options.faceInside = true;
+    TriMesh::Options options;
+    options.enableTexCoords = true;
+    options.faceInside      = true;
 
     TriMesh mesh = TriMesh::Sphere(100, 64, 64, options);
 
