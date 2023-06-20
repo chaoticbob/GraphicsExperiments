@@ -160,6 +160,7 @@ NS::Error* CreateTexture(
 
         mipWidth >>= 1;
         mipHeight >>= 1;
+       mipIndex++;
     }
 
     return nullptr;
