@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.0)
 
-project(103_cornell_box_metal)
+project(102_cornell_box_metal)
 
 add_executable(
-    103_cornell_box_metal
-    103_cornell_box_metal.cpp
+    102_cornell_box_metal
+    102_cornell_box_metal.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer.cpp
@@ -16,10 +16,10 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/tri_mesh.cpp
 )
 
-set_target_properties(103_cornell_box_metal PROPERTIES FOLDER "geometry")
+set_target_properties(102_cornell_box_metal PROPERTIES FOLDER "geometry")
 
 target_include_directories(
-    103_cornell_box_metal
+    102_cornell_box_metal
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
            ${GREX_THIRD_PARTY_DIR}/glm
            ${GREX_THIRD_PARTY_DIR}/tinyobjloader
@@ -32,7 +32,7 @@ FIND_LIBRARY(METAL_LIBRARY Metal)
 FIND_LIBRARY(METALKIT_LIBRARY MetalKit)
 
 target_link_libraries(
-    103_cornell_box_metal
+    102_cornell_box_metal
     PUBLIC glfw
     ${FOUNDATION_LIBRARY}
     ${METAL_LIBRARY}
