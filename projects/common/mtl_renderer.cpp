@@ -48,7 +48,7 @@ bool InitMetal(
 
 bool InitSwapchain(
     MetalRenderer*   pRenderer,
-    void*            cocoaWindow,
+    void*            pCocoaWindow,
     uint32_t         width,
     uint32_t         height,
     uint32_t         bufferCount,
@@ -65,9 +65,9 @@ bool InitSwapchain(
         layer->setPixelFormat(GREX_DEFAULT_RTV_FORMAT);
         layer->setDrawableSize(layerSize);
 
-        MetalSetNSWindowSwapchain(cocoaWindow, layer);
+        MetalSetNSWindowSwapchain(pCocoaWindow, layer);
 
-        pRenderer->Swapchain            = layer;
+        pRenderer->pSwapchain            = layer;
         pRenderer->SwapchainBufferCount = bufferCount;
 
         if (dsvFormat != MTL::PixelFormatInvalid) {
@@ -94,7 +94,7 @@ bool InitSwapchain(
         }
     }
     else {
-        assert(false && "Swapchain creation CA::MetalLayer::layer() failed");
+        assert(false && "pSwapchain creation CA::MetalLayer::layer() failed");
         return false;
     }
 
