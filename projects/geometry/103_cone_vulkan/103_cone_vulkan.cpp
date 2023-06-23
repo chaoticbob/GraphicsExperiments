@@ -11,8 +11,8 @@ using namespace glm;
 
 #define CHECK_CALL(FN)                               \
     {                                                \
-        VkResult vkres = FN;                         \
-        if (vkres != VK_SUCCESS) {                   \
+        HRESULT hr = FN;                             \
+        if (FAILED(hr)) {                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -23,49 +23,53 @@ using namespace glm;
         }                                            \
     }
 
+struct Camera
+{
+   mat4 mvp;
+};
+
 // =============================================================================
 // Shader code
 // =============================================================================
-const char* gShaderVS= R"(
+const char* gShadersVS = R"(
 #version 460
 
 layout( push_constant ) uniform CameraProperties 
 {
-	mat4 MVP;
-} cam;
+   mat4 MVP;
+} Cam;
 
 in vec3 PositionOS;
 in vec3 Color;
 
-out vec3 vertexColor;	// Specify a color output to the fragment shader
+out vec3 outColor;
 
 void main()
 {
-	gl_Position = cam.MVP * vec4(PositionOS, 1);
-	vertexColor = Color;
+    gl_Position = Cam.MVP * vec4(PositionOS, 1);
+    outColor = Color;
 }
 )";
-
-const char* gShaderFS= R"(
+const char* gShadersFS = R"(
 #version 460
 
-in vec3 vertexColor;	// The input variable from the vertex shader (of the same name)
+in vec3 Color;
 
 out vec4 FragColor;
 
 void main()
 {
-	FragColor = vec4(vertexColor, 1.0f);
+    FragColor = vec4(Color, 1);
 }
 )";
 
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth        = 1280;
-static uint32_t gWindowHeight       = 720;
-static bool     gEnableDebug        = true;
-static bool     gEnableRayTracing   = false;
+static uint32_t gWindowWidth  = 1280;
+static uint32_t gWindowHeight = 720;
+static bool     gEnableDebug  = true;
+static bool     gEnableRaytracing = false;
 
 void CreatePipelineLayout(VulkanRenderer* pRenderer, VkPipelineLayout* pLayout);
 void CreateShaderModules(
@@ -75,10 +79,13 @@ void CreateShaderModules(
    VkShaderModule*               pModuleVS,
    VkShaderModule*               pModuleFS);
 void CreateGeometryBuffers(
-   VulkanRenderer*   pRenderer,
-   VulkanBuffer*     ppIndexBuffer,
-   VulkanBuffer*     ppPositionBuffer,
-   VulkanBuffer*     ppVertexColorBuffer);
+    VulkanRenderer*  pRenderer,
+    VulkanBuffer*    pIndexBuffer,
+    VulkanBuffer*    pVertexBuffer,
+    VulkanBuffer*    pVertexColorBuffer,
+    uint32_t*        pNumIndices,
+    VulkanBuffer*    pTBNVertexBuffer,
+    uint32_t*        pNumTBNVertices);
 
 // =============================================================================
 // main()
@@ -87,38 +94,37 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRayTracing)) {
+    if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRaytracing)) {
         return EXIT_FAILURE;
     }
 
     // *************************************************************************
     // Compile shaders
-    //
-    // Make sure the shaders compile before we do anything.
-    //
     // *************************************************************************
-	std::vector<uint32_t> spirvVS;
-	std::vector<uint32_t> spirvFS;
-   {
-      std::string   errorMsg;
-      CompileResult res = CompileGLSL(gShaderVS, VK_SHADER_STAGE_VERTEX_BIT, {}, &spirvVS, &errorMsg);
-      if (res != COMPILE_SUCCESS) {
-         std::stringstream ss;
-         ss << "\n"
-            << "Shader compiler error (VS): " << errorMsg << "\n";
-         GREX_LOG_ERROR(ss.str().c_str());
-         return EXIT_FAILURE;
-      }
+    std::vector<uint32_t> spirvVS;
+    std::vector<uint32_t> spirvFS;
+    {
+        std::string errorMsg;
+        CompileResult vkRes = CompileGLSL(gShadersVS, VK_SHADER_STAGE_VERTEX_BIT, {}, &spirvVS, &errorMsg);
+        if (vkRes != COMPILE_SUCCESS) {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (VS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            assert(false);
+            return EXIT_FAILURE;
+        }
 
-      res = CompileGLSL(gShaderFS, VK_SHADER_STAGE_FRAGMENT_BIT, {}, &spirvFS, &errorMsg);
-      if (res != COMPILE_SUCCESS) {
-         std::stringstream ss;
-         ss << "\n"
-            << "Shader compiler error (VS): " << errorMsg << "\n";
-         GREX_LOG_ERROR(ss.str().c_str());
-         return EXIT_FAILURE;
-      }
-   }
+        vkRes = CompileGLSL(gShadersFS, VK_SHADER_STAGE_FRAGMENT_BIT, {}, &spirvFS, &errorMsg);
+        if (vkRes != COMPILE_SUCCESS) {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (PS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            assert(false);
+            return EXIT_FAILURE;
+        }
+    }
 
     // *************************************************************************
     // Pipeline layout
@@ -149,25 +155,28 @@ int main(int argc, char** argv)
     //    2) Fragment Shader
     //
     // *************************************************************************
-    VkPipeline pipeline = VK_NULL_HANDLE;
-    CreateDrawVertexColorPipeline(
+    VkPipeline trianglePipelineState = VK_NULL_HANDLE;
+    CHECK_CALL(CreateDrawVertexColorPipeline(
        renderer.get(),
        pipelineLayout,
        moduleVS,
        moduleFS,
        GREX_DEFAULT_RTV_FORMAT,
        GREX_DEFAULT_DSV_FORMAT,
-       &pipeline);
+       &trianglePipelineState));
 
-    // *************************************************************************
-    // Get descriptor buffer properties
-    // *************************************************************************
-    VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT};
-    {
-        VkPhysicalDeviceProperties2 properties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
-        properties.pNext                       = &descriptorBufferProperties;
-        vkGetPhysicalDeviceProperties2(renderer->PhysicalDevice, &properties);
-    }
+    VkPipeline tbnDebugPipelineState;
+    CHECK_CALL(CreateDrawVertexColorPipeline(
+       renderer.get(),
+       pipelineLayout,
+       moduleVS,
+       moduleFS,
+       GREX_DEFAULT_RTV_FORMAT,
+       GREX_DEFAULT_DSV_FORMAT,
+       &tbnDebugPipelineState,
+       VK_CULL_MODE_NONE,
+       VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
+       VK_PIPELINE_FLAGS_INTERLEAVED_ATTRS));
 
     // *************************************************************************
     // Geometry data
@@ -175,12 +184,22 @@ int main(int argc, char** argv)
     VulkanBuffer indexBuffer;
     VulkanBuffer positionBuffer;
     VulkanBuffer vertexColorBuffer;
-    CreateGeometryBuffers(renderer.get(), &indexBuffer, &positionBuffer, &vertexColorBuffer);
+    uint32_t     numIndices = 0;
+    VulkanBuffer tbnDebugVertexBuffer;
+    uint32_t     tbnDebugNumVertices = 0;
+    CreateGeometryBuffers(
+        renderer.get(),
+        &indexBuffer,
+        &positionBuffer,
+        &vertexColorBuffer,
+        &numIndices,
+        &tbnDebugVertexBuffer,
+        &tbnDebugNumVertices);
 
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "102_color_cube_vulkan");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "103_cone_vulkan");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -197,56 +216,56 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain image views, depth buffers/views
     // *************************************************************************
-    std::vector<VkImageView> imageViews;
-    std::vector<VkImageView> depthViews;
+    std::vector<VkImageView>  imageViews;
+    std::vector<VkImageView>  depthViews;
     {
-        std::vector<VkImage> images;
-        CHECK_CALL(GetSwapchainImages(renderer.get(), images));
+       std::vector<VkImage>      images;
+       CHECK_CALL(GetSwapchainImages(renderer.get(), images));
 
-        for (auto& image : images) {
-           // Create swap chain images
-           VkImageViewCreateInfo createInfo           = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
-           createInfo.image                           = image;
-           createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
-           createInfo.format                          = GREX_DEFAULT_RTV_FORMAT;
-           createInfo.components                      = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
-           createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-           createInfo.subresourceRange.baseMipLevel   = 0;
-           createInfo.subresourceRange.levelCount     = 1;
-           createInfo.subresourceRange.baseArrayLayer = 0;
-           createInfo.subresourceRange.layerCount     = 1;
+       for (auto& image : images) {
+          // Create swap chain images
+          VkImageViewCreateInfo createInfo           = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+          createInfo.image                           = image;
+          createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+          createInfo.format                          = GREX_DEFAULT_RTV_FORMAT;
+          createInfo.components                      = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
+          createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+          createInfo.subresourceRange.baseMipLevel   = 0;
+          createInfo.subresourceRange.levelCount     = 1;
+          createInfo.subresourceRange.baseArrayLayer = 0;
+          createInfo.subresourceRange.layerCount     = 1;
 
-           VkImageView imageView = VK_NULL_HANDLE;
-           CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &imageView));
+          VkImageView imageView = VK_NULL_HANDLE;
+          CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &imageView));
 
-           imageViews.push_back(imageView);
-        }
+          imageViews.push_back(imageView);
+       }
 
-        size_t imageCount = images.size();
+       size_t imageCount = images.size();
 
-        std::vector<VulkanImage> depthImages;
-        depthImages.resize(images.size());
+       std::vector<VulkanImage> depthImages;
+       depthImages.resize(images.size());
 
-        for (int depthIndex = 0; depthIndex < imageCount; depthIndex++) {
-           // Create depth images
-           CHECK_CALL(CreateDSV(renderer.get(), window->GetWidth(), window->GetHeight(), &depthImages[depthIndex]));
+       for (int depthIndex = 0; depthIndex < imageCount; depthIndex++) {
+          // Create depth images
+          CHECK_CALL(CreateDSV(renderer.get(), window->GetWidth(), window->GetHeight(), &depthImages[depthIndex]));
 
-           VkImageViewCreateInfo createInfo           = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
-           createInfo.image                           = depthImages[depthIndex].Image;
-           createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
-           createInfo.format                          = GREX_DEFAULT_DSV_FORMAT;
-           createInfo.components                      = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY };
-           createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
-           createInfo.subresourceRange.baseMipLevel   = 0;
-           createInfo.subresourceRange.levelCount     = 1;
-           createInfo.subresourceRange.baseArrayLayer = 0;
-           createInfo.subresourceRange.layerCount     = 1;
+          VkImageViewCreateInfo createInfo           = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+          createInfo.image                           = depthImages[depthIndex].Image;
+          createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+          createInfo.format                          = GREX_DEFAULT_DSV_FORMAT;
+          createInfo.components                      = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY };
+          createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
+          createInfo.subresourceRange.baseMipLevel   = 0;
+          createInfo.subresourceRange.levelCount     = 1;
+          createInfo.subresourceRange.baseArrayLayer = 0;
+          createInfo.subresourceRange.layerCount     = 1;
 
-           VkImageView depthView = VK_NULL_HANDLE;
-           CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &depthView));
+          VkImageView depthView = VK_NULL_HANDLE;
+          CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &depthView));
 
-           depthViews.push_back(depthView);
-        }
+          depthViews.push_back(depthView);
+       }
     }
 
     // *************************************************************************
@@ -265,8 +284,8 @@ int main(int argc, char** argv)
     clearValues[1].depthStencil = { 1.0f, 0 };
 
     while (window->PollEvents()) {
-        uint32_t imageIndex = 0;
-        if (AcquireNextImage(renderer.get(), &imageIndex)) {
+        UINT bufferIndex = 0;
+        if (AcquireNextImage(renderer.get(), &bufferIndex)) {
             assert(false && "AcquireNextImage failed");
             break;
         }
@@ -277,15 +296,16 @@ int main(int argc, char** argv)
         CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
 
         {
+
            VkRenderingAttachmentInfo colorAttachment  = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
-           colorAttachment.imageView                  = imageViews[imageIndex];
+           colorAttachment.imageView                  = imageViews[bufferIndex];
            colorAttachment.imageLayout                = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
            colorAttachment.loadOp                     = VK_ATTACHMENT_LOAD_OP_CLEAR;
            colorAttachment.storeOp                    = VK_ATTACHMENT_STORE_OP_STORE;
            colorAttachment.clearValue                 = clearValues[0];
 
            VkRenderingAttachmentInfo depthAttachment  = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
-           depthAttachment.imageView                  = depthViews[imageIndex];
+           depthAttachment.imageView                  = depthViews[bufferIndex];
            depthAttachment.imageLayout                = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
            depthAttachment.loadOp                     = VK_ATTACHMENT_LOAD_OP_CLEAR;
            depthAttachment.storeOp                    = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -308,26 +328,36 @@ int main(int argc, char** argv)
            vkCmdSetScissor(cmdBuf.CommandBuffer, 0, 1, &scissor);
 
            // Bind the VS/FS Graphics Pipeline
-           vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+           vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, trianglePipelineState);
 
-           // Bind the mesh vertex/index buffers
+           // Bind the Index Buffer
            vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, indexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
 
+           // Bind the Vertex Buffer
            VkBuffer vertexBuffers[] = { positionBuffer.Buffer, vertexColorBuffer.Buffer };
            VkDeviceSize offsets[] = { 0, 0 };
            vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 2, vertexBuffers, offsets);
 
-           // Update the camera model view projection matrix
-           mat4 modelMat = rotate(static_cast<float>(glfwGetTime()), vec3(0, 1, 0)) *
-                           rotate(static_cast<float>(glfwGetTime()), vec3(1, 0, 0));
-           mat4 viewMat = lookAt(vec3(0, 0, 2), vec3(0, 0, 0), vec3(0, 1, 0));
-           mat4 projMat = perspective(radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
-
+           float t = static_cast<float>(glfwGetTime());
+           mat4 modelMat = glm::rotate(t, vec3(1, 0, 0));
+           mat4 viewMat = glm::lookAt(vec3(0, 1, 2), vec3(0, 0, 0), vec3(0, 1, 0));
+           mat4 projMat = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
            mat4 mvpMat  = projMat * viewMat * modelMat;
 
            vkCmdPushConstants(cmdBuf.CommandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mat4), &mvpMat);
 
-           vkCmdDrawIndexed(cmdBuf.CommandBuffer, 36, 1, 0, 0, 0);
+           vkCmdDraw(cmdBuf.CommandBuffer, numIndices, 1, 0, 0);
+
+           // TBN debug
+           {
+              vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, tbnDebugPipelineState);
+
+              VkBuffer vertexBuffers[] = { tbnDebugVertexBuffer.Buffer };
+              VkDeviceSize offsets[] = { 0 };
+              vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 1, vertexBuffers, offsets);
+
+              vkCmdDraw(cmdBuf.CommandBuffer, tbnDebugNumVertices, 1, 0, 0);
+           }
 
            vkCmdEndRendering(cmdBuf.CommandBuffer);
         }
@@ -337,12 +367,13 @@ int main(int argc, char** argv)
         // Execute command buffer
         CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
 
-        // Wait for the GPU to finish the work
         if (!WaitForGpu(renderer.get())) {
             assert(false && "WaitForGpu failed");
+            break;
         }
 
-        if (!SwapchainPresent(renderer.get(), imageIndex)) {
+        // Present
+        if (!SwapchainPresent(renderer.get(), bufferIndex)) {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -351,7 +382,9 @@ int main(int argc, char** argv)
     return 0;
 }
 
-void CreatePipelineLayout(VulkanRenderer* pRenderer, VkPipelineLayout* pLayout)
+void CreatePipelineLayout(
+   VulkanRenderer*   pRenderer, 
+   VkPipelineLayout* pLayout)
 {
    VkPushConstantRange push_constant      = {};
    push_constant.offset                   = 0;
@@ -372,32 +405,35 @@ void CreateShaderModules(
    VkShaderModule*               pModuleVS,
    VkShaderModule*               pModuleFS)
 {
-    // Vertex Shader
-    {
-        VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        createInfo.codeSize                 = SizeInBytes(spirvVS);
-        createInfo.pCode                    = DataPtr(spirvVS);
+   // Vertex Shader
+   {
+      VkShaderModuleCreateInfo createInfo = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+      createInfo.codeSize                 = SizeInBytes(spirvVS);
+      createInfo.pCode                    = DataPtr(spirvVS);
 
-        CHECK_CALL(vkCreateShaderModule(pRenderer->Device, &createInfo, nullptr, pModuleVS));
-    }
+      CHECK_CALL(vkCreateShaderModule(pRenderer->Device, &createInfo, nullptr, pModuleVS));
+   }
 
-    // Fragment Shader
-    {
-        VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        createInfo.codeSize                 = SizeInBytes(spirvFS);
-        createInfo.pCode                    = DataPtr(spirvFS);
+   // Fragment Shader
+   {
+      VkShaderModuleCreateInfo createInfo = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+      createInfo.codeSize                 = SizeInBytes(spirvFS);
+      createInfo.pCode                    = DataPtr(spirvFS);
 
-        CHECK_CALL(vkCreateShaderModule(pRenderer->Device, &createInfo, nullptr, pModuleFS));
-    }
+      CHECK_CALL(vkCreateShaderModule(pRenderer->Device, &createInfo, nullptr, pModuleFS));
+   }
 }
 
 void CreateGeometryBuffers(
-   VulkanRenderer*   pRenderer,
-   VulkanBuffer*     pIndexBuffer,
-   VulkanBuffer*     pPositionBuffer,
-   VulkanBuffer*     pVertexColorBuffer)
+    VulkanRenderer*  pRenderer,
+    VulkanBuffer*    pIndexBuffer,
+    VulkanBuffer*    pPositionBuffer,
+    VulkanBuffer*    pVertexColorBuffer,
+    uint32_t*        pNumIndices,
+    VulkanBuffer*    pTBNVertexBuffer,
+    uint32_t*        pNumTBNVertices)
 {
-   TriMesh mesh = TriMesh::Cube(vec3(1), false, {.enableVertexColors = true});
+   TriMesh mesh = TriMesh::Cone(1, 1, 32, { .enableVertexColors = true, .enableNormals = true, .enableTangents = true });
 
    CHECK_CALL(CreateBuffer(
       pRenderer,
@@ -422,9 +458,15 @@ void CreateGeometryBuffers(
       VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
       0,
       pVertexColorBuffer));
-}
 
-void CreateFrameBuffers()
-{
+   *pNumIndices = 3 * mesh.GetNumTriangles();
 
+   auto tbnVertexData = mesh.GetTBNLineSegments(pNumTBNVertices);
+   CHECK_CALL(CreateBuffer(
+      pRenderer,
+      SizeInBytes(tbnVertexData),
+      DataPtr(tbnVertexData),
+      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+      0,
+      pTBNVertexBuffer));
 }

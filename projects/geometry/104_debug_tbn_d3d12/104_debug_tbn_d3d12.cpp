@@ -54,24 +54,73 @@ float4 psmain(VSOutput input) : SV_TARGET
 )";
 
 // =============================================================================
+// Constants
+// =============================================================================
+
+const std::vector<std::string> gModelNames = {
+    "Sphere (Generated)",
+    "Cone",
+    "Teapot",
+    "Knob",
+    "Sphere (OBJ)",
+    "Torus",
+};
+
+// =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth  = 1280;
-static uint32_t gWindowHeight = 720;
+static uint32_t gWindowWidth  = 1920;
+static uint32_t gWindowHeight = 1080;
 static bool     gEnableDebug  = true;
 
 static LPCWSTR gVSShaderName = L"vsmain";
 static LPCWSTR gPSShaderName = L"psmain";
 
+struct Geometry
+{
+    uint32_t               numIndices;
+    ComPtr<ID3D12Resource> indexBuffer;
+    ComPtr<ID3D12Resource> positionBuffer;
+    ComPtr<ID3D12Resource> vertexColorBuffer;
+    uint32_t               tbnDebugNumVertices;
+    ComPtr<ID3D12Resource> tbnDebugVertexBuffer;
+};
+
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
 void CreateGeometryBuffers(
-    DxRenderer*      pRenderer,
-    ID3D12Resource** ppIndexBuffer,
-    ID3D12Resource** ppVertexBuffer,
-    ID3D12Resource** ppVertexColorBuffer,
-    uint32_t*        pNumIndices,
-    ID3D12Resource** ppTBNVertexBuffer,
-    uint32_t*        pNumTBNVertices);
+    DxRenderer*            pRenderer,
+    std::vector<Geometry>& outGeometries);
+
+static uint32_t gModelIndex = 0;
+
+static int   sPrevX;
+static int   sPrevY;
+static float sAngleX       = 0;
+static float sAngleY       = 0;
+static float sTargetAngleX = 0;
+static float sTargetAngleY = 0;
+
+void MouseDown(int x, int y, int buttons)
+{
+    if (buttons & MOUSE_BUTTON_LEFT) {
+        sPrevX = x;
+        sPrevY = y;
+    }
+}
+
+void MouseMove(int x, int y, int buttons)
+{
+    if (buttons & MOUSE_BUTTON_LEFT) {
+        int dx = x - sPrevX;
+        int dy = y - sPrevY;
+
+        sTargetAngleX += 0.25f * dy;
+        sTargetAngleY += 0.25f * dx;
+
+        sPrevX = x;
+        sPrevY = y;
+    }
+}
 
 // =============================================================================
 // main()
@@ -147,35 +196,36 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Geometry data
     // *************************************************************************
-    ComPtr<ID3D12Resource> indexBuffer;
-    ComPtr<ID3D12Resource> positionBuffer;
-    ComPtr<ID3D12Resource> vertexColorBuffer;
-    uint32_t               numIndices = 0;
-    ComPtr<ID3D12Resource> tbnDebugVertexBuffer;
-    uint32_t               tbnDebugNumVertices = 0;
+    std::vector<Geometry> geometries;
     CreateGeometryBuffers(
         renderer.get(),
-        &indexBuffer,
-        &positionBuffer,
-        &vertexColorBuffer,
-        &numIndices,
-        &tbnDebugVertexBuffer,
-        &tbnDebugNumVertices);
+        geometries);
 
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "101_color_cube_d3d12");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "104_debug_tbn_d3d12");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
     }
+
+    window->AddMouseDownCallbacks(MouseDown);
+    window->AddMouseMoveCallbacks(MouseMove);
 
     // *************************************************************************
     // Swapchain
     // *************************************************************************
     if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT)) {
         assert(false && "InitSwapchain failed");
+        return EXIT_FAILURE;
+    }
+
+    // *************************************************************************
+    // Imgui
+    // *************************************************************************
+    if (!window->InitImGuiForD3D12(renderer.get())) {
+        assert(false && "Window::InitImGuiForD3D12 failed");
         return EXIT_FAILURE;
     }
 
@@ -205,6 +255,29 @@ int main(int argc, char** argv)
     // Main loop
     // *************************************************************************
     while (window->PollEvents()) {
+        window->ImGuiNewFrameD3D12();
+
+        if (ImGui::Begin("Scene")) {
+            static const char* currentModelNames = gModelNames[gModelIndex].c_str();
+
+            if (ImGui::BeginCombo("Model", currentModelNames)) {
+                for (size_t i = 0; i < gModelNames.size(); ++i) {
+                    bool isSelected = (currentModelNames == gModelNames[i]);
+                    if (ImGui::Selectable(gModelNames[i].c_str(), isSelected)) {
+                        currentModelNames = gModelNames[i].c_str();
+                        gModelIndex       = static_cast<uint32_t>(i);
+                    }
+                    if (isSelected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+        }
+        ImGui::End();
+
+        // ---------------------------------------------------------------------
+
         UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
 
         ComPtr<ID3D12Resource> swapchainBuffer;
@@ -226,27 +299,31 @@ int main(int argc, char** argv)
             commandList->ClearRenderTargetView(renderer->SwapchainRTVDescriptorHandles[bufferIndex], clearColor, 0, nullptr);
             commandList->ClearDepthStencilView(renderer->SwapchainDSVDescriptorHandles[bufferIndex], D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0xFF, 0, nullptr);
 
-            float t = static_cast<float>(glfwGetTime());
-            mat4 modelMat = glm::rotate(t, vec3(1, 0, 0)); 
-            mat4 viewMat = glm::lookAt(vec3(0, 1, 2), vec3(0, 0, 0), vec3(0, 1, 0));
-            mat4 projMat = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
-            mat4 mvpMat  = projMat * viewMat * modelMat;
+            mat4 modelMat = glm::rotate(glm::radians(sAngleX), vec3(1, 0, 0)) * glm::rotate(glm::radians(sAngleY), vec3(0, 1, 0));
+            mat4 viewMat  = glm::lookAt(vec3(0, 1, 2), vec3(0, 0, 0), vec3(0, 1, 0));
+            mat4 projMat  = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+            mat4 mvpMat   = projMat * viewMat * modelMat;
+
+            sAngleX += (sTargetAngleX - sAngleX) * 0.1f;
+            sAngleY += (sTargetAngleY - sAngleY) * 0.1f;
 
             commandList->SetGraphicsRootSignature(rootSig.Get());
             commandList->SetGraphicsRoot32BitConstants(0, 16, &mvpMat, 0);
 
+            auto& geo = geometries[gModelIndex];
+
             D3D12_INDEX_BUFFER_VIEW ibv = {};
-            ibv.BufferLocation          = indexBuffer->GetGPUVirtualAddress();
-            ibv.SizeInBytes             = static_cast<UINT>(indexBuffer->GetDesc().Width);
+            ibv.BufferLocation          = geo.indexBuffer->GetGPUVirtualAddress();
+            ibv.SizeInBytes             = static_cast<UINT>(geo.indexBuffer->GetDesc().Width);
             ibv.Format                  = DXGI_FORMAT_R32_UINT;
             commandList->IASetIndexBuffer(&ibv);
 
             D3D12_VERTEX_BUFFER_VIEW vbvs[2] = {};
-            vbvs[0].BufferLocation           = positionBuffer->GetGPUVirtualAddress();
-            vbvs[0].SizeInBytes              = static_cast<UINT>(positionBuffer->GetDesc().Width);
+            vbvs[0].BufferLocation           = geo.positionBuffer->GetGPUVirtualAddress();
+            vbvs[0].SizeInBytes              = static_cast<UINT>(geo.positionBuffer->GetDesc().Width);
             vbvs[0].StrideInBytes            = 12;
-            vbvs[1].BufferLocation           = vertexColorBuffer->GetGPUVirtualAddress();
-            vbvs[1].SizeInBytes              = static_cast<UINT>(vertexColorBuffer->GetDesc().Width);
+            vbvs[1].BufferLocation           = geo.vertexColorBuffer->GetGPUVirtualAddress();
+            vbvs[1].SizeInBytes              = static_cast<UINT>(geo.vertexColorBuffer->GetDesc().Width);
             vbvs[1].StrideInBytes            = 12;
 
             commandList->IASetVertexBuffers(0, 2, vbvs);
@@ -261,20 +338,23 @@ int main(int argc, char** argv)
 
             commandList->SetPipelineState(trianglePipelineState.Get());
 
-            commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
+            commandList->DrawIndexedInstanced(geo.numIndices, 1, 0, 0, 0);
 
             // TBN debug
             {
                 commandList->SetPipelineState(tbnDebugPipelineState.Get());
                 commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 
-                vbvs[0].BufferLocation = tbnDebugVertexBuffer->GetGPUVirtualAddress();
-                vbvs[0].SizeInBytes    = static_cast<UINT>(tbnDebugVertexBuffer->GetDesc().Width);
+                vbvs[0].BufferLocation = geo.tbnDebugVertexBuffer->GetGPUVirtualAddress();
+                vbvs[0].SizeInBytes    = static_cast<UINT>(geo.tbnDebugVertexBuffer->GetDesc().Width);
                 vbvs[0].StrideInBytes  = 24;
                 commandList->IASetVertexBuffers(0, 1, vbvs);
 
-                commandList->DrawInstanced(tbnDebugNumVertices, 1, 0, 0);
+                commandList->DrawInstanced(geo.tbnDebugNumVertices, 1, 0, 0);
             }
+
+            // Draw ImGui
+            window->ImGuiRenderDrawData(renderer.get(), commandList.Get());
         }
         D3D12_RESOURCE_BARRIER postRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
         commandList->ResourceBarrier(1, &postRenderBarrier);
@@ -324,40 +404,83 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 }
 
 void CreateGeometryBuffers(
-    DxRenderer*      pRenderer,
-    ID3D12Resource** ppIndexBuffer,
-    ID3D12Resource** ppPositionBuffer,
-    ID3D12Resource** ppVertexColorBuffer,
-    uint32_t*        pNumIndices,
-    ID3D12Resource** ppTBNVertexBuffer,
-    uint32_t*        pNumTBNVertices)
+    DxRenderer*            pRenderer,
+    std::vector<Geometry>& outGeometries)
 {
-    TriMesh mesh = TriMesh::Cone(1, 1, 32, {.enableVertexColors = true, .enableNormals = true, .enableTangents = true});
+    TriMesh::Options options = {.enableVertexColors = true, .enableTexCoords = true,  .enableNormals = true, .enableTangents = true};
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTriangles()),
-        DataPtr(mesh.GetTriangles()),
-        ppIndexBuffer));
+    std::vector<TriMesh> meshes;
+    meshes.push_back(TriMesh::Sphere(1.0f, 16, 16, options));
+    meshes.push_back(TriMesh::Cone(1, 1, 32, options));
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetPositions()),
-        DataPtr(mesh.GetPositions()),
-        ppPositionBuffer));
+    // Teapot
+    {
+        TriMesh mesh;
+        bool res = TriMesh::LoadOBJ(GetAssetPath("models/teapot.obj").string(), "", options, &mesh);
+        assert(res && "OBJ load failed");
+        mesh.ScaleToFit();
+        meshes.push_back(mesh);
+    }
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetVertexColors()),
-        DataPtr(mesh.GetVertexColors()),
-        ppVertexColorBuffer));
+    // Knob
+    {
+        TriMesh mesh;
+        bool res = TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh);
+        assert(res && "OBJ load failed");
+        mesh.ScaleToFit();
+        meshes.push_back(mesh);
+    }
 
-    *pNumIndices = 3 * mesh.GetNumTriangles();
+    // Sphere
+    {
+        TriMesh mesh;
+        bool res = TriMesh::LoadOBJ(GetAssetPath("models/sphere.obj").string(), "", options, &mesh);
+        assert(res && "OBJ load failed");
+        mesh.ScaleToFit();
+        meshes.push_back(mesh);
+    }
 
-    auto tbnVertexData = mesh.GetTBNLineSegments(pNumTBNVertices);
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(tbnVertexData),
-        DataPtr(tbnVertexData),
-        ppTBNVertexBuffer));
+    // Torus
+    {
+        TriMesh mesh;
+        bool res = TriMesh::LoadOBJ(GetAssetPath("models/torus.obj").string(), "", options, &mesh);
+        assert(res && "OBJ load failed");
+        mesh.ScaleToFit();
+        meshes.push_back(mesh);
+    }
+
+    for (uint32_t i = 0; i < meshes.size(); ++i) {
+        auto& mesh = meshes[i];
+
+        Geometry geo = {};
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTriangles()),
+            DataPtr(mesh.GetTriangles()),
+            &geo.indexBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetPositions()),
+            DataPtr(mesh.GetPositions()),
+            &geo.positionBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetVertexColors()),
+            DataPtr(mesh.GetVertexColors()),
+            &geo.vertexColorBuffer));
+
+        geo.numIndices = 3 * mesh.GetNumTriangles();
+
+        auto tbnVertexData = mesh.GetTBNLineSegments(&geo.tbnDebugNumVertices);
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(tbnVertexData),
+            DataPtr(tbnVertexData),
+            &geo.tbnDebugVertexBuffer));
+
+        outGeometries.push_back(geo);
+    }
 }

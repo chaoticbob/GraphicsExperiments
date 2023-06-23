@@ -23,19 +23,6 @@ using namespace glm;
         }                                            \
     }
 
-struct DrawParameters
-{
-    uint32_t               materialIndex = 0;
-    uint32_t               numIndices    = 0;
-    ComPtr<ID3D12Resource> indexBuffer   = nullptr;
-};
-
-struct Material
-{
-    glm::vec3 albedo       = glm::vec3(1);
-    uint32_t  recieveLight = 1;
-};
-
 // =============================================================================
 // Shader code
 // =============================================================================
@@ -43,49 +30,26 @@ const char* gShaders = R"(
 
 struct CameraProperties {
 	float4x4 MVP;
-    float3   LightPosition;
 };
 
-struct DrawParameters {
-    uint MaterialIndex;
-};
-
-struct Material {
-    float3 Albedo;
-    uint   recieveLight;
-};
-
-ConstantBuffer<CameraProperties> Camera     : register(b0);
-ConstantBuffer<DrawParameters>   DrawParams : register(b1);
-StructuredBuffer<Material>       Materials  : register(t2);
+ConstantBuffer<CameraProperties> Cam : register(b0); // Constant buffer
 
 struct VSOutput {
     float4 PositionCS : SV_POSITION;
-    float3 PositionOS : POSITION;
-    float3 Normal     : NORMAL;
+    float3 Color      : COLOR;
 };
 
-VSOutput vsmain(float3 PositionOS : POSITION, float3 Normal : NORMAL)
+VSOutput vsmain(float3 PositionOS : POSITION, float3 Color : COLOR0)
 {
     VSOutput output = (VSOutput)0;
-    output.PositionCS = mul(Camera.MVP, float4(PositionOS, 1));
-    output.PositionOS = PositionOS;
-    output.Normal = Normal;
+    output.PositionCS = mul(Cam.MVP, float4(PositionOS, 1));
+    output.Color = Color;
     return output;
 }
 
 float4 psmain(VSOutput input) : SV_TARGET
 {
-    float3 lightDir = normalize(Camera.LightPosition - input.PositionOS);
-    float  diffuse = 0.7 * saturate(dot(lightDir, input.Normal));
-
-    Material material = Materials[DrawParams.MaterialIndex];
-    float3 color = material.Albedo;
-    if (material.recieveLight) {
-        color = (0.3 + diffuse) * material.Albedo;
-    }
-
-    return float4(color, 1);   
+    return float4(input.Color, 1);   
 }
 )";
 
@@ -101,12 +65,13 @@ static LPCWSTR gPSShaderName = L"psmain";
 
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
 void CreateGeometryBuffers(
-    DxRenderer*                  pRenderer,
-    std::vector<DrawParameters>& outDrawParams,
-    ID3D12Resource**             ppMaterialBuffer,
-    ID3D12Resource**             ppPositionBuffer,
-    ID3D12Resource**             ppNormalBuffer,
-    vec3*                        pLightPosition);
+    DxRenderer*      pRenderer,
+    ID3D12Resource** ppIndexBuffer,
+    ID3D12Resource** ppVertexBuffer,
+    ID3D12Resource** ppVertexColorBuffer,
+    uint32_t*        pNumIndices,
+    ID3D12Resource** ppTBNVertexBuffer,
+    uint32_t*        pNumTBNVertices);
 
 // =============================================================================
 // main()
@@ -154,38 +119,53 @@ int main(int argc, char** argv)
     CreateGlobalRootSig(renderer.get(), &rootSig);
 
     // *************************************************************************
-    // Graphics pipeline state object
+    // Graphics pipeline state objects
     // *************************************************************************
-    ComPtr<ID3D12PipelineState> pipelineState;
-    CHECK_CALL(CreateDrawNormalPipeline(
+    ComPtr<ID3D12PipelineState> trianglePipelineState;
+    CHECK_CALL(CreateDrawVertexColorPipeline(
         renderer.get(),
         rootSig.Get(),
         dxilVS,
         dxilPS,
         GREX_DEFAULT_RTV_FORMAT,
         GREX_DEFAULT_DSV_FORMAT,
-        &pipelineState));
+        &trianglePipelineState));
+
+    ComPtr<ID3D12PipelineState> tbnDebugPipelineState;
+    CHECK_CALL(CreateDrawVertexColorPipeline(
+        renderer.get(),
+        rootSig.Get(),
+        dxilVS,
+        dxilPS,
+        GREX_DEFAULT_RTV_FORMAT,
+        GREX_DEFAULT_DSV_FORMAT,
+        &tbnDebugPipelineState,
+        D3D12_CULL_MODE_NONE,
+        D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE,
+        DX_PIPELINE_FLAGS_INTERLEAVED_ATTRS));
 
     // *************************************************************************
     // Geometry data
     // *************************************************************************
-    std::vector<DrawParameters> drawParams;
-    ComPtr<ID3D12Resource>      materialBuffer;
-    ComPtr<ID3D12Resource>      positionBuffer;
-    ComPtr<ID3D12Resource>      normalBuffer;
-    vec3                        lightPosition;
+    ComPtr<ID3D12Resource> indexBuffer;
+    ComPtr<ID3D12Resource> positionBuffer;
+    ComPtr<ID3D12Resource> vertexColorBuffer;
+    uint32_t               numIndices = 0;
+    ComPtr<ID3D12Resource> tbnDebugVertexBuffer;
+    uint32_t               tbnDebugNumVertices = 0;
     CreateGeometryBuffers(
         renderer.get(),
-        drawParams,
-        &materialBuffer,
+        &indexBuffer,
         &positionBuffer,
-        &normalBuffer,
-        &lightPosition);
+        &vertexColorBuffer,
+        &numIndices,
+        &tbnDebugVertexBuffer,
+        &tbnDebugNumVertices);
 
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "103_cornell_box_d3d12");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "103_cone_d3d12");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -246,34 +226,27 @@ int main(int argc, char** argv)
             commandList->ClearRenderTargetView(renderer->SwapchainRTVDescriptorHandles[bufferIndex], clearColor, 0, nullptr);
             commandList->ClearDepthStencilView(renderer->SwapchainDSVDescriptorHandles[bufferIndex], D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0xFF, 0, nullptr);
 
-            mat4 modelMat = mat4(1);
-            mat4 viewMat  = glm::lookAt(vec3(0, 3, 5), vec3(0, 2.8f, 0), vec3(0, 1, 0));
-            mat4 projMat  = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
-            mat4 mvpMat   = projMat * viewMat * modelMat;
-
-            struct Camera
-            {
-                mat4 mvp;
-                vec3 lightPosition;
-            };
-
-            Camera cam        = {};
-            cam.mvp           = mvpMat;
-            cam.lightPosition = lightPosition;
+            float t = static_cast<float>(glfwGetTime());
+            mat4 modelMat = glm::rotate(t, vec3(1, 0, 0)); 
+            mat4 viewMat = glm::lookAt(vec3(0, 1, 2), vec3(0, 0, 0), vec3(0, 1, 0));
+            mat4 projMat = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+            mat4 mvpMat  = projMat * viewMat * modelMat;
 
             commandList->SetGraphicsRootSignature(rootSig.Get());
+            commandList->SetGraphicsRoot32BitConstants(0, 16, &mvpMat, 0);
 
-            // Camera (b0)
-            commandList->SetGraphicsRoot32BitConstants(0, 19, &cam, 0);
-            // Materials (t2)
-            commandList->SetGraphicsRootShaderResourceView(2, materialBuffer->GetGPUVirtualAddress());
+            D3D12_INDEX_BUFFER_VIEW ibv = {};
+            ibv.BufferLocation          = indexBuffer->GetGPUVirtualAddress();
+            ibv.SizeInBytes             = static_cast<UINT>(indexBuffer->GetDesc().Width);
+            ibv.Format                  = DXGI_FORMAT_R32_UINT;
+            commandList->IASetIndexBuffer(&ibv);
 
             D3D12_VERTEX_BUFFER_VIEW vbvs[2] = {};
             vbvs[0].BufferLocation           = positionBuffer->GetGPUVirtualAddress();
             vbvs[0].SizeInBytes              = static_cast<UINT>(positionBuffer->GetDesc().Width);
             vbvs[0].StrideInBytes            = 12;
-            vbvs[1].BufferLocation           = normalBuffer->GetGPUVirtualAddress();
-            vbvs[1].SizeInBytes              = static_cast<UINT>(normalBuffer->GetDesc().Width);
+            vbvs[1].BufferLocation           = vertexColorBuffer->GetGPUVirtualAddress();
+            vbvs[1].SizeInBytes              = static_cast<UINT>(vertexColorBuffer->GetDesc().Width);
             vbvs[1].StrideInBytes            = 12;
 
             commandList->IASetVertexBuffers(0, 2, vbvs);
@@ -286,19 +259,21 @@ int main(int argc, char** argv)
             D3D12_RECT scissor = {0, 0, static_cast<long>(gWindowWidth), static_cast<long>(gWindowHeight)};
             commandList->RSSetScissorRects(1, &scissor);
 
-            commandList->SetPipelineState(pipelineState.Get());
+            commandList->SetPipelineState(trianglePipelineState.Get());
 
-            for (auto& draw : drawParams) {
-                D3D12_INDEX_BUFFER_VIEW ibv = {};
-                ibv.BufferLocation          = draw.indexBuffer->GetGPUVirtualAddress();
-                ibv.SizeInBytes             = static_cast<UINT>(draw.indexBuffer->GetDesc().Width);
-                ibv.Format                  = DXGI_FORMAT_R32_UINT;
-                commandList->IASetIndexBuffer(&ibv);
+            commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
 
-                // DrawParams (b1)
-                commandList->SetGraphicsRoot32BitConstants(1, 1, &draw.materialIndex, 0);
+            // TBN debug
+            {
+                commandList->SetPipelineState(tbnDebugPipelineState.Get());
+                commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 
-                commandList->DrawIndexedInstanced(draw.numIndices, 1, 0, 0, 0);
+                vbvs[0].BufferLocation = tbnDebugVertexBuffer->GetGPUVirtualAddress();
+                vbvs[0].SizeInBytes    = static_cast<UINT>(tbnDebugVertexBuffer->GetDesc().Width);
+                vbvs[0].StrideInBytes  = 24;
+                commandList->IASetVertexBuffers(0, 1, vbvs);
+
+                commandList->DrawInstanced(tbnDebugNumVertices, 1, 0, 0);
             }
         }
         D3D12_RESOURCE_BARRIER postRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
@@ -326,25 +301,16 @@ int main(int argc, char** argv)
 
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 {
-    D3D12_ROOT_PARAMETER rootParameters[3]      = {};
-    rootParameters[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    rootParameters[0].Constants.Num32BitValues  = 19;
-    rootParameters[0].Constants.ShaderRegister  = 0;
-    rootParameters[0].Constants.RegisterSpace   = 0;
-    rootParameters[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    rootParameters[1].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    rootParameters[1].Constants.Num32BitValues  = 1;
-    rootParameters[1].Constants.ShaderRegister  = 1;
-    rootParameters[1].Constants.RegisterSpace   = 0;
-    rootParameters[1].ShaderVisibility          = D3D12_SHADER_VISIBILITY_PIXEL;
-    rootParameters[2].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[2].Descriptor.ShaderRegister = 2;
-    rootParameters[2].Descriptor.RegisterSpace  = 0;
-    rootParameters[2].ShaderVisibility          = D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_ROOT_PARAMETER rootParameter     = {};
+    rootParameter.ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    rootParameter.Constants.Num32BitValues = 16;
+    rootParameter.Constants.ShaderRegister = 0;
+    rootParameter.Constants.RegisterSpace  = 0;
+    rootParameter.ShaderVisibility         = D3D12_SHADER_VISIBILITY_VERTEX;
 
     D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-    rootSigDesc.NumParameters             = 3;
-    rootSigDesc.pParameters               = rootParameters;
+    rootSigDesc.NumParameters             = 1;
+    rootSigDesc.pParameters               = &rootParameter;
     rootSigDesc.Flags                     = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     ComPtr<ID3DBlob> blob;
@@ -358,49 +324,21 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 }
 
 void CreateGeometryBuffers(
-    DxRenderer*                  pRenderer,
-    std::vector<DrawParameters>& outDrawParams,
-    ID3D12Resource**             ppMaterialBuffer,
-    ID3D12Resource**             ppPositionBuffer,
-    ID3D12Resource**             normalBuffer,
-    vec3*                        pLightPosition)
+    DxRenderer*      pRenderer,
+    ID3D12Resource** ppIndexBuffer,
+    ID3D12Resource** ppPositionBuffer,
+    ID3D12Resource** ppVertexColorBuffer,
+    uint32_t*        pNumIndices,
+    ID3D12Resource** ppTBNVertexBuffer,
+    uint32_t*        pNumTBNVertices)
 {
-    TriMesh mesh = TriMesh::CornellBox({.enableVertexColors = true, .enableNormals = true});
-
-    uint32_t lightGroupIndex = mesh.GetGroupIndex("light");
-    assert((lightGroupIndex != UINT32_MAX) && "group index for 'light' failed");
-
-    *pLightPosition = mesh.GetGroup(lightGroupIndex).GetBounds().Center();
-
-    std::vector<Material> materials;
-    for (uint32_t materialIndex = 0; materialIndex < mesh.GetNumMaterials(); ++materialIndex) {
-        auto& matDesc = mesh.GetMaterial(materialIndex);
-
-        Material material     = {};
-        material.albedo       = matDesc.baseColor;
-        material.recieveLight = (matDesc.name != "white light") ? true: false;
-        materials.push_back(material);
-
-        auto triangles = mesh.GetTrianglesForMaterial(materialIndex);
-
-        DrawParameters params = {};
-        params.numIndices     = static_cast<uint32_t>(3 * triangles.size());
-        params.materialIndex  = materialIndex;
-
-        CHECK_CALL(CreateBuffer(
-            pRenderer,
-            SizeInBytes(triangles),
-            DataPtr(triangles),
-            &params.indexBuffer));
-
-        outDrawParams.push_back(params);
-    }
+    TriMesh mesh = TriMesh::Cone(1, 1, 32, {.enableVertexColors = true, .enableNormals = true, .enableTangents = true});
 
     CHECK_CALL(CreateBuffer(
         pRenderer,
-        SizeInBytes(materials),
-        DataPtr(materials),
-        ppMaterialBuffer));
+        SizeInBytes(mesh.GetTriangles()),
+        DataPtr(mesh.GetTriangles()),
+        ppIndexBuffer));
 
     CHECK_CALL(CreateBuffer(
         pRenderer,
@@ -410,7 +348,16 @@ void CreateGeometryBuffers(
 
     CHECK_CALL(CreateBuffer(
         pRenderer,
-        SizeInBytes(mesh.GetNormals()),
-        DataPtr(mesh.GetNormals()),
-        normalBuffer));
+        SizeInBytes(mesh.GetVertexColors()),
+        DataPtr(mesh.GetVertexColors()),
+        ppVertexColorBuffer));
+
+    *pNumIndices = 3 * mesh.GetNumTriangles();
+
+    auto tbnVertexData = mesh.GetTBNLineSegments(pNumTBNVertices);
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(tbnVertexData),
+        DataPtr(tbnVertexData),
+        ppTBNVertexBuffer));
 }
