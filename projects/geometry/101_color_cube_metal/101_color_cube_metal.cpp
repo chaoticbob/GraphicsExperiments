@@ -28,38 +28,38 @@ using namespace glm;
 // Shader code
 // =============================================================================
 const char* gShaders = R"(
-	#include <metal_stdlib>
-	using namespace metal;
+#include <metal_stdlib>
+using namespace metal;
 
-	struct Camera {
-		float4x4 MVP;
-	};
+struct Camera {
+	float4x4 MVP;
+};
 
-	struct VSOutput {
-		float4 PositionCS [[position]];
-		float3 Color;
-	};
+struct VSOutput {
+	float4 PositionCS [[position]];
+	float3 Color;
+};
 
-	struct VertexData {
-		float3 PositionOS [[attribute(0)]];
-		float3 Color [[attribute(1)]];
-	};
+struct VertexData {
+	float3 PositionOS [[attribute(0)]];
+	float3 Color [[attribute(1)]];
+};
 
-	VSOutput vertex vertexMain(
-		VertexData vertexData [[stage_in]],
-		constant Camera &Cam [[buffer(2)]])
-	{
-		VSOutput output;
-		float3 position = vertexData.PositionOS;
-		output.PositionCS = Cam.MVP * float4(position, 1.0f);
-		output.Color = vertexData.Color;
-		return output;
-	}
+VSOutput vertex vertexMain(
+	VertexData vertexData [[stage_in]],
+	constant Camera &Cam [[buffer(2)]])
+{
+	VSOutput output;
+	float3 position = vertexData.PositionOS;
+	output.PositionCS = Cam.MVP * float4(position, 1.0f);
+	output.Color = vertexData.Color;
+	return output;
+}
 
-	float4 fragment fragmentMain( VSOutput in [[stage_in]] )
-	{
-		return float4(in.Color, 1.0);
-	}
+float4 fragment fragmentMain( VSOutput in [[stage_in]] )
+{
+	return float4(in.Color, 1.0);
+}
 )";
 
 // =============================================================================
