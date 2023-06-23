@@ -171,7 +171,7 @@ int main(int argc, char** argv)
     std::vector<char> dxilVS;
     std::vector<char> dxilPS;
     {
-        std::string shaderSource = LoadString("projects/255_256_pbr_material_textures/shaders.hlsl");
+        std::string shaderSource = LoadString("projects/253_pbr_material_textures/shaders.hlsl");
         if (shaderSource.empty()) {
             assert(false && "no shader source");
             return EXIT_FAILURE;
@@ -202,7 +202,7 @@ int main(int argc, char** argv)
     std::vector<char> drawTextureDxilVS;
     std::vector<char> drawTextureDxilPS;
     {
-        std::string shaderSource = LoadString("projects/255_256_pbr_material_textures/drawtexture.hlsl");
+        std::string shaderSource = LoadString("projects/253_pbr_material_textures/drawtexture.hlsl");
         if (shaderSource.empty()) {
             assert(false && "no shader source");
             return EXIT_FAILURE;
@@ -385,7 +385,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "255_pbr_material_textures_d3d12");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "253_pbr_material_textures_d3d12");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;

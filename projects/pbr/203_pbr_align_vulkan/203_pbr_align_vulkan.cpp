@@ -66,8 +66,8 @@ struct PBRImplementationInfo
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth  = 1280;
-static uint32_t gWindowHeight = 1024;
+static uint32_t gWindowWidth  = 1920;
+static uint32_t gWindowHeight = 1080;
 static bool     gEnableDebug  = true;
 static bool     gEnableRayTracing = false;
 
@@ -152,7 +152,7 @@ int main(int argc, char** argv)
     std::vector<uint32_t> spirvVS;
     std::vector<uint32_t> spirvFS;
     {
-        std::string shaderSource = LoadString("projects/201_202_pbr_spheres/shaders.hlsl");
+        std::string shaderSource = LoadString("projects/203_pbr_align/shaders.hlsl");
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &spirvVS, &errorMsg);
@@ -198,7 +198,7 @@ int main(int argc, char** argv)
     std::vector<uint32_t> drawTextureSpirvVS;
     std::vector<uint32_t> drawTextureSpirvFS;
     {
-        std::string shaderSource = LoadString("projects/201_202_pbr_spheres/drawtexture.hlsl");
+        std::string shaderSource = LoadString("projects/203_pbr_align/drawtexture.hlsl");
         if (shaderSource.empty()) {
             assert(false && "no shader source");
             return EXIT_FAILURE;
@@ -368,7 +368,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "202_pbr_spheres_vulkan");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "203_pbr_align_vulkan");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -540,11 +540,15 @@ int main(int argc, char** argv)
           // Smooth out the rotation on Y
           gAngle += (gTargetAngle - gAngle) * 0.1f;
 
-          // Camera matrices
-          vec3 eyePosition = vec3(0, 0, 9);
-          mat4 viewMat     = glm::lookAt(eyePosition, vec3(0, 0, 0), vec3(0, 1, 0));
-          mat4 projMat     = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
-          mat4 rotMat      = glm::rotate(glm::radians(gAngle), vec3(0, 1, 0));
+
+
+            // Camera matrices
+            mat4 transformEyeMat     = glm::rotate(glm::radians(-gAngle), vec3(0, 1, 0));
+            vec3 startingEyePosition = vec3(0, 0, 4);
+            vec3 eyePosition         = transformEyeMat * vec4(startingEyePosition, 1);
+            mat4 viewMat             = glm::lookAt(eyePosition, vec3(0, 0, 0), vec3(0, 1, 0));
+            mat4 projMat             = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+
 
           // Set constant buffer values
           pPBRSceneParams->viewProjectionMatrix    = projMat * viewMat;
@@ -632,44 +636,86 @@ int main(int argc, char** argv)
 
              // Pipeline state
              vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pbrPipelineState);
+			 
+            // Shiny pastic
+            {
+                MaterialParameters materialParams = {};
+                materialParams.baseColor          = vec3(1.0f, 1.0f, 1.0f);
+                materialParams.roughness          = 0;
+                materialParams.metallic           = 0;
 
-             MaterialParameters materialParams = {};
-             materialParams.baseColor             = vec3(0.8f, 0.8f, 0.9f);
-             materialParams.roughness          = 0;
-             materialParams.metallic          = 0;
+                float x = -2.25f;
+                float y = 0;
+                float z = 0;
 
-             uint32_t numSlotsX     = 10;
-             uint32_t numSlotsY     = 10;
-             float    slotSize      = 0.9f;
-             float    spanX         = numSlotsX * slotSize;
-             float    spanY         = numSlotsY * slotSize;
-             float    halfSpanX     = spanX / 2.0f;
-             float    halfSpanY     = spanY / 2.0f;
-             float    roughnessStep = 1.0f / (numSlotsX - 1);
-             float    metalnessStep = 1.0f / (numSlotsY - 1);
+                glm::mat4 modelMat = glm::translate(vec3(x, y, z));
+                // DrawParams (b1)
+                vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(mat4), &modelMat);
+                // MaterialParams (b2)
+                vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(mat4), sizeof(MaterialParameters), &materialParams);
 
-             for (uint32_t i = 0; i < numSlotsY; ++i) {
-                materialParams.metallic = 0;
+                vkCmdDrawIndexed(cmdBuf.CommandBuffer, materialSphereNumIndices, 1, 0, 0, 0);
+            }
 
-                for (uint32_t j = 0; j < numSlotsX; ++j) {
-                   float x = -halfSpanX + j * slotSize;
-                   float y = -halfSpanY + i * slotSize;
-                   float z = 0;
-                   // Readjust center
-                   x += slotSize / 2.0f;
-                   y += slotSize / 2.0f;
+            // Rough plastic
+            {
+                MaterialParameters materialParams = {};
+                materialParams.baseColor          = vec3(1.0f, 1.0f, 1.0f);
+                materialParams.roughness          = 1;
+                materialParams.metallic           = 0;
 
-                   glm::mat4 modelMat = rotMat * glm::translate(vec3(x, y, z));
+                float x = -0.75f;
+                float y = 0;
+                float z = 0;
 
-                   vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(mat4), &modelMat);
-                   vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(mat4), sizeof(MaterialParameters), &materialParams);
+                glm::mat4 modelMat = glm::translate(vec3(x, y, z));
+                // DrawParams (b1)
+                vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(mat4), &modelMat);
+                // MaterialParams (b2)
+                vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(mat4), sizeof(MaterialParameters), &materialParams);
 
-                   vkCmdDrawIndexed(cmdBuf.CommandBuffer, materialSphereNumIndices, 1, 0, 0, 0);
+                vkCmdDrawIndexed(cmdBuf.CommandBuffer, materialSphereNumIndices, 1, 0, 0, 0);
+            }
 
-                   materialParams.metallic += roughnessStep;
-                }
-                materialParams.roughness += metalnessStep;
-             }
+            // Shiny metal
+            {
+                MaterialParameters materialParams = {};
+                materialParams.baseColor          = F0_MetalGold;
+                materialParams.roughness          = 0;
+                materialParams.metallic           = 1;
+
+                float x = 0.75f;
+                float y = 0;
+                float z = 0;
+
+                glm::mat4 modelMat = glm::translate(vec3(x, y, z));
+                // DrawParams (b1)
+                vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(mat4), &modelMat);
+                // MaterialParams (b2)
+                vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(mat4), sizeof(MaterialParameters), &materialParams);
+
+                vkCmdDrawIndexed(cmdBuf.CommandBuffer, materialSphereNumIndices, 1, 0, 0, 0);
+            }
+
+            // Rough metal
+            {
+                MaterialParameters materialParams = {};
+                materialParams.baseColor          = vec3(0.5f, 0.5f, 0.5f);
+                materialParams.roughness          = 1;
+                materialParams.metallic           = 1;
+
+                float x = 2.25f;
+                float y = 0;
+                float z = 0;
+
+                glm::mat4 modelMat = glm::translate(vec3(x, y, z));
+                // DrawParams (b1)
+                vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(mat4), &modelMat);
+                // MaterialParams (b2)
+                vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(mat4), sizeof(MaterialParameters), &materialParams);
+
+                vkCmdDrawIndexed(cmdBuf.CommandBuffer, materialSphereNumIndices, 1, 0, 0, 0);
+            }
           }
 
           vkCmdEndRendering(cmdBuf.CommandBuffer);
@@ -872,7 +918,7 @@ void CreateMaterialSphereVertexBuffers(
     VulkanBuffer*    pPositionBuffer,
     VulkanBuffer*    pNormalBuffer)
 {
-   TriMesh mesh = TriMesh::Sphere(0.42f, 256, 256, { .enableNormals = true });
+   TriMesh mesh = TriMesh::Sphere(0.6f, 256, 256, {.enableNormals = true});
 
    *pNumIndices = 3 * mesh.GetNumTriangles();
 

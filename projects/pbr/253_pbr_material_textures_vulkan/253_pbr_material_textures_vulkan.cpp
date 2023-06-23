@@ -10,6 +10,8 @@
 #include <glm/gtx/transform.hpp>
 using namespace glm;
 
+#include <fstream>
+
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
@@ -24,32 +26,21 @@ using namespace glm;
         }                                            \
     }
 
-#define DISTRIBUTION_TROWBRIDGE_REITZ 0
-#define DISTRIBUTION_BECKMANN         1
-#define DISTRIBUTION_BLINN_PHONG      2
+#define MATERIAL_TEXTURE_STRIDE 4
+#define NUM_MATERIALS           16 
+#define TOTAL_MATERIAL_TEXTURES (NUM_MATERIALS * MATERIAL_TEXTURE_STRIDE)
 
-#define FRESNEL_SCHLICK_ROUGHNESS 0
-#define FRESNEL_SCHLICK           1
-#define FRESNEL_COOK_TORRANCE     2
-#define FRESNEL_NONE              3
-
-#define GEOMETRY_SMITH                 0
-#define GEOMETRY_IMPLICIT              1
-#define GEOMETRY_NEUMANN               2
-#define GEOMETRY_COOK_TORRANCE         3
-#define GEOMETRY_KELEMEN               4
-#define GEOMETRY_BECKMANN              5
-#define GEOMETRY_GGX1                  6
-#define GEOMETRY_GGX2                  7
-#define GEOMETRY_SCHLICK_GGX           8
-#define GEOMETRY_SMITH_CORRELATED      9
-#define GEOMETRY_SMITH_CORRELATED_FAST 10
+#define IBL_INTEGRATION_LUT_DESCRIPTOR_OFFSET    3
+#define IBL_INTEGRATION_MS_LUT_DESCRIPTOR_OFFSET 4
+#define IBL_IRRADIANCE_MAPS_DESCRIPTOR_OFFSET    16
+#define IBL_ENVIRONMENT_MAPS_DESCRIPTOR_OFFSET   48
+#define MATERIAL_TEXTURES_DESCRIPTOR_OFFSET      100
 
 // This will be passed in via constant buffer
 struct Light
 {
+    uint32_t active;
     vec3     position;
-    uint32_t __pad;
     vec3     color;
     float    intensity;
 };
@@ -62,35 +53,34 @@ struct PBRSceneParameters
     Light    lights[8];
     uint32_t iblNumEnvLevels;
     uint32_t iblIndex;
-    float    iblDiffuseStrength;
-    float    iblSpecularStrength;
+    uint     multiscatter;
+    uint     colorCorrect;
 };
 
 struct EnvSceneParameters
 {
-    mat4 MVP;
-    uint IBLIndex;
-};
-
-struct DrawParameters
-{
-    mat4 ModelMatrix;
-    uint MaterialIndex;
+    mat4     MVP;
+    uint32_t IBLIndex;
 };
 
 struct MaterialParameters
 {
-    vec3     baseColor;
-    float    roughness;
-    float    metallic;
-    float    specular;
-    uint     directComponentMode;
-    uint32_t D_Func;
-    uint32_t F_Func;
-    uint32_t G_Func;
-    uint32_t indirectComponentMode;
-    uint32_t indirectSpecularMode;
-    uint32_t drawMode;
+    float specular;
+};
+
+struct DrawParameters
+{
+    mat4     ModelMatrix;
+    uint32_t MaterialIndex;
+    uint32_t InvertNormalMapY;
+};
+
+struct MaterialTextures
+{
+    VulkanImage baseColorTexture;
+    VulkanImage normalTexture;
+    VulkanImage roughnessTexture;
+    VulkanImage metallicTexture;
 };
 
 struct GeometryBuffers
@@ -108,68 +98,11 @@ struct GeometryBuffers
 // Constants
 // =============================================================================
 
-const std::vector<std::string> gDistributionNames = {
-    "GGX (Trowbridge-Reitz)",
-    "Beckmann",
-    "Blinn-Phong",
-};
-
-const std::vector<std::string> gFresnelNames = {
-    "Schlick with Roughness",
-    "Schlick",
-    "CookTorrance",
-    "None",
-};
-
-const std::vector<std::string> gGeometryNames = {
-    "Smith",
-    "Implicit",
-    "Neumann",
-    "Cook-Torrance",
-    "Kelemen",
-    "Beckmann",
-    "GGX1",
-    "GGX2",
-    "SchlickGGX",
-    "Smith Correlated",
-    "Smith Correlated Fast",
-};
-
-const std::vector<std::string> gDirectComponentModeNames = {
-    "All",
-    "Distribution",
-    "Fresnel",
-    "Geometry",
-    "Diffuse",
-    "Radiance",
-    "kD",
-    "Specular",
-    "BRDF",
-};
-
-const std::vector<std::string> gIndirectComponentModeNames = {
-    "All",
-    "Diffuse",
-    "Specular"};
-
-const std::vector<std::string> gIndirectSpecularModeNames = {
-    "LUT",
-    "Approx Lazarov",
-    "Approx Polynomial",
-    "Approx Karis",
-};
-
-const std::vector<std::string> gDrawModeNames = {
-    "Full Lighting",
-    "Direct",
-    "Indirect",
-};
-
 const std::vector<std::string> gModelNames = {
     "Sphere",
     "Knob",
     "Monkey",
-    "Teapot",
+    "Cube",
 };
 
 // =============================================================================
@@ -180,45 +113,16 @@ static uint32_t gWindowHeight     = 1080;
 static bool     gEnableDebug      = true;
 static bool     gEnableRayTracing = false;
 
-static LPCWSTR gVSShaderName = L"vsmain";
-static LPCWSTR gPSShaderName = L"psmain";
-
 static float gTargetAngle = 0.0f;
 static float gAngle       = 0.0f;
 
-// clang-format off
-static std::vector<MaterialParameters> gMaterialParams = {
-    {F0_MetalCopper,         0.25f, 1.00f, 0.5f, 0, 0, 0, 0},
-    {F0_MetalGold,           0.05f, 1.00f, 0.5f, 0, 0, 0, 0},
-    {F0_MetalSilver,         0.18f, 1.00f, 0.5f, 0, 0, 0, 0},
-    {F0_MetalZinc,           0.65f, 1.00f, 0.5f, 0, 0, 0, 0},
-    {F0_MetalTitanium,       0.11f, 1.00f, 0.5f, 0, 0, 0, 0},
-    {vec3(0.6f, 0.0f, 0.0f), 0.00f, 0.00f, 0.5f, 0, 0, 0, 0},
-    {vec3(0.0f, 0.6f, 0.0f), 0.25f, 0.00f, 0.5f, 0, 0, 0, 0},
-    {vec3(0.0f, 0.0f, 0.6f), 0.50f, 0.00f, 0.5f, 0, 0, 0, 0},
-    {vec3(0.7f, 0.7f, 0.2f), 0.92f, 0.15f, 0.5f, 0, 0, 0, 0},
-};
-// clang-format on
+static std::vector<std::string> gMaterialNames = {};
 
-static std::vector<std::string> gMaterialNames = {
-    "Copper",
-    "Gold",
-    "Silver",
-    "Zink",
-    "Titanium",
-    "Shiny Plastic",
-    "Rough Plastic",
-    "Rougher Plastic",
-    "Roughest Plastic",
-};
-
-static uint32_t                 gNumLights           = 0;
-static const uint32_t           gMaxIBLs             = 32;
-static uint32_t                 gIBLIndex            = 0;
-static std::vector<std::string> gIBLNames            = {};
-static float                    gIBLDiffuseStrength  = 1.0f;
-static float                    gIBLSpecularStrength = 1.0f;
-static uint32_t                 gModelIndex          = 0;
+static uint32_t                 gNumLights  = 4;
+static const uint32_t           gMaxIBLs    = 32;
+static uint32_t                 gIBLIndex   = 0;
+static std::vector<std::string> gIBLNames   = {};
+static uint32_t                 gModelIndex = 0;
 
 void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout);
 void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout);
@@ -230,36 +134,36 @@ void CreateMaterialModels(
     std::vector<GeometryBuffers>& outGeomtryBuffers);
 void CreateIBLTextures(
     VulkanRenderer*           pRenderer,
-    VulkanImage*              pBRDFLUT,
+    VulkanImage*              ppBRDFLUT,
+    VulkanImage*              ppMultiscatterBRDFLUT,
     std::vector<VulkanImage>& outIrradianceTextures,
     std::vector<VulkanImage>& outEnvironmentTextures,
     std::vector<uint32_t>&    outEnvNumLevels);
+void CreateMaterials(
+    VulkanRenderer*                  pRenderer,
+    MaterialTextures&                outDefaultMaterialTextures,
+    std::vector<MaterialTextures>&   outMaterialTexturesSets,
+    std::vector<MaterialParameters>& outMaterialParametersSets);
 void CreateDescriptorBuffer(
     VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
+    VkDescriptorSetLayout pDescriptorSetLayout,
     VulkanBuffer*         pBuffer);
 void WritePBRDescriptors(
-    VulkanRenderer*           pRenderer,
-    VkDescriptorSetLayout     descriptorSetLayout,
-    VulkanBuffer*             pDescriptorBuffer,
-    const VulkanBuffer*       pSceneParamsBuffer,
-    const VulkanBuffer*       pMaterialsBuffer,
-    const VulkanImage*        pBRDFLUT,
-    std::vector<VulkanImage>& pIrradianceTexture,
-    std::vector<VulkanImage>& pEnvTexture);
+    VulkanRenderer*                pRenderer,
+    VkDescriptorSetLayout          descriptorSetLayout,
+    VulkanBuffer*                  pDescriptorBuffer,
+    VulkanBuffer*                  pSceneParamsBuffer,
+    VulkanBuffer*                  pMaterialBuffer,
+    std::vector<MaterialTextures>& materialTextureSets,
+    const VulkanImage*             pBRDFLUT,
+    const VulkanImage*             pMultiscatterBRDFLUT,
+    std::vector<VulkanImage>&      irrTextures,
+    std::vector<VulkanImage>&      envTextures);
 void WriteEnvDescriptors(
-    VulkanRenderer*           pRenderer,
-    VkDescriptorSetLayout     descriptorSetLayout,
-    VulkanBuffer*             pDescriptorBuffer,
-    std::vector<VulkanImage>& envTextures);
-
-/*
-void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
-void CreateEnvironmentRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
-void CreateDescriptorHeap(
-    DxRenderer*            pRenderer,
-    ID3D12DescriptorHeap** ppHeap);
-    */
+    VulkanRenderer*          pRenderer,
+    VkDescriptorSetLayout    descriptorSetLayout,
+    VulkanBuffer*            pDescriptorBuffer,
+    std::vector<VulkanImage> envTextures);
 
 void MouseMove(int x, int y, int buttons)
 {
@@ -295,7 +199,7 @@ int main(int argc, char** argv)
     std::vector<uint32_t> spirvVS;
     std::vector<uint32_t> spirvFS;
     {
-        std::string shaderSource = LoadString("projects/251_252_pbr_explorer/shaders.hlsl");
+        std::string shaderSource = LoadString("projects/253_pbr_material_textures/shaders.hlsl");
         if (shaderSource.empty()) {
             assert(false && "no shader source");
             return EXIT_FAILURE;
@@ -345,7 +249,7 @@ int main(int argc, char** argv)
     std::vector<uint32_t> drawTextureSpirvVS;
     std::vector<uint32_t> drawTextureSpirvFS;
     {
-        std::string shaderSource = LoadString("projects/251_252_pbr_explorer/drawtexture.hlsl");
+        std::string shaderSource = LoadString("projects/253_pbr_material_textures/drawtexture.hlsl");
         if (shaderSource.empty()) {
             assert(false && "no shader source");
             return EXIT_FAILURE;
@@ -406,8 +310,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // PBR pipeline state object
     // *************************************************************************
-    VkPipeline pbrPipelineState = VK_NULL_HANDLE;
-    CHECK_CALL(CreateDrawNormalPipeline(
+    VkPipeline pbrPipelineState;
+    CHECK_CALL(CreateGraphicsPipeline1(
         renderer.get(),
         pbrPipelineLayout.PipelineLayout,
         shaderModuleVS,
@@ -415,15 +319,12 @@ int main(int argc, char** argv)
         GREX_DEFAULT_RTV_FORMAT,
         GREX_DEFAULT_DSV_FORMAT,
         &pbrPipelineState,
-        false, // enable tangents
-        VK_CULL_MODE_BACK_BIT,
-        "vsmain",
-        "psmain"));
+        VK_CULL_MODE_BACK_BIT));
 
     // *************************************************************************
     // Environment pipeline state object
     // *************************************************************************
-    VkPipeline envPipelineState = VK_NULL_HANDLE;
+    VkPipeline envPipelineState;
     CHECK_CALL(CreateDrawTexturePipeline(
         renderer.get(),
         envPipelineLayout.PipelineLayout,
@@ -437,20 +338,7 @@ int main(int argc, char** argv)
         "psmain"));
 
     // *************************************************************************
-    // Material buffer
-    // *************************************************************************
-    VulkanBuffer pbrMaterialParamsBuffer = {};
-    CHECK_CALL(CreateBuffer(
-        renderer.get(),
-        SizeInBytes(gMaterialParams),
-        DataPtr(gMaterialParams),
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-        VMA_MEMORY_USAGE_CPU_TO_GPU,
-        0,
-        &pbrMaterialParamsBuffer));
-
-    // *************************************************************************
-    // Constant buffers
+    // Constant buffer
     // *************************************************************************
     VulkanBuffer pbrSceneParamsBuffer;
     CHECK_CALL(CreateBuffer(
@@ -482,10 +370,42 @@ int main(int argc, char** argv)
     // Environment texture
     // *************************************************************************
     VulkanImage              brdfLUT;
+    VulkanImage              multiscatterBRDFLUT;
     std::vector<VulkanImage> irrTextures;
     std::vector<VulkanImage> envTextures;
     std::vector<uint32_t>    envNumLevels;
-    CreateIBLTextures(renderer.get(), &brdfLUT, irrTextures, envTextures, envNumLevels);
+    CreateIBLTextures(
+        renderer.get(),
+        &brdfLUT,
+        &multiscatterBRDFLUT,
+        irrTextures,
+        envTextures,
+        envNumLevels);
+
+    // *************************************************************************
+    // Material texture
+    // *************************************************************************
+    MaterialTextures                defaultMaterialTextures;
+    std::vector<MaterialTextures>   materialTexturesSets;
+    std::vector<MaterialParameters> materialParametersSets;
+    CreateMaterials(
+        renderer.get(),
+        defaultMaterialTextures,
+        materialTexturesSets,
+        materialParametersSets);
+
+    // *************************************************************************
+    // Material buffer
+    // *************************************************************************
+    VulkanBuffer materialBuffer;
+    CHECK_CALL(CreateBuffer(
+        renderer.get(),
+        SizeInBytes(materialParametersSets),
+        DataPtr(materialParametersSets),
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VMA_MEMORY_USAGE_CPU_TO_GPU,
+        0,
+        &materialBuffer));
 
     // *************************************************************************
     // Descriptor buffers
@@ -498,8 +418,10 @@ int main(int argc, char** argv)
         pbrPipelineLayout.DescriptorSetLayout,
         &pbrDescriptorBuffer,
         &pbrSceneParamsBuffer,
-        &pbrMaterialParamsBuffer,
+        &materialBuffer,
+        materialTexturesSets,
         &brdfLUT,
+        &multiscatterBRDFLUT,
         irrTextures,
         envTextures);
 
@@ -515,7 +437,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "252_pbr_explorer_vulkan");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "253_pbr_material_textures_vulkan");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -612,48 +534,49 @@ int main(int argc, char** argv)
     }
 
     // *************************************************************************
-    // Persistent map scene parameters
+    // Persistent map parameters
     // *************************************************************************
     PBRSceneParameters* pPBRSceneParams = nullptr;
     vmaMapMemory(renderer->Allocator, pbrSceneParamsBuffer.Allocation, reinterpret_cast<void**>(&pPBRSceneParams));
 
     MaterialParameters* pMaterialParams = nullptr;
-    vmaMapMemory(renderer->Allocator, pbrMaterialParamsBuffer.Allocation, reinterpret_cast<void**>(&pMaterialParams));
+    vmaMapMemory(renderer->Allocator, materialBuffer.Allocation, reinterpret_cast<void**>(&pMaterialParams));
+
+    // *************************************************************************
+    // Set some scene params
+    // *************************************************************************
+    pPBRSceneParams->numLights           = gNumLights;
+    pPBRSceneParams->lights[0].active    = 0;
+    pPBRSceneParams->lights[0].position  = vec3(3, 10, 0);
+    pPBRSceneParams->lights[0].color     = vec3(1, 1, 1);
+    pPBRSceneParams->lights[0].intensity = 1.5f;
+    pPBRSceneParams->lights[1].active    = 0;
+    pPBRSceneParams->lights[1].position  = vec3(-8, 1, 4);
+    pPBRSceneParams->lights[1].color     = vec3(0.85f, 0.95f, 0.81f);
+    pPBRSceneParams->lights[1].intensity = 0.4f;
+    pPBRSceneParams->lights[2].active    = 0;
+    pPBRSceneParams->lights[2].position  = vec3(0, 8, -8);
+    pPBRSceneParams->lights[2].color     = vec3(0.89f, 0.89f, 0.97f);
+    pPBRSceneParams->lights[2].intensity = 0.95f;
+    pPBRSceneParams->lights[3].active    = 0;
+    pPBRSceneParams->lights[3].position  = vec3(15, 0, 0);
+    pPBRSceneParams->lights[3].color     = vec3(0.92f, 0.5f, 0.7f);
+    pPBRSceneParams->lights[3].intensity = 0.5f;
+    pPBRSceneParams->iblNumEnvLevels     = envNumLevels[gIBLIndex];
+    pPBRSceneParams->iblIndex            = gIBLIndex;
+    pPBRSceneParams->colorCorrect        = 0;
 
     // *************************************************************************
     // Main loop
     // *************************************************************************
     VkClearValue clearValues[2];
-    clearValues[0].color = {
-        {0.0f, 0.0f, 0.2f, 1.0f}
-    };
+    clearValues[0].color        = { {0.0f, 0.0f, 0.2f, 1.0f} };
     clearValues[1].depthStencil = {1.0f, 0};
 
     while (window->PollEvents()) {
         window->ImGuiNewFrameVulkan();
 
         if (ImGui::Begin("Scene")) {
-            static const char* currentIBLName = gIBLNames[0].c_str();
-            if (ImGui::BeginCombo("IBL", currentIBLName)) {
-                for (size_t i = 0; i < gIBLNames.size(); ++i) {
-                    bool isSelected = (currentIBLName == gIBLNames[i]);
-                    if (ImGui::Selectable(gIBLNames[i].c_str(), isSelected)) {
-                        currentIBLName = gIBLNames[i].c_str();
-                        gIBLIndex      = static_cast<uint32_t>(i);
-                    }
-                    if (isSelected) {
-                        ImGui::SetItemDefaultFocus();
-                    }
-                }
-                ImGui::EndCombo();
-            }
-
-            ImGui::SliderFloat("IBL Diffuse Strength", &gIBLDiffuseStrength, 0.0f, 2.0f);
-            ImGui::SliderFloat("IBL Specular Strength", &gIBLSpecularStrength, 0.0f, 2.0f);
-            ImGui::SliderInt("Number of Lights", reinterpret_cast<int*>(&gNumLights), 0, 4);
-
-            ImGui::Separator();
-
             static const char* currentModelName = gModelNames[0].c_str();
             if (ImGui::BeginCombo("Model", currentModelName)) {
                 for (size_t i = 0; i < gModelNames.size(); ++i) {
@@ -668,133 +591,52 @@ int main(int argc, char** argv)
                 }
                 ImGui::EndCombo();
             }
+
+            ImGui::Separator();
+
+            static const char* currentIBLName = gIBLNames[0].c_str();
+            if (ImGui::BeginCombo("IBL", currentIBLName)) {
+                for (size_t i = 0; i < gIBLNames.size(); ++i) {
+                    bool isSelected = (currentIBLName == gIBLNames[i]);
+                    if (ImGui::Selectable(gIBLNames[i].c_str(), isSelected)) {
+                        currentIBLName         = gIBLNames[i].c_str();
+                        pPBRSceneParams->iblIndex = static_cast<uint32_t>(i);
+                    }
+                    if (isSelected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
+            ImGui::Separator();
+
+            ImGui::Checkbox("Multiscatter", reinterpret_cast<bool*>(&pPBRSceneParams->multiscatter));
+
+            ImGui::Separator();
+
+            ImGui::Checkbox("Color Correct", reinterpret_cast<bool*>(&pPBRSceneParams->colorCorrect));
+
+            ImGui::Separator();
+
+            for (uint32_t lightIdx = 0; lightIdx < 4; ++lightIdx) {
+                std::stringstream lightName;
+                lightName << "Light " << lightIdx;
+                if (ImGui::TreeNodeEx(lightName.str().c_str(), ImGuiTreeNodeFlags_None)) {
+                    ImGui::Checkbox("Active", reinterpret_cast<bool*>(&pPBRSceneParams->lights[lightIdx].active));
+                    ImGui::SliderFloat("Intensity", &pPBRSceneParams->lights[lightIdx].intensity, 0.0f, 10.0f);
+                    ImGui::ColorPicker3("Albedo", reinterpret_cast<float*>(&(pPBRSceneParams->lights[lightIdx].color)), ImGuiColorEditFlags_NoInputs);
+
+                    ImGui::TreePop();
+                }
+            }
         }
         ImGui::End();
 
         if (ImGui::Begin("Material Parameters")) {
-            static std::vector<const char*> currentDrawModeNames(gMaterialParams.size(), gDrawModeNames[0].c_str());
-            static std::vector<const char*> currentDirectComponentModeNames(gMaterialParams.size(), gDirectComponentModeNames[0].c_str());
-            static std::vector<const char*> currentDistributionNames(gMaterialParams.size(), gDistributionNames[0].c_str());
-            static std::vector<const char*> currentFresnelNames(gMaterialParams.size(), gFresnelNames[0].c_str());
-            static std::vector<const char*> currentGeometryNames(gMaterialParams.size(), gGeometryNames[0].c_str());
-            static std::vector<const char*> currentIndirectComponentModeNames(gMaterialParams.size(), gIndirectComponentModeNames[0].c_str());
-            static std::vector<const char*> currentIndirectSpecularModeNames(gMaterialParams.size(), gIndirectSpecularModeNames[0].c_str());
-
             for (uint32_t matIdx = 0; matIdx < gMaterialNames.size(); ++matIdx) {
                 if (ImGui::TreeNodeEx(gMaterialNames[matIdx].c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-                    // DrawMode
-                    if (ImGui::BeginCombo("DrawMode", currentDrawModeNames[matIdx])) {
-                        for (size_t i = 0; i < gDrawModeNames.size(); ++i) {
-                            bool isSelected = (currentDrawModeNames[matIdx] == gDrawModeNames[i]);
-                            if (ImGui::Selectable(gDrawModeNames[i].c_str(), isSelected)) {
-                                currentDrawModeNames[matIdx]     = gDrawModeNames[i].c_str();
-                                pMaterialParams[matIdx].drawMode = static_cast<uint32_t>(i);
-                            }
-                            if (isSelected) {
-                                ImGui::SetItemDefaultFocus();
-                            }
-                        }
-                        ImGui::EndCombo();
-                    }
-                    // Direct Light Params
-                    if (ImGui::TreeNodeEx("Direct Light Parames", ImGuiTreeNodeFlags_DefaultOpen)) {
-                        // DirectComponentMode
-                        if (ImGui::BeginCombo("Direct Component Mode", currentDirectComponentModeNames[matIdx])) {
-                            for (size_t i = 0; i < gDirectComponentModeNames.size(); ++i) {
-                                bool isSelected = (currentDirectComponentModeNames[matIdx] == gDirectComponentModeNames[i]);
-                                if (ImGui::Selectable(gDirectComponentModeNames[i].c_str(), isSelected)) {
-                                    currentDirectComponentModeNames[matIdx]     = gDirectComponentModeNames[i].c_str();
-                                    pMaterialParams[matIdx].directComponentMode = static_cast<uint32_t>(i);
-                                }
-                                if (isSelected) {
-                                    ImGui::SetItemDefaultFocus();
-                                }
-                            }
-                            ImGui::EndCombo();
-                        }
-                        // Distribution
-                        if (ImGui::BeginCombo("Distribution", currentDistributionNames[matIdx])) {
-                            for (size_t i = 0; i < gDistributionNames.size(); ++i) {
-                                bool isSelected = (currentDistributionNames[matIdx] == gDistributionNames[i]);
-                                if (ImGui::Selectable(gDistributionNames[i].c_str(), isSelected)) {
-                                    currentDistributionNames[matIdx] = gDistributionNames[i].c_str();
-                                    pMaterialParams[matIdx].D_Func   = static_cast<uint32_t>(i);
-                                }
-                                if (isSelected) {
-                                    ImGui::SetItemDefaultFocus();
-                                }
-                            }
-                            ImGui::EndCombo();
-                        }
-                        // Fresnel
-                        if (ImGui::BeginCombo("Fresnel", currentFresnelNames[matIdx])) {
-                            for (size_t i = 0; i < gFresnelNames.size(); ++i) {
-                                bool isSelected = (currentFresnelNames[matIdx] == gFresnelNames[i]);
-                                if (ImGui::Selectable(gFresnelNames[i].c_str(), isSelected)) {
-                                    currentFresnelNames[matIdx]    = gFresnelNames[i].c_str();
-                                    pMaterialParams[matIdx].F_Func = static_cast<uint32_t>(i);
-                                }
-                                if (isSelected) {
-                                    ImGui::SetItemDefaultFocus();
-                                }
-                            }
-                            ImGui::EndCombo();
-                        }
-                        // Geometry
-                        if (ImGui::BeginCombo("Geometry", currentGeometryNames[matIdx])) {
-                            for (size_t i = 0; i < gGeometryNames.size(); ++i) {
-                                bool isSelected = (currentGeometryNames[matIdx] == gGeometryNames[i]);
-                                if (ImGui::Selectable(gGeometryNames[i].c_str(), isSelected)) {
-                                    currentGeometryNames[matIdx]   = gGeometryNames[i].c_str();
-                                    pMaterialParams[matIdx].G_Func = static_cast<uint32_t>(i);
-                                }
-                                if (isSelected) {
-                                    ImGui::SetItemDefaultFocus();
-                                }
-                            }
-                            ImGui::EndCombo();
-                        }
-
-                        ImGui::TreePop();
-                    }
-                    // Indirect Light Params
-                    if (ImGui::TreeNodeEx("Indirect Light Parames", ImGuiTreeNodeFlags_DefaultOpen)) {
-                        // IndirectComponentMode
-                        if (ImGui::BeginCombo("Indirect Component Mode", currentIndirectComponentModeNames[matIdx])) {
-                            for (size_t i = 0; i < gIndirectComponentModeNames.size(); ++i) {
-                                bool isSelected = (currentIndirectComponentModeNames[matIdx] == gIndirectComponentModeNames[i]);
-                                if (ImGui::Selectable(gIndirectComponentModeNames[i].c_str(), isSelected)) {
-                                    currentIndirectComponentModeNames[matIdx]     = gIndirectComponentModeNames[i].c_str();
-                                    pMaterialParams[matIdx].indirectComponentMode = static_cast<uint32_t>(i);
-                                }
-                                if (isSelected) {
-                                    ImGui::SetItemDefaultFocus();
-                                }
-                            }
-                            ImGui::EndCombo();
-                        }
-                        // Specular Mode
-                        if (ImGui::BeginCombo("Specular Mode", currentIndirectSpecularModeNames[matIdx])) {
-                            for (size_t i = 0; i < gIndirectSpecularModeNames.size(); ++i) {
-                                bool isSelected = (currentIndirectSpecularModeNames[matIdx] == gIndirectSpecularModeNames[i]);
-                                if (ImGui::Selectable(gIndirectSpecularModeNames[i].c_str(), isSelected)) {
-                                    currentIndirectSpecularModeNames[matIdx]     = gIndirectSpecularModeNames[i].c_str();
-                                    pMaterialParams[matIdx].indirectSpecularMode = static_cast<uint32_t>(i);
-                                }
-                                if (isSelected) {
-                                    ImGui::SetItemDefaultFocus();
-                                }
-                            }
-                            ImGui::EndCombo();
-                        }
-
-                        ImGui::TreePop();
-                    }
-
-                    ImGui::SliderFloat("Roughness", &(pMaterialParams[matIdx].roughness), 0.0f, 1.0f);
-                    ImGui::SliderFloat("Metallic", &(pMaterialParams[matIdx].metallic), 0.0f, 1.0f);
                     ImGui::SliderFloat("Specular", &(pMaterialParams[matIdx].specular), 0.0f, 1.0f);
-                    ImGui::ColorPicker3("Albedo", reinterpret_cast<float*>(&(pMaterialParams[matIdx].baseColor)), ImGuiColorEditFlags_NoInputs);
 
                     ImGui::TreePop();
                 }
@@ -861,34 +703,15 @@ int main(int argc, char** argv)
 
             // Camera matrices - spin the camera around the target
             mat4 transformEyeMat     = glm::rotate(glm::radians(-gAngle), vec3(0, 1, 0));
-            vec3 startingEyePosition = vec3(0, 3, 8);
+            vec3 startingEyePosition = vec3(0, 2.5f, 10);
             vec3 eyePosition         = transformEyeMat * vec4(startingEyePosition, 1);
             mat4 viewMat             = glm::lookAt(eyePosition, vec3(0, 0, 0), vec3(0, 1, 0));
             mat4 projMat             = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
 
-            // Set constant buffer values
-            //
-            // We're rotating everything in the world...including the lights
-            //
+            // Set scene params values that required calculation
             pPBRSceneParams->viewProjectionMatrix = projMat * viewMat;
             pPBRSceneParams->eyePosition          = eyePosition;
-            pPBRSceneParams->numLights            = gNumLights;
-            pPBRSceneParams->lights[0].position   = vec3(3, 10, 0);
-            pPBRSceneParams->lights[0].color      = vec3(1, 1, 1);
-            pPBRSceneParams->lights[0].intensity  = 1.5f;
-            pPBRSceneParams->lights[1].position   = vec3(-8, 1, 4);
-            pPBRSceneParams->lights[1].color      = vec3(0.85f, 0.95f, 0.81f);
-            pPBRSceneParams->lights[1].intensity  = 0.4f;
-            pPBRSceneParams->lights[2].position   = vec3(0, 8, -8);
-            pPBRSceneParams->lights[2].color      = vec3(0.89f, 0.89f, 0.97f);
-            pPBRSceneParams->lights[2].intensity  = 0.95f;
-            pPBRSceneParams->lights[3].position   = vec3(15, 0, 0);
-            pPBRSceneParams->lights[3].color      = vec3(0.92f, 0.5f, 0.7f);
-            pPBRSceneParams->lights[3].intensity  = 0.5f;
             pPBRSceneParams->iblNumEnvLevels      = envNumLevels[gIBLIndex];
-            pPBRSceneParams->iblIndex             = gIBLIndex;
-            pPBRSceneParams->iblDiffuseStrength   = gIBLDiffuseStrength;
-            pPBRSceneParams->iblSpecularStrength  = gIBLSpecularStrength;
 
             // Draw environment
             {
@@ -916,12 +739,8 @@ int main(int argc, char** argv)
 
                 // SceneParmas (b0)
                 mat4 mvp = projMat * viewMat * moveUp;
-
-                EnvSceneParameters envSceneParams = {};
-                envSceneParams.IBLIndex           = gIBLIndex;
-                envSceneParams.MVP                = mvp;
-
-                vkCmdPushConstants(cmdBuf.CommandBuffer, envPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(EnvSceneParameters), &envSceneParams);
+                vkCmdPushConstants(cmdBuf.CommandBuffer, envPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &mvp);
+                vkCmdPushConstants(cmdBuf.CommandBuffer, envPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &pPBRSceneParams->iblIndex);
 
                 // Bind the Index Buffer
                 vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, envGeoBuffers.indexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
@@ -934,7 +753,7 @@ int main(int argc, char** argv)
                 vkCmdDrawIndexed(cmdBuf.CommandBuffer, envGeoBuffers.numIndices, 1, 0, 0, 0);
             }
 
-            // Draw sample spheres
+            // Draw material models
             {
                 VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
                 descriptorBufferBindingInfo.pNext                            = nullptr;
@@ -954,146 +773,251 @@ int main(int argc, char** argv)
                     &descriptorBufferOffsets);
 
                 // Select which model to draw
-                const GeometryBuffers& geoBuffers    = matGeoBuffers[gModelIndex];
-                uint32_t               geoIndexCount = geoBuffers.numIndices;
+                const GeometryBuffers& geoBuffers = matGeoBuffers[gModelIndex];
 
-                // Bind the Index Buffer
+                // Index buffer
                 vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, geoBuffers.indexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
 
-                // Bind the Vertex Buffer
-                VkBuffer     vertexBuffers[] = {geoBuffers.positionBuffer.Buffer, geoBuffers.normalBuffer.Buffer};
-                VkDeviceSize offsets[]       = {0, 0};
-                vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 2, vertexBuffers, offsets);
+                // Vertex buffers
+                VkBuffer vertexBuffers[] = {
+                    geoBuffers.positionBuffer.Buffer,
+                    geoBuffers.texCoordBuffer.Buffer,
+                    geoBuffers.normalBuffer.Buffer,
+                    geoBuffers.tangentBuffer.Buffer,
+                    geoBuffers.bitangentBuffer.Buffer,
+                };
+                VkDeviceSize offsets[] = {0, 0, 0, 0, 0};
+                vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 5, vertexBuffers, offsets);
 
                 // Pipeline state
                 vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pbrPipelineState);
 
-                const float yPos = 0.0f;
+                const float yPos             = 0.0f;
+                uint32_t    materialIndex    = 0;
+                uint32_t    invertNormalMapY = false; // Invert if sphere
 
-                // Copper
+                // Material 0
                 {
-                    glm::mat4 modelMat      = glm::translate(vec3(-3, yPos, 3));
-                    uint32_t  materialIndex = 0;
+                    glm::mat4 modelMat = glm::translate(vec3(-4.5f, yPos, 4.5f));
 
-                    DrawParameters drawParams = {};
-                    drawParams.ModelMatrix    = modelMat;
-                    drawParams.MaterialIndex  = materialIndex;
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
-
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoIndexCount, 1, 0, 0, 0);
+                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                        ++materialIndex;
+                    }
                 }
 
-                // Gold
+                // Material 1
                 {
-                    glm::mat4 modelMat      = glm::translate(vec3(0, yPos, 3));
-                    uint32_t  materialIndex = 1;
+                    glm::mat4 modelMat = glm::translate(vec3(-1.5f, yPos, 4.5f));
 
-                    DrawParameters drawParams = {};
-                    drawParams.ModelMatrix    = modelMat;
-                    drawParams.MaterialIndex  = materialIndex;
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
-
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoIndexCount, 1, 0, 0, 0);
+                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                        ++materialIndex;
+                    }
                 }
 
-                // Silver
+                // Material 2
                 {
-                    glm::mat4 modelMat      = glm::translate(vec3(3, yPos, 3));
-                    uint32_t  materialIndex = 2;
+                    glm::mat4 modelMat = glm::translate(vec3(1.5f, yPos, 4.5f));
 
-                    DrawParameters drawParams = {};
-                    drawParams.ModelMatrix    = modelMat;
-                    drawParams.MaterialIndex  = materialIndex;
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
-
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoIndexCount, 1, 0, 0, 0);
+                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                        ++materialIndex;
+                    }
                 }
 
-                // Zink
+                // Material 3
                 {
-                    glm::mat4 modelMat      = glm::translate(vec3(-3, yPos, 0));
-                    uint32_t  materialIndex = 3;
+                    glm::mat4 modelMat = glm::translate(vec3(4.5f, yPos, 4.5f));
 
-                    DrawParameters drawParams = {};
-                    drawParams.ModelMatrix    = modelMat;
-                    drawParams.MaterialIndex  = materialIndex;
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
-
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoIndexCount, 1, 0, 0, 0);
+                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                        ++materialIndex;
+                    }
                 }
 
-                // Titanium
+                // Material 4
                 {
-                    glm::mat4 modelMat      = glm::translate(vec3(0, yPos, 0));
-                    uint32_t  materialIndex = 4;
+                    glm::mat4 modelMat = glm::translate(vec3(-4.5f, yPos, 1.5f));
 
-                    DrawParameters drawParams = {};
-                    drawParams.ModelMatrix    = modelMat;
-                    drawParams.MaterialIndex  = materialIndex;
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
-
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoIndexCount, 1, 0, 0, 0);
+                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                        ++materialIndex;
+                    }
                 }
 
-                // Shiny Plastic
+                // Material 5
                 {
-                    glm::mat4 modelMat      = glm::translate(vec3(3, yPos, 0));
-                    uint32_t  materialIndex = 5;
+                    glm::mat4 modelMat = glm::translate(vec3(-1.5f, yPos, 1.5f));
 
-                    DrawParameters drawParams = {};
-                    drawParams.ModelMatrix    = modelMat;
-                    drawParams.MaterialIndex  = materialIndex;
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
-
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoIndexCount, 1, 0, 0, 0);
+                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                        ++materialIndex;
+                    }
                 }
 
-                // Rough Plastic
+                // Material 6
                 {
-                    glm::mat4 modelMat      = glm::translate(vec3(-3, yPos, -3));
-                    uint32_t  materialIndex = 6;
+                    glm::mat4 modelMat = glm::translate(vec3(1.5f, yPos, 1.5f));
 
-                    DrawParameters drawParams = {};
-                    drawParams.ModelMatrix    = modelMat;
-                    drawParams.MaterialIndex  = materialIndex;
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
-
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoIndexCount, 1, 0, 0, 0);
+                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                        ++materialIndex;
+                    }
                 }
 
-                // Rougher Plastic
+                // Material 7
                 {
-                    glm::mat4 modelMat      = glm::translate(vec3(0, yPos, -3));
-                    uint32_t  materialIndex = 7;
+                    glm::mat4 modelMat = glm::translate(vec3(4.5f, yPos, 1.5f));
 
-                    DrawParameters drawParams = {};
-                    drawParams.ModelMatrix    = modelMat;
-                    drawParams.MaterialIndex  = materialIndex;
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
-
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoIndexCount, 1, 0, 0, 0);
+                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                        ++materialIndex;
+                    }
                 }
 
-                // Roughest Plastic
+                // Material 8
                 {
-                    glm::mat4 modelMat      = glm::translate(vec3(3, yPos, -3));
-                    uint32_t  materialIndex = 8;
+                    glm::mat4 modelMat = glm::translate(vec3(-4.5f, yPos, -1.5f));
 
-                    DrawParameters drawParams = {};
-                    drawParams.ModelMatrix    = modelMat;
-                    drawParams.MaterialIndex  = materialIndex;
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(DrawParameters), &drawParams);
+                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                        ++materialIndex;
+                    }
+                }
 
-                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoIndexCount, 1, 0, 0, 0);
+                // Material 9
+                {
+                    glm::mat4 modelMat = glm::translate(vec3(-1.5f, yPos, -1.5f));
+
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+
+                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                        ++materialIndex;
+                    }
+                }
+
+                // Material 10
+                {
+                    glm::mat4 modelMat = glm::translate(vec3(1.5f, yPos, -1.5f));
+
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+
+                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                        ++materialIndex;
+                    }
+                }
+
+                // Material 11
+                {
+                    glm::mat4 modelMat = glm::translate(vec3(4.5f, yPos, -1.5f));
+
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+
+                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                        ++materialIndex;
+                    }
+                }
+
+                // Material 12
+                {
+                    glm::mat4 modelMat = glm::translate(vec3(-4.5f, yPos, -4.5f));
+
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+
+                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                        ++materialIndex;
+                    }
+                }
+
+                // Material 13
+                {
+                    glm::mat4 modelMat = glm::translate(vec3(-1.5f, yPos, -4.5f));
+
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+
+                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                        ++materialIndex;
+                    }
+                }
+
+                // Material 14
+                {
+                    glm::mat4 modelMat = glm::translate(vec3(1.5f, yPos, -4.5f));
+
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+
+                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                        ++materialIndex;
+                    }
+                }
+
+                // Material 15
+                {
+                    glm::mat4 modelMat = glm::translate(vec3(4.5f, yPos, -4.5f));
+
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(glm::mat4), &modelMat);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4), sizeof(uint32_t), &materialIndex);
+                    vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
+                    vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
+
+                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                        ++materialIndex;
+                    }
                 }
             }
 
@@ -1155,7 +1079,7 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
     // Descriptor set layout
     {
         std::vector<VkDescriptorSetLayoutBinding> bindings = {};
-        // ConstantBuffer<SceneParameters>      SceneParams        : register(b0);
+        // ConstantBuffer<SceneParameters>      SceneParams                   : register(b0);
         {
             VkDescriptorSetLayoutBinding binding = {};
             binding.binding                      = 0;
@@ -1164,7 +1088,11 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
             binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
             bindings.push_back(binding);
         }
-        // StructuredBuffer<MaterialParameters> MaterialParams     : register(t2);
+
+        // DEFINE_AS_PUSH_CONSTANT
+        // ConstantBuffer<DrawParameters>       DrawParams                    : register(b1);
+
+        // StructuredBuffer<MaterialParameters> MaterialParams                : register(t2);
         {
             VkDescriptorSetLayoutBinding binding = {};
             binding.binding                      = 2;
@@ -1173,34 +1101,25 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
             binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
             bindings.push_back(binding);
         }
-        // SamplerState                         ClampedSampler     : register(s4);
+        // Texture2D                            IBLIntegrationLUT             : register(t3);
         {
             VkDescriptorSetLayoutBinding binding = {};
-            binding.binding                      = 4;
-            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
-            binding.descriptorCount              = 1;
-            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-            bindings.push_back(binding);
-        }
-        // SamplerState                         UWrapSampler       : register(s5);
-        {
-            VkDescriptorSetLayoutBinding binding = {};
-            binding.binding                      = 5;
-            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
-            binding.descriptorCount              = 1;
-            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-            bindings.push_back(binding);
-        }
-        // Texture2D                            BRDFLUT            : register(t10);
-        {
-            VkDescriptorSetLayoutBinding binding = {};
-            binding.binding                      = 10;
+            binding.binding                      = 3;
             binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
             binding.descriptorCount              = 1;
             binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
             bindings.push_back(binding);
         }
-        // Texture2D                            IrradianceMap[32]  : register(t16);
+        // Texture2D                            IBLIntegrationMultiscatterLUT : register(t4);
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 4;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+            binding.descriptorCount              = 1;
+            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+            bindings.push_back(binding);
+        }
+        // Texture2D                            IBLIrradianceMaps[32]         : register(t16);
         {
             VkDescriptorSetLayoutBinding binding = {};
             binding.binding                      = 16;
@@ -1209,12 +1128,57 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
             binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
             bindings.push_back(binding);
         }
-        // Texture2D                            EnvironmentMap[32] : register(t48);
+        // Texture2D                            IBLEnvironmentMaps[32]        : register(t48);
         {
             VkDescriptorSetLayoutBinding binding = {};
             binding.binding                      = 48;
             binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
             binding.descriptorCount              = 32;
+            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+            bindings.push_back(binding);
+        }
+        // SamplerState                         IBLIntegrationSampler         : register(s32);
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 32;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
+            binding.descriptorCount              = 1;
+            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+            bindings.push_back(binding);
+        }
+        // SamplerState                         IBLMapSampler                 : register(s33);
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 33;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
+            binding.descriptorCount              = 1;
+            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+            bindings.push_back(binding);
+        }
+        // Texture2D    MaterialTextures[TOTAL_MATERIAL_TEXTURES] : register(t100);
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 100;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+            binding.descriptorCount              = TOTAL_MATERIAL_TEXTURES;
+            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+            bindings.push_back(binding);
+        }
+        // SamplerState MaterialSampler                           : register(s34);
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 34;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
+            binding.descriptorCount              = 1;
+            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+            bindings.push_back(binding);
+        }
+        // SamplerState MaterialNormalMapSampler                  : register(s35);
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 35;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
+            binding.descriptorCount              = 1;
             binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
             bindings.push_back(binding);
         }
@@ -1254,6 +1218,10 @@ void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* 
     // Descriptor set layout
     {
         std::vector<VkDescriptorSetLayoutBinding> bindings = {};
+        // DEFINE_AS_PUSH_CONSTANT
+        // ConstantBuffer<SceneParameters> SceneParmas  : register(b0);
+
+        // SamplerState                    Sampler0     : register(s1);
         {
             VkDescriptorSetLayoutBinding binding = {};
             binding.binding                      = 1;
@@ -1262,6 +1230,7 @@ void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* 
             binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
             bindings.push_back(binding);
         }
+        // Texture2D                       Textures[16] : register(t32);
         {
             VkDescriptorSetLayoutBinding binding = {};
             binding.binding                      = 32;
@@ -1339,7 +1308,9 @@ void CreateMaterialModels(
 {
     // Sphere
     {
-        TriMesh mesh = TriMesh::Sphere(1, 256, 256, {.enableNormals = true});
+        TriMesh::Options options = {.enableTexCoords = true, .enableNormals = true, .enableTangents = true};
+
+        TriMesh mesh = TriMesh::Sphere(1, 256, 256, options);
 
         GeometryBuffers buffers = {};
 
@@ -1365,6 +1336,15 @@ void CreateMaterialModels(
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
+            SizeInBytes(mesh.GetTexCoords()),
+            DataPtr(mesh.GetTexCoords()),
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY,
+            0,
+            &buffers.texCoordBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
             SizeInBytes(mesh.GetNormals()),
             DataPtr(mesh.GetNormals()),
             VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
@@ -1372,13 +1352,34 @@ void CreateMaterialModels(
             0,
             &buffers.normalBuffer));
 
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTangents()),
+            DataPtr(mesh.GetTangents()),
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY,
+            0,
+            &buffers.tangentBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetBitangents()),
+            DataPtr(mesh.GetBitangents()),
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY,
+            0,
+            &buffers.bitangentBuffer));
+
         outGeomtryBuffers.push_back(buffers);
     }
 
     // Knob
     {
         TriMesh::Options options = {};
+        options.enableTexCoords  = true;
         options.enableNormals    = true;
+        options.enableTangents   = true;
+        options.invertTexCoordsV = true;
         options.applyTransform   = true;
         options.transformRotate  = glm::vec3(0, glm::radians(180.0f), 0);
 
@@ -1412,6 +1413,15 @@ void CreateMaterialModels(
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
+            SizeInBytes(mesh.GetTexCoords()),
+            DataPtr(mesh.GetTexCoords()),
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY,
+            0,
+            &buffers.texCoordBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
             SizeInBytes(mesh.GetNormals()),
             DataPtr(mesh.GetNormals()),
             VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
@@ -1419,13 +1429,33 @@ void CreateMaterialModels(
             0,
             &buffers.normalBuffer));
 
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTangents()),
+            DataPtr(mesh.GetTangents()),
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY,
+            0,
+            &buffers.tangentBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetBitangents()),
+            DataPtr(mesh.GetBitangents()),
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY,
+            0,
+            &buffers.bitangentBuffer));
+
         outGeomtryBuffers.push_back(buffers);
     }
 
     // Monkey
     {
         TriMesh::Options options = {};
+        options.enableTexCoords  = true;
         options.enableNormals    = true;
+        options.enableTangents   = true;
         options.applyTransform   = true;
         options.transformRotate  = glm::vec3(0, glm::radians(180.0f), 0);
 
@@ -1459,6 +1489,15 @@ void CreateMaterialModels(
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
+            SizeInBytes(mesh.GetTexCoords()),
+            DataPtr(mesh.GetTexCoords()),
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY,
+            0,
+            &buffers.texCoordBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
             SizeInBytes(mesh.GetNormals()),
             DataPtr(mesh.GetNormals()),
             VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
@@ -1466,21 +1505,30 @@ void CreateMaterialModels(
             0,
             &buffers.normalBuffer));
 
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTangents()),
+            DataPtr(mesh.GetTangents()),
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY,
+            0,
+            &buffers.tangentBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetBitangents()),
+            DataPtr(mesh.GetBitangents()),
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY,
+            0,
+            &buffers.bitangentBuffer));
+
         outGeomtryBuffers.push_back(buffers);
     }
 
-    // Teapot
+    // Cube
     {
-        TriMesh::Options options = {};
-        options.enableNormals    = true;
-        options.applyTransform   = true;
-        options.transformRotate  = glm::vec3(0, glm::radians(135.0f), 0);
-
-        TriMesh mesh;
-        if (!TriMesh::LoadOBJ(GetAssetPath("models/teapot.obj").string(), "", options, &mesh)) {
-            return;
-        }
-        mesh.ScaleToFit(2.0f);
+        TriMesh mesh = TriMesh::Cube(vec3(2), false, {.enableTexCoords = true, .enableNormals = true, .enableTangents = true});
 
         GeometryBuffers buffers = {};
 
@@ -1506,12 +1554,39 @@ void CreateMaterialModels(
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
+            SizeInBytes(mesh.GetTexCoords()),
+            DataPtr(mesh.GetTexCoords()),
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY,
+            0,
+            &buffers.texCoordBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
             SizeInBytes(mesh.GetNormals()),
             DataPtr(mesh.GetNormals()),
             VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
             VMA_MEMORY_USAGE_GPU_ONLY,
             0,
             &buffers.normalBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTangents()),
+            DataPtr(mesh.GetTangents()),
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY,
+            0,
+            &buffers.tangentBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetBitangents()),
+            DataPtr(mesh.GetBitangents()),
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY,
+            0,
+            &buffers.bitangentBuffer));
 
         outGeomtryBuffers.push_back(buffers);
     }
@@ -1520,6 +1595,7 @@ void CreateMaterialModels(
 void CreateIBLTextures(
     VulkanRenderer*           pRenderer,
     VulkanImage*              pBRDFLUT,
+    VulkanImage*              pMultiscatterBRDFLUT,
     std::vector<VulkanImage>& outIrradianceTextures,
     std::vector<VulkanImage>& outEnvironmentTextures,
     std::vector<uint32_t>&    outEnvNumLevels)
@@ -1542,6 +1618,24 @@ void CreateIBLTextures(
             pBRDFLUT));
     }
 
+    // Multiscatter BRDF LUT
+    {
+        auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut_ms.hdr"));
+        if (bitmap.Empty()) {
+            assert(false && "Load image failed");
+            return;
+        }
+
+        CHECK_CALL(CreateTexture(
+            pRenderer,
+            bitmap.GetWidth(),
+            bitmap.GetHeight(),
+            VK_FORMAT_R32G32B32A32_SFLOAT,
+            bitmap.GetSizeInBytes(),
+            bitmap.GetPixels(),
+            pMultiscatterBRDFLUT));
+    }
+
     auto                               iblDir = GetAssetPath("IBL");
     std::vector<std::filesystem::path> iblFiles;
     for (auto& entry : std::filesystem::directory_iterator(iblDir)) {
@@ -1558,11 +1652,12 @@ void CreateIBLTextures(
 
     size_t maxEntries = std::min<size_t>(gMaxIBLs, iblFiles.size());
     for (size_t i = 0; i < maxEntries; ++i) {
-        auto& iblFile = iblFiles[i];
+        std::filesystem::path iblFile = iblFiles[i];
 
         IBLMaps ibl = {};
         if (!LoadIBLMaps32f(iblFile, &ibl)) {
             GREX_LOG_ERROR("failed to load: " << iblFile);
+            assert(false && "IBL maps load failed failed");
             return;
         }
 
@@ -1570,7 +1665,7 @@ void CreateIBLTextures(
 
         // Irradiance
         {
-            VulkanImage texture;
+            VulkanImage texture = {};
             CHECK_CALL(CreateTexture(
                 pRenderer,
                 ibl.irradianceMap.GetWidth(),
@@ -1603,7 +1698,7 @@ void CreateIBLTextures(
                 levelHeight >>= 1;
             }
 
-            VulkanImage texture;
+            VulkanImage texture = {};
             CHECK_CALL(CreateTexture(
                 pRenderer,
                 ibl.baseWidth,
@@ -1619,6 +1714,134 @@ void CreateIBLTextures(
         gIBLNames.push_back(iblFile.filename().replace_extension().string());
 
         GREX_LOG_INFO("Loaded " << iblFile);
+    }
+}
+
+void CreateMaterials(
+    VulkanRenderer*                  pRenderer,
+    MaterialTextures&                outDefaultMaterialTextures,
+    std::vector<MaterialTextures>&   outMaterialTexturesSets,
+    std::vector<MaterialParameters>& outMaterialParametersSets)
+{
+    // Default material textures
+    {
+        PixelRGBA8u purplePixel = {0, 0, 0, 255};
+        PixelRGBA8u blackPixel  = {0, 0, 0, 255};
+        PixelRGBA8u whitePixel  = {255, 255, 255, 255};
+
+        CHECK_CALL(CreateTexture(pRenderer, 1, 1, VK_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &purplePixel, &outDefaultMaterialTextures.baseColorTexture));
+        CHECK_CALL(CreateTexture(pRenderer, 1, 1, VK_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &blackPixel, &outDefaultMaterialTextures.normalTexture));
+        CHECK_CALL(CreateTexture(pRenderer, 1, 1, VK_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &blackPixel, &outDefaultMaterialTextures.roughnessTexture));
+        CHECK_CALL(CreateTexture(pRenderer, 1, 1, VK_FORMAT_R8G8B8A8_UNORM, sizeof(PixelRGBA8u), &blackPixel, &outDefaultMaterialTextures.metallicTexture));
+    }
+
+    // Texture directory
+    auto texturesDir = GetAssetPath("textures");
+
+    // Material files - limit to 16 since there's 16 objects draws
+    std::vector<std::filesystem::path> materialFiles = {
+        texturesDir / "bark_brown_02" / "material.mat",
+        texturesDir / "bark_willow" / "material.mat",
+        texturesDir / "brick_4" / "material.mat",
+        texturesDir / "castle_brick_02_red" / "material.mat",
+        texturesDir / "dark_brick_wall" / "material.mat",
+        texturesDir / "factory_wall" / "material.mat",
+        texturesDir / "green_metal_rust" / "material.mat",
+        texturesDir / "hexagonal_concrete_paving" / "material.mat",
+        texturesDir / "metal_grate_rusty" / "material.mat",
+        texturesDir / "metal_plate" / "material.mat",
+        texturesDir / "mud_cracked_dry_riverbed_002" / "material.mat",
+        texturesDir / "pavement_02" / "material.mat",
+        texturesDir / "rough_plaster_broken" / "material.mat",
+        texturesDir / "rusty_metal_02" / "material.mat",
+        texturesDir / "weathered_planks" / "material.mat",
+        texturesDir / "wood_table_001" / "material.mat",
+    };
+
+    size_t maxEntries = materialFiles.size();
+    for (size_t i = 0; i < maxEntries; ++i) {
+        auto materialFile = materialFiles[i];
+
+        std::ifstream is = std::ifstream(materialFile.string().c_str());
+        if (!is.is_open()) {
+            assert(false && "faild to open material file");
+        }
+
+        MaterialTextures   materialTextures = outDefaultMaterialTextures;
+        MaterialParameters materialParams   = {};
+
+        while (!is.eof()) {
+            VulkanImage*          pTargetTexture = {};
+            std::filesystem::path textureFile   = "";
+
+            std::string key;
+            is >> key;
+            if (key == "basecolor") {
+                is >> textureFile;
+                pTargetTexture = &materialTextures.baseColorTexture;
+            }
+            else if (key == "normal") {
+                is >> textureFile;
+                pTargetTexture = &materialTextures.normalTexture;
+            }
+            else if (key == "roughness") {
+                is >> textureFile;
+                pTargetTexture = &materialTextures.roughnessTexture;
+            }
+            else if (key == "metallic") {
+                is >> textureFile;
+                pTargetTexture = &materialTextures.metallicTexture;
+            }
+            else if (key == "specular") {
+                is >> materialParams.specular;
+            }
+
+            if (textureFile.empty()) {
+                continue;
+            }
+
+            auto cwd    = materialFile.parent_path().filename();
+            textureFile = "textures" / cwd / textureFile;
+
+            auto bitmap = LoadImage8u(textureFile);
+            if (!bitmap.Empty()) {
+                MipmapRGBA8u mipmap = MipmapRGBA8u(
+                    bitmap,
+                    BITMAP_SAMPLE_MODE_WRAP,
+                    BITMAP_SAMPLE_MODE_WRAP,
+                    BITMAP_FILTER_MODE_NEAREST);
+
+                std::vector<MipOffset> mipOffsets;
+                for (auto& srcOffset : mipmap.GetOffsets()) {
+                    MipOffset dstOffset = {};
+                    dstOffset.Offset    = srcOffset;
+                    dstOffset.RowStride = mipmap.GetRowStride();
+                    mipOffsets.push_back(dstOffset);
+                }
+
+                CHECK_CALL(CreateTexture(
+                    pRenderer,
+                    mipmap.GetWidth(0),
+                    mipmap.GetHeight(0),
+                    VK_FORMAT_R8G8B8A8_UNORM,
+                    mipOffsets,
+                    mipmap.GetSizeInBytes(),
+                    mipmap.GetPixels(),
+                    &(*pTargetTexture)));
+
+                GREX_LOG_INFO("Created texture from " << textureFile);
+            }
+            else {
+                GREX_LOG_ERROR("Failed to load: " << textureFile);
+                assert(false && "Failed to load texture!");
+            }
+        }
+
+        outMaterialTexturesSets.push_back(materialTextures);
+        outMaterialParametersSets.push_back(materialParams);
+
+        // Use directory name for material name
+        gMaterialNames.push_back(materialFile.parent_path().filename().string());
     }
 }
 
@@ -1644,14 +1867,16 @@ void CreateDescriptorBuffer(
 }
 
 void WritePBRDescriptors(
-    VulkanRenderer*           pRenderer,
-    VkDescriptorSetLayout     descriptorSetLayout,
-    VulkanBuffer*             pDescriptorBuffer,
-    const VulkanBuffer*       pSceneParamsBuffer,
-    const VulkanBuffer*       pMaterialsBuffer,
-    const VulkanImage*        pBRDFLUT,
-    std::vector<VulkanImage>& irradianceTextures,
-    std::vector<VulkanImage>& envTextures)
+    VulkanRenderer*                pRenderer,
+    VkDescriptorSetLayout          descriptorSetLayout,
+    VulkanBuffer*                  pDescriptorBuffer,
+    VulkanBuffer*                  pSceneParamsBuffer,
+    VulkanBuffer*                  pMaterialBuffer,
+    std::vector<MaterialTextures>& materialTextureSets,
+    const VulkanImage*             pBRDFLUT,
+    const VulkanImage*             pMultiscatterBRDFLUT,
+    std::vector<VulkanImage>&      irrTextures,
+    std::vector<VulkanImage>&      envTextures)
 {
     char* pDescriptorBufferStartAddress = nullptr;
     CHECK_CALL(vmaMapMemory(
@@ -1659,7 +1884,7 @@ void WritePBRDescriptors(
         pDescriptorBuffer->Allocation,
         reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
 
-    // ConstantBuffer<SceneParameters>    SceneParams           : register(b0);
+   // ConstantBuffer<SceneParameters>      SceneParams                                : register(b0);
     WriteDescriptor(
         pRenderer,
         pDescriptorBufferStartAddress,
@@ -1669,10 +1894,10 @@ void WritePBRDescriptors(
         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         pSceneParamsBuffer);
 
-    // Set via push constants
-    // ConstantBuffer<DrawParameters>     DrawParams            : register(b1);
+    // DEFINE_AS_PUSH_CONSTANT
+    // ConstantBuffer<DrawParameters>       DrawParams                                 : register(b1);
 
-    // ConstantBuffer<MaterialParameters> MaterialParams        : register(b2);
+    // StructuredBuffer<MaterialParameters> MaterialParams                             : register(t2);
     WriteDescriptor(
         pRenderer,
         pDescriptorBufferStartAddress,
@@ -1680,10 +1905,107 @@ void WritePBRDescriptors(
         2, // binding
         0, // arrayElement
         VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-        pMaterialsBuffer);
+        pMaterialBuffer);
 
-    // Samplers are setup in the immutable samplers in the DescriptorSetLayout
-    // SamplerState                       IBLIntegrationSampler : register(s4);
+    // Texture2D                            IBLIntegrationLUT                          : register(t3);
+    {
+        VkImageView imageView = VK_NULL_HANDLE;
+        CHECK_CALL(CreateImageView(
+            pRenderer,
+            pBRDFLUT,
+            VK_IMAGE_VIEW_TYPE_2D,
+            VK_FORMAT_R32G32B32A32_SFLOAT,
+            GREX_ALL_SUBRESOURCES,
+            &imageView));
+
+        WriteDescriptor(
+            pRenderer,
+            pDescriptorBufferStartAddress,
+            descriptorSetLayout,
+            3, // binding
+            0, // arrayElement
+            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            imageView,
+            VK_IMAGE_LAYOUT_GENERAL);
+    }
+
+    // Texture2D                            IBLIntegrationMultiscatterLUT              : register(t4);
+    {
+        VkImageView imageView = VK_NULL_HANDLE;
+        CHECK_CALL(CreateImageView(
+            pRenderer,
+            pMultiscatterBRDFLUT,
+            VK_IMAGE_VIEW_TYPE_2D,
+            VK_FORMAT_R32G32B32A32_SFLOAT,
+            GREX_ALL_SUBRESOURCES,
+            &imageView));
+
+        WriteDescriptor(
+            pRenderer,
+            pDescriptorBufferStartAddress,
+            descriptorSetLayout,
+            4, // binding
+            0, // arrayElement
+            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            imageView,
+            VK_IMAGE_LAYOUT_GENERAL);
+    }
+
+    // Texture2D                            IBLIrradianceMaps[32]                      : register(t16);
+    {
+        uint32_t arrayIndex = 0;
+        for (auto& image : irrTextures) {
+            VkImageView imageView = VK_NULL_HANDLE;
+            CHECK_CALL(CreateImageView(
+                pRenderer,
+                &image,
+                VK_IMAGE_VIEW_TYPE_2D,
+                VK_FORMAT_R32G32B32A32_SFLOAT,
+                GREX_ALL_SUBRESOURCES,
+                &imageView));
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                16,         // binding
+                arrayIndex, // arrayElement
+                VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                imageView,
+                VK_IMAGE_LAYOUT_GENERAL);
+
+            arrayIndex++;
+        }
+    }
+
+    // Texture2D                            IBLEnvironmentMaps[32]                     : register(t48);
+    {
+        uint32_t arrayIndex = 0;
+        for (auto& image : envTextures) {
+            VkImageView imageView = VK_NULL_HANDLE;
+            CHECK_CALL(CreateImageView(
+                pRenderer,
+                &image,
+                VK_IMAGE_VIEW_TYPE_2D,
+                VK_FORMAT_R32G32B32A32_SFLOAT,
+                GREX_ALL_SUBRESOURCES,
+                &imageView));
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                descriptorSetLayout,
+                48,         // binding
+                arrayIndex, // arrayElement
+                VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                imageView,
+                VK_IMAGE_LAYOUT_GENERAL);
+
+            arrayIndex++;
+        }
+    }
+
+    // SamplerState                         IBLIntegrationSampler                      : register(s32);
     {
         VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         samplerInfo.flags                   = 0;
@@ -1703,23 +2025,23 @@ void WritePBRDescriptors(
         samplerInfo.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
         samplerInfo.unnormalizedCoordinates = VK_FALSE;
 
-        VkSampler clampedSampler = VK_NULL_HANDLE;
+        VkSampler iblIntegrationSampler = VK_NULL_HANDLE;
         CHECK_CALL(vkCreateSampler(
             pRenderer->Device,
             &samplerInfo,
             nullptr,
-            &clampedSampler));
+            &iblIntegrationSampler));
 
         WriteDescriptor(
             pRenderer,
             pDescriptorBufferStartAddress,
             descriptorSetLayout,
-            4, // binding
-            0, // arrayElement
-            clampedSampler);
+            32, // binding
+            0,  // arrayElement
+            iblIntegrationSampler);
     }
 
-    // SamplerState                         UWrapSampler       : register(s5);
+    // SamplerState                         IBLMapSampler                              : register(s33);
     {
         VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         samplerInfo.flags                   = 0;
@@ -1739,106 +2061,137 @@ void WritePBRDescriptors(
         samplerInfo.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
         samplerInfo.unnormalizedCoordinates = VK_FALSE;
 
-        VkSampler uWrapSampler = VK_NULL_HANDLE;
+        VkSampler iblMapSampler = VK_NULL_HANDLE;
         CHECK_CALL(vkCreateSampler(
             pRenderer->Device,
             &samplerInfo,
             nullptr,
-            &uWrapSampler));
+            &iblMapSampler));
 
         WriteDescriptor(
             pRenderer,
             pDescriptorBufferStartAddress,
             descriptorSetLayout,
-            5, // binding
-            0, // arrayElement
-            uWrapSampler);
-    }
-
-    // Texture2D                            BRDFLUT            : register(t10);
-    {
-        VkImageView imageView = VK_NULL_HANDLE;
-        CHECK_CALL(CreateImageView(
-            pRenderer,
-            pBRDFLUT,
-            VK_IMAGE_VIEW_TYPE_2D,
-            VK_FORMAT_R32G32B32A32_SFLOAT,
-            GREX_ALL_SUBRESOURCES,
-            &imageView));
-
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
-            10, // binding
+            33, // binding
             0,  // arrayElement
-            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            imageView,
-            VK_IMAGE_LAYOUT_GENERAL);
+            iblMapSampler);
     }
 
-    // Texture2D                            IrradianceMap[32]  : register(t16);
+    // Texture2D                            MaterialTextures[TOTAL_MATERIAL_TEXTURES]  : register(t100);
     {
-        uint32_t arrayElement = 0;
-        for (auto& irradianceTexture : irradianceTextures) {
-            VkImageView imageView = VK_NULL_HANDLE;
-            CHECK_CALL(CreateImageView(
-                pRenderer,
-                &irradianceTexture,
-                VK_IMAGE_VIEW_TYPE_2D,
-                VK_FORMAT_R32G32B32A32_SFLOAT,
-                GREX_ALL_SUBRESOURCES,
-                &imageView));
+        uint32_t arrayIndex = 0;
+        for (auto& materialTextures : materialTextureSets) {
+            VulkanImage* textureImages[] = {
+                &materialTextures.baseColorTexture,
+                &materialTextures.normalTexture,
+                &materialTextures.roughnessTexture,
+                &materialTextures.metallicTexture};
 
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                16,           // binding
-                arrayElement, // arrayElement
-                VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                imageView,
-                VK_IMAGE_LAYOUT_GENERAL);
+            for (auto& image : textureImages) {
+                VkImageView imageView = VK_NULL_HANDLE;
+                CHECK_CALL(CreateImageView(
+                    pRenderer,
+                    image,
+                    VK_IMAGE_VIEW_TYPE_2D,
+                    VK_FORMAT_R8G8B8A8_UNORM,
+                    GREX_ALL_SUBRESOURCES,
+                    &imageView));
 
-            arrayElement++;
+                WriteDescriptor(
+                    pRenderer,
+                    pDescriptorBufferStartAddress,
+                    descriptorSetLayout,
+                    100,        // binding
+                    arrayIndex, // arrayElement
+                    VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    imageView,
+                    VK_IMAGE_LAYOUT_GENERAL);
+
+                arrayIndex++;
+            }
         }
     }
 
-    // Texture2D                            EnvironmentMap[32] : register(t48);
+    // SamplerState                         MaterialSampler                            : register(s34);
     {
-        uint32_t arrayElement = 0;
-        for (auto& envTexture : envTextures) {
-            VkImageView imageView = VK_NULL_HANDLE;
-            CHECK_CALL(CreateImageView(
-                pRenderer,
-                &envTexture,
-                VK_IMAGE_VIEW_TYPE_2D,
-                VK_FORMAT_R32G32B32A32_SFLOAT,
-                GREX_ALL_SUBRESOURCES,
-                &imageView));
+        VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+        samplerInfo.flags                   = 0;
+        samplerInfo.magFilter               = VK_FILTER_LINEAR;
+        samplerInfo.minFilter               = VK_FILTER_LINEAR;
+        samplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        samplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        samplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        samplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerInfo.mipLodBias              = 0;
+        samplerInfo.anisotropyEnable        = VK_FALSE;
+        samplerInfo.maxAnisotropy           = 0;
+        samplerInfo.compareEnable           = VK_TRUE;
+        samplerInfo.compareOp               = VK_COMPARE_OP_LESS_OR_EQUAL;
+        samplerInfo.minLod                  = 0;
+        samplerInfo.maxLod                  = FLT_MAX;
+        samplerInfo.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+        samplerInfo.unnormalizedCoordinates = VK_FALSE;
 
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                48,           // binding
-                arrayElement, // arrayElement
-                VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                imageView,
-                VK_IMAGE_LAYOUT_GENERAL);
+        VkSampler materialSampler = VK_NULL_HANDLE;
+        CHECK_CALL(vkCreateSampler(
+            pRenderer->Device,
+            &samplerInfo,
+            nullptr,
+            &materialSampler));
 
-            arrayElement++;
-        }
+        WriteDescriptor(
+            pRenderer,
+            pDescriptorBufferStartAddress,
+            descriptorSetLayout,
+            34, // binding
+            0,  // arrayElement
+            materialSampler);
+    }
+
+    // SamplerState                         MaterialNormalMapSampler                   : register(s35);
+    {
+        VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+        samplerInfo.flags                   = 0;
+        samplerInfo.magFilter               = VK_FILTER_LINEAR;
+        samplerInfo.minFilter               = VK_FILTER_LINEAR;
+        samplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        samplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        samplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerInfo.mipLodBias              = 0;
+        samplerInfo.anisotropyEnable        = VK_FALSE;
+        samplerInfo.maxAnisotropy           = 0;
+        samplerInfo.compareEnable           = VK_TRUE;
+        samplerInfo.compareOp               = VK_COMPARE_OP_LESS_OR_EQUAL;
+        samplerInfo.minLod                  = 0;
+        samplerInfo.maxLod                  = FLT_MAX;
+        samplerInfo.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+        samplerInfo.unnormalizedCoordinates = VK_FALSE;
+
+        VkSampler materialNormalSampler = VK_NULL_HANDLE;
+        CHECK_CALL(vkCreateSampler(
+            pRenderer->Device,
+            &samplerInfo,
+            nullptr,
+            &materialNormalSampler));
+
+        WriteDescriptor(
+            pRenderer,
+            pDescriptorBufferStartAddress,
+            descriptorSetLayout,
+            35, // binding
+            0, // arrayElement
+            materialNormalSampler);
     }
 
     vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
 }
 
 void WriteEnvDescriptors(
-    VulkanRenderer*           pRenderer,
-    VkDescriptorSetLayout     descriptorSetLayout,
-    VulkanBuffer*             pDescriptorBuffer,
-    std::vector<VulkanImage>& envTextures)
+    VulkanRenderer*          pRenderer,
+    VkDescriptorSetLayout    descriptorSetLayout,
+    VulkanBuffer*            pDescriptorBuffer,
+    std::vector<VulkanImage> envTextures)
 {
     char* pDescriptorBufferStartAddress = nullptr;
     CHECK_CALL(vmaMapMemory(
@@ -1846,10 +2199,10 @@ void WriteEnvDescriptors(
         pDescriptorBuffer->Allocation,
         reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
 
-    // set via push constants
-    // ConstantBuffer<SceneParameters> SceneParams       : register(b0);
+    // DEFINE_AS_PUSH_CONSTANT
+    // ConstantBuffer<SceneParameters> SceneParmas  : register(b0);
 
-    // SamplerState                    IBLMapSampler     : register(s1);
+    // SamplerState                    Sampler0     : register(s1);
     {
         VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         samplerInfo.flags                   = 0;
@@ -1885,14 +2238,14 @@ void WriteEnvDescriptors(
             uWrapSampler);
     }
 
-    // Texture2D                       IBLEnvironmentMap : register(t2);
+    // Texture2D                       Textures[16] : register(t32);
     {
-        uint32_t arrayElement = 0;
-        for (auto& envTexture : envTextures) {
+        uint32_t arrayIndex = 0;
+        for (auto& image : envTextures) {
             VkImageView imageView = VK_NULL_HANDLE;
             CHECK_CALL(CreateImageView(
                 pRenderer,
-                &envTexture,
+                &image,
                 VK_IMAGE_VIEW_TYPE_2D,
                 VK_FORMAT_R32G32B32A32_SFLOAT,
                 GREX_ALL_SUBRESOURCES,
@@ -1902,190 +2255,15 @@ void WriteEnvDescriptors(
                 pRenderer,
                 pDescriptorBufferStartAddress,
                 descriptorSetLayout,
-                32,           // binding
-                arrayElement, // arrayElement
+                32,         // binding
+                arrayIndex, // arrayElement
                 VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                 imageView,
                 VK_IMAGE_LAYOUT_GENERAL);
 
-            arrayElement++;
+            arrayIndex++;
         }
     }
 
     vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
 }
-
-/*
-void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
-{
-    // BRDFLUT (t10)
-    D3D12_DESCRIPTOR_RANGE range1            = {};
-    range1.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    range1.NumDescriptors                    = 1;
-    range1.BaseShaderRegister                = 10;
-    range1.RegisterSpace                     = 0;
-    range1.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-    // IrradianceMap (t16)
-    D3D12_DESCRIPTOR_RANGE range2            = {};
-    range2.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    range2.NumDescriptors                    = gMaxIBLs;
-    range2.BaseShaderRegister                = 16;
-    range2.RegisterSpace                     = 0;
-    range2.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-    // EnvironmentMap (t32)
-    D3D12_DESCRIPTOR_RANGE range3            = {};
-    range3.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    range3.NumDescriptors                    = gMaxIBLs;
-    range3.BaseShaderRegister                = 48;
-    range3.RegisterSpace                     = 0;
-    range3.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-    D3D12_ROOT_PARAMETER rootParameters[6] = {};
-    // SceneParams (b0)
-    rootParameters[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
-    rootParameters[0].Descriptor.ShaderRegister = 0;
-    rootParameters[0].Descriptor.RegisterSpace  = 0;
-    rootParameters[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // DrawParams (b1)
-    rootParameters[1].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    rootParameters[1].Constants.Num32BitValues = 36;
-    rootParameters[1].Constants.ShaderRegister = 1;
-    rootParameters[1].Constants.RegisterSpace  = 0;
-    rootParameters[1].ShaderVisibility         = D3D12_SHADER_VISIBILITY_ALL;
-    // MaterialParams (t2)
-    rootParameters[2].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[2].Descriptor.ShaderRegister = 2;
-    rootParameters[2].Descriptor.RegisterSpace  = 0;
-    rootParameters[2].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // BRDFLUT (t10)
-    rootParameters[3].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[3].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[3].DescriptorTable.pDescriptorRanges   = &range1;
-    rootParameters[3].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-    // IrradianceMap (t16)
-    rootParameters[4].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[4].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[4].DescriptorTable.pDescriptorRanges   = &range2;
-    rootParameters[4].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-    // EnvironmentMap (t32)
-    rootParameters[5].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[5].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[5].DescriptorTable.pDescriptorRanges   = &range3;
-    rootParameters[5].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {};
-    // ClampedSampler (s4)
-    staticSamplers[0].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSamplers[0].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[0].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[0].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[0].MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
-    staticSamplers[0].MaxAnisotropy    = 0;
-    staticSamplers[0].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    staticSamplers[0].MinLOD           = 0;
-    staticSamplers[0].MaxLOD           = 1;
-    staticSamplers[0].ShaderRegister   = 4;
-    staticSamplers[0].RegisterSpace    = 0;
-    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    // UWrapSampler (s5)
-    staticSamplers[1].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSamplers[1].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[1].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
-    staticSamplers[1].MaxAnisotropy    = 0;
-    staticSamplers[1].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    staticSamplers[1].MinLOD           = 0;
-    staticSamplers[1].MaxLOD           = D3D12_FLOAT32_MAX;
-    staticSamplers[1].ShaderRegister   = 5;
-    staticSamplers[1].RegisterSpace    = 0;
-    staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-    D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-    rootSigDesc.NumParameters             = 6;
-    rootSigDesc.pParameters               = rootParameters;
-    rootSigDesc.NumStaticSamplers         = 2;
-    rootSigDesc.pStaticSamplers           = staticSamplers;
-    rootSigDesc.Flags                     = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-    ComPtr<ID3DBlob> blob;
-    ComPtr<ID3DBlob> error;
-    CHECK_CALL(D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error));
-    CHECK_CALL(pRenderer->Device->CreateRootSignature(
-        0,                         // nodeMask
-        blob->GetBufferPointer(),  // pBloblWithRootSignature
-        blob->GetBufferSize(),     // blobLengthInBytes
-        IID_PPV_ARGS(ppRootSig))); // riid, ppvRootSignature
-}
-
-void CreateEnvironmentRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
-{
-    // Textures (t32)
-    D3D12_DESCRIPTOR_RANGE range            = {};
-    range.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    range.NumDescriptors                    = gMaxIBLs;
-    range.BaseShaderRegister                = 32;
-    range.RegisterSpace                     = 0;
-    range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-    D3D12_ROOT_PARAMETER rootParameters[4] = {};
-    // SceneParams (b0)
-    rootParameters[0].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    rootParameters[0].Constants.Num32BitValues = 17;
-    rootParameters[0].Constants.ShaderRegister = 0;
-    rootParameters[0].Constants.RegisterSpace  = 0;
-    rootParameters[0].ShaderVisibility         = D3D12_SHADER_VISIBILITY_ALL;
-    // Textures (t32)
-    rootParameters[1].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[1].DescriptorTable.pDescriptorRanges   = &range;
-    rootParameters[1].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-
-    D3D12_STATIC_SAMPLER_DESC staticSampler = {};
-    // Sampler0 (s1)
-    staticSampler.Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSampler.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSampler.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSampler.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSampler.MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
-    staticSampler.MaxAnisotropy    = 0;
-    staticSampler.ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    staticSampler.MinLOD           = 0;
-    staticSampler.MaxLOD           = 1;
-    staticSampler.ShaderRegister   = 1;
-    staticSampler.RegisterSpace    = 0;
-    staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-    D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-    rootSigDesc.NumParameters             = 2;
-    rootSigDesc.pParameters               = rootParameters;
-    rootSigDesc.NumStaticSamplers         = 1;
-    rootSigDesc.pStaticSamplers           = &staticSampler;
-    rootSigDesc.Flags                     = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-    ComPtr<ID3DBlob> blob;
-    ComPtr<ID3DBlob> error;
-    CHECK_CALL(D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error));
-    CHECK_CALL(pRenderer->Device->CreateRootSignature(
-        0,                         // nodeMask
-        blob->GetBufferPointer(),  // pBloblWithRootSignature
-        blob->GetBufferSize(),     // blobLengthInBytes
-        IID_PPV_ARGS(ppRootSig))); // riid, ppvRootSignature
-}
-
-void CreateDescriptorHeap(
-    DxRenderer*            pRenderer,
-    ID3D12DescriptorHeap** ppHeap)
-{
-    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-    desc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    desc.NumDescriptors             = 256;
-    desc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-
-    CHECK_CALL(pRenderer->Device->CreateDescriptorHeap(
-        &desc,
-        IID_PPV_ARGS(ppHeap)));
-}
-*/

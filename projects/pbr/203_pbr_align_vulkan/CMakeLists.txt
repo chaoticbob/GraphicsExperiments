@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.0)
 
-project(254_pbr_material_properties_vulkan)
+project(203_pbr_align_vulkan)
 
 add_executable(
-    254_pbr_material_properties_vulkan
-    254_pbr_material_properties_vulkan.cpp
+    203_pbr_align_vulkan
+    203_pbr_align_vulkan.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.cpp
@@ -19,15 +19,15 @@ add_executable(
     ${IMGUI_VULKAN_FILES}
 )
 
-set_target_properties(254_pbr_material_properties_vulkan PROPERTIES FOLDER "pbr")
+set_target_properties(203_pbr_align_vulkan PROPERTIES FOLDER "pbr")
 
 target_compile_definitions(
-    254_pbr_material_properties_vulkan
+    203_pbr_align_vulkan
     PUBLIC ENABLE_IMGUI_VULKAN
 )
 
 target_include_directories(
-    254_pbr_material_properties_vulkan
+    203_pbr_align_vulkan
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
            ${GREX_THIRD_PARTY_DIR}/glslang # This needs to come before ${VULKAN_INCLUDE_DIR}
 		   ${VULKAN_INCLUDE_DIR}
@@ -39,7 +39,7 @@ target_include_directories(
 )
 
 target_link_libraries(
-    254_pbr_material_properties_vulkan
+    203_pbr_align_vulkan
     PUBLIC glfw
            glslang
            SPIRV
@@ -48,12 +48,12 @@ target_link_libraries(
 
 if(WIN32)
     target_compile_definitions(
-        254_pbr_material_properties_vulkan
+        203_pbr_align_vulkan
         PUBLIC VK_USE_PLATFORM_WIN32_KHR
     )
 
     target_link_libraries(
-        254_pbr_material_properties_vulkan
+        203_pbr_align_vulkan
         PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
     )
 endif()

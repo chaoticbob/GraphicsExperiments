@@ -177,7 +177,7 @@ int main(int argc, char** argv)
    std::vector<uint32_t> spirvVS;
    std::vector<uint32_t> spirvFS;
    {
-      std::string shaderSource = LoadString("projects/203_204_pbr_camera/shaders.hlsl");
+      std::string shaderSource = LoadString("projects/202_pbr_camera/shaders.hlsl");
 
       std::string errorMsg;
       HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &spirvVS, &errorMsg);
@@ -223,7 +223,7 @@ int main(int argc, char** argv)
    std::vector<uint32_t> drawTextureSpirvVS;
    std::vector<uint32_t> drawTextureSpirvFS;
    {
-      std::string shaderSource = LoadString("projects/203_204_pbr_camera/drawtexture.hlsl");
+      std::string shaderSource = LoadString("projects/202_pbr_camera/drawtexture.hlsl");
       if (shaderSource.empty()) {
          assert(false && "no shader source");
          return EXIT_FAILURE;
@@ -437,7 +437,7 @@ int main(int argc, char** argv)
    // *************************************************************************
    // Window
    // *************************************************************************
-   auto window = Window::Create(gWindowWidth, gWindowHeight, "204_pbr_camera_vulkan");
+   auto window = Window::Create(gWindowWidth, gWindowHeight, "202_pbr_camera_vulkan");
    if (!window) {
       assert(false && "Window::Create failed");
       return EXIT_FAILURE;
