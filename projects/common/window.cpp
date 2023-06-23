@@ -3,6 +3,10 @@
 #include <cassert>
 #include <fstream>
 
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
+
 // =============================================================================
 // Static globals
 // =============================================================================
@@ -615,6 +619,13 @@ HWND Window::GetHWND() const
 }
 #endif
 
+#if defined(__APPLE__)
+void* Window::GetNativeWindow() const
+{
+   return glfwGetCocoaWindow(mWindow);
+}
+#endif
+
 bool Window::PollEvents()
 {
     bool shouldClose = (glfwWindowShouldClose(mWindow) != 0);
@@ -641,6 +652,12 @@ fs::path GetExecutablePath()
     std::memset(buf, 0, MAX_PATH);
     GetModuleFileNameA(this_win32_module, buf, MAX_PATH);
     path = fs::path(buf);
+#elif defined(__APPLE__)
+   char buf[PATH_MAX];
+   uint32_t size = sizeof(buf);
+   std::memset(buf, 0, size);
+   _NSGetExecutablePath(buf, &size);
+   path = fs::path(buf);
 #else
 #    error "unsupported platform"
 #endif
@@ -654,6 +671,8 @@ uint32_t GetProcessId()
     pid = static_cast<uint32_t>(getpid());
 #elif defined(WIN32)
     pid  = static_cast<uint32_t>(::GetCurrentProcessId());
+#elif defined(__APPLE__)
+   pid = static_cast<uint32_t>(getpid());
 #endif
     return pid;
 }

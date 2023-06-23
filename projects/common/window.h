@@ -58,6 +58,10 @@ public:
     HWND GetHWND() const;
 #endif
 
+#if defined(__APPLE__)
+    void* GetNativeWindow() const;
+#endif
+
     bool PollEvents();
 
     void AddWindowMoveCallbacks(std::function<void(int, int)> fn);
