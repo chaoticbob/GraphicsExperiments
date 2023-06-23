@@ -17,8 +17,8 @@ using Microsoft::WRL::ComPtr;
 #endif
 
 #if defined(__APPLE__)
-#include <float.h>
-#include <math.h>
+#include <cfloat>
+#include <cmath>
 #endif
 
 #define GREX_LOG_INFO(MSG)                                 \
