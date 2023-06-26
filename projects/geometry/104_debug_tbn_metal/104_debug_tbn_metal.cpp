@@ -127,7 +127,6 @@ void MouseMove(int x, int y, int buttons)
     }
 }
 
-
 // =============================================================================
 // main()
 // =============================================================================
@@ -201,15 +200,15 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Geometry data
     // *************************************************************************
-	std::vector<Geometry> geometries;
+    std::vector<Geometry> geometries;
     CreateGeometryBuffers(
         renderer.get(),
-		geometries);
+        geometries);
 
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "101_color_cube_metal");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "104_debug_tbn_metal");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -244,9 +243,9 @@ int main(int argc, char** argv)
     // *************************************************************************
     MTL::ClearColor clearColor(0.23f, 0.23f, 0.31f, 0);
     uint32_t        frameIndex = 0;
-   
-   ImGuiIO& io = ImGui::GetIO();
-   io.DisplayFramebufferScale = ImVec2(1,1);
+
+    ImGuiIO& io                = ImGui::GetIO();
+    io.DisplayFramebufferScale = ImVec2(1, 1);
 
     while (window->PollEvents()) {
         window->ImGuiNewFrameMetal(pRenderPassDescriptor);
@@ -270,79 +269,76 @@ int main(int argc, char** argv)
         }
         ImGui::End();
 
-        CA::MetalDrawable* pDrawable = renderer->Swapchain->nextDrawable();
+        CA::MetalDrawable* pDrawable = renderer->pSwapchain->nextDrawable();
 
-        // nextDrawable() will return nil if there are no free swapchain buffers to render to
-        if (pDrawable) {
-            uint32_t swapchainIndex = (frameIndex % renderer->SwapchainBufferCount);
-           frameIndex++;
+        uint32_t swapchainIndex = (frameIndex % renderer->SwapchainBufferCount);
+        frameIndex++;
 
-            auto colorTargetDesc = NS::TransferPtr(MTL::RenderPassColorAttachmentDescriptor::alloc()->init());
-            colorTargetDesc->setClearColor(clearColor);
-            colorTargetDesc->setTexture(pDrawable->texture());
-            colorTargetDesc->setLoadAction(MTL::LoadActionClear);
-            colorTargetDesc->setStoreAction(MTL::StoreActionStore);
-            pRenderPassDescriptor->colorAttachments()->setObject(colorTargetDesc.get(), 0);
+        auto colorTargetDesc = NS::TransferPtr(MTL::RenderPassColorAttachmentDescriptor::alloc()->init());
+        colorTargetDesc->setClearColor(clearColor);
+        colorTargetDesc->setTexture(pDrawable->texture());
+        colorTargetDesc->setLoadAction(MTL::LoadActionClear);
+        colorTargetDesc->setStoreAction(MTL::StoreActionStore);
+        pRenderPassDescriptor->colorAttachments()->setObject(colorTargetDesc.get(), 0);
 
-            auto depthTargetDesc = NS::TransferPtr(MTL::RenderPassDepthAttachmentDescriptor::alloc()->init());
-            depthTargetDesc->setClearDepth(1);
-            depthTargetDesc->setTexture(renderer->SwapchainDSVBuffers[swapchainIndex].get());
-            depthTargetDesc->setLoadAction(MTL::LoadActionClear);
-            depthTargetDesc->setStoreAction(MTL::StoreActionDontCare);
-            pRenderPassDescriptor->setDepthAttachment(depthTargetDesc.get());
+        auto depthTargetDesc = NS::TransferPtr(MTL::RenderPassDepthAttachmentDescriptor::alloc()->init());
+        depthTargetDesc->setClearDepth(1);
+        depthTargetDesc->setTexture(renderer->SwapchainDSVBuffers[swapchainIndex].get());
+        depthTargetDesc->setLoadAction(MTL::LoadActionClear);
+        depthTargetDesc->setStoreAction(MTL::StoreActionDontCare);
+        pRenderPassDescriptor->setDepthAttachment(depthTargetDesc.get());
 
-            MTL::CommandBuffer*        pCommandBuffer = renderer->Queue->commandBuffer();
-            MTL::RenderCommandEncoder* pRenderEncoder = pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
+        MTL::CommandBuffer*        pCommandBuffer = renderer->Queue->commandBuffer();
+        MTL::RenderCommandEncoder* pRenderEncoder = pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
 
-            pRenderEncoder->setRenderPipelineState(trianglePipelineState.State.get());
-            pRenderEncoder->setDepthStencilState(triangleDepthStencilState.State.get());
+        pRenderEncoder->setRenderPipelineState(trianglePipelineState.State.get());
+        pRenderEncoder->setDepthStencilState(triangleDepthStencilState.State.get());
 
-            mat4 modelMat = glm::rotate(glm::radians(sAngleX), vec3(1, 0, 0)) * glm::rotate(glm::radians(sAngleY), vec3(0, 1, 0));
-            mat4 viewMat  = lookAt(vec3(0, 1, 2), vec3(0, 0, 0), vec3(0, 1, 0));
-            mat4 projMat  = perspective(radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
-            mat4 mvpMat   = projMat * viewMat * modelMat;
+        mat4 modelMat = glm::rotate(glm::radians(sAngleX), vec3(1, 0, 0)) * glm::rotate(glm::radians(sAngleY), vec3(0, 1, 0));
+        mat4 viewMat  = lookAt(vec3(0, 1, 2), vec3(0, 0, 0), vec3(0, 1, 0));
+        mat4 projMat  = perspective(radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+        mat4 mvpMat   = projMat * viewMat * modelMat;
 
-            sAngleX += (sTargetAngleX - sAngleX) * 0.1f;
-            sAngleY += (sTargetAngleY - sAngleY) * 0.1f;
+        sAngleX += (sTargetAngleX - sAngleX) * 0.1f;
+        sAngleY += (sTargetAngleY - sAngleY) * 0.1f;
 
-            pRenderEncoder->setVertexBytes(&mvpMat, sizeof(glm::mat4), 2);
+        pRenderEncoder->setVertexBytes(&mvpMat, sizeof(glm::mat4), 2);
 
-            auto& geo = geometries[gModelIndex];
+        auto& geo = geometries[gModelIndex];
 
-            MTL::Buffer* vbvs[2]    = {geo.positionBuffer.Buffer.get(), geo.vertexColorBuffer.Buffer.get()};
-            NS::UInteger offsets[2] = {0, 0};
-            NS::Range    vbRange(0, 2);
-            pRenderEncoder->setVertexBuffers(vbvs, offsets, vbRange);
+        MTL::Buffer* vbvs[2]    = {geo.positionBuffer.Buffer.get(), geo.vertexColorBuffer.Buffer.get()};
+        NS::UInteger offsets[2] = {0, 0};
+        NS::Range    vbRange(0, 2);
+        pRenderEncoder->setVertexBuffers(vbvs, offsets, vbRange);
 
-            pRenderEncoder->setFrontFacingWinding(MTL::WindingCounterClockwise);
-            pRenderEncoder->setCullMode(MTL::CullModeBack);
+        pRenderEncoder->setFrontFacingWinding(MTL::WindingCounterClockwise);
+        pRenderEncoder->setCullMode(MTL::CullModeBack);
 
-            pRenderEncoder->drawIndexedPrimitives(
-                MTL::PrimitiveType::PrimitiveTypeTriangle,
-                geo.numIndices,
-                MTL::IndexTypeUInt32,
-                geo.indexBuffer.Buffer.get(),
-                0);
+        pRenderEncoder->drawIndexedPrimitives(
+            MTL::PrimitiveType::PrimitiveTypeTriangle,
+            geo.numIndices,
+            MTL::IndexTypeUInt32,
+            geo.indexBuffer.Buffer.get(),
+            0);
 
-            // TBN debug
-            {
-                pRenderEncoder->setRenderPipelineState(tbnDebugPipelineState.State.get());
-                pRenderEncoder->setDepthStencilState(tbnDebugDepthStencilState.State.get());
+        // TBN debug
+        {
+            pRenderEncoder->setRenderPipelineState(tbnDebugPipelineState.State.get());
+            pRenderEncoder->setDepthStencilState(tbnDebugDepthStencilState.State.get());
 
-                pRenderEncoder->setVertexBuffer(geo.tbnDebugVertexBuffer.Buffer.get(), 0, 0);
+            pRenderEncoder->setVertexBuffer(geo.tbnDebugVertexBuffer.Buffer.get(), 0, 0);
 
-                pRenderEncoder->setCullMode(MTL::CullModeNone);
+            pRenderEncoder->setCullMode(MTL::CullModeNone);
 
-                pRenderEncoder->drawPrimitives(MTL::PrimitiveTypeLine, 0, geo.tbnDebugNumVertices, 1);
-            }
-
-            window->ImGuiRenderDrawData(renderer.get(), pCommandBuffer, pRenderEncoder);
-
-            pRenderEncoder->endEncoding();
-
-            pCommandBuffer->presentDrawable(pDrawable);
-            pCommandBuffer->commit();
+            pRenderEncoder->drawPrimitives(MTL::PrimitiveTypeLine, 0, geo.tbnDebugNumVertices, 1);
         }
+
+        window->ImGuiRenderDrawData(renderer.get(), pCommandBuffer, pRenderEncoder);
+
+        pRenderEncoder->endEncoding();
+
+        pCommandBuffer->presentDrawable(pDrawable);
+        pCommandBuffer->commit();
     }
 
     return 0;
@@ -365,7 +361,7 @@ void CreateGeometryBuffers(
     // Teapot
     {
         TriMesh mesh;
-        bool res = TriMesh::LoadOBJ(GetAssetPath("models/teapot.obj").string(), "", options, &mesh);
+        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/teapot.obj").string(), "", options, &mesh);
         assert(res && "OBJ load failed");
         mesh.ScaleToFit();
         meshes.push_back(mesh);
@@ -374,7 +370,7 @@ void CreateGeometryBuffers(
     // Knob
     {
         TriMesh mesh;
-        bool res = TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh);
+        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh);
         assert(res && "OBJ load failed");
         mesh.ScaleToFit();
         meshes.push_back(mesh);
@@ -383,7 +379,7 @@ void CreateGeometryBuffers(
     // Sphere
     {
         TriMesh mesh;
-        bool res = TriMesh::LoadOBJ(GetAssetPath("models/sphere.obj").string(), "", options, &mesh);
+        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/sphere.obj").string(), "", options, &mesh);
         assert(res && "OBJ load failed");
         mesh.ScaleToFit();
         meshes.push_back(mesh);
@@ -392,7 +388,7 @@ void CreateGeometryBuffers(
     // Torus
     {
         TriMesh mesh;
-        bool res = TriMesh::LoadOBJ(GetAssetPath("models/torus.obj").string(), "", options, &mesh);
+        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/torus.obj").string(), "", options, &mesh);
         assert(res && "OBJ load failed");
         mesh.ScaleToFit();
         meshes.push_back(mesh);
