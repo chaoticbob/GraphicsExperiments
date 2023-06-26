@@ -169,7 +169,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "101_color_cube_metal");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "103_cone_metal");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -195,73 +195,71 @@ int main(int argc, char** argv)
     uint32_t        frameIndex = 0;
 
     while (window->PollEvents()) {
-        CA::MetalDrawable* pDrawable = renderer->Swapchain->nextDrawable();
+        CA::MetalDrawable* pDrawable = renderer->pSwapchain->nextDrawable();
+        assert(pDrawable != nullptr);
 
-        // nextDrawable() will return nil if there are no free swapchain buffers to render to
-        if (pDrawable) {
-            uint32_t swapchainIndex = (frameIndex % renderer->SwapchainBufferCount);
+        uint32_t swapchainIndex = (frameIndex % renderer->SwapchainBufferCount);
 
-            auto colorTargetDesc = NS::TransferPtr(MTL::RenderPassColorAttachmentDescriptor::alloc()->init());
-            colorTargetDesc->setClearColor(clearColor);
-            colorTargetDesc->setTexture(pDrawable->texture());
-            colorTargetDesc->setLoadAction(MTL::LoadActionClear);
-            colorTargetDesc->setStoreAction(MTL::StoreActionStore);
-            pRenderPassDescriptor->colorAttachments()->setObject(colorTargetDesc.get(), 0);
+        auto colorTargetDesc = NS::TransferPtr(MTL::RenderPassColorAttachmentDescriptor::alloc()->init());
+        colorTargetDesc->setClearColor(clearColor);
+        colorTargetDesc->setTexture(pDrawable->texture());
+        colorTargetDesc->setLoadAction(MTL::LoadActionClear);
+        colorTargetDesc->setStoreAction(MTL::StoreActionStore);
+        pRenderPassDescriptor->colorAttachments()->setObject(colorTargetDesc.get(), 0);
 
-            auto depthTargetDesc = NS::TransferPtr(MTL::RenderPassDepthAttachmentDescriptor::alloc()->init());
-            depthTargetDesc->setClearDepth(1);
-            depthTargetDesc->setTexture(renderer->SwapchainDSVBuffers[swapchainIndex].get());
-            depthTargetDesc->setLoadAction(MTL::LoadActionClear);
-            depthTargetDesc->setStoreAction(MTL::StoreActionDontCare);
-            pRenderPassDescriptor->setDepthAttachment(depthTargetDesc.get());
+        auto depthTargetDesc = NS::TransferPtr(MTL::RenderPassDepthAttachmentDescriptor::alloc()->init());
+        depthTargetDesc->setClearDepth(1);
+        depthTargetDesc->setTexture(renderer->SwapchainDSVBuffers[swapchainIndex].get());
+        depthTargetDesc->setLoadAction(MTL::LoadActionClear);
+        depthTargetDesc->setStoreAction(MTL::StoreActionDontCare);
+        pRenderPassDescriptor->setDepthAttachment(depthTargetDesc.get());
 
-            MTL::CommandBuffer*        pCommandBuffer = renderer->Queue->commandBuffer();
-            MTL::RenderCommandEncoder* pRenderEncoder = pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
+        MTL::CommandBuffer*        pCommandBuffer = renderer->Queue->commandBuffer();
+        MTL::RenderCommandEncoder* pRenderEncoder = pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
 
-            pRenderEncoder->setRenderPipelineState(trianglePipelineState.State.get());
-            pRenderEncoder->setDepthStencilState(triangleDepthStencilState.State.get());
+        pRenderEncoder->setRenderPipelineState(trianglePipelineState.State.get());
+        pRenderEncoder->setDepthStencilState(triangleDepthStencilState.State.get());
 
-            float t        = static_cast<float>(glfwGetTime());
-            mat4  modelMat = glm::rotate(t, vec3(1, 0, 0));
-            mat4  viewMat  = lookAt(vec3(0, 1, 2), vec3(0, 0, 0), vec3(0, 1, 0));
-            mat4  projMat  = perspective(radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+        float t        = static_cast<float>(glfwGetTime());
+        mat4  modelMat = glm::rotate(t, vec3(1, 0, 0));
+        mat4  viewMat  = lookAt(vec3(0, 1, 2), vec3(0, 0, 0), vec3(0, 1, 0));
+        mat4  projMat  = perspective(radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
 
-            mat4 mvpMat = projMat * viewMat * modelMat;
+        mat4 mvpMat = projMat * viewMat * modelMat;
 
-            pRenderEncoder->setVertexBytes(&mvpMat, sizeof(glm::mat4), 2);
+        pRenderEncoder->setVertexBytes(&mvpMat, sizeof(glm::mat4), 2);
 
-            MTL::Buffer* vbvs[2]    = {positionBuffer.Buffer.get(), vertexColorBuffer.Buffer.get()};
-            NS::UInteger offsets[2] = {0, 0};
-            NS::Range    vbRange(0, 2);
-            pRenderEncoder->setVertexBuffers(vbvs, offsets, vbRange);
+        MTL::Buffer* vbvs[2]    = {positionBuffer.Buffer.get(), vertexColorBuffer.Buffer.get()};
+        NS::UInteger offsets[2] = {0, 0};
+        NS::Range    vbRange(0, 2);
+        pRenderEncoder->setVertexBuffers(vbvs, offsets, vbRange);
 
-            pRenderEncoder->setFrontFacingWinding(MTL::WindingCounterClockwise);
-            pRenderEncoder->setCullMode(MTL::CullModeBack);
+        pRenderEncoder->setFrontFacingWinding(MTL::WindingCounterClockwise);
+        pRenderEncoder->setCullMode(MTL::CullModeBack);
 
-            pRenderEncoder->drawIndexedPrimitives(
-                MTL::PrimitiveType::PrimitiveTypeTriangle,
-                numIndices,
-                MTL::IndexTypeUInt32,
-                indexBuffer.Buffer.get(),
-                0);
+        pRenderEncoder->drawIndexedPrimitives(
+            MTL::PrimitiveType::PrimitiveTypeTriangle,
+            numIndices,
+            MTL::IndexTypeUInt32,
+            indexBuffer.Buffer.get(),
+            0);
 
-            // TBN debug
-            {
-                pRenderEncoder->setRenderPipelineState(tbnDebugPipelineState.State.get());
-                pRenderEncoder->setDepthStencilState(tbnDebugDepthStencilState.State.get());
+        // TBN debug
+        {
+            pRenderEncoder->setRenderPipelineState(tbnDebugPipelineState.State.get());
+            pRenderEncoder->setDepthStencilState(tbnDebugDepthStencilState.State.get());
 
-                pRenderEncoder->setVertexBuffer(tbnDebugVertexBuffer.Buffer.get(), 0, 0);
+            pRenderEncoder->setVertexBuffer(tbnDebugVertexBuffer.Buffer.get(), 0, 0);
 
-                pRenderEncoder->setCullMode(MTL::CullModeNone);
+            pRenderEncoder->setCullMode(MTL::CullModeNone);
 
-                pRenderEncoder->drawPrimitives(MTL::PrimitiveTypeLine, 0, tbnDebugNumVertices, 1);
-            }
-
-            pRenderEncoder->endEncoding();
-
-            pCommandBuffer->presentDrawable(pDrawable);
-            pCommandBuffer->commit();
+            pRenderEncoder->drawPrimitives(MTL::PrimitiveTypeLine, 0, tbnDebugNumVertices, 1);
         }
+
+        pRenderEncoder->endEncoding();
+
+        pCommandBuffer->presentDrawable(pDrawable);
+        pCommandBuffer->commit();
     }
 
     return 0;
