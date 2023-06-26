@@ -1,0 +1,416 @@
+#include "window.h"
+
+#include "dx_renderer.h"
+#include "tri_mesh.h"
+
+#include <glm/glm.hpp>
+#include <glm/matrix.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/transform.hpp>
+using namespace glm;
+
+#define CHECK_CALL(FN)                               \
+    {                                                \
+        HRESULT hr = FN;                             \
+        if (FAILED(hr)) {                            \
+            std::stringstream ss;                    \
+            ss << "\n";                              \
+            ss << "*** FUNCTION CALL FAILED *** \n"; \
+            ss << "FUNCTION: " << #FN << "\n";       \
+            ss << "\n";                              \
+            GREX_LOG_ERROR(ss.str().c_str());        \
+            assert(false);                           \
+        }                                            \
+    }
+
+struct DrawParameters
+{
+    uint32_t               materialIndex = 0;
+    uint32_t               numIndices    = 0;
+    ComPtr<ID3D12Resource> indexBuffer   = nullptr;
+};
+
+struct Material
+{
+    glm::vec3 albedo       = glm::vec3(1);
+    uint32_t  recieveLight = 1;
+};
+
+// =============================================================================
+// Shader code
+// =============================================================================
+const char* gShaders = R"(
+
+struct CameraProperties {
+	float4x4 MVP;
+    float3   LightPosition;
+};
+
+struct DrawParameters {
+    uint MaterialIndex;
+};
+
+struct Material {
+    float3 Albedo;
+    uint   recieveLight;
+};
+
+ConstantBuffer<CameraProperties> Camera     : register(b0);
+ConstantBuffer<DrawParameters>   DrawParams : register(b1);
+StructuredBuffer<Material>       Materials  : register(t2);
+
+struct VSOutput {
+    float4 PositionCS : SV_POSITION;
+    float3 PositionOS : POSITION;
+    float3 Normal     : NORMAL;
+};
+
+VSOutput vsmain(float3 PositionOS : POSITION, float3 Normal : NORMAL)
+{
+    VSOutput output = (VSOutput)0;
+    output.PositionCS = mul(Camera.MVP, float4(PositionOS, 1));
+    output.PositionOS = PositionOS;
+    output.Normal = Normal;
+    return output;
+}
+
+float4 psmain(VSOutput input) : SV_TARGET
+{
+    float3 lightDir = normalize(Camera.LightPosition - input.PositionOS);
+    float  diffuse = 0.7 * saturate(dot(lightDir, input.Normal));
+
+    Material material = Materials[DrawParams.MaterialIndex];
+    float3 color = material.Albedo;
+    if (material.recieveLight) {
+        color = (0.3 + diffuse) * material.Albedo;
+    }
+
+    return float4(color, 1);   
+}
+)";
+
+// =============================================================================
+// Globals
+// =============================================================================
+static uint32_t gWindowWidth  = 1280;
+static uint32_t gWindowHeight = 720;
+static bool     gEnableDebug  = true;
+
+static LPCWSTR gVSShaderName = L"vsmain";
+static LPCWSTR gPSShaderName = L"psmain";
+
+void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
+void CreateGeometryBuffers(
+    DxRenderer*                  pRenderer,
+    std::vector<DrawParameters>& outDrawParams,
+    ID3D12Resource**             ppMaterialBuffer,
+    ID3D12Resource**             ppPositionBuffer,
+    ID3D12Resource**             ppNormalBuffer,
+    vec3*                        pLightPosition);
+
+// =============================================================================
+// main()
+// =============================================================================
+int main(int argc, char** argv)
+{
+    std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
+
+    if (!InitDx(renderer.get(), gEnableDebug)) {
+        return EXIT_FAILURE;
+    }
+
+    // *************************************************************************
+    // Compile shaders
+    // *************************************************************************
+    std::vector<char> dxilVS;
+    std::vector<char> dxilPS;
+    {
+        std::string errorMsg;
+        HRESULT     hr = CompileHLSL(gShaders, "vsmain", "vs_6_0", &dxilVS, &errorMsg);
+        if (FAILED(hr)) {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (VS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            assert(false);
+            return EXIT_FAILURE;
+        }
+
+        hr = CompileHLSL(gShaders, "psmain", "ps_6_0", &dxilPS, &errorMsg);
+        if (FAILED(hr)) {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (PS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            assert(false);
+            return EXIT_FAILURE;
+        }
+    }
+
+    // *************************************************************************
+    // Root signature
+    // *************************************************************************
+    ComPtr<ID3D12RootSignature> rootSig;
+    CreateGlobalRootSig(renderer.get(), &rootSig);
+
+    // *************************************************************************
+    // Graphics pipeline state object
+    // *************************************************************************
+    ComPtr<ID3D12PipelineState> pipelineState;
+    CHECK_CALL(CreateDrawNormalPipeline(
+        renderer.get(),
+        rootSig.Get(),
+        dxilVS,
+        dxilPS,
+        GREX_DEFAULT_RTV_FORMAT,
+        GREX_DEFAULT_DSV_FORMAT,
+        &pipelineState));
+
+    // *************************************************************************
+    // Geometry data
+    // *************************************************************************
+    std::vector<DrawParameters> drawParams;
+    ComPtr<ID3D12Resource>      materialBuffer;
+    ComPtr<ID3D12Resource>      positionBuffer;
+    ComPtr<ID3D12Resource>      normalBuffer;
+    vec3                        lightPosition;
+    CreateGeometryBuffers(
+        renderer.get(),
+        drawParams,
+        &materialBuffer,
+        &positionBuffer,
+        &normalBuffer,
+        &lightPosition);
+
+    // *************************************************************************
+    // Window
+    // *************************************************************************
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "102_cornell_box_d3d12");
+    if (!window) {
+        assert(false && "Window::Create failed");
+        return EXIT_FAILURE;
+    }
+
+    // *************************************************************************
+    // Swapchain
+    // *************************************************************************
+    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT)) {
+        assert(false && "InitSwapchain failed");
+        return EXIT_FAILURE;
+    }
+
+    // *************************************************************************
+    // Command allocator
+    // *************************************************************************
+    ComPtr<ID3D12CommandAllocator> commandAllocator;
+    {
+        CHECK_CALL(renderer->Device->CreateCommandAllocator(
+            D3D12_COMMAND_LIST_TYPE_DIRECT,    // type
+            IID_PPV_ARGS(&commandAllocator))); // ppCommandList
+    }
+
+    // *************************************************************************
+    // Command list
+    // *************************************************************************
+    ComPtr<ID3D12GraphicsCommandList5> commandList;
+    {
+        CHECK_CALL(renderer->Device->CreateCommandList1(
+            0,                              // nodeMask
+            D3D12_COMMAND_LIST_TYPE_DIRECT, // type
+            D3D12_COMMAND_LIST_FLAG_NONE,   // flags
+            IID_PPV_ARGS(&commandList)));   // ppCommandList
+    }
+
+    // *************************************************************************
+    // Main loop
+    // *************************************************************************
+    while (window->PollEvents()) {
+        UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
+
+        ComPtr<ID3D12Resource> swapchainBuffer;
+        CHECK_CALL(renderer->Swapchain->GetBuffer(bufferIndex, IID_PPV_ARGS(&swapchainBuffer)));
+
+        CHECK_CALL(commandAllocator->Reset());
+        CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
+
+        D3D12_RESOURCE_BARRIER preRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        commandList->ResourceBarrier(1, &preRenderBarrier);
+        {
+            commandList->OMSetRenderTargets(
+                1,
+                &renderer->SwapchainRTVDescriptorHandles[bufferIndex],
+                false,
+                &renderer->SwapchainDSVDescriptorHandles[bufferIndex]);
+
+            float clearColor[4] = {0.23f, 0.23f, 0.31f, 0};
+            commandList->ClearRenderTargetView(renderer->SwapchainRTVDescriptorHandles[bufferIndex], clearColor, 0, nullptr);
+            commandList->ClearDepthStencilView(renderer->SwapchainDSVDescriptorHandles[bufferIndex], D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0xFF, 0, nullptr);
+
+            mat4 modelMat = mat4(1);
+            mat4 viewMat  = glm::lookAt(vec3(0, 3, 5), vec3(0, 2.8f, 0), vec3(0, 1, 0));
+            mat4 projMat  = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+            mat4 mvpMat   = projMat * viewMat * modelMat;
+
+            struct Camera
+            {
+                mat4 mvp;
+                vec3 lightPosition;
+            };
+
+            Camera cam        = {};
+            cam.mvp           = mvpMat;
+            cam.lightPosition = lightPosition;
+
+            commandList->SetGraphicsRootSignature(rootSig.Get());
+
+            // Camera (b0)
+            commandList->SetGraphicsRoot32BitConstants(0, 19, &cam, 0);
+            // Materials (t2)
+            commandList->SetGraphicsRootShaderResourceView(2, materialBuffer->GetGPUVirtualAddress());
+
+            D3D12_VERTEX_BUFFER_VIEW vbvs[2] = {};
+            vbvs[0].BufferLocation           = positionBuffer->GetGPUVirtualAddress();
+            vbvs[0].SizeInBytes              = static_cast<UINT>(positionBuffer->GetDesc().Width);
+            vbvs[0].StrideInBytes            = 12;
+            vbvs[1].BufferLocation           = normalBuffer->GetGPUVirtualAddress();
+            vbvs[1].SizeInBytes              = static_cast<UINT>(normalBuffer->GetDesc().Width);
+            vbvs[1].StrideInBytes            = 12;
+
+            commandList->IASetVertexBuffers(0, 2, vbvs);
+
+            commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+            D3D12_VIEWPORT viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
+            commandList->RSSetViewports(1, &viewport);
+
+            D3D12_RECT scissor = {0, 0, static_cast<long>(gWindowWidth), static_cast<long>(gWindowHeight)};
+            commandList->RSSetScissorRects(1, &scissor);
+
+            commandList->SetPipelineState(pipelineState.Get());
+
+            for (auto& draw : drawParams) {
+                D3D12_INDEX_BUFFER_VIEW ibv = {};
+                ibv.BufferLocation          = draw.indexBuffer->GetGPUVirtualAddress();
+                ibv.SizeInBytes             = static_cast<UINT>(draw.indexBuffer->GetDesc().Width);
+                ibv.Format                  = DXGI_FORMAT_R32_UINT;
+                commandList->IASetIndexBuffer(&ibv);
+
+                // DrawParams (b1)
+                commandList->SetGraphicsRoot32BitConstants(1, 1, &draw.materialIndex, 0);
+
+                commandList->DrawIndexedInstanced(draw.numIndices, 1, 0, 0, 0);
+            }
+        }
+        D3D12_RESOURCE_BARRIER postRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+        commandList->ResourceBarrier(1, &postRenderBarrier);
+
+        commandList->Close();
+
+        ID3D12CommandList* pList = commandList.Get();
+        renderer->Queue->ExecuteCommandLists(1, &pList);
+
+        if (!WaitForGpu(renderer.get())) {
+            assert(false && "WaitForGpu failed");
+            break;
+        }
+
+        // Present
+        if (!SwapchainPresent(renderer.get())) {
+            assert(false && "SwapchainPresent failed");
+            break;
+        }
+    }
+
+    return 0;
+}
+
+void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
+{
+    D3D12_ROOT_PARAMETER rootParameters[3]      = {};
+    rootParameters[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    rootParameters[0].Constants.Num32BitValues  = 19;
+    rootParameters[0].Constants.ShaderRegister  = 0;
+    rootParameters[0].Constants.RegisterSpace   = 0;
+    rootParameters[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[1].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    rootParameters[1].Constants.Num32BitValues  = 1;
+    rootParameters[1].Constants.ShaderRegister  = 1;
+    rootParameters[1].Constants.RegisterSpace   = 0;
+    rootParameters[1].ShaderVisibility          = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[2].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    rootParameters[2].Descriptor.ShaderRegister = 2;
+    rootParameters[2].Descriptor.RegisterSpace  = 0;
+    rootParameters[2].ShaderVisibility          = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
+    rootSigDesc.NumParameters             = 3;
+    rootSigDesc.pParameters               = rootParameters;
+    rootSigDesc.Flags                     = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+    ComPtr<ID3DBlob> blob;
+    ComPtr<ID3DBlob> error;
+    CHECK_CALL(D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error));
+    CHECK_CALL(pRenderer->Device->CreateRootSignature(
+        0,                         // nodeMask
+        blob->GetBufferPointer(),  // pBloblWithRootSignature
+        blob->GetBufferSize(),     // blobLengthInBytes
+        IID_PPV_ARGS(ppRootSig))); // riid, ppvRootSignature
+}
+
+void CreateGeometryBuffers(
+    DxRenderer*                  pRenderer,
+    std::vector<DrawParameters>& outDrawParams,
+    ID3D12Resource**             ppMaterialBuffer,
+    ID3D12Resource**             ppPositionBuffer,
+    ID3D12Resource**             normalBuffer,
+    vec3*                        pLightPosition)
+{
+    TriMesh mesh = TriMesh::CornellBox({.enableVertexColors = true, .enableNormals = true});
+
+    uint32_t lightGroupIndex = mesh.GetGroupIndex("light");
+    assert((lightGroupIndex != UINT32_MAX) && "group index for 'light' failed");
+
+    *pLightPosition = mesh.GetGroup(lightGroupIndex).GetBounds().Center();
+
+    std::vector<Material> materials;
+    for (uint32_t materialIndex = 0; materialIndex < mesh.GetNumMaterials(); ++materialIndex) {
+        auto& matDesc = mesh.GetMaterial(materialIndex);
+
+        Material material     = {};
+        material.albedo       = matDesc.baseColor;
+        material.recieveLight = (matDesc.name != "white light") ? true: false;
+        materials.push_back(material);
+
+        auto triangles = mesh.GetTrianglesForMaterial(materialIndex);
+
+        DrawParameters params = {};
+        params.numIndices     = static_cast<uint32_t>(3 * triangles.size());
+        params.materialIndex  = materialIndex;
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(triangles),
+            DataPtr(triangles),
+            &params.indexBuffer));
+
+        outDrawParams.push_back(params);
+    }
+
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(materials),
+        DataPtr(materials),
+        ppMaterialBuffer));
+
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(mesh.GetPositions()),
+        DataPtr(mesh.GetPositions()),
+        ppPositionBuffer));
+
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(mesh.GetNormals()),
+        DataPtr(mesh.GetNormals()),
+        normalBuffer));
+}
