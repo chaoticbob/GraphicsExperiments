@@ -43,62 +43,62 @@ struct Material
 // Shader code
 // =============================================================================
 const char* gShaders = R"(
-	#include <metal_stdlib>
-	using namespace metal;
+#include <metal_stdlib>
+using namespace metal;
 
-	struct Camera {
-		float4x4 MVP;
-		float3   LightPosition;
-	};
+struct Camera {
+	float4x4 MVP;
+	float3   LightPosition;
+};
 
-	struct DrawParameters {
-		uint MaterialIndex;
-	};
+struct DrawParameters {
+	uint MaterialIndex;
+};
 
-	struct Material {
-		float3 Albedo;
-		uint   receiveLight;
-	};
+struct Material {
+	float3 Albedo;
+	uint   receiveLight;
+};
 
-	struct VertexData {
-		float3 PositionOS [[attribute(0)]];
-		float3 Normal     [[attribute(1)]];
-	};
+struct VertexData {
+	float3 PositionOS [[attribute(0)]];
+	float3 Normal     [[attribute(1)]];
+};
 
-	struct VSOutput {
-		float4 PositionCS [[position]];
-		float3 PositionOS;
-		float3 Normal;
-	};
+struct VSOutput {
+	float4 PositionCS [[position]];
+	float3 PositionOS;
+	float3 Normal;
+};
 
-	VSOutput vertex vertexMain(
-		         VertexData vertexData [[stage_in]],
-		constant Camera&    Camera     [[buffer(2)]])
-	{
-		VSOutput output;
-		output.PositionCS = Camera.MVP * float4(vertexData.PositionOS, 1.0f);
-		output.PositionOS = vertexData.PositionOS;
-		output.Normal = vertexData.Normal;
-		return output;
+VSOutput vertex vertexMain(
+			 VertexData vertexData [[stage_in]],
+	constant Camera&    Camera     [[buffer(2)]])
+{
+	VSOutput output;
+	output.PositionCS = Camera.MVP * float4(vertexData.PositionOS, 1.0f);
+	output.PositionOS = vertexData.PositionOS;
+	output.Normal = vertexData.Normal;
+	return output;
+}
+
+float4 fragment fragmentMain( 
+			 VSOutput        input      [[stage_in]],
+	constant Camera&         Camera     [[buffer(1)]],
+	constant DrawParameters& DrawParams [[buffer(2)]],
+	constant Material*       Materials  [[buffer(3)]])
+{
+	float3 lightDir = normalize(Camera.LightPosition - input.PositionOS);
+	float  diffuse = 0.7 * saturate(dot(lightDir, input.Normal));
+
+	Material material = Materials[DrawParams.MaterialIndex];
+	float3 color = material.Albedo;
+	if (material.receiveLight) {
+		color = (0.3 + diffuse) * material.Albedo;
 	}
 
-	float4 fragment fragmentMain( 
-		         VSOutput        input      [[stage_in]],
-		constant Camera&         Camera     [[buffer(1)]],
-		constant DrawParameters& DrawParams [[buffer(2)]],
-		constant Material*       Materials  [[buffer(3)]])
-	{
-		float3 lightDir = normalize(Camera.LightPosition - input.PositionOS);
-		float  diffuse = 0.7 * saturate(dot(lightDir, input.Normal));
-
-		Material material = Materials[DrawParams.MaterialIndex];
-		float3 color = material.Albedo;
-		if (material.receiveLight) {
-			color = (0.3 + diffuse) * material.Albedo;
-		}
-
-		return float4(color, 1);  
-	}
+	return float4(color, 1);  
+}
 )";
 
 // =============================================================================
@@ -132,39 +132,31 @@ int main(int argc, char** argv)
     // *************************************************************************
     MetalShader vsShader;
     MetalShader fsShader;
-    {
-        NS::Error*    pError   = nullptr;
-        MTL::Library* pLibrary = renderer->Device->newLibrary(
-            NS::String::string(gShaders, NS::UTF8StringEncoding),
-            nullptr,
-            &pError);
+    NS::Error*  pError  = nullptr;
+    auto        library = NS::TransferPtr(renderer->Device->newLibrary(
+        NS::String::string(gShaders, NS::UTF8StringEncoding),
+        nullptr,
+        &pError));
 
-        if (!pLibrary) {
-            std::stringstream ss;
-            ss << "\n"
-               << "Shader compiler error (VS): " << pError->localizedDescription()->utf8String() << "\n";
-            GREX_LOG_ERROR(ss.str().c_str());
-            assert(false);
-            return EXIT_FAILURE;
-        }
+    if (library.get() == nullptr) {
+        std::stringstream ss;
+        ss << "\n"
+           << "Shader compiler error (VS): " << pError->localizedDescription()->utf8String() << "\n";
+        GREX_LOG_ERROR(ss.str().c_str());
+        assert(false);
+        return EXIT_FAILURE;
+    }
 
-        MTL::Function* metalVS = pLibrary->newFunction(NS::String::string("vertexMain", NS::UTF8StringEncoding));
-        if (metalVS != nullptr) {
-            vsShader.Function = NS::TransferPtr(metalVS);
-        }
-        else {
-            assert(false && "VS Shader MTL::Library::newFunction() failed");
-            return EXIT_FAILURE;
-        }
+    vsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("vertexMain", NS::UTF8StringEncoding)));
+    if (vsShader.Function.get() == nullptr) {
+        assert(false && "VS Shader MTL::Library::newFunction() failed");
+        return EXIT_FAILURE;
+    }
 
-        MTL::Function* metalFS = pLibrary->newFunction(NS::String::string("fragmentMain", NS::UTF8StringEncoding));
-        if (metalFS != nullptr) {
-            fsShader.Function = NS::TransferPtr(metalFS);
-        }
-        else {
-            assert(false && "FS Shader MTL::Library::newFunction() failed");
-            return EXIT_FAILURE;
-        }
+    fsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("fragmentMain", NS::UTF8StringEncoding)));
+    if (fsShader.Function.get() == nullptr) {
+        assert(false && "FS Shader MTL::Library::newFunction() failed");
+        return EXIT_FAILURE;
     }
 
     // *************************************************************************
@@ -200,7 +192,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "103_color_cube_metal");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "102_cornell_box_metal");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -226,78 +218,72 @@ int main(int argc, char** argv)
     uint32_t        frameIndex = 0;
 
     while (window->PollEvents()) {
-        NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
+        CA::MetalDrawable* pDrawable = renderer->pSwapchain->nextDrawable();
+        assert(pDrawable != nullptr);
 
-        CA::MetalDrawable* pDrawable = renderer->Swapchain->nextDrawable();
+        uint32_t swapchainIndex = (frameIndex % renderer->SwapchainBufferCount);
 
-        // nextDrawable() will return nil if there are no free swapchain buffers to render to
-        if (pDrawable) {
-            uint32_t swapchainIndex = (frameIndex % renderer->SwapchainBufferCount);
+        auto colorTargetDesc = NS::TransferPtr(MTL::RenderPassColorAttachmentDescriptor::alloc()->init());
+        colorTargetDesc->setClearColor(clearColor);
+        colorTargetDesc->setTexture(pDrawable->texture());
+        colorTargetDesc->setLoadAction(MTL::LoadActionClear);
+        colorTargetDesc->setStoreAction(MTL::StoreActionStore);
+        pRenderPassDescriptor->colorAttachments()->setObject(colorTargetDesc.get(), 0);
 
-            MTL::RenderPassColorAttachmentDescriptor* pColorTargetDesc = MTL::RenderPassColorAttachmentDescriptor::alloc()->init();
-            pColorTargetDesc->setClearColor(clearColor);
-            pColorTargetDesc->setTexture(pDrawable->texture());
-            pColorTargetDesc->setLoadAction(MTL::LoadActionClear);
-            pColorTargetDesc->setStoreAction(MTL::StoreActionStore);
-            pRenderPassDescriptor->colorAttachments()->setObject(pColorTargetDesc, 0);
+        auto depthTargetDesc = NS::TransferPtr(MTL::RenderPassDepthAttachmentDescriptor::alloc()->init());
+        depthTargetDesc->setClearDepth(1);
+        depthTargetDesc->setTexture(renderer->SwapchainDSVBuffers[swapchainIndex].get());
+        depthTargetDesc->setLoadAction(MTL::LoadActionClear);
+        depthTargetDesc->setStoreAction(MTL::StoreActionDontCare);
+        pRenderPassDescriptor->setDepthAttachment(depthTargetDesc.get());
 
-            MTL::RenderPassDepthAttachmentDescriptor* pDepthTargetDesc = MTL::RenderPassDepthAttachmentDescriptor::alloc()->init();
-            pDepthTargetDesc->setClearDepth(1);
-            pDepthTargetDesc->setTexture(renderer->SwapchainDSVBuffers[swapchainIndex].get());
-            pDepthTargetDesc->setLoadAction(MTL::LoadActionClear);
-            pDepthTargetDesc->setStoreAction(MTL::StoreActionDontCare);
-            pRenderPassDescriptor->setDepthAttachment(pDepthTargetDesc);
+        MTL::CommandBuffer*        pCommandBuffer = renderer->Queue->commandBuffer();
+        MTL::RenderCommandEncoder* pRenderEncoder = pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
 
-            MTL::CommandBuffer*        pCommandBuffer = renderer->Queue->commandBuffer();
-            MTL::RenderCommandEncoder* pRenderEncoder = pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
+        pRenderEncoder->setRenderPipelineState(renderPipelineState.State.get());
+        pRenderEncoder->setDepthStencilState(depthStencilState.State.get());
 
-            pRenderEncoder->setRenderPipelineState(renderPipelineState.State.get());
-            pRenderEncoder->setDepthStencilState(depthStencilState.State.get());
+        // Update the camera model view projection matrix
+        mat4 modelMat = mat4(1);
 
-            // Update the camera model view projection matrix
-            mat4 modelMat = mat4(1);
+        mat4 viewMat = lookAt(vec3(0, 3, 5), vec3(0, 2.8, 0), vec3(0, 1, 0));
+        mat4 projMat = perspective(radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+        mat4 mvpMat  = projMat * viewMat * modelMat;
 
-            mat4 viewMat = lookAt(vec3(0, 3, 5), vec3(0, 2.8, 0), vec3(0, 1, 0));
-            mat4 projMat = perspective(radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
-            mat4 mvpMat  = projMat * viewMat * modelMat;
+        struct Camera
+        {
+            mat4   mvp;
+            vec3   lightPosition;
+            uint32 _padding;
+        };
 
-            struct Camera
-            {
-                mat4   mvp;
-                vec3   lightPosition;
-                uint32 _padding;
-            };
+        Camera cam        = {};
+        cam.mvp           = mvpMat;
+        cam.lightPosition = lightPosition;
 
-            Camera cam        = {};
-            cam.mvp           = mvpMat;
-            cam.lightPosition = lightPosition;
+        pRenderEncoder->setVertexBytes(&cam, sizeof(Camera), 2);
+        pRenderEncoder->setFragmentBytes(&cam, sizeof(Camera), 1);
+        pRenderEncoder->setFragmentBuffer(materialBuffer.Buffer.get(), 0, 3);
 
-            pRenderEncoder->setVertexBytes(&cam, sizeof(Camera), 2);
-            pRenderEncoder->setFragmentBytes(&cam, sizeof(Camera), 1);
-            pRenderEncoder->setFragmentBuffer(materialBuffer.Buffer.get(), 0, 3);
+        MTL::Buffer* vbvs[2]    = {positionBuffer.Buffer.get(), normalBuffer.Buffer.get()};
+        NS::UInteger offsets[2] = {0, 0};
+        NS::Range    vbRange(0, 2);
+        pRenderEncoder->setVertexBuffers(vbvs, offsets, vbRange);
 
-            MTL::Buffer* vbvs[2]    = {positionBuffer.Buffer.get(), normalBuffer.Buffer.get()};
-            NS::UInteger offsets[2] = {0, 0};
-            NS::Range    vbRange(0, 2);
-            pRenderEncoder->setVertexBuffers(vbvs, offsets, vbRange);
-
-            for (auto& draw : drawParams) {
-                pRenderEncoder->setFragmentBytes(&draw.materialIndex, sizeof(uint), 2);
-                pRenderEncoder->drawIndexedPrimitives(
-                    MTL::PrimitiveType::PrimitiveTypeTriangle,
-                    draw.numIndices,
-                    MTL::IndexTypeUInt32,
-                    draw.indexBuffer.Buffer.get(),
-                    0);
-            }
-
-            pRenderEncoder->endEncoding();
-
-            pCommandBuffer->presentDrawable(pDrawable);
-            pCommandBuffer->commit();
+        for (auto& draw : drawParams) {
+            pRenderEncoder->setFragmentBytes(&draw.materialIndex, sizeof(uint), 2);
+            pRenderEncoder->drawIndexedPrimitives(
+                MTL::PrimitiveType::PrimitiveTypeTriangle,
+                draw.numIndices,
+                MTL::IndexTypeUInt32,
+                draw.indexBuffer.Buffer.get(),
+                0);
         }
 
-        pPoolAllocator->release();
+        pRenderEncoder->endEncoding();
+
+        pCommandBuffer->presentDrawable(pDrawable);
+        pCommandBuffer->commit();
     }
 
     return 0;
