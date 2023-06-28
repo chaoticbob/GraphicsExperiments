@@ -4,7 +4,6 @@
 #include <fstream>
 
 #if defined(__APPLE__)
-#include <unordered_map>
 #include <mach-o/dyld.h>
 #endif
 
