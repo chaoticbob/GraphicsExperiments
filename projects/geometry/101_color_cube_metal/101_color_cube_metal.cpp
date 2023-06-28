@@ -28,38 +28,38 @@ using namespace glm;
 // Shader code
 // =============================================================================
 const char* gShaders = R"(
-	#include <metal_stdlib>
-	using namespace metal;
+#include <metal_stdlib>
+using namespace metal;
 
-	struct Camera {
-		float4x4 MVP;
-	};
+struct Camera {
+	float4x4 MVP;
+};
 
-	struct VSOutput {
-		float4 PositionCS [[position]];
-		float3 Color;
-	};
+struct VSOutput {
+	float4 PositionCS [[position]];
+	float3 Color;
+};
 
-	struct VertexData {
-		float3 PositionOS [[attribute(0)]];
-		float3 Color [[attribute(1)]];
-	};
+struct VertexData {
+	float3 PositionOS [[attribute(0)]];
+	float3 Color [[attribute(1)]];
+};
 
-   VSOutput vertex vertexMain(
-		VertexData vertexData [[stage_in]],
-		constant Camera &Cam [[buffer(2)]])
-	{
-		VSOutput output;
-		float3 position = vertexData.PositionOS;
-		output.PositionCS = Cam.MVP * float4(position, 1.0f);
-		output.Color = vertexData.Color;
-		return output;
-	}
+VSOutput vertex vertexMain(
+	VertexData vertexData [[stage_in]],
+	constant Camera &Cam [[buffer(2)]])
+{
+	VSOutput output;
+	float3 position = vertexData.PositionOS;
+	output.PositionCS = Cam.MVP * float4(position, 1.0f);
+	output.Color = vertexData.Color;
+	return output;
+}
 
-	float4 fragment fragmentMain( VSOutput in [[stage_in]] )
-	{
-		return float4(in.Color, 1.0);
-	}
+float4 fragment fragmentMain( VSOutput in [[stage_in]] )
+{
+	return float4(in.Color, 1.0);
+}
 )";
 
 // =============================================================================
@@ -169,54 +169,52 @@ int main(int argc, char** argv)
     uint32_t        frameIndex = 0;
 
     while (window->PollEvents()) {
-        CA::MetalDrawable* pDrawable = renderer->Swapchain->nextDrawable();
+        CA::MetalDrawable* pDrawable = renderer->pSwapchain->nextDrawable();
+        assert(pDrawable != nullptr);
 
-        // nextDrawable() will return nil if there are no free swapchain buffers to render to
-        if (pDrawable) {
-            uint32_t swapchainIndex = (frameIndex % renderer->SwapchainBufferCount);
+        uint32_t swapchainIndex = (frameIndex % renderer->SwapchainBufferCount);
 
-            auto colorTargetDesc = NS::TransferPtr(MTL::RenderPassColorAttachmentDescriptor::alloc()->init());
-            colorTargetDesc->setClearColor(clearColor);
-            colorTargetDesc->setTexture(pDrawable->texture());
-            colorTargetDesc->setLoadAction(MTL::LoadActionClear);
-            colorTargetDesc->setStoreAction(MTL::StoreActionStore);
-            pRenderPassDescriptor->colorAttachments()->setObject(colorTargetDesc.get(), 0);
+        auto colorTargetDesc = NS::TransferPtr(MTL::RenderPassColorAttachmentDescriptor::alloc()->init());
+        colorTargetDesc->setClearColor(clearColor);
+        colorTargetDesc->setTexture(pDrawable->texture());
+        colorTargetDesc->setLoadAction(MTL::LoadActionClear);
+        colorTargetDesc->setStoreAction(MTL::StoreActionStore);
+        pRenderPassDescriptor->colorAttachments()->setObject(colorTargetDesc.get(), 0);
 
-            auto depthTargetDesc = NS::TransferPtr(MTL::RenderPassDepthAttachmentDescriptor::alloc()->init());
-            depthTargetDesc->setClearDepth(1);
-            depthTargetDesc->setTexture(renderer->SwapchainDSVBuffers[swapchainIndex].get());
-            depthTargetDesc->setLoadAction(MTL::LoadActionClear);
-            depthTargetDesc->setStoreAction(MTL::StoreActionDontCare);
-            pRenderPassDescriptor->setDepthAttachment(depthTargetDesc.get());
+        auto depthTargetDesc = NS::TransferPtr(MTL::RenderPassDepthAttachmentDescriptor::alloc()->init());
+        depthTargetDesc->setClearDepth(1);
+        depthTargetDesc->setTexture(renderer->SwapchainDSVBuffers[swapchainIndex].get());
+        depthTargetDesc->setLoadAction(MTL::LoadActionClear);
+        depthTargetDesc->setStoreAction(MTL::StoreActionDontCare);
+        pRenderPassDescriptor->setDepthAttachment(depthTargetDesc.get());
 
-            MTL::CommandBuffer*        pCommandBuffer = renderer->Queue->commandBuffer();
-            MTL::RenderCommandEncoder* pRenderEncoder = pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
+        MTL::CommandBuffer*        pCommandBuffer = renderer->Queue->commandBuffer();
+        MTL::RenderCommandEncoder* pRenderEncoder = pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
 
-            pRenderEncoder->setRenderPipelineState(renderPipelineState.State.get());
-            pRenderEncoder->setDepthStencilState(depthStencilState.State.get());
+        pRenderEncoder->setRenderPipelineState(renderPipelineState.State.get());
+        pRenderEncoder->setDepthStencilState(depthStencilState.State.get());
 
-            // Update the camera model view projection matrix
-            mat4 modelMat = rotate(static_cast<float>(glfwGetTime()), vec3(0, 1, 0)) *
-                            rotate(static_cast<float>(glfwGetTime()), vec3(1, 0, 0));
-            mat4 viewMat = lookAt(vec3(0, 0, 2), vec3(0, 0, 0), vec3(0, 1, 0));
-            mat4 projMat = perspective(radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+        // Update the camera model view projection matrix
+        mat4 modelMat = rotate(static_cast<float>(glfwGetTime()), vec3(0, 1, 0)) *
+                        rotate(static_cast<float>(glfwGetTime()), vec3(1, 0, 0));
+        mat4 viewMat = lookAt(vec3(0, 0, 2), vec3(0, 0, 0), vec3(0, 1, 0));
+        mat4 projMat = perspective(radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
 
-            mat4 mvpMat = projMat * viewMat * modelMat;
+        mat4 mvpMat = projMat * viewMat * modelMat;
 
-            pRenderEncoder->setVertexBytes(&mvpMat, sizeof(glm::mat4), 2);
+        pRenderEncoder->setVertexBytes(&mvpMat, sizeof(glm::mat4), 2);
 
-            MTL::Buffer* vbvs[2]    = {pPositionBuffer.Buffer.get(), pVertexColorBuffer.Buffer.get()};
-            NS::UInteger offsets[2] = {0, 0};
-            NS::Range    vbRange(0, 2);
-            pRenderEncoder->setVertexBuffers(vbvs, offsets, vbRange);
+        MTL::Buffer* vbvs[2]    = {pPositionBuffer.Buffer.get(), pVertexColorBuffer.Buffer.get()};
+        NS::UInteger offsets[2] = {0, 0};
+        NS::Range    vbRange(0, 2);
+        pRenderEncoder->setVertexBuffers(vbvs, offsets, vbRange);
 
-            pRenderEncoder->drawIndexedPrimitives(MTL::PrimitiveType::PrimitiveTypeTriangle, 36, MTL::IndexTypeUInt32, pIndexBuffer.Buffer.get(), 0);
+        pRenderEncoder->drawIndexedPrimitives(MTL::PrimitiveType::PrimitiveTypeTriangle, 36, MTL::IndexTypeUInt32, pIndexBuffer.Buffer.get(), 0);
 
-            pRenderEncoder->endEncoding();
+        pRenderEncoder->endEncoding();
 
-            pCommandBuffer->presentDrawable(pDrawable);
-            pCommandBuffer->commit();
-        }
+        pCommandBuffer->presentDrawable(pDrawable);
+        pCommandBuffer->commit();
     }
 
     return 0;

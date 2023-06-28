@@ -18,7 +18,7 @@ struct MetalRenderer
     bool                                     DebugEnabled = false;
     NS::SharedPtr<MTL::Device>               Device;
     NS::SharedPtr<MTL::CommandQueue>         Queue;
-    CA::MetalLayer*                          Swapchain = nullptr;
+    CA::MetalLayer*                          pSwapchain = nullptr;
     std::vector<NS::SharedPtr<MTL::Texture>> SwapchainDSVBuffers;
     uint32_t                                 SwapchainBufferCount = 0;
 
@@ -27,7 +27,7 @@ struct MetalRenderer
 };
 
 bool InitMetal(MetalRenderer* pRenderer, bool enableDebug);
-bool InitSwapchain(MetalRenderer* pRenderer, void* cocoaWindow, uint32_t width, uint32_t height, uint32_t bufferCount = 2, MTL::PixelFormat dsvFormat = MTL::PixelFormatInvalid);
+bool InitSwapchain(MetalRenderer* pRenderer, void* pCocoaWindow, uint32_t width, uint32_t height, uint32_t bufferCount = 2, MTL::PixelFormat dsvFormat = MTL::PixelFormatInvalid);
 
 struct MetalBuffer
 {
