@@ -86,6 +86,11 @@ constexpr sampler IBLMapSampler(
 	s_address::repeat
 );
 
+constexpr sampler MaterialSampler(
+	filter::linear,
+	mip_filter::linear
+);
+
 float Distribution_GGX(float3 N, float3 H, float roughness)
 {
     float NoH    = saturate(dot(N, H));
@@ -205,13 +210,14 @@ float3 ACESFilm(float3 x)
 }
 
 float4 fragment psmain(
-             VSOutput            input             [[stage_in]],
-    constant DrawParameters&     DrawParams        [[buffer(2)]],
-    constant SceneParameters&    SceneParams       [[buffer(3)]],
-	constant MaterialParameters& MaterialParams    [[buffer(4)]],
-             texture2d<float>    IBLIntegrationLUT [[texture(0)]],
-             texture2d<float>    IBLIrradianceMap  [[texture(1)]],
-             texture2d<float>    IBLEnvironmentMap [[texture(2)]])
+             VSOutput                     input             [[stage_in]],
+    constant DrawParameters&              DrawParams        [[buffer(2)]],
+    constant SceneParameters&             SceneParams       [[buffer(3)]],
+    constant MaterialParameters*          MaterialParams    [[buffer(4)]],
+             texture2d<float>             IBLIntegrationLUT [[texture(0)]],
+             texture2d<float>             IBLIrradianceMap  [[texture(1)]],
+             texture2d<float>             IBLEnvironmentMap [[texture(2)]],
+             array<texture2d<float>, 10>  MaterialTextures  [[texture(3)]])
 {
     uint baseColorIdx = 5 * DrawParams.MaterialIndex + 0;
     uint normalIdx    = 5 * DrawParams.MaterialIndex + 1;
@@ -220,18 +226,18 @@ float4 fragment psmain(
     uint aoIdx        = 5 * DrawParams.MaterialIndex + 4;
 
     // Read material values from textures
-    float3 baseColor  = MaterialTextures[baseColorIdx].Sample(MaterialSampler, input.TexCoord).rgb;
-    float3 normal     = normalize((MaterialTextures[normalIdx].Sample(MaterialSampler, input.TexCoord).rgb * 2) - 1);
-    float  roughness  = MaterialTextures[roughnessIdx].Sample(MaterialSampler, input.TexCoord).r; 
-    float  metallic   = MaterialTextures[metallicIdx].Sample(MaterialSampler, input.TexCoord).r; 
-    float3 ao         = MaterialTextures[aoIdx].Sample(MaterialSampler, input.TexCoord).rgb;
+    float3 baseColor  = MaterialTextures[baseColorIdx].sample(MaterialSampler, input.TexCoord).rgb;
+    float3 normal     = normalize((MaterialTextures[normalIdx].sample(MaterialSampler, input.TexCoord).rgb * 2) - 1);
+    float  roughness  = MaterialTextures[roughnessIdx].sample(MaterialSampler, input.TexCoord).r; 
+    float  metallic   = MaterialTextures[metallicIdx].sample(MaterialSampler, input.TexCoord).r; 
+    float3 ao         = MaterialTextures[aoIdx].sample(MaterialSampler, input.TexCoord).rgb;
     float  dielectric = 1 - metallic;
     
     // Calculate normal
     float3 vNt = normal;
-    float3 vN  = normalize(mul(DrawParams.ModelMatrix, float4(input.Normal, 0)).xyz);
-    float3 vT  = mul(DrawParams.ModelMatrix, float4(input.Tangent.xyz, 0)).xyz;
-    float3 vB  = mul(DrawParams.ModelMatrix, float4(input.Bitangent.xyz, 0)).xyz;
+    float3 vN  = normalize((DrawParams.ModelMatrix * float4(input.Normal, 0)).xyz);
+    float3 vT  = (DrawParams.ModelMatrix * float4(input.Tangent.xyz, 0)).xyz;
+    float3 vB  = (DrawParams.ModelMatrix * float4(input.Bitangent.xyz, 0)).xyz;
     float3 N   = normalize(vNt.x * vT + vNt.y * vB + vNt.z * vN);
 
     // Scene and geometry variables - world space

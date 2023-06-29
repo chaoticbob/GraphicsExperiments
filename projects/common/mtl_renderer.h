@@ -103,3 +103,12 @@ NS::Error* CreateDrawTexturePipeline(
     MTL::PixelFormat          dsvFormat,
     MetalPipelineRenderState* pPipeline,
     MetalDepthStencilState*   pDepthStencilState);
+
+NS::Error* CreateGraphicsPipeline1(
+    MetalRenderer*            pRenderer,
+    MetalShader*              vsShaderModule,
+    MetalShader*              fsShaderModule,
+    MTL::PixelFormat          rtvFormat,
+    MTL::PixelFormat          dsvFormat,
+    MetalPipelineRenderState* pPipeline,
+    MetalDepthStencilState*   pDepthStencilState);

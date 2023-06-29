@@ -16,7 +16,7 @@ endif()
 
 if (GREX_ENABLE_METAL)
     add_subdirectory(201_pbr_spheres_metal)
-    add_subdirectory(203_pbr_camera_metal)
+    add_subdirectory(202_pbr_camera_metal)
 endif()
 
 if (GREX_ENABLE_VULKAN)

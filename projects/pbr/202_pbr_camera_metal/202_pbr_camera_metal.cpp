@@ -91,6 +91,12 @@ float gAngle       = 0.0f;
 
 static uint32_t gNumLights = 0;
 
+void CreateMaterialSphereVertexBuffers(
+    MetalRenderer* pRenderer,
+    uint32_t*      pNumIndices,
+    MetalBuffer*   pIndexBuffer,
+    MetalBuffer*   pPositionBuffer,
+    MetalBuffer*   pNormalBuffer);
 void CreateIBLTextures(
     MetalRenderer* pRenderer,
     MetalTexture*  pBRDFLUT,
@@ -112,9 +118,9 @@ void CreateCameraVertexBuffers(
 void CreateEnvironmentVertexBuffers(
     MetalRenderer* pRenderer,
     uint32_t*      pNumIndices,
-    MetalBuffer    pIndexBuffer,
-    MetalBuffer    pPositionBuffer,
-    MetalBuffer    pTexCoordBuffer);
+    MetalBuffer*   pIndexBuffer,
+    MetalBuffer*   pPositionBuffer,
+    MetalBuffer*   pTexCoordBuffer);
 
 void MouseMove(int x, int y, int buttons)
 {
@@ -151,7 +157,7 @@ int main(int argc, char** argv)
     MetalShader pbrFsShader;
     NS::Error*  pError = nullptr;
     {
-        std::string shaderSource = LoadString("projects/203_204_pbr_camera/shaders.metal");
+        std::string shaderSource = LoadString("projects/202_pbr_camera/shaders.metal");
         if (shaderSource.empty()) {
             assert(false && "no shader source");
             return EXIT_FAILURE;
@@ -188,7 +194,7 @@ int main(int argc, char** argv)
     MetalShader drawTextureVsShader;
     MetalShader drawTextureFsShader;
     {
-        std::string shaderSource = LoadString("projects/203_204_pbr_camera/drawtexture.metal");
+        std::string shaderSource = LoadString("projects/202_pbr_camera/drawtexture.metal");
         if (shaderSource.empty()) {
             assert(false && "no shader source");
             return EXIT_FAILURE;
@@ -226,7 +232,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     MetalPipelineRenderState pbrPipelineState;
     MetalDepthStencilState   pbrDepthStencilState;
-    CHECK_CALL(CreateDrawNormalPipeline(
+    CHECK_CALL(CreateGraphicsPipeline1(
         renderer.get(),
         &pbrVsShader,
         &pbrFsShader,
@@ -249,6 +255,7 @@ int main(int argc, char** argv)
         &envPipelineState,
         &envDepthStencilState));
 
+	/*
     // *************************************************************************
     // Material sphere vertex buffers
     // *************************************************************************
@@ -551,9 +558,9 @@ void CreateMaterialSphereVertexBuffers(
 void CreateEnvironmentVertexBuffers(
     MetalRenderer* pRenderer,
     uint32_t*      pNumIndices,
-    MetalBuffer*   pIndexBuffer,
-    MetalBuffer*   pPositionBuffer,
-    MetalBuffer*   pTexCoordBuffer)
+    MetalBuffer*    pIndexBuffer,
+    MetalBuffer*    pPositionBuffer,
+    MetalBuffer*    pTexCoordBuffer)
 {
     TriMesh::Options options;
     options.enableTexCoords = true;
@@ -782,7 +789,7 @@ void CreateCameraMaterials(
 }
 
 void CreateCameraVertexBuffers(
-    DxRenderer*                  pRenderer,
+    MetalRenderer*               pRenderer,
     const TriMesh*               pMesh,
     std::vector<DrawParameters>& outDrawParams,
     VertexBuffers&               outVertexBuffers)
@@ -833,38 +840,4 @@ void CreateCameraVertexBuffers(
         SizeInBytes(pMesh->GetBitangents()),
         DataPtr(pMesh->GetBitangents()),
         &outVertexBuffers.bitangentBuffer));
-}
-
-void CreateEnvironmentVertexBuffers(
-    MetalRenderer* pRenderer,
-    uint32_t*      pNumIndices,
-    MetalBuffer*   pIndexBuffer,
-    MetalBuffer*   pPositionBuffer,
-    MetalBuffer*   pTexCoordBuffer)
-{
-	TriMesh::Options options;
-	options.enableTexcCoords = true;
-	options.faceInside = true;
-
-    TriMesh mesh = TriMesh::Sphere(100, 64, 64, options);
-
-    *pNumIndices = 3 * mesh.GetNumTriangles();
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTriangles()),
-        DataPtr(mesh.GetTriangles()),
-        pIndexBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetPositions()),
-        DataPtr(mesh.GetPositions()),
-        pPositionBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTexCoords()),
-        DataPtr(mesh.GetTexCoords()),
-        pTexCoordBuffer));
 }
