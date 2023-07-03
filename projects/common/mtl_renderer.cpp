@@ -121,41 +121,65 @@ NS::Error* CreateBuffer(
 }
 
 NS::Error* CreateDrawVertexColorPipeline(
-    MetalRenderer*            pRenderer,
-    MetalShader*              pVsShaderModule,
-    MetalShader*              pFsShaderModule,
-    MTL::PixelFormat          rtvFormat,
-    MTL::PixelFormat          dsvFormat,
-    MetalPipelineRenderState* pPipelineRenderState,
-    MetalDepthStencilState*   pDepthStencilState)
+    MetalRenderer*              pRenderer,
+    MetalShader*                vsShaderModule,
+    MetalShader*                fsShaderModule,
+    MTL::PixelFormat            rtvFormat,
+    MTL::PixelFormat            dsvFormat,
+    MetalPipelineRenderState*   pPipelineRenderState,
+    MetalDepthStencilState*     pDepthStencilState,
+    MTL::PrimitiveTopologyClass topologyType,
+    uint32_t                    pipelineFlags)
 {
     auto vertexDescriptor = NS::TransferPtr(MTL::VertexDescriptor::alloc()->init());
-    if (vertexDescriptor.get() != nullptr) {
-        // Position Buffer
-        {
+   if (vertexDescriptor.get() != nullptr) {
+      if (pipelineFlags & METAL_PIPELINE_FLAGS_INTERLEAVED_ATTRS) {
+         {
+            // Position Buffer
+            MTL::VertexAttributeDescriptor* vertexAttribute0 = vertexDescriptor->attributes()->object(0);
+            vertexAttribute0->setOffset(0);
+            vertexAttribute0->setFormat(MTL::VertexFormatFloat3);
+            vertexAttribute0->setBufferIndex(0);
+            
+            // Vertex Color Buffer
+            MTL::VertexAttributeDescriptor* vertexAttribute1 = vertexDescriptor->attributes()->object(1);
+            vertexAttribute1->setOffset(12);
+            vertexAttribute1->setFormat(MTL::VertexFormatFloat3);
+            vertexAttribute1->setBufferIndex(0);
+         }
+         
+         MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = vertexDescriptor->layouts()->object(0);
+         vertexBufferLayout->setStride(24);
+         vertexBufferLayout->setStepRate(1);
+         vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+      }
+      else {
+         // Position Buffer
+         {
             MTL::VertexAttributeDescriptor* vertexAttribute = vertexDescriptor->attributes()->object(0);
             vertexAttribute->setOffset(0);
             vertexAttribute->setFormat(MTL::VertexFormatFloat3);
             vertexAttribute->setBufferIndex(0);
-
+            
             MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = vertexDescriptor->layouts()->object(0);
             vertexBufferLayout->setStride(12);
             vertexBufferLayout->setStepRate(1);
             vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
-        }
-        // Vertex Color Buffer
-        {
+         }
+         // Vertex Color Buffer
+         {
             MTL::VertexAttributeDescriptor* vertexAttribute = vertexDescriptor->attributes()->object(1);
             vertexAttribute->setOffset(0);
             vertexAttribute->setFormat(MTL::VertexFormatFloat3);
             vertexAttribute->setBufferIndex(1);
-
+            
             MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = vertexDescriptor->layouts()->object(1);
             vertexBufferLayout->setStride(12);
             vertexBufferLayout->setStepRate(1);
             vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
-        }
-    }
+         }
+      }
+   }
     else {
         assert(false && "CreateDrawVertexColorPipeline() - MTL::VertexDescriptor::alloc::init() failed");
         return nullptr;
@@ -164,11 +188,12 @@ NS::Error* CreateDrawVertexColorPipeline(
     auto desc = NS::TransferPtr(MTL::RenderPipelineDescriptor::alloc()->init());
 
     if (desc.get() != nullptr) {
-        desc->setVertexFunction(pVsShaderModule->Function.get());
-        desc->setFragmentFunction(pFsShaderModule->Function.get());
+        desc->setVertexFunction(vsShaderModule->Function.get());
+        desc->setFragmentFunction(fsShaderModule->Function.get());
         desc->setVertexDescriptor(vertexDescriptor.get());
         desc->colorAttachments()->object(0)->setPixelFormat(rtvFormat);
         desc->setDepthAttachmentPixelFormat(dsvFormat);
+        desc->setInputPrimitiveTopology(topologyType);
 
         NS::Error* pError           = nullptr;
         pPipelineRenderState->State = NS::TransferPtr(pRenderer->Device->newRenderPipelineState(desc.get(), &pError));
