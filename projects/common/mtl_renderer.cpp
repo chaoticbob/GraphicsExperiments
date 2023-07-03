@@ -197,3 +197,96 @@ NS::Error* CreateDrawVertexColorPipeline(
 
     return nullptr;
 }
+
+NS::Error* CreateDrawNormalPipeline(
+    MetalRenderer*            pRenderer,
+    MetalShader*              pVsShaderModule,
+    MetalShader*              pFsShaderModule,
+    MTL::PixelFormat          rtvFormat,
+    MTL::PixelFormat          dsvFormat,
+    MetalPipelineRenderState* pPipelineRenderState,
+    MetalDepthStencilState*   pDepthStencilState)
+{
+    NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
+
+    MTL::VertexDescriptor* pVertexDescriptor = MTL::VertexDescriptor::alloc()->init();
+    if (pVertexDescriptor != nullptr) {
+        // Position Buffer
+        {
+            MTL::VertexAttributeDescriptor* vertexAttribute = pVertexDescriptor->attributes()->object(0);
+            vertexAttribute->setOffset(0);
+            vertexAttribute->setFormat(MTL::VertexFormatFloat3);
+            vertexAttribute->setBufferIndex(0);
+
+            MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = pVertexDescriptor->layouts()->object(0);
+            vertexBufferLayout->setStride(12);
+            vertexBufferLayout->setStepRate(1);
+            vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+        }
+        // Vertex Normal Buffer
+        {
+            MTL::VertexAttributeDescriptor* vertexAttribute = pVertexDescriptor->attributes()->object(1);
+            vertexAttribute->setOffset(0);
+            vertexAttribute->setFormat(MTL::VertexFormatFloat3);
+            vertexAttribute->setBufferIndex(1);
+
+            MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = pVertexDescriptor->layouts()->object(1);
+            vertexBufferLayout->setStride(12);
+            vertexBufferLayout->setStepRate(1);
+            vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+        }
+    }
+    else {
+        assert(false && "CreateDrawNormalPipeline() - MTL::VertexDescriptor::alloc::init() failed");
+    }
+
+    NS::Error* pError = nullptr;
+    {
+        MTL::RenderPipelineDescriptor* pDesc = MTL::RenderPipelineDescriptor::alloc()->init();
+
+        if (pDesc != nullptr) {
+            pDesc->setVertexFunction(pVsShaderModule->Function.get());
+            pDesc->setFragmentFunction(pFsShaderModule->Function.get());
+            pDesc->setVertexDescriptor(pVertexDescriptor);
+            pDesc->colorAttachments()->object(0)->setPixelFormat(rtvFormat);
+            pDesc->setDepthAttachmentPixelFormat(dsvFormat);
+
+            MTL::RenderPipelineState* pLocalPipelineState = pRenderer->Device->newRenderPipelineState(pDesc, &pError);
+            if (pLocalPipelineState != nullptr) {
+                pPipelineRenderState->State = NS::TransferPtr(pLocalPipelineState);
+            }
+            else {
+                assert(false && "CreateDrawNormalPipeline() - MTL::Device::newRenderPipelineState() failed");
+            }
+
+            pDesc->release();
+        }
+        else {
+            assert(false && "CreateDrawNormalPipeline() - MTL::RenderPipelineDescriptor::alloc()->init() failed");
+        }
+    }
+
+    if (pError == nullptr) {
+        MTL::DepthStencilDescriptor* pDepthStateDesc = MTL::DepthStencilDescriptor::alloc()->init();
+
+        if (pDepthStateDesc != nullptr) {
+            pDepthStateDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
+            pDepthStateDesc->setDepthWriteEnabled(true);
+
+            MTL::DepthStencilState* pLocalDepthState = pRenderer->Device->newDepthStencilState(pDepthStateDesc);
+            if (pLocalDepthState != nullptr) {
+                pDepthStencilState->State = NS::TransferPtr(pLocalDepthState);
+            }
+            else {
+                assert(false && "CreateDrawNormalPipeline() - MTL::Device::newDepthStencilState() failed");
+            }
+
+            pDepthStateDesc->release();
+        }
+    }
+
+    pVertexDescriptor->release();
+    pPoolAllocator->release();
+
+    return pError;
+}

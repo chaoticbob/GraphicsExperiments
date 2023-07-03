@@ -24,6 +24,21 @@ using namespace glm;
         }                                                                            \
     }
 
+struct DrawParameters
+{
+    uint32_t    materialIndex = 0;
+    uint32_t    numIndices    = 0;
+    MetalBuffer indexBuffer;
+};
+
+struct Material
+{
+    glm::vec3 albedo = glm::vec3(1);
+    uint32_t  _padding0;
+    uint32_t  recieveLight = 1;
+    uint32_t  _padding1[3];
+};
+
 // =============================================================================
 // Shader code
 // =============================================================================
@@ -33,32 +48,56 @@ using namespace metal;
 
 struct Camera {
 	float4x4 MVP;
+	float3   LightPosition;
 };
 
-struct VSOutput {
-	float4 PositionCS [[position]];
-	float3 Color;
+struct DrawParameters {
+	uint MaterialIndex;
+};
+
+struct Material {
+	float3 Albedo;
+	uint   receiveLight;
 };
 
 struct VertexData {
 	float3 PositionOS [[attribute(0)]];
-	float3 Color [[attribute(1)]];
+	float3 Normal     [[attribute(1)]];
+};
+
+struct VSOutput {
+	float4 PositionCS [[position]];
+	float3 PositionOS;
+	float3 Normal;
 };
 
 VSOutput vertex vertexMain(
-	VertexData vertexData [[stage_in]],
-	constant Camera &Cam [[buffer(2)]])
+			 VertexData vertexData [[stage_in]],
+	constant Camera&    Camera     [[buffer(2)]])
 {
 	VSOutput output;
-	float3 position = vertexData.PositionOS;
-	output.PositionCS = Cam.MVP * float4(position, 1.0f);
-	output.Color = vertexData.Color;
+	output.PositionCS = Camera.MVP * float4(vertexData.PositionOS, 1.0f);
+	output.PositionOS = vertexData.PositionOS;
+	output.Normal = vertexData.Normal;
 	return output;
 }
 
-float4 fragment fragmentMain( VSOutput in [[stage_in]] )
+float4 fragment fragmentMain( 
+			 VSOutput        input      [[stage_in]],
+	constant Camera&         Camera     [[buffer(1)]],
+	constant DrawParameters& DrawParams [[buffer(2)]],
+	constant Material*       Materials  [[buffer(3)]])
 {
-	return float4(in.Color, 1.0);
+	float3 lightDir = normalize(Camera.LightPosition - input.PositionOS);
+	float  diffuse = 0.7 * saturate(dot(lightDir, input.Normal));
+
+	Material material = Materials[DrawParams.MaterialIndex];
+	float3 color = material.Albedo;
+	if (material.receiveLight) {
+		color = (0.3 + diffuse) * material.Albedo;
+	}
+
+	return float4(color, 1);  
 }
 )";
 
@@ -70,10 +109,12 @@ static uint32_t gWindowHeight = 720;
 static bool     gEnableDebug  = true;
 
 void CreateGeometryBuffers(
-    MetalRenderer* pRenderer,
-    MetalBuffer*   pIndexBuffer,
-    MetalBuffer*   pPositionBuffer,
-    MetalBuffer*   pVertexColorBuffer);
+    MetalRenderer*               pRenderer,
+    std::vector<DrawParameters>& outDrawParams,
+    MetalBuffer*                 pMaterialBuffer,
+    MetalBuffer*                 pPositionBuffer,
+    MetalBuffer*                 pNormalBuffer,
+    vec3*                        pLightPosition);
 
 // =============================================================================
 // main()
@@ -123,7 +164,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     MetalPipelineRenderState renderPipelineState;
     MetalDepthStencilState   depthStencilState;
-    CHECK_CALL(CreateDrawVertexColorPipeline(
+    CHECK_CALL(CreateDrawNormalPipeline(
         renderer.get(),
         &vsShader,
         &fsShader,
@@ -135,15 +176,23 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Geometry data
     // *************************************************************************
-    MetalBuffer pIndexBuffer;
-    MetalBuffer pPositionBuffer;
-    MetalBuffer pVertexColorBuffer;
-    CreateGeometryBuffers(renderer.get(), &pIndexBuffer, &pPositionBuffer, &pVertexColorBuffer);
+    std::vector<DrawParameters> drawParams;
+    MetalBuffer                 materialBuffer;
+    MetalBuffer                 positionBuffer;
+    MetalBuffer                 normalBuffer;
+    vec3                        lightPosition;
+    CreateGeometryBuffers(
+        renderer.get(),
+        drawParams,
+        &materialBuffer,
+        &positionBuffer,
+        &normalBuffer,
+        &lightPosition);
 
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "101_color_cube_metal");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "102_cornell_box_metal");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -195,21 +244,41 @@ int main(int argc, char** argv)
         pRenderEncoder->setDepthStencilState(depthStencilState.State.get());
 
         // Update the camera model view projection matrix
-        mat4 modelMat = rotate(static_cast<float>(glfwGetTime()), vec3(0, 1, 0)) *
-                        rotate(static_cast<float>(glfwGetTime()), vec3(1, 0, 0));
-        mat4 viewMat = lookAt(vec3(0, 0, 2), vec3(0, 0, 0), vec3(0, 1, 0));
+        mat4 modelMat = mat4(1);
+
+        mat4 viewMat = lookAt(vec3(0, 3, 5), vec3(0, 2.8, 0), vec3(0, 1, 0));
         mat4 projMat = perspective(radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+        mat4 mvpMat  = projMat * viewMat * modelMat;
 
-        mat4 mvpMat = projMat * viewMat * modelMat;
+        struct Camera
+        {
+            mat4   mvp;
+            vec3   lightPosition;
+            uint32 _padding;
+        };
 
-        pRenderEncoder->setVertexBytes(&mvpMat, sizeof(glm::mat4), 2);
+        Camera cam        = {};
+        cam.mvp           = mvpMat;
+        cam.lightPosition = lightPosition;
 
-        MTL::Buffer* vbvs[2]    = {pPositionBuffer.Buffer.get(), pVertexColorBuffer.Buffer.get()};
+        pRenderEncoder->setVertexBytes(&cam, sizeof(Camera), 2);
+        pRenderEncoder->setFragmentBytes(&cam, sizeof(Camera), 1);
+        pRenderEncoder->setFragmentBuffer(materialBuffer.Buffer.get(), 0, 3);
+
+        MTL::Buffer* vbvs[2]    = {positionBuffer.Buffer.get(), normalBuffer.Buffer.get()};
         NS::UInteger offsets[2] = {0, 0};
         NS::Range    vbRange(0, 2);
         pRenderEncoder->setVertexBuffers(vbvs, offsets, vbRange);
 
-        pRenderEncoder->drawIndexedPrimitives(MTL::PrimitiveType::PrimitiveTypeTriangle, 36, MTL::IndexTypeUInt32, pIndexBuffer.Buffer.get(), 0);
+        for (auto& draw : drawParams) {
+            pRenderEncoder->setFragmentBytes(&draw.materialIndex, sizeof(uint), 2);
+            pRenderEncoder->drawIndexedPrimitives(
+                MTL::PrimitiveType::PrimitiveTypeTriangle,
+                draw.numIndices,
+                MTL::IndexTypeUInt32,
+                draw.indexBuffer.Buffer.get(),
+                0);
+        }
 
         pRenderEncoder->endEncoding();
 
@@ -221,21 +290,53 @@ int main(int argc, char** argv)
 }
 
 void CreateGeometryBuffers(
-    MetalRenderer* pRenderer,
-    MetalBuffer*   pIndexBuffer,
-    MetalBuffer*   pPositionBuffer,
-    MetalBuffer*   pVertexColorBuffer)
+    MetalRenderer*               pRenderer,
+    std::vector<DrawParameters>& outDrawParams,
+    MetalBuffer*                 pMaterialBuffer,
+    MetalBuffer*                 pPositionBuffer,
+    MetalBuffer*                 pNormalBuffer,
+    vec3*                        pLightPosition)
 {
     TriMesh::Options options;
     options.enableVertexColors = true;
+    options.enableNormals      = true;
 
-    TriMesh mesh = TriMesh::Cube(vec3(1), false, options);
+    TriMesh mesh = TriMesh::CornellBox(options);
+
+    uint32_t lightGroupIndex = mesh.GetGroupIndex("light");
+    assert((lightGroupIndex != UINT32_MAX) && "group index for 'light' failed");
+
+    *pLightPosition = mesh.GetGroup(lightGroupIndex).GetBounds().Center();
+
+    std::vector<Material> materials;
+    for (uint32_t materialIndex = 0; materialIndex < mesh.GetNumMaterials(); ++materialIndex) {
+        auto& matDesc = mesh.GetMaterial(materialIndex);
+
+        Material material     = {};
+        material.albedo       = matDesc.baseColor;
+        material.recieveLight = (matDesc.name != "white light") ? true : false;
+        materials.push_back(material);
+
+        auto triangles = mesh.GetTrianglesForMaterial(materialIndex);
+
+        DrawParameters params = {};
+        params.numIndices     = static_cast<uint32_t>(3 * triangles.size());
+        params.materialIndex  = materialIndex;
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(triangles),
+            DataPtr(triangles),
+            &params.indexBuffer));
+
+        outDrawParams.push_back(params);
+    }
 
     CHECK_CALL(CreateBuffer(
         pRenderer,
-        SizeInBytes(mesh.GetTriangles()),
-        DataPtr(mesh.GetTriangles()),
-        pIndexBuffer));
+        SizeInBytes(materials),
+        DataPtr(materials),
+        pMaterialBuffer));
 
     CHECK_CALL(CreateBuffer(
         pRenderer,
@@ -245,7 +346,7 @@ void CreateGeometryBuffers(
 
     CHECK_CALL(CreateBuffer(
         pRenderer,
-        SizeInBytes(mesh.GetVertexColors()),
-        DataPtr(mesh.GetVertexColors()),
-        pVertexColorBuffer));
+        SizeInBytes(mesh.GetNormals()),
+        DataPtr(mesh.GetNormals()),
+        pNormalBuffer));
 }
