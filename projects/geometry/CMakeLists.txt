@@ -16,6 +16,7 @@ if (GREX_ENABLE_METAL)
 	add_subdirectory(101_color_cube_metal)
     add_subdirectory(102_cornell_box_metal)
     add_subdirectory(103_cone_metal)
+    add_subdirectory(104_debug_tbn_metal)
 endif()
 
 if (GREX_ENABLE_VULKAN)

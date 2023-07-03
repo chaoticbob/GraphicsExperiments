@@ -231,6 +231,14 @@ Window::~Window()
     }
 #endif
 
+#if defined(ENABLE_IMGUI_VULKAN)
+    if (mImGuiEnabled) {
+        ImGui_ImplMetal_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
+    }
+#endif
+
     glfwDestroyWindow(mWindow);
     mWindow = nullptr;
 
@@ -266,7 +274,7 @@ void Window::WindowResizeEvent(int width, int height)
 
 void Window::MouseDownEvent(int x, int y, int buttons)
 {
-#if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN)
+#if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN) || defined(ENABLE_IMGUI_METAL)
     if (mImGuiEnabled) {
         ImGuiIO& io = ImGui::GetIO();
         if (io.WantCaptureMouse) {
@@ -282,7 +290,7 @@ void Window::MouseDownEvent(int x, int y, int buttons)
 
 void Window::MouseUpEvent(int x, int y, int buttons)
 {
-#if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN)
+#if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN) || defined(ENABLE_IMGUI_METAL)
     if (mImGuiEnabled) {
         ImGuiIO& io = ImGui::GetIO();
         if (io.WantCaptureMouse) {
@@ -298,7 +306,7 @@ void Window::MouseUpEvent(int x, int y, int buttons)
 
 void Window::MouseMoveEvent(int x, int y, int buttons)
 {
-#if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN)
+#if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN) || defined(ENABLE_IMGUI_METAL)
     if (mImGuiEnabled) {
         ImGuiIO& io = ImGui::GetIO();
         if (io.WantCaptureMouse) {
@@ -608,6 +616,61 @@ void Window::ImGuiRenderDrawData(VulkanRenderer* pRenderer, VkCommandBuffer cmdB
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuf);
 }
 #endif // defined(ENABLE_IMGUI_VULKAN)
+
+#if defined(ENABLE_IMGUI_METAL)
+bool Window::InitImGuiForMetal(MetalRenderer* pRenderer)
+{
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+   
+   ImGuiIO& io = ImGui::GetIO();
+   io.DisplayFramebufferScale = ImVec2(1, 1);
+   
+   bool res = ImGui_ImplGlfw_InitForOther(mWindow, true);
+   if (res == false) {
+       assert(false && "ImGui init GLFW for Metal failed!");
+       return false;
+   }
+
+    res = ImGui_ImplMetal_Init(pRenderer->Device.get());
+    if (res == false) {
+        assert(false && "ImGui init Metal failed!");
+        return false;
+    }
+
+    mImGuiEnabled = ImGui_ImplMetal_CreateFontsTexture(pRenderer->Device.get());
+    mImGuiEnabled = mImGuiEnabled && ImGui_ImplMetal_CreateDeviceObjects(pRenderer->Device.get());
+
+    return mImGuiEnabled;
+}
+
+void Window::ImGuiNewFrameMetal(MTL::RenderPassDescriptor* pRenderPassDescriptor)
+{
+    ImGui_ImplMetal_NewFrame(pRenderPassDescriptor);
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+}
+
+void Window::ImGuiRenderDrawData(MetalRenderer* pRenderer, MTL::CommandBuffer* pCommandBuffer, MTL::RenderCommandEncoder* pRenderEncoder)
+{
+    ImGui::Render();
+   
+   // It seems like we're missing something when it comes to High DPI rendering
+   // When the system is not using the full resolution of the monitor (e.g. 2560x1440 on a 4k monitor)
+   // the view.window.screen.backingScaleFactor seems to always be set to 2.0. ImGUI uses that factor
+   // to scale it's scissor which causes the following debug validation layer error
+   //
+   // -[MTLDebugRenderCommandEncoder setScissorRect:]:3814: failed assertion `Set Scissor Rect Validation
+   //    (rect.x(0) + rect.width(3840))(3840) must be <= render pass width(1920)
+   //    (rect.y(0) + rect.height(2160))(2160) must be <= render pass height(1080)
+   //
+   // So to avoid that I'm setting the FramebufferScale to 1.0 regardless of what the system says.
+   ImDrawData* drawData = ImGui::GetDrawData();
+   drawData->FramebufferScale = ImVec2(1,1);
+   
+   ImGui_ImplMetal_RenderDrawData(ImGui::GetDrawData(), pCommandBuffer, pRenderEncoder);
+}
+#endif // defined(ENABLE_IMGUI_METAL)
 
 // =============================================================================
 // Platform functions

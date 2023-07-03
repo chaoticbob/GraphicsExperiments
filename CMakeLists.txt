@@ -177,6 +177,18 @@ list(APPEND IMGUI_VULKAN_FILES
     ${GREX_THIRD_PARTY_DIR}/imgui/backends/imgui_impl_vulkan.cpp
 )
 
+list(APPEND IMGUI_METAL_FILES
+    ${GREX_THIRD_PARTY_DIR}/imgui/imgui.h
+    ${GREX_THIRD_PARTY_DIR}/imgui/imgui.cpp
+    ${GREX_THIRD_PARTY_DIR}/imgui/imgui_draw.cpp
+    ${GREX_THIRD_PARTY_DIR}/imgui/imgui_tables.cpp
+    ${GREX_THIRD_PARTY_DIR}/imgui/imgui_widgets.cpp
+    ${GREX_THIRD_PARTY_DIR}/imgui/backends/imgui_impl_glfw.h
+    ${GREX_THIRD_PARTY_DIR}/imgui/backends/imgui_impl_glfw.cpp
+    ${GREX_THIRD_PARTY_DIR}/imgui/backends/imgui_impl_metal.h
+    ${GREX_THIRD_PARTY_DIR}/imgui/backends/imgui_impl_metal.mm
+)
+
 set(IMGUI_INC_DIR ${GREX_THIRD_PARTY_DIR}/imgui)
 
 # ------------------------------------------------------------------------------
