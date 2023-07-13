@@ -43,40 +43,47 @@ struct SceneParameters
     uint32_t numLights;
     uint32_t __pad1[3];
     Light    lights[8];
-    uint     iblEnvironmentNumLevels;
+    uint     iblEnvNumLevels;
     uint32_t __pad2[3];
+};
+
+struct DrawInfo
+{
+    mat4     modelMatrix;
+    uint32_t materialIndex = 0;
+
+    uint32_t    numIndices = 0;
+    MetalBuffer indexBuffer;
 };
 
 struct DrawParameters
 {
-    mat4        modelMatrix;
-    uint32_t    materialIndex = 0;
-
-    uint32_t    numIndices    = 0;
-    MetalBuffer indexBuffer;
+    mat4     ModelMatrix;
+    uint32_t MaterialIndex;
+    uint32_t __pad0[3];
 };
 
 struct MaterialParameters
 {
-	uint32_t UseGeometricNormal;
+    uint32_t UseGeometricNormal;
 };
 
 struct MaterialTextures
 {
-	MetalTexture baseColorTexture;
-	MetalTexture normalTexture;
-	MetalTexture roughnessTexture;
-	MetalTexture metallicTexture;
-	MetalTexture aoTexture;
+    MetalTexture baseColorTexture;
+    MetalTexture normalTexture;
+    MetalTexture roughnessTexture;
+    MetalTexture metallicTexture;
+    MetalTexture aoTexture;
 };
 
 struct VertexBuffers
 {
-	MetalBuffer positionBuffer;
-	MetalBuffer texCoordBuffer;
-	MetalBuffer normalBuffer;
-	MetalBuffer tangentBuffer;
-	MetalBuffer bitangentBuffer;
+    MetalBuffer positionBuffer;
+    MetalBuffer texCoordBuffer;
+    MetalBuffer normalBuffer;
+    MetalBuffer tangentBuffer;
+    MetalBuffer bitangentBuffer;
 };
 
 // =============================================================================
@@ -91,12 +98,6 @@ float gAngle       = 0.0f;
 
 static uint32_t gNumLights = 0;
 
-void CreateMaterialSphereVertexBuffers(
-    MetalRenderer* pRenderer,
-    uint32_t*      pNumIndices,
-    MetalBuffer*   pIndexBuffer,
-    MetalBuffer*   pPositionBuffer,
-    MetalBuffer*   pNormalBuffer);
 void CreateIBLTextures(
     MetalRenderer* pRenderer,
     MetalTexture*  pBRDFLUT,
@@ -111,10 +112,10 @@ void CreateCameraMaterials(
     MaterialTextures&              outDefaultMaterialTextures,
     std::vector<MaterialTextures>& outMatrialTextures);
 void CreateCameraVertexBuffers(
-    MetalRenderer*               pRenderer,
-    const TriMesh*               pMesh,
-    std::vector<DrawParameters>& outDrawParams,
-    VertexBuffers&               outVertexBuffers);
+    MetalRenderer*         pRenderer,
+    const TriMesh*         pMesh,
+    std::vector<DrawInfo>& outDrawParams,
+    VertexBuffers&         outVertexBuffers);
 void CreateEnvironmentVertexBuffers(
     MetalRenderer* pRenderer,
     uint32_t*      pNumIndices,
@@ -255,20 +256,97 @@ int main(int argc, char** argv)
         &envPipelineState,
         &envDepthStencilState));
 
-	/*
     // *************************************************************************
-    // Material sphere vertex buffers
+    // Load mesh
     // *************************************************************************
-    uint32_t    materialSphereNumIndices = 0;
-    MetalBuffer materialSphereIndexBuffer;
-    MetalBuffer materialSpherePositionBuffer;
-    MetalBuffer materialSphereNormalBuffer;
-    CreateMaterialSphereVertexBuffers(
+    const fs::path           modelDir  = "models/camera";
+    const fs::path           modelFile = modelDir / "camera.obj";
+    std::unique_ptr<TriMesh> mesh;
+    {
+        TriMesh::Options options = {};
+        options.enableTexCoords  = true;
+        options.enableNormals    = true;
+        options.enableTangents   = true;
+        options.invertTexCoordsV = true;
+
+        mesh = std::make_unique<TriMesh>(options);
+        if (!mesh) {
+            assert(false && "allocated mesh failed");
+            return EXIT_FAILURE;
+        }
+
+        if (!TriMesh::LoadOBJ(GetAssetPath(modelFile).string(), GetAssetPath(modelDir).string(), options, mesh.get())) {
+            assert(false && "OBJ load failed");
+            return EXIT_FAILURE;
+        }
+
+        mesh->Recenter();
+
+        auto bounds = mesh->GetBounds();
+
+        std::stringstream ss;
+        ss << "mesh bounding box: "
+           << "min = (" << bounds.min.x << ", " << bounds.min.y << ", " << bounds.min.z << ")"
+           << " "
+           << "max = (" << bounds.max.x << ", " << bounds.max.y << ", " << bounds.max.z << ")";
+        GREX_LOG_INFO(ss.str());
+    }
+
+    // *************************************************************************
+    // Materials
+    // *************************************************************************
+    MetalBuffer                   materialParamsBuffer;
+    MaterialTextures              defaultMaterialTextures = {};
+    std::vector<MaterialTextures> materialTexturesSets    = {};
+    CreateCameraMaterials(
         renderer.get(),
-        &materialSphereNumIndices,
-        &materialSphereIndexBuffer,
-        &materialSpherePositionBuffer,
-        &materialSphereNormalBuffer);
+        mesh.get(),
+        GetAssetPath(fs::path(modelDir)),
+        &materialParamsBuffer,
+        defaultMaterialTextures,
+        materialTexturesSets);
+
+    // *************************************************************************
+    // Environment texture
+    // *************************************************************************
+    MetalTexture brdfLUT;
+    MetalTexture irrTexture;
+    MetalTexture envTexture;
+    uint32_t     envNumLevels = 0;
+    CreateIBLTextures(renderer.get(), &brdfLUT, &irrTexture, &envTexture, &envNumLevels);
+
+    // *************************************************************************
+    // Texture Arrays
+    // *************************************************************************
+    // Material textures
+    std::vector<MTL::Texture*> cameraTextureArray;
+    for (auto& materialTextures : materialTexturesSets) {
+        // Albedo
+        cameraTextureArray.push_back(materialTextures.baseColorTexture.Texture.get());
+
+        // Normal
+        cameraTextureArray.push_back(materialTextures.normalTexture.Texture.get());
+
+        // Roughness
+        cameraTextureArray.push_back(materialTextures.roughnessTexture.Texture.get());
+
+        // Metalness
+        cameraTextureArray.push_back(materialTextures.metallicTexture.Texture.get());
+
+        // Ambient Occlusion
+        cameraTextureArray.push_back(materialTextures.aoTexture.Texture.get());
+    }
+
+    // *************************************************************************
+    // Camera Vertex buffers
+    // *************************************************************************
+    std::vector<DrawInfo> cameraDrawParams    = {};
+    VertexBuffers         cameraVertexBuffers = {};
+    CreateCameraVertexBuffers(
+        renderer.get(),
+        mesh.get(),
+        cameraDrawParams,
+        cameraVertexBuffers);
 
     // *************************************************************************
     // Environment vertex buffers
@@ -285,18 +363,9 @@ int main(int argc, char** argv)
         &envTexCoordBuffer);
 
     // *************************************************************************
-    // IBL texture
-    // *************************************************************************
-    MetalTexture brdfLUT;
-    MetalTexture irrTexture;
-    MetalTexture envTexture;
-    uint32_t     envNumLevels = 0;
-    CreateIBLTextures(renderer.get(), &brdfLUT, &irrTexture, &envTexture, &envNumLevels);
-
-    // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "201_pbr_spheres_metal");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "202_pbr_camera_metal");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -330,8 +399,7 @@ int main(int argc, char** argv)
     MTL::ClearColor clearColor(0.23f, 0.23f, 0.31f, 0);
     uint32_t        frameIndex = 0;
 
-   /*
-   while (window->PollEvents()) {
+    while (window->PollEvents()) {
         window->ImGuiNewFrameMetal(pRenderPassDescriptor);
 
         if (ImGui::Begin("Scene")) {
@@ -341,335 +409,177 @@ int main(int argc, char** argv)
 
         // ---------------------------------------------------------------------
 
-        CA::MetalDrawable* pDrawable = renderer->Swapchain->nextDrawable();
+        CA::MetalDrawable* pDrawable = renderer->pSwapchain->nextDrawable();
+        assert(pDrawable);
 
-        // nextDrawable() will return nil if there are no free swapchain buffers to render to
-        if (pDrawable) {
-            uint32_t swapchainIndex = (frameIndex % renderer->SwapchainBufferCount);
-            frameIndex++;
+        uint32_t swapchainIndex = (frameIndex % renderer->SwapchainBufferCount);
+        frameIndex++;
 
-            auto colorTargetDesc = NS::TransferPtr(MTL::RenderPassColorAttachmentDescriptor::alloc()->init());
-            colorTargetDesc->setClearColor(clearColor);
-            colorTargetDesc->setTexture(pDrawable->texture());
-            colorTargetDesc->setLoadAction(MTL::LoadActionClear);
-            colorTargetDesc->setStoreAction(MTL::StoreActionStore);
-            pRenderPassDescriptor->colorAttachments()->setObject(colorTargetDesc.get(), 0);
+        auto colorTargetDesc = NS::TransferPtr(MTL::RenderPassColorAttachmentDescriptor::alloc()->init());
+        colorTargetDesc->setClearColor(clearColor);
+        colorTargetDesc->setTexture(pDrawable->texture());
+        colorTargetDesc->setLoadAction(MTL::LoadActionClear);
+        colorTargetDesc->setStoreAction(MTL::StoreActionStore);
+        pRenderPassDescriptor->colorAttachments()->setObject(colorTargetDesc.get(), 0);
 
-            auto depthTargetDesc = NS::TransferPtr(MTL::RenderPassDepthAttachmentDescriptor::alloc()->init());
-            depthTargetDesc->setClearDepth(1);
-            depthTargetDesc->setTexture(renderer->SwapchainDSVBuffers[swapchainIndex].get());
-            depthTargetDesc->setLoadAction(MTL::LoadActionClear);
-            depthTargetDesc->setStoreAction(MTL::StoreActionDontCare);
-            pRenderPassDescriptor->setDepthAttachment(depthTargetDesc.get());
+        auto depthTargetDesc = NS::TransferPtr(MTL::RenderPassDepthAttachmentDescriptor::alloc()->init());
+        depthTargetDesc->setClearDepth(1);
+        depthTargetDesc->setTexture(renderer->SwapchainDSVBuffers[swapchainIndex].get());
+        depthTargetDesc->setLoadAction(MTL::LoadActionClear);
+        depthTargetDesc->setStoreAction(MTL::StoreActionDontCare);
+        pRenderPassDescriptor->setDepthAttachment(depthTargetDesc.get());
 
-            MTL::CommandBuffer*        pCommandBuffer = renderer->Queue->commandBuffer();
-            MTL::RenderCommandEncoder* pRenderEncoder = pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
+        MTL::CommandBuffer*        pCommandBuffer = renderer->Queue->commandBuffer();
+        MTL::RenderCommandEncoder* pRenderEncoder = pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
 
-            // Smooth out the rotation on Y
-            gAngle += (gTargetAngle - gAngle) * 0.1f;
+        // Smooth out the rotation on Y
+        gAngle += (gTargetAngle - gAngle) * 0.1f;
 
-            // Camera matrices
-            vec3 eyePosition = vec3(0, 0, 9);
-            mat4 viewMat     = glm::lookAt(eyePosition, vec3(0, 0, 0), vec3(0, 1, 0));
-            mat4 projMat     = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
-            mat4 rotMat      = glm::rotate(glm::radians(gAngle), vec3(0, 1, 0));
+        // Camera matrices
+        vec3 eyePosition = vec3(0, 4.5f, 8);
+        mat4 modelMat    = glm::rotate(glm::radians(gAngle), vec3(0, 1, 0));
+        mat4 viewMat     = glm::lookAt(eyePosition, vec3(0, -0.25f, 0), vec3(0, 1, 0));
+        mat4 projMat     = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
 
-            // Set constant buffer values
-            SceneParameters sceneParams         = {};
-            sceneParams.viewProjectionMatrix    = projMat * viewMat;
-            sceneParams.eyePosition             = eyePosition;
-            sceneParams.numLights               = gNumLights;
-            sceneParams.lights[0].position      = vec3(5, 7, 32);
-            sceneParams.lights[0].color         = vec3(0.98f, 0.85f, 0.71f);
-            sceneParams.lights[0].intensity     = 0.5f;
-            sceneParams.lights[1].position      = vec3(-8, 1, 4);
-            sceneParams.lights[1].color         = vec3(1.00f, 0.00f, 0.00f);
-            sceneParams.lights[1].intensity     = 0.5f;
-            sceneParams.lights[2].position      = vec3(0, 8, -8);
-            sceneParams.lights[2].color         = vec3(0.00f, 1.00f, 0.00f);
-            sceneParams.lights[2].intensity     = 0.5f;
-            sceneParams.lights[3].position      = vec3(15, 8, 0);
-            sceneParams.lights[3].color         = vec3(0.00f, 0.00f, 1.00f);
-            sceneParams.lights[3].intensity     = 0.5f;
-            sceneParams.iblEnvironmentNumLevels = envNumLevels;
+        // Set constant buffer values
+        SceneParameters sceneParams      = {};
+        sceneParams.viewProjectionMatrix = projMat * viewMat;
+        sceneParams.eyePosition          = eyePosition;
+        sceneParams.numLights            = gNumLights;
+        sceneParams.lights[0].position   = vec3(5, 7, 32);
+        sceneParams.lights[0].color      = vec3(1.00f, 0.70f, 0.00f);
+        sceneParams.lights[0].intensity  = 0.2f;
+        sceneParams.lights[1].position   = vec3(-8, 1, 4);
+        sceneParams.lights[1].color      = vec3(1.00f, 0.00f, 0.00f);
+        sceneParams.lights[1].intensity  = 0.4f;
+        sceneParams.lights[2].position   = vec3(0, 8, -8);
+        sceneParams.lights[2].color      = vec3(0.00f, 1.00f, 0.00f);
+        sceneParams.lights[2].intensity  = 0.4f;
+        sceneParams.lights[3].position   = vec3(15, 8, 0);
+        sceneParams.lights[3].color      = vec3(0.00f, 0.00f, 1.00f);
+        sceneParams.lights[3].intensity  = 0.4f;
+        sceneParams.iblEnvNumLevels      = envNumLevels;
 
-            // Draw environment
-            {
-                pRenderEncoder->setRenderPipelineState(envPipelineState.State.get());
-                pRenderEncoder->setDepthStencilState(envDepthStencilState.State.get());
+        // Draw environment
+        {
+            pRenderEncoder->setRenderPipelineState(envPipelineState.State.get());
+            pRenderEncoder->setDepthStencilState(envDepthStencilState.State.get());
 
-                glm::mat4 moveUp = glm::translate(vec3(0, 0, 0));
+            glm::mat4 moveUp = glm::translate(vec3(0, 0, 0));
 
-                // DrawParams [[buffer(2)]]
-                mat4 mvp = projMat * viewMat * moveUp;
-                pRenderEncoder->setVertexBytes(&mvp, sizeof(glm::mat4), 2);
+            // DrawParams [[buffer(2)]]
+            mat4 mvp = projMat * viewMat * moveUp;
+            pRenderEncoder->setVertexBytes(&mvp, sizeof(glm::mat4), 2);
 
-                // Textures
-                pRenderEncoder->setFragmentTexture(envTexture.Texture.get(), 2);
+            // Textures
+            pRenderEncoder->setFragmentTexture(envTexture.Texture.get(), 2);
 
-                // Vertex buffers
-                MTL::Buffer* vbvs[2]    = {};
-                NS::UInteger offsets[2] = {};
-                NS::Range    vbRange(0, 2);
-                // Position
-                vbvs[0]    = envPositionBuffer.Buffer.get();
-                offsets[0] = 0;
-                // Tex coord
-                vbvs[1]    = envTexCoordBuffer.Buffer.get();
-                offsets[1] = 0;
-                pRenderEncoder->setVertexBuffers(vbvs, offsets, vbRange);
+            // Vertex buffers
+            MTL::Buffer* vbvs[2]    = {};
+            NS::UInteger offsets[2] = {};
+            NS::Range    vbRange(0, 2);
+            // Position
+            vbvs[0]    = envPositionBuffer.Buffer.get();
+            offsets[0] = 0;
+            // Tex coord
+            vbvs[1]    = envTexCoordBuffer.Buffer.get();
+            offsets[1] = 0;
+            pRenderEncoder->setVertexBuffers(vbvs, offsets, vbRange);
 
-                pRenderEncoder->setFrontFacingWinding(MTL::WindingCounterClockwise);
-                pRenderEncoder->setCullMode(MTL::CullModeFront);
+            pRenderEncoder->setFrontFacingWinding(MTL::WindingCounterClockwise);
+            pRenderEncoder->setCullMode(MTL::CullModeFront);
+
+            pRenderEncoder->drawIndexedPrimitives(
+                MTL::PrimitiveType::PrimitiveTypeTriangle,
+                envNumIndices,
+                MTL::IndexTypeUInt32,
+                envIndexBuffer.Buffer.get(),
+                0);
+        }
+
+        // Draw camera
+        {
+            // Vertex Shader Parameters
+            // SceneParmas [[buffer(6)]]
+            pRenderEncoder->setVertexBytes(&sceneParams, sizeof(SceneParameters), 6);
+
+            // Fragment Shader parameters
+            // SceneParams       [[buffer(3)]],
+            // MaterialParams    [[buffer(4)]],
+            // IBLIntegrationLUT [[texture(0)]],
+            // IBLIrradianceMap  [[texture(1)]],
+            // IBLEnvironmentMap [[texture(2)]],
+            // MaterialTextures  [[texture(3)]])
+            pRenderEncoder->setFragmentBytes(&sceneParams, sizeof(SceneParameters), 3);
+            pRenderEncoder->setFragmentBuffer(materialParamsBuffer.Buffer.get(), 0, 4);
+            pRenderEncoder->setFragmentTexture(brdfLUT.Texture.get(), 0);
+            pRenderEncoder->setFragmentTexture(irrTexture.Texture.get(), 1);
+            pRenderEncoder->setFragmentTexture(envTexture.Texture.get(), 2);
+            pRenderEncoder->setFragmentTextures(DataPtr(cameraTextureArray), NS::Range(3, 10));
+
+            // Vertex buffers
+            MTL::Buffer* vbvs[5]    = {};
+            NS::UInteger offsets[5] = {};
+            NS::Range    vbRange(0, 5);
+            // Position
+            vbvs[0]    = cameraVertexBuffers.positionBuffer.Buffer.get();
+            offsets[0] = 0;
+            // TexCoord
+            vbvs[1]    = cameraVertexBuffers.texCoordBuffer.Buffer.get();
+            offsets[1] = 0;
+            // Normal
+            vbvs[2]    = cameraVertexBuffers.normalBuffer.Buffer.get();
+            offsets[2] = 0;
+            // Tangent
+            vbvs[3]    = cameraVertexBuffers.tangentBuffer.Buffer.get();
+            offsets[3] = 0;
+            // Bitangent
+            vbvs[4]    = cameraVertexBuffers.bitangentBuffer.Buffer.get();
+            offsets[4] = 0;
+
+            pRenderEncoder->setVertexBuffers(vbvs, offsets, vbRange);
+
+            pRenderEncoder->setFrontFacingWinding(MTL::WindingCounterClockwise);
+            pRenderEncoder->setCullMode(MTL::CullModeFront);
+
+            // Pipeline state
+            pRenderEncoder->setRenderPipelineState(pbrPipelineState.State.get());
+            pRenderEncoder->setDepthStencilState(pbrDepthStencilState.State.get());
+
+            pRenderEncoder->setFrontFacingWinding(MTL::WindingCounterClockwise);
+            pRenderEncoder->setCullMode(MTL::CullModeBack);
+
+            for (auto& draw : cameraDrawParams) {
+                DrawParameters drawParams = {};
+                drawParams.ModelMatrix    = modelMat;
+                drawParams.MaterialIndex  = draw.materialIndex;
+
+                // DrawParams [[buffer(5)]] / [[buffer(2)]]
+                pRenderEncoder->setVertexBytes(&drawParams, sizeof(DrawParameters), 5);
+                pRenderEncoder->setFragmentBytes(&drawParams, sizeof(DrawParameters), 2);
+
+                // MaterialParams [[buffer(4)]]
+                pRenderEncoder->setFragmentBuffer(materialParamsBuffer.Buffer.get(), 0, 4);
 
                 pRenderEncoder->drawIndexedPrimitives(
                     MTL::PrimitiveType::PrimitiveTypeTriangle,
-                    envNumIndices,
+                    draw.numIndices,
                     MTL::IndexTypeUInt32,
-                    envIndexBuffer.Buffer.get(),
+                    draw.indexBuffer.Buffer.get(),
                     0);
             }
-
-            // Draw material sphere
-            {
-                // SceneParams [[buffer(3)]]
-                pRenderEncoder->setVertexBytes(&sceneParams, sizeof(SceneParameters), 3);
-                pRenderEncoder->setFragmentBytes(&sceneParams, sizeof(SceneParameters), 3);
-                // IBL textures [[texture(0,1,2)]]
-                pRenderEncoder->setFragmentTexture(brdfLUT.Texture.get(), 0);
-                pRenderEncoder->setFragmentTexture(irrTexture.Texture.get(), 1);
-                pRenderEncoder->setFragmentTexture(envTexture.Texture.get(), 2);
-
-                // Vertex buffers
-                MTL::Buffer* vbvs[2]    = {};
-                NS::UInteger offsets[2] = {};
-                NS::Range    vbRange(0, 2);
-                // Position
-                vbvs[0]    = materialSpherePositionBuffer.Buffer.get();
-                offsets[0] = 0;
-                // Tex coord
-                vbvs[1]    = materialSphereNormalBuffer.Buffer.get();
-                offsets[1] = 0;
-                pRenderEncoder->setVertexBuffers(vbvs, offsets, vbRange);
-
-                pRenderEncoder->setFrontFacingWinding(MTL::WindingCounterClockwise);
-                pRenderEncoder->setCullMode(MTL::CullModeFront);
-
-                // Pipeline state
-                pRenderEncoder->setRenderPipelineState(pbrPipelineState.State.get());
-                pRenderEncoder->setDepthStencilState(pbrDepthStencilState.State.get());
-
-                pRenderEncoder->setFrontFacingWinding(MTL::WindingCounterClockwise);
-                pRenderEncoder->setCullMode(MTL::CullModeBack);
-
-                MaterialParameters materialParams = {};
-                materialParams.baseColor          = vec3(0.8f, 0.8f, 0.9f);
-                materialParams.roughness          = 0;
-                materialParams.metallic           = 0;
-
-                uint32_t numSlotsX     = 10;
-                uint32_t numSlotsY     = 10;
-                float    slotSize      = 0.9f;
-                float    spanX         = numSlotsX * slotSize;
-                float    spanY         = numSlotsY * slotSize;
-                float    halfSpanX     = spanX / 2.0f;
-                float    halfSpanY     = spanY / 2.0f;
-                float    roughnessStep = 1.0f / (numSlotsX - 1);
-                float    metalnessStep = 1.0f / (numSlotsY - 1);
-
-                for (uint32_t i = 0; i < numSlotsY; ++i) {
-                    materialParams.metallic = 0;
-
-                    for (uint32_t j = 0; j < numSlotsX; ++j) {
-                        float x = -halfSpanX + j * slotSize;
-                        float y = -halfSpanY + i * slotSize;
-                        float z = 0;
-                        // Readjust center
-                        x += slotSize / 2.0f;
-                        y += slotSize / 2.0f;
-
-                        glm::mat4 modelMat = rotMat * glm::translate(vec3(x, y, z));
-                        // DrawParams [[buffer(2)]]
-                        pRenderEncoder->setVertexBytes(&modelMat, sizeof(glm::mat4), 2);
-                        pRenderEncoder->setFragmentBytes(&modelMat, sizeof(glm::mat4), 2);
-                        // MaterialParams [[buffer(4)]]
-                        pRenderEncoder->setFragmentBytes(&materialParams, sizeof(MaterialParameters), 4);
-
-                        pRenderEncoder->drawIndexedPrimitives(
-                            MTL::PrimitiveType::PrimitiveTypeTriangle,
-                            materialSphereNumIndices,
-                            MTL::IndexTypeUInt32,
-                            materialSphereIndexBuffer.Buffer.get(),
-                            0);
-
-                        materialParams.metallic += metalnessStep;
-                    }
-                    materialParams.roughness += metalnessStep;
-                }
-            }
-
-            // Draw ImGui
-            window->ImGuiRenderDrawData(renderer.get(), pCommandBuffer, pRenderEncoder);
-
-            pRenderEncoder->endEncoding();
-
-            pCommandBuffer->presentDrawable(pDrawable);
-            pCommandBuffer->commit();
         }
+
+        // Draw ImGui
+        window->ImGuiRenderDrawData(renderer.get(), pCommandBuffer, pRenderEncoder);
+
+        pRenderEncoder->endEncoding();
+
+        pCommandBuffer->presentDrawable(pDrawable);
+        pCommandBuffer->commit();
     }
-    */
 
     return 0;
-}
-
-void CreateMaterialSphereVertexBuffers(
-    MetalRenderer* pRenderer,
-    uint32_t*      pNumIndices,
-    MetalBuffer*   pIndexBuffer,
-    MetalBuffer*   pPositionBuffer,
-    MetalBuffer*   pNormalBuffer)
-{
-    TriMesh::Options options;
-    options.enableNormals = true;
-
-    TriMesh mesh = TriMesh::Sphere(0.42f, 256, 256, options);
-
-    *pNumIndices = 3 * mesh.GetNumTriangles();
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTriangles()),
-        DataPtr(mesh.GetTriangles()),
-        pIndexBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetPositions()),
-        DataPtr(mesh.GetPositions()),
-        pPositionBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetNormals()),
-        DataPtr(mesh.GetNormals()),
-        pNormalBuffer));
-}
-
-void CreateEnvironmentVertexBuffers(
-    MetalRenderer* pRenderer,
-    uint32_t*      pNumIndices,
-    MetalBuffer*    pIndexBuffer,
-    MetalBuffer*    pPositionBuffer,
-    MetalBuffer*    pTexCoordBuffer)
-{
-    TriMesh::Options options;
-    options.enableTexCoords = true;
-    options.faceInside      = true;
-
-    TriMesh mesh = TriMesh::Sphere(100, 64, 64, options);
-
-    *pNumIndices = 3 * mesh.GetNumTriangles();
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTriangles()),
-        DataPtr(mesh.GetTriangles()),
-        pIndexBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetPositions()),
-        DataPtr(mesh.GetPositions()),
-        pPositionBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTexCoords()),
-        DataPtr(mesh.GetTexCoords()),
-        pTexCoordBuffer));
-}
-
-void CreateIBLTextures(
-    MetalRenderer* pRenderer,
-    MetalTexture*  pBRDFLUT,
-    MetalTexture*  pIrradianceTexture,
-    MetalTexture*  pEnvironmentTexture,
-    uint32_t*      pEnvNumLevels)
-{
-    // BRDF LUT
-    {
-        auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut.hdr"));
-        if (bitmap.Empty()) {
-            assert(false && "Load image failed");
-            return;
-        }
-
-        CHECK_CALL(CreateTexture(
-            pRenderer,
-            bitmap.GetWidth(),
-            bitmap.GetHeight(),
-            MTL::PixelFormatRGBA32Float,
-            bitmap.GetSizeInBytes(),
-            bitmap.GetPixels(),
-            pBRDFLUT));
-    }
-
-    // IBL file
-    auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
-
-    IBLMaps ibl = {};
-    if (!LoadIBLMaps32f(iblFile, &ibl)) {
-        GREX_LOG_ERROR("failed to load: " << iblFile);
-        return;
-    }
-
-    *pEnvNumLevels = ibl.numLevels;
-
-    // Irradiance
-    {
-        CHECK_CALL(CreateTexture(
-            pRenderer,
-            ibl.irradianceMap.GetWidth(),
-            ibl.irradianceMap.GetHeight(),
-            MTL::PixelFormatRGBA32Float,
-            ibl.irradianceMap.GetSizeInBytes(),
-            ibl.irradianceMap.GetPixels(),
-            pIrradianceTexture));
-    }
-
-    // Environment
-    {
-        const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
-        const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
-
-        std::vector<MipOffset> mipOffsets;
-        uint32_t               levelOffset = 0;
-        uint32_t               levelWidth  = ibl.baseWidth;
-        uint32_t               levelHeight = ibl.baseHeight;
-        for (uint32_t i = 0; i < ibl.numLevels; ++i) {
-            MipOffset mipOffset = {};
-            mipOffset.Offset    = levelOffset;
-            mipOffset.RowStride = rowStride;
-
-            mipOffsets.push_back(mipOffset);
-
-            levelOffset += (rowStride * levelHeight);
-            levelWidth >>= 1;
-            levelHeight >>= 1;
-        }
-
-        CHECK_CALL(CreateTexture(
-            pRenderer,
-            ibl.baseWidth,
-            ibl.baseHeight,
-            MTL::PixelFormatRGBA32Float,
-            mipOffsets,
-            ibl.environmentMap.GetSizeInBytes(),
-            ibl.environmentMap.GetPixels(),
-            pEnvironmentTexture));
-    }
-
-    GREX_LOG_INFO("Loaded " << iblFile);
 }
 
 void CreateCameraMaterials(
@@ -788,19 +698,102 @@ void CreateCameraMaterials(
         pMaterialParamsBuffer));
 }
 
+void CreateIBLTextures(
+    MetalRenderer* pRenderer,
+    MetalTexture*  pBRDFLUT,
+    MetalTexture*  pIrradianceTexture,
+    MetalTexture*  pEnvironmentTexture,
+    uint32_t*      pEnvNumLevels)
+{
+    // BRDF LUT
+    {
+        auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut.hdr"));
+        if (bitmap.Empty()) {
+            assert(false && "Load image failed");
+            return;
+        }
+
+        CHECK_CALL(CreateTexture(
+            pRenderer,
+            bitmap.GetWidth(),
+            bitmap.GetHeight(),
+            MTL::PixelFormatRGBA32Float,
+            bitmap.GetSizeInBytes(),
+            bitmap.GetPixels(),
+            pBRDFLUT));
+    }
+
+    // IBL file
+    auto iblFile = GetAssetPath("IBL/palermo_square_4k.ibl");
+
+    IBLMaps ibl = {};
+    if (!LoadIBLMaps32f(iblFile, &ibl)) {
+        GREX_LOG_ERROR("failed to load: " << iblFile);
+        return;
+    }
+
+    *pEnvNumLevels = ibl.numLevels;
+
+    // Irradiance
+    {
+        CHECK_CALL(CreateTexture(
+            pRenderer,
+            ibl.irradianceMap.GetWidth(),
+            ibl.irradianceMap.GetHeight(),
+            MTL::PixelFormatRGBA32Float,
+            ibl.irradianceMap.GetSizeInBytes(),
+            ibl.irradianceMap.GetPixels(),
+            pIrradianceTexture));
+    }
+
+    // Environment
+    {
+        const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
+        const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
+
+        std::vector<MipOffset> mipOffsets;
+        uint32_t               levelOffset = 0;
+        uint32_t               levelWidth  = ibl.baseWidth;
+        uint32_t               levelHeight = ibl.baseHeight;
+        for (uint32_t i = 0; i < ibl.numLevels; ++i) {
+            MipOffset mipOffset = {};
+            mipOffset.Offset    = levelOffset;
+            mipOffset.RowStride = rowStride;
+
+            mipOffsets.push_back(mipOffset);
+
+            levelOffset += (rowStride * levelHeight);
+            levelWidth >>= 1;
+            levelHeight >>= 1;
+        }
+
+        CHECK_CALL(CreateTexture(
+            pRenderer,
+            ibl.baseWidth,
+            ibl.baseHeight,
+            MTL::PixelFormatRGBA32Float,
+            mipOffsets,
+            ibl.environmentMap.GetSizeInBytes(),
+            ibl.environmentMap.GetPixels(),
+            pEnvironmentTexture));
+    }
+
+    GREX_LOG_INFO("Loaded " << iblFile);
+}
+
 void CreateCameraVertexBuffers(
-    MetalRenderer*               pRenderer,
-    const TriMesh*               pMesh,
-    std::vector<DrawParameters>& outDrawParams,
-    VertexBuffers&               outVertexBuffers)
+    MetalRenderer*         pRenderer,
+    const TriMesh*         pMesh,
+    std::vector<DrawInfo>& outDrawParams,
+    VertexBuffers&         outVertexBuffers)
 {
     // Group draws based on material indices
     for (uint32_t materialIndex = 0; materialIndex < pMesh->GetNumMaterials(); ++materialIndex) {
         auto triangles = pMesh->GetTrianglesForMaterial(materialIndex);
 
-        DrawParameters params = {};
-        params.numIndices     = static_cast<uint32_t>(3 * triangles.size());
-        params.materialIndex  = materialIndex;
+        DrawInfo params      = {};
+        params.numIndices    = static_cast<uint32_t>(3 * triangles.size());
+        params.materialIndex = materialIndex;
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
@@ -840,4 +833,38 @@ void CreateCameraVertexBuffers(
         SizeInBytes(pMesh->GetBitangents()),
         DataPtr(pMesh->GetBitangents()),
         &outVertexBuffers.bitangentBuffer));
+}
+
+void CreateEnvironmentVertexBuffers(
+    MetalRenderer* pRenderer,
+    uint32_t*      pNumIndices,
+    MetalBuffer*   pIndexBuffer,
+    MetalBuffer*   pPositionBuffer,
+    MetalBuffer*   pTexCoordBuffer)
+{
+    TriMesh::Options options;
+    options.enableTexCoords = true;
+    options.faceInside      = true;
+
+    TriMesh mesh = TriMesh::Sphere(100, 64, 64, options);
+
+    *pNumIndices = 3 * mesh.GetNumTriangles();
+
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(mesh.GetTriangles()),
+        DataPtr(mesh.GetTriangles()),
+        pIndexBuffer));
+
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(mesh.GetPositions()),
+        DataPtr(mesh.GetPositions()),
+        pPositionBuffer));
+
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(mesh.GetTexCoords()),
+        DataPtr(mesh.GetTexCoords()),
+        pTexCoordBuffer));
 }

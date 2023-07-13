@@ -11,8 +11,7 @@ struct Light
     float  Intensity;
 };
 
-struct SceneParameters
-{
+struct SceneParameters {
     float4x4 ViewProjectionMatrix;
     float3   EyePosition;
     uint     NumLights;
@@ -20,14 +19,12 @@ struct SceneParameters
     uint     IBLEnvironmentNumLevels;
 };
 
-struct DrawParameters
-{
+struct DrawParameters {
     float4x4 ModelMatrix;
     uint     MaterialIndex;
 };
 
-struct MaterialParameters
-{
+struct MaterialParameters {
 	uint UseGeometricNormal;
 };
 
@@ -47,10 +44,10 @@ struct VSOutput
 {
     float3 PositionWS;
     float4 PositionCS [[position]];
-	float2 TexCoord;
+    float2 TexCoord;
     float3 Normal;
-	float3 Tangent;
-	float3 Bitangent;
+    float3 Tangent;
+    float3 Bitangent;
 };
 
 VSOutput vertex vsmain(
@@ -76,19 +73,18 @@ VSOutput vertex vsmain(
 // =================================================================================================
 
 constexpr sampler IBLIntegrationSampler(
-	filter::linear,
-	mip_filter::linear
+	filter::linear
 );
 
 constexpr sampler IBLMapSampler(
 	filter::linear,
 	mip_filter::linear,
-	s_address::repeat
+	s_address::repeat,
+	r_address::repeat
 );
 
 constexpr sampler MaterialSampler(
-	filter::linear,
-	mip_filter::linear
+	mip_filter::nearest
 );
 
 float Distribution_GGX(float3 N, float3 H, float roughness)
@@ -190,7 +186,6 @@ float3 GetIBLEnvironment(texture2d<float> IBLEnvironmentMap, float3 dir, float l
     uv.x         = saturate(uv.x / (2.0 * PI));
     uv.y         = saturate(uv.y / PI);
     float3 color = IBLEnvironmentMap.sample(IBLMapSampler, uv, level(lod)).rgb;
-    // float3 color = IBLEnvironmentMap.sample(IBLMapSampler, uv, level(0)).rgb;
     return color;
 }
 

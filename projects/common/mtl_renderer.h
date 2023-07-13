@@ -5,7 +5,7 @@
 #include <Metal/Metal.hpp>
 #include <QuartzCore/CAMetalLayer.hpp>
 
-#define GREX_DEFAULT_RTV_FORMAT MTL::PixelFormatBGRA8Unorm_sRGB
+#define GREX_DEFAULT_RTV_FORMAT MTL::PixelFormatBGRA8Unorm
 #define GREX_DEFAULT_DSV_FORMAT MTL::PixelFormatDepth32Float
 
 enum MtlPipelineFlags

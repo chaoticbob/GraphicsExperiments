@@ -1,14 +1,12 @@
 #include <metal_stdlib>
 using namespace metal;
 
-struct SceneParameters
-{
+struct SceneParameters {
     float4x4 MVP;
 };
 
 constexpr sampler IBLMapSampler(
-    mag_filter::linear,
-    min_filter::linear);
+    filter::linear);
 
 struct VSOutput
 {
@@ -35,8 +33,7 @@ VSOutput vertex vsmain(
 //
 // https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
 //
-float3 ACESFilm(float3 x)
-{
+float3 ACESFilm(float3 x) {
     return saturate((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14));
 }
 
