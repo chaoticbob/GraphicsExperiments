@@ -93,7 +93,8 @@ NS::Error* CreateDrawNormalPipeline(
     MTL::PixelFormat          rtvFormat,
     MTL::PixelFormat          dsvFormat,
     MetalPipelineRenderState* pPipeline,
-    MetalDepthStencilState*   pDepthStencilState);
+    MetalDepthStencilState*   pDepthStencilState,
+	bool                      enableTangents = false);
 
 NS::Error* CreateDrawTexturePipeline(
     MetalRenderer*            pRenderer,
