@@ -1,5 +1,6 @@
 #include "dx_renderer.h"
 
+bool     IsCompressed(DXGI_FORMAT fmt);
 bool     IsVideo(DXGI_FORMAT fmt);
 uint32_t BitsPerPixel(DXGI_FORMAT fmt);
 
@@ -452,12 +453,19 @@ DXGI_FORMAT ToDxFormat(GREXFormat format)
         case GREX_FORMAT_R32_FLOAT          : return DXGI_FORMAT_R32_FLOAT;
         case GREX_FORMAT_R32G32_FLOAT       : return DXGI_FORMAT_R32G32_FLOAT;
         case GREX_FORMAT_R32G32B32A32_FLOAT : return DXGI_FORMAT_R32G32B32A32_FLOAT;
+        case GREX_FORMAT_BC1_RGB            : return DXGI_FORMAT_UNKNOWN; // Does D3D12 support BC1 RGB?
+        case GREX_FORMAT_BC3_RGBA           : return DXGI_FORMAT_BC3_UNORM; 
+        case GREX_FORMAT_BC4_R              : return DXGI_FORMAT_BC4_UNORM;
+        case GREX_FORMAT_BC5_RG             : return DXGI_FORMAT_BC5_UNORM;
+        case GREX_FORMAT_BC6H_SFLOAT        : return DXGI_FORMAT_BC6H_SF16;
+        case GREX_FORMAT_BC6H_UFLOAT        : return DXGI_FORMAT_BC6H_UF16;
+        case GREX_FORMAT_BC7_RGBA           : return DXGI_FORMAT_BC7_UNORM;
     }
     // clang-format on
     return DXGI_FORMAT_UNKNOWN;
 }
 
-HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, D3D12_HEAP_TYPE heapType, ID3D12Resource** ppResource)
+HRESULT CreateBuffer(DxRenderer* pRenderer, size_t size, D3D12_HEAP_TYPE heapType, ID3D12Resource** ppResource)
 {
     if (IsNull(pRenderer)) {
         return E_UNEXPECTED;
@@ -477,7 +485,7 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, D3D12_HEAP_TYPE heap
     D3D12_RESOURCE_DESC desc = {};
     desc.Dimension           = D3D12_RESOURCE_DIMENSION_BUFFER;
     desc.Alignment           = 0;
-    desc.Width               = srcSize;
+    desc.Width               = size;
     desc.Height              = 1;
     desc.DepthOrArraySize    = 1;
     desc.MipLevels           = 1;
@@ -503,9 +511,74 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, D3D12_HEAP_TYPE heap
     return S_OK;
 }
 
-HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData, D3D12_HEAP_TYPE heapType, ID3D12Resource** ppResource)
+HRESULT CreateBuffer(DxRenderer* pRenderer, ID3D12Resource* pSrcBuffer, D3D12_HEAP_TYPE heapType, ID3D12Resource** ppResource)
 {
-    HRESULT hr = CreateBuffer(pRenderer, srcSize, heapType, ppResource);
+    if (IsNull(pSrcBuffer)) {
+        return E_UNEXPECTED;
+    }
+
+    UINT64 srcSize = pSrcBuffer->GetDesc().Width;
+    HRESULT hr = CreateBuffer(pRenderer, static_cast<uint32_t>(srcSize), heapType, ppResource);
+    if (FAILED(hr)) {
+        return hr;
+    }
+
+    // Copy
+    {
+        ComPtr<ID3D12CommandAllocator> cmdAllocator;
+        hr = pRenderer->Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAllocator));
+        if (FAILED(hr)) {
+            return hr;
+        }
+
+        ComPtr<ID3D12GraphicsCommandList> cmdList;
+        hr = pRenderer->Device->CreateCommandList1(0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(&cmdList));
+        if (FAILED(hr)) {
+            return hr;
+        }
+
+        hr = cmdAllocator->Reset();
+        if (FAILED(hr)) {
+            return hr;
+        }
+
+        hr = cmdList->Reset(cmdAllocator.Get(), nullptr);
+        if (FAILED(hr)) {
+            return hr;
+        }
+
+        // Build command buffer
+        {
+            cmdList->CopyBufferRegion(
+                (*ppResource), // pDstBuffer
+                0,             // DstOffset
+                pSrcBuffer,    // pSrcBuffer
+                0,             // SrcOffset
+                srcSize);      // NumBytes
+        }
+        hr = cmdList->Close();
+        if (FAILED(hr)) {
+            return hr;
+        } 
+
+        ID3D12CommandList* pList = cmdList.Get();
+        pRenderer->Queue->ExecuteCommandLists(1, &pList);
+
+        if (!WaitForGpu(pRenderer)) {
+            return E_FAIL;
+        }    
+    }
+
+    return S_OK;
+}
+
+HRESULT CreateBuffer(DxRenderer* pRenderer, size_t bufferSize, size_t srcSize, const void* pSrcData, D3D12_HEAP_TYPE heapType, ID3D12Resource** ppResource)
+{
+    if (srcSize > bufferSize) {
+        return E_INVALIDARG;
+    }
+
+    HRESULT hr = CreateBuffer(pRenderer, bufferSize, heapType, ppResource);
     if (FAILED(hr)) {
         return hr;
     }
@@ -587,6 +660,17 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData
         }
     }
 
+    return S_OK;
+}
+
+HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData, D3D12_HEAP_TYPE heapType, ID3D12Resource** ppResource)
+{
+    const size_t bufferSize = srcSize;
+
+    HRESULT hr = CreateBuffer(pRenderer, bufferSize, srcSize, pSrcData, heapType, ppResource);
+    if (FAILED(hr)) {
+        return hr;
+    }
     return S_OK;
 }
 
@@ -760,29 +844,38 @@ HRESULT CreateTexture(
         height,
         format,
         numMipLevels,
-        1,
+        1, // numArrayLayers
         ppResource);
     if (FAILED(hr)) {
         return hr;
     }
 
     if (!IsNull(pSrcData)) {
-        const uint32_t rowStride = width * PixelStride(format);
-        // Calculate the total number of rows for all mip maps
-        uint32_t numRows = 0;
-        {
-            uint32_t mipHeight = height;
-            for (UINT level = 0; level < numMipLevels; ++level) {
-                numRows += mipHeight;
-                mipHeight >>= 1;
+        ComPtr<ID3D12Resource> stagingBuffer;
+        if (IsCompressed(format)) {
+            hr = CreateBuffer(pRenderer, srcSizeBytes, pSrcData, &stagingBuffer);
+            if (FAILED(hr)) {
+                assert(false && "create staging buffer failed");
+                return hr;
             }
         }
+        else {
+            const uint32_t rowStride = width * PixelStride(format);
+            // Calculate the total number of rows for all mip maps
+            uint32_t numRows = 0;
+            {
+                uint32_t mipHeight = height;
+                for (UINT level = 0; level < numMipLevels; ++level) {
+                    numRows += mipHeight;
+                    mipHeight >>= 1;
+                }
+            }
 
-        ComPtr<ID3D12Resource> stagingBuffer;
-        hr = CreateBuffer(pRenderer, rowStride, numRows, pSrcData, &stagingBuffer);
-        if (FAILED(hr)) {
-            assert(false && "create staging buffer failed");
-            return hr;
+            hr = CreateBuffer(pRenderer, rowStride, numRows, pSrcData, &stagingBuffer);
+            if (FAILED(hr)) {
+                assert(false && "create staging buffer failed");
+                return hr;
+            }
         }
 
         ComPtr<ID3D12CommandAllocator> cmdAllocator;
@@ -817,7 +910,13 @@ HRESULT CreateTexture(
             uint32_t levelHeight = height;
             for (UINT level = 0; level < numMipLevels; ++level) {
                 const auto&    mipOffset    = mipOffsets[level];
-                const uint32_t mipRowStride = Align<uint32_t>(mipOffset.RowStride, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+                uint32_t mipRowStride = Align<uint32_t>(mipOffset.RowStride, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+                if (IsCompressed(format)) {
+                    //
+                    // This is hack based on values returned by GetCopyableFootprints().
+                    //
+                    mipRowStride = levelWidth * 4;
+                }
 
                 D3D12_TEXTURE_COPY_LOCATION dst = {};
                 dst.pResource                   = *ppResource;
@@ -1524,6 +1623,111 @@ HRESULT CreateGraphicsPipeline1(
     return S_OK;
 }
 
+HRESULT CreateGraphicsPipeline2(
+    DxRenderer*              pRenderer,
+    ID3D12RootSignature*     pRootSig,
+    const std::vector<char>& vsShaderBytecode,
+    const std::vector<char>& psShaderBytecode,
+    DXGI_FORMAT              rtvFormat,
+    DXGI_FORMAT              dsvFormat,
+    ID3D12PipelineState**    ppPipeline,
+    D3D12_CULL_MODE          cullMode)
+{
+    const uint32_t kNumInputElements = 4;
+
+    D3D12_INPUT_ELEMENT_DESC inputElementDesc[kNumInputElements] = {};
+    // Position
+    inputElementDesc[0].SemanticName         = "POSITION";
+    inputElementDesc[0].SemanticIndex        = 0;
+    inputElementDesc[0].Format               = DXGI_FORMAT_R32G32B32_FLOAT;
+    inputElementDesc[0].InputSlot            = 0;
+    inputElementDesc[0].AlignedByteOffset    = D3D12_APPEND_ALIGNED_ELEMENT;
+    inputElementDesc[0].InputSlotClass       = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+    inputElementDesc[0].InstanceDataStepRate = 0;
+    // TexCoord
+    inputElementDesc[1].SemanticName         = "TEXCOORD";
+    inputElementDesc[1].SemanticIndex        = 0;
+    inputElementDesc[1].Format               = DXGI_FORMAT_R32G32_FLOAT;
+    inputElementDesc[1].InputSlot            = 1;
+    inputElementDesc[1].AlignedByteOffset    = D3D12_APPEND_ALIGNED_ELEMENT;
+    inputElementDesc[1].InputSlotClass       = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+    inputElementDesc[1].InstanceDataStepRate = 0;
+    // Normal
+    inputElementDesc[2].SemanticName         = "NORMAL";
+    inputElementDesc[2].SemanticIndex        = 0;
+    inputElementDesc[2].Format               = DXGI_FORMAT_R32G32B32_FLOAT;
+    inputElementDesc[2].InputSlot            = 2;
+    inputElementDesc[2].AlignedByteOffset    = D3D12_APPEND_ALIGNED_ELEMENT;
+    inputElementDesc[2].InputSlotClass       = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+    inputElementDesc[2].InstanceDataStepRate = 0;
+    // Tangent
+    inputElementDesc[3].SemanticName         = "TANGENT";
+    inputElementDesc[3].SemanticIndex        = 0;
+    inputElementDesc[3].Format               = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    inputElementDesc[3].InputSlot            = 3;
+    inputElementDesc[3].AlignedByteOffset    = D3D12_APPEND_ALIGNED_ELEMENT;
+    inputElementDesc[3].InputSlotClass       = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+    inputElementDesc[3].InstanceDataStepRate = 0;
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC desc               = {};
+    desc.pRootSignature                                   = pRootSig;
+    desc.VS                                               = {DataPtr(vsShaderBytecode), CountU32(vsShaderBytecode)};
+    desc.PS                                               = {DataPtr(psShaderBytecode), CountU32(psShaderBytecode)};
+    desc.BlendState.AlphaToCoverageEnable                 = FALSE;
+    desc.BlendState.IndependentBlendEnable                = FALSE;
+    desc.BlendState.RenderTarget[0].BlendEnable           = FALSE;
+    desc.BlendState.RenderTarget[0].LogicOpEnable         = FALSE;
+    desc.BlendState.RenderTarget[0].SrcBlend              = D3D12_BLEND_SRC_COLOR;
+    desc.BlendState.RenderTarget[0].DestBlend             = D3D12_BLEND_ZERO;
+    desc.BlendState.RenderTarget[0].BlendOp               = D3D12_BLEND_OP_ADD;
+    desc.BlendState.RenderTarget[0].SrcBlendAlpha         = D3D12_BLEND_SRC_ALPHA;
+    desc.BlendState.RenderTarget[0].DestBlendAlpha        = D3D12_BLEND_ZERO;
+    desc.BlendState.RenderTarget[0].BlendOpAlpha          = D3D12_BLEND_OP_ADD;
+    desc.BlendState.RenderTarget[0].LogicOp               = D3D12_LOGIC_OP_NOOP;
+    desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    desc.SampleMask                                       = D3D12_DEFAULT_SAMPLE_MASK;
+    desc.RasterizerState.FillMode                         = D3D12_FILL_MODE_SOLID;
+    desc.RasterizerState.CullMode                         = cullMode;
+    desc.RasterizerState.FrontCounterClockwise            = TRUE;
+    desc.RasterizerState.DepthBias                        = D3D12_DEFAULT_DEPTH_BIAS;
+    desc.RasterizerState.DepthBiasClamp                   = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
+    desc.RasterizerState.SlopeScaledDepthBias             = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+    desc.RasterizerState.DepthClipEnable                  = FALSE;
+    desc.RasterizerState.MultisampleEnable                = FALSE;
+    desc.RasterizerState.AntialiasedLineEnable            = FALSE;
+    desc.RasterizerState.ForcedSampleCount                = 0;
+    desc.DepthStencilState.DepthEnable                    = (dsvFormat != DXGI_FORMAT_UNKNOWN);
+    desc.DepthStencilState.DepthWriteMask                 = D3D12_DEPTH_WRITE_MASK_ALL;
+    desc.DepthStencilState.DepthFunc                      = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    desc.DepthStencilState.StencilEnable                  = FALSE;
+    desc.DepthStencilState.StencilReadMask                = D3D12_DEFAULT_STENCIL_READ_MASK;
+    desc.DepthStencilState.StencilWriteMask               = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+    desc.DepthStencilState.FrontFace.StencilFailOp        = D3D12_STENCIL_OP_KEEP;
+    desc.DepthStencilState.FrontFace.StencilDepthFailOp   = D3D12_STENCIL_OP_KEEP;
+    desc.DepthStencilState.FrontFace.StencilPassOp        = D3D12_STENCIL_OP_KEEP;
+    desc.DepthStencilState.FrontFace.StencilFunc          = D3D12_COMPARISON_FUNC_NEVER;
+    desc.DepthStencilState.BackFace                       = desc.DepthStencilState.FrontFace;
+    desc.InputLayout.NumElements                          = kNumInputElements;
+    desc.InputLayout.pInputElementDescs                   = inputElementDesc;
+    desc.IBStripCutValue                                  = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF;
+    desc.PrimitiveTopologyType                            = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    desc.NumRenderTargets                                 = 1;
+    desc.RTVFormats[0]                                    = rtvFormat;
+    desc.DSVFormat                                        = dsvFormat;
+    desc.SampleDesc.Count                                 = 1;
+    desc.SampleDesc.Quality                               = 0;
+    desc.NodeMask                                         = 0;
+    desc.CachedPSO                                        = {};
+    desc.Flags                                            = D3D12_PIPELINE_STATE_FLAG_NONE;
+
+    HRESULT hr = pRenderer->Device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(ppPipeline));
+    if (FAILED(hr)) {
+        return hr;
+    }
+
+    return S_OK;
+}
+
 static std::wstring AsciiToUTF16(const std::string& ascii)
 {
     std::wstring utf16;
@@ -1628,7 +1832,42 @@ HRESULT CompileHLSL(
 }
 
 //
-// From: https://github.com/microsoft/DirectXTex
+// From: https://github.com/microsoft/DirectXTex/blob/main/DirectXTex/DirectXTex.inl#L53
+//
+bool IsCompressed(DXGI_FORMAT fmt) 
+{
+    switch (fmt)
+    {
+    case DXGI_FORMAT_BC1_TYPELESS:
+    case DXGI_FORMAT_BC1_UNORM:
+    case DXGI_FORMAT_BC1_UNORM_SRGB:
+    case DXGI_FORMAT_BC2_TYPELESS:
+    case DXGI_FORMAT_BC2_UNORM:
+    case DXGI_FORMAT_BC2_UNORM_SRGB:
+    case DXGI_FORMAT_BC3_TYPELESS:
+    case DXGI_FORMAT_BC3_UNORM:
+    case DXGI_FORMAT_BC3_UNORM_SRGB:
+    case DXGI_FORMAT_BC4_TYPELESS:
+    case DXGI_FORMAT_BC4_UNORM:
+    case DXGI_FORMAT_BC4_SNORM:
+    case DXGI_FORMAT_BC5_TYPELESS:
+    case DXGI_FORMAT_BC5_UNORM:
+    case DXGI_FORMAT_BC5_SNORM:
+    case DXGI_FORMAT_BC6H_TYPELESS:
+    case DXGI_FORMAT_BC6H_UF16:
+    case DXGI_FORMAT_BC6H_SF16:
+    case DXGI_FORMAT_BC7_TYPELESS:
+    case DXGI_FORMAT_BC7_UNORM:
+    case DXGI_FORMAT_BC7_UNORM_SRGB:
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+//
+// From: https://github.com/microsoft/DirectXTex/blob/main/DirectXTex/DirectXTexUtil.cpp#L366
 //
 bool IsVideo(DXGI_FORMAT fmt)
 {

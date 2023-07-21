@@ -246,6 +246,39 @@ bool BitmapRGBA8u::Load(const std::filesystem::path& absPath, BitmapRGBA8u* pBit
     return true;
 }
 
+bool BitmapRGBA8u::Load(const size_t srcDataSize, const void* pSrcData, BitmapRGBA8u* pBitmap)
+{
+    if ((srcDataSize == 0) || (pSrcData == nullptr)) {
+        return false;
+    }
+
+    if (pBitmap == nullptr) {
+        return false;
+    }
+
+    int width   = 0;
+    int height  = 0;
+    int comp    = 0;
+    int reqComp = 4;
+
+    stbi_uc* pData = stbi_load_from_memory(static_cast<const stbi_uc*>(pSrcData), static_cast<int>(srcDataSize), &width, &height, &comp, reqComp);
+    if (pData == nullptr) {
+        return false;
+    }
+    size_t nbytesLoaded = static_cast<size_t>(width * height * reqComp);
+
+    *pBitmap           = BitmapRGBA8u(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+    size_t sizeInBytes = pBitmap->GetSizeInBytes();
+    assert((nbytesLoaded == sizeInBytes) && "size mismatch");
+
+    auto* pDstPixels = pBitmap->GetPixels();
+    memcpy(pDstPixels, pData, sizeInBytes);
+
+    stbi_image_free(pData);
+
+    return true;
+}
+
 bool BitmapRGBA8u::Save(const std::filesystem::path& absPath, const BitmapRGBA8u* pBitmap)
 {
     bool        success = false;
@@ -388,6 +421,15 @@ BitmapRGBA8u LoadImage8u(const std::filesystem::path& subPath)
 
     BitmapRGBA8u bitmap = {};
     bool         res    = BitmapRGBA8u::Load(absPath, &bitmap);
+    assert(res && "Failed to load image");
+
+    return bitmap;
+}
+
+BitmapRGBA8u  LoadImage8u(const size_t srcDataSize, const void* pSrcData)
+{
+    BitmapRGBA8u bitmap = {};
+    bool         res    = BitmapRGBA8u::Load(srcDataSize, pSrcData, &bitmap);
     assert(res && "Failed to load image");
 
     return bitmap;
