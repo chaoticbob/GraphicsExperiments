@@ -6,15 +6,18 @@ add_executable(
     gltf_d3d12
     gltf_d3d12.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
-    ${GREX_PROJECTS_COMMON_DIR}/scene.h
-    ${GREX_PROJECTS_COMMON_DIR}/scene.cpp
     ${GREX_PROJECTS_COMMON_DIR}/dx_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/dx_renderer.cpp
-    ${GREX_PROJECTS_COMMON_DIR}/dx_scene.h
-    ${GREX_PROJECTS_COMMON_DIR}/dx_scene.cpp
     ${GREX_PROJECTS_COMMON_DIR}/window.h
     ${GREX_PROJECTS_COMMON_DIR}/window.cpp
+    ${GREX_PROJECTS_COMMON_DIR}/cgltf_impl.cpp
 	${GREX_THIRD_PARTY_DIR}/cgltf/cgltf.h
+    ${GREX_PROJECTS_COMMON_DIR}/faux_render.h
+    ${GREX_PROJECTS_COMMON_DIR}/faux_render.cpp
+    ${GREX_PROJECTS_COMMON_DIR}/dx_faux_render.h
+    ${GREX_PROJECTS_COMMON_DIR}/dx_faux_render.cpp
+    ${GREX_PROJECTS_COMMON_DIR}/bitmap.h
+    ${GREX_PROJECTS_COMMON_DIR}/bitmap.cpp
 )
 
 set_target_properties(gltf_d3d12 PROPERTIES FOLDER "misc")
@@ -25,6 +28,7 @@ target_include_directories(
             ${GREX_THIRD_PARTY_DIR}/glm
             ${GREX_THIRD_PARTY_DIR}/tinyobjloader
             ${GREX_THIRD_PARTY_DIR}/cgltf
+            ${GREX_THIRD_PARTY_DIR}/stb
 )
 
 target_link_libraries(
@@ -34,4 +38,5 @@ target_link_libraries(
            dxgi
            dxguid
            dxcompiler
+           ktx
 )

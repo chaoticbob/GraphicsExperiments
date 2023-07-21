@@ -1,0 +1,17 @@
+cmake_minimum_required(VERSION 3.0)
+
+# ------------------------------------------------------------------------------
+# Configure directories
+# ------------------------------------------------------------------------------
+set(GREX_PROJECTS_COMMON_DIR "${GREX_PROJECTS_DIR}/common")
+
+if (GREX_ENABLE_D3D12)
+    add_subdirectory(401_gltf_basic_geo_d3d12)
+    add_subdirectory(402_gltf_basic_texture_d3d12)
+    add_subdirectory(403_gltf_basic_material_d3d12)
+    add_subdirectory(404_gltf_basic_material_texture_d3d12)
+    add_subdirectory(405_gltf_full_material_test_d3d12)
+endif()
+
+if (GREX_ENABLE_VULKAN)
+endif()
