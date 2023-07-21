@@ -191,7 +191,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     std::vector<uint32_t> rayTraceSpirv;
     {
-        auto source = LoadString("projects/029_raytracing_refract_d3d12/shaders.hlsl");
+        auto source = LoadString("projects/029_30_raytracing_refract/shaders.hlsl");
         assert((!source.empty()) && "no shader source!");
 
         std::string errorMsg;
@@ -906,16 +906,7 @@ void CreateGeometries(
 
    // Sphere
    {
-      TriMesh::Options options = { .enableNormals = true };
-
-      TriMesh mesh;
-      bool    res = TriMesh::LoadOBJ(GetAssetPath("models/monkey_lowres.obj").string(), "", options, &mesh);
-      if (!res) {
-         assert(false && "failed to load model");
-      }
-      mesh.ScaleToFit(1.2f);
-
-      // mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
+      TriMesh mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
 
       Geometry& geo = outSphereGeometry;
 
@@ -1334,14 +1325,14 @@ void CreateIBLTextures(
       const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
       const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
 
-      std::vector<VkMipOffset> mipOffsets;
-      uint32_t                 levelOffset = 0;
-      uint32_t                 levelWidth  = ibl.baseWidth;
-      uint32_t                 levelHeight = ibl.baseHeight;
+      std::vector<MipOffset> mipOffsets;
+      uint32_t               levelOffset = 0;
+      uint32_t               levelWidth  = ibl.baseWidth;
+      uint32_t               levelHeight = ibl.baseHeight;
       for (uint32_t i = 0; i < ibl.numLevels; ++i) {
-         VkMipOffset mipOffset = {};
-         mipOffset.offset      = levelOffset;
-         mipOffset.rowStride   = rowStride;
+         MipOffset mipOffset = {};
+         mipOffset.Offset    = levelOffset;
+         mipOffset.RowStride = rowStride;
 
          mipOffsets.push_back(mipOffset);
 

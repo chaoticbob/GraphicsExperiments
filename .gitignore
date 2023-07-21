@@ -8,6 +8,7 @@ bin/
 include/
 lib/
 build-vs2022/
+build/
 
 **/CMakeFiles
 **/*.sln
@@ -17,3 +18,6 @@ build-vs2022/
 **/*.dir
 **/cmake_install.cmake
 **/imgui.ini
+
+# Apple files
+**/.DS_Store

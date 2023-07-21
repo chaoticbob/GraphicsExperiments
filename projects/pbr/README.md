@@ -8,7 +8,7 @@
 Renders the typical sphere grid of metalness on X-axis and roughness on Y-axis. 
 Uses IBL lighting by default, point lights can be turned optionally turned on.
 
-Shaders are found in the [assets/projects/201_pbr_spheres_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/201_pbr_spheres_d3d12) directory.
+Shaders are found in the [assets/projects/201_202_pbr_spheres](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/201_202_pbr_spheres) directory.
 
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
@@ -25,7 +25,7 @@ Notes:
 PBR render of a [camera model](https://sketchfab.com/3d-models/dae-bilora-bella-46-camera-game-ready-asset-eeb9d9f0627f4783b5d16a8732f0d1a4)
 with normal mapping. Tangent and bitangent are calculated using [MikkTSpace](https://github.com/mmikk/MikkTSpace).
 
-Shaders are found in the [assets/projects/203_pbr_camera_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/203_pbr_camera_d3d12) directory.
+Shaders are found in the [assets/projects/203_204_pbr_camera](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/203_204_pbr_camera) directory.
 
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
@@ -44,7 +44,7 @@ PBR.
 
 Knob is borrowed from [Google Filament](https://github.com/google/filament) and monkey is generated from [Blender](https://www.blender.org/).
 
-Shaders are found in the [assets/projects/251_pbr_explorer_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/251_pbr_explorer_d3d12) directory.
+Shaders are found in the [assets/projects/251_252_pbr_explorer](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/251_252_pbr_explorer) directory.
 
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
@@ -62,7 +62,7 @@ First pass implementation of the [Google Filament](https://github.com/google/fil
 
 Knob is borrowed from [Google Filament](https://github.com/google/filament) and monkey is generated from [Blender](https://www.blender.org/).
 
-Shaders are found in the [assets/projects/253_pbr_material_properties_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/253_pbr_material_properties_d3d12) directory.
+Shaders are found in the [assets/projects/253_254_pbr_material_properties](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/253_254_pbr_material_properties) directory.
 
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
@@ -79,7 +79,7 @@ More advanced PBR material with textures sets and different lighting environment
 
 Knob is borrowed from [Google Filament](https://github.com/google/filament) and monkey is generated from [Blender](https://www.blender.org/).
 
-Shaders are found in the [assets/projects/255_pbr_material_textures_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/255_pbr_material_textures_d3d12) directory.
+Shaders are found in the [assets/projects/255_256_pbr_material_textures](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/255_256_pbr_material_textures) directory.
 
 Textures and HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 

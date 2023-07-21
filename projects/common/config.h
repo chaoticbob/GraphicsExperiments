@@ -16,6 +16,11 @@
 using Microsoft::WRL::ComPtr;
 #endif
 
+#if defined(__APPLE__)
+#include <cfloat>
+#include <cmath>
+#endif
+
 #define GREX_LOG_INFO(MSG)                                 \
     {                                                      \
         std::stringstream ss_grex_log_info;                \

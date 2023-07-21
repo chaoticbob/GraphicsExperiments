@@ -1,4 +1,4 @@
-![alt text](images/screenshots/raytracing/path_trace__pbr.png?raw=true)
+![alt text](images/screenshots/raytracing/path_trace_pbr_main_page.png?raw=true)
 
 # Graphics Experiments
 Collection of small and mostly self contained graphics experiments for reference. 
@@ -7,7 +7,7 @@ The graphics API objects are not always properly cleaned up. Just keep that in
 mind if you make use of the code.
 
 #### What kinds of experiments are in here?
-Graphics experiments for rendering, ray tracing, geometry generation, proceudral textures, etc.
+Graphics experiments for rendering, [ray tracing](https://github.com/chaoticbob/GraphicsExperiments/tree/main/projects/raytracing), [PBR](https://github.com/chaoticbob/GraphicsExperiments/tree/main/projects/pbr), geometry generation, procedural textures, [normal mapping, parallax occlusion mapping](https://github.com/chaoticbob/GraphicsExperiments/tree/main/projects/texture), etc.
 Pretty much anything that's graphically interesting. Everything can be foundin the [projects](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects) directory.
 
 # Some Stuff

@@ -60,7 +60,6 @@ IndentWidth: 4
 IndentWrappedFunctionNames: false
 KeepEmptyLinesAtTheStartOfBlocks: false
 LambdaBodyIndentation: Signature
-Language: Cpp
 NamespaceIndentation: None
 PenaltyBreakAssignment: 200
 PenaltyBreakBeforeFirstCallParameter: 10

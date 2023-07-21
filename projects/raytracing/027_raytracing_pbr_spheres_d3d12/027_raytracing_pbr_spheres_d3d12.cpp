@@ -153,7 +153,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     std::vector<char> dxil;
     {
-        auto source = LoadString("projects/027_raytracing_pbr_spheres_d3d12/shaders.hlsl");
+        auto source = LoadString("projects/027_28_raytracing_pbr_spheres/shaders.hlsl");
         assert((!source.empty()) && "no shader source!");
 
         std::string errorMsg;

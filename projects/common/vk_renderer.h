@@ -76,12 +76,6 @@ enum VkPipelineFlags
    VK_PIPELINE_FLAGS_INTERLEAVED_ATTRS = 0x00000001
 };
 
-struct VkMipOffset
-{
-    uint32_t offset    = 0;
-    uint32_t rowStride = 0;
-};
-
 struct VulkanRenderer
 {
     bool              DebugEnabled             = true;
@@ -257,14 +251,14 @@ VkResult CreateImage(
     VulkanImage*      pImage);
 
 VkResult CreateTexture(
-    VulkanRenderer*                 pRenderer,
-    uint32_t                        width,
-    uint32_t                        height,
-    VkFormat                        format,
-    const std::vector<VkMipOffset>& mipOffsets,
-    uint64_t                        srcSizeBytes,
-    const void*                     pSrcData,
-    VulkanImage*                    pImage);
+    VulkanRenderer*               pRenderer,
+    uint32_t                      width,
+    uint32_t                      height,
+    VkFormat                      format,
+    const std::vector<MipOffset>& mipOffsets,
+    uint64_t                      srcSizeBytes,
+    const void*                   pSrcData,
+    VulkanImage*                  pImage);
 
 VkResult CreateTexture(
     VulkanRenderer* pRenderer,
@@ -332,6 +326,30 @@ HRESULT CreateDrawNormalPipeline(
    const char*          fsEntryPoint = "main");
 
 HRESULT CreateDrawTexturePipeline(
+    VulkanRenderer*    pRenderer,
+    VkPipelineLayout   pipelineLayout,
+    VkShaderModule     vsShaderModule,
+    VkShaderModule     fsShaderModule,
+    VkFormat           rtvFormat,
+    VkFormat           dsvFormat,
+    VkPipeline*        pPipeline,
+    VkCullModeFlagBits cullMode     = VK_CULL_MODE_BACK_BIT,
+    const char*        vsEntryPoint = "main",
+    const char*        fsEntryPoint = "main");
+
+HRESULT CreateDrawBasicPipeline(
+    VulkanRenderer*    pRenderer,
+    VkPipelineLayout   pipelineLayout,
+    VkShaderModule     vsShaderModule,
+    VkShaderModule     fsShaderModule,
+    VkFormat           rtvFormat,
+    VkFormat           dsvFormat,
+    VkPipeline*        pPipeline,
+    VkCullModeFlagBits cullMode = VK_CULL_MODE_BACK_BIT,
+    const char*        vsEntryPoint = "main",
+    const char*        fsEntryPoint = "main");
+
+HRESULT CreateGraphicsPipeline1(
    VulkanRenderer*      pRenderer,
    VkPipelineLayout     pipelineLayout,
    VkShaderModule       vsShaderModule,

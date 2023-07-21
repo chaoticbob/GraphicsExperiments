@@ -599,7 +599,7 @@ int main(int argc, char** argv)
             VkImageViewCreateInfo createInfo           = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
             createInfo.image                           = image;
             createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
-            createInfo.format                          = VK_FORMAT_R8G8B8A8_UNORM;
+            createInfo.format                          = GREX_DEFAULT_RTV_FORMAT;
             createInfo.components                      = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A};
             createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
             createInfo.subresourceRange.baseMipLevel   = 0;

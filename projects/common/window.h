@@ -33,6 +33,12 @@ namespace fs = std::filesystem;
 #    include "backends/imgui_impl_vulkan.h"
 #endif // defined(ENABLE_IMGUI_VULKAN)
 
+#if defined(ENABLE_IMGUI_METAL)
+#    include "mtl_renderer.h"
+#    include "backends/imgui_impl_glfw.h"
+#    include "backends/imgui_impl_metal.h"
+#endif // defined(ENABLE_IMGUI_METAL)
+
 enum MouseButton
 {
     MOUSE_BUTTON_LEFT   = 0x1,
@@ -56,6 +62,10 @@ public:
 
 #if defined(WIN32)
     HWND GetHWND() const;
+#endif
+
+#if defined(__APPLE__)
+    void* GetNativeWindow() const;
 #endif
 
     bool PollEvents();
@@ -82,6 +92,12 @@ public:
     void ImGuiNewFrameVulkan();
     void ImGuiRenderDrawData(VulkanRenderer* pRenderer, VkCommandBuffer cmdBuf);
 #endif // defined(ENABLE_IMGUI_VULKAN)
+
+#if defined(ENABLE_IMGUI_METAL)
+    bool InitImGuiForMetal(MetalRenderer* pRenderer);
+	void ImGuiNewFrameMetal(MTL::RenderPassDescriptor* pRenderPassDescriptor);
+	void ImGuiRenderDrawData(MetalRenderer* pRenderer, MTL::CommandBuffer* pCommandBuffer, MTL::RenderCommandEncoder* pRenderEncoder);
+#endif // defined(ENABLE_IMGUI_METAL)
 
 private:
     uint32_t    mWidth        = 0;

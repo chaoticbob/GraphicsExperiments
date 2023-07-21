@@ -177,7 +177,7 @@ since there's a large number of samples for both the diffuse and specular calcul
 There are no punctual lights in this sample, all the lighting is done via IBL. Punctual lights might
 get added later.
 
-Shaders are found in the [assets/projects/027_raytracing_pbr_spheres_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/027_raytracing_pbr_spheres_d3d12) directory.
+Shaders are found in the [assets/projects/027_28_raytracing_pbr_spheres](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/027_28_raytracing_pbr_spheres) directory.
 
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
@@ -193,12 +193,12 @@ to achieve the look you want.
 There are no punctual lights in this sample, all the lighting is done via IBL. Punctual lights might
 get added later.
 
-Shaders are found in the [assets/projects/029_raytracing_refract_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/029_raytracing_refract_d3d12) directory.
+Shaders are found in the [assets/projects/029_30_raytracing_refract](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/029_30_raytracing_refract) directory.
 
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
 ## path_trace
-![alt text](../../images/screenshots/raytracing/path_trace_teapots.png?raw=true)
+![alt text](../../images/screenshots/raytracing/path_trace.png?raw=true)
 
 **Naive/fun path tracing experiment**
 
@@ -210,14 +210,14 @@ But fun to see it starting to work. Sample count get reset if camera is move usi
 There are no punctual lights in this sample, all the lighting is done via IBL. Punctual lights might
 get added later.
 
-Shaders are found in the [assets/projects/031_raytracing_path_trace_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/031_raytracing_path_trace_d3d12) directory.
+Shaders are found in the [assets/projects/031_032_raytracing_path_trace](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/031_032_raytracing_path_trace) directory.
 
 This experiment uses [Nathan Reed's PCG has function](https://www.reedbeta.com/blog/hash-functions-for-gpu-rendering/)
 
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
 ## path_trace_pbr
-![alt text](../../images/screenshots/raytracing/path_trace__pbr.png?raw=true)
+![alt text](../../images/screenshots/raytracing/path_trace_pbr.png?raw=true)
 
 **Naive/fun path tracing with PBR experiment**
 
@@ -233,7 +233,7 @@ of the IBL and diffuse began to look more like specular - which wasn't desirable
 There are no punctual lights in this sample, all the lighting is done via IBL. Punctual lights might
 get added later.
 
-Shaders are found in the [assets/projects/033_raytracing_path_trace_pbr_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/033_raytracing_path_trace_pbr_d3d12) directory.
+Shaders are found in the [assets/projects/031_032_raytracing_path_trace](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/031_032_raytracing_path_trace) directory.
 
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
