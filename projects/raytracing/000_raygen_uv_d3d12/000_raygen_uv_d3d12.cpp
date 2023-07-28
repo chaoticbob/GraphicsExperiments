@@ -1,7 +1,6 @@
 #include "window.h"
 
 #include "dx_renderer.h"
-#include "tri_mesh.h"
 
 #include <glm/glm.hpp>
 #include <glm/matrix.hpp>
@@ -22,16 +21,37 @@
     }
 
 // =============================================================================
+// Shader code
+// =============================================================================
+const char* gRayTracingShaders = R"(
+
+struct CameraProperties {
+	float4x4 ViewInverse;
+	float4x4 ProjInverse;
+};
+
+RWTexture2D<float4>              RenderTarget : register(u1); // Output textures
+ConstantBuffer<CameraProperties> Cam          : register(b2); // Constant buffer
+
+[shader("raygeneration")]
+void MyRaygenShader()
+{
+	const float2 pixelCenter = (float2)DispatchRaysIndex() + float2(0.5, 0.5);
+	const float2 inUV = pixelCenter/(float2)DispatchRaysDimensions();
+
+    RenderTarget[DispatchRaysIndex().xy] = float4(inUV, 0, 0);
+}
+
+)";
+
+// =============================================================================
 // Globals
 // =============================================================================
 static uint32_t gWindowWidth  = 1280;
 static uint32_t gWindowHeight = 720;
 static bool     gEnableDebug  = true;
 
-static LPCWSTR gHitGroupName         = L"MyHitGroup";
-static LPCWSTR gRayGenShaderName     = L"MyRaygenShader";
-static LPCWSTR gMissShaderName       = L"MyMissShader";
-static LPCWSTR gClosestHitShaderName = L"MyClosestHitShader";
+static LPCWSTR gRayGenShaderName = L"MyRaygenShader";
 
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
 void CreateRayTracingStateObject(
@@ -43,26 +63,9 @@ void CreateRayTracingStateObject(
 void CreateShaderRecordTables(
     DxRenderer*        pRenderer,
     ID3D12StateObject* pStateObject,
-    ID3D12Resource**   ppRayGenSRT,
-    ID3D12Resource**   ppMissSRT,
-    ID3D12Resource**   ppHitGroupSRT);
-void CreateGeometry(
-    DxRenderer*      pRenderer,
-    uint32_t*        pIndexCount,
-    ID3D12Resource** ppIndexBuffer,
-    uint32_t*        pVertexCount,
-    ID3D12Resource** ppPositionBuffer,
-    ID3D12Resource** ppNormalBuffer);
-void CreateBLAS(
-    DxRenderer*      pRenderer,
-    uint32_t         indexCount,
-    ID3D12Resource*  pIndexBuffer,
-    uint32_t         vertexCount,
-    ID3D12Resource*  pPositionBuffer,
-    ID3D12Resource** ppBLAS);
-void CreateTLAS(DxRenderer* pRenderer, ID3D12Resource* pBLAS, ID3D12Resource** ppTLAS);
+    ID3D12Resource**   ppRayGenSRT);
 void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer);
-void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource** ppConstantBuffer);
+void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource* pRayGenSRT, ID3D12Resource** ppConstantBuffer);
 void CreateDescriptorHeap(DxRenderer* pRenderer, ID3D12DescriptorHeap** ppHeap);
 
 // =============================================================================
@@ -89,21 +92,40 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Compile shaders
     // *************************************************************************
-    std::vector<char> dxil;
+    ComPtr<IDxcBlob> shaderBinary;
     {
-        auto source = LoadString("projects/021_raytracing_triangles/shaders.hlsl");
-        assert((!source.empty()) && "no shader source!");
+        ComPtr<IDxcLibrary> dxcLibrary;
+        CHECK_CALL(DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&dxcLibrary)));
 
-        std::string errorMsg;
-        HRESULT     hr = CompileHLSL(source, "", "lib_6_3", &dxil, &errorMsg);
-        if (FAILED(hr)) {
+        ComPtr<IDxcCompiler3> dxcCompiler;
+        CHECK_CALL(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxcCompiler)));
+
+        DxcBuffer source = {};
+        source.Ptr       = gRayTracingShaders;
+        source.Size      = strlen(gRayTracingShaders);
+
+        LPCWSTR args[2] = {L"-T", L"lib_6_3"};
+
+        ComPtr<IDxcResult> result;
+        CHECK_CALL(dxcCompiler->Compile(
+            &source,
+            args,
+            ARRAYSIZE(args),
+            nullptr,
+            IID_PPV_ARGS(&result)));
+
+        ComPtr<IDxcBlob> errors;
+        CHECK_CALL(result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errors), nullptr));
+        if (errors && (errors->GetBufferSize() > 0)) {
+            std::string       errorMsg = std::string(reinterpret_cast<const char*>(errors->GetBufferPointer()), errors->GetBufferSize());
             std::stringstream ss;
             ss << "\n"
-               << "Shader compiler error (raytracing): " << errorMsg << "\n";
+               << "Shader compiler error: " << errorMsg << "\n";
             GREX_LOG_ERROR(ss.str().c_str());
-            assert(false);
             return EXIT_FAILURE;
         }
+
+        CHECK_CALL(result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shaderBinary), nullptr));
     }
 
     // *************************************************************************
@@ -123,56 +145,18 @@ int main(int argc, char** argv)
     CreateRayTracingStateObject(
         renderer.get(),
         globalRootSig.Get(),
-        dxil.size(),
-        dxil.data(),
+        shaderBinary->GetBufferSize(),
+        shaderBinary->GetBufferPointer(),
         &stateObject);
 
     // *************************************************************************
     // Shader record tables
     // *************************************************************************
     ComPtr<ID3D12Resource> rgenSRT;
-    ComPtr<ID3D12Resource> missSRT;
-    ComPtr<ID3D12Resource> hitgSRT;
     CreateShaderRecordTables(
         renderer.get(),
         stateObject.Get(),
-        &rgenSRT,
-        &missSRT,
-        &hitgSRT);
-
-    // *************************************************************************
-    // Create geometry
-    // *************************************************************************
-    uint32_t               indexCount  = 0;
-    uint32_t               vertexCount = 0;
-    ComPtr<ID3D12Resource> indexBuffer;
-    ComPtr<ID3D12Resource> positionBuffer;
-    ComPtr<ID3D12Resource> normalBuffer;
-    CreateGeometry(
-        renderer.get(),
-        &indexCount,
-        &indexBuffer,
-        &vertexCount,
-        &positionBuffer,
-        &normalBuffer);
-
-    // *************************************************************************
-    // Bottom level acceleration structure
-    // *************************************************************************
-    ComPtr<ID3D12Resource> BLAS;
-    CreateBLAS(
-        renderer.get(),
-        indexCount,
-        indexBuffer.Get(),
-        vertexCount,
-        positionBuffer.Get(),
-        &BLAS);
-
-    // *************************************************************************
-    // Top level acceleration structure
-    // *************************************************************************
-    ComPtr<ID3D12Resource> TLAS;
-    CreateTLAS(renderer.get(), BLAS.Get(), &TLAS);
+        &rgenSRT);
 
     // *************************************************************************
     // Output texture
@@ -184,7 +168,7 @@ int main(int argc, char** argv)
     // Constant buffer
     // *************************************************************************
     ComPtr<ID3D12Resource> constantBuffer;
-    CreateConstantBuffer(renderer.get(), &constantBuffer);
+    CreateConstantBuffer(renderer.get(), rgenSRT.Get(), &constantBuffer);
 
     // *************************************************************************
     // Descriptor heaps
@@ -206,7 +190,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "021_raytracing_triangles_d3d12");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "000_raygen_uv_d3d12");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -254,30 +238,16 @@ int main(int argc, char** argv)
             commandList->SetComputeRootSignature(globalRootSig.Get());
             commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
 
-            // Acceleration structure (t0)
-            commandList->SetComputeRootShaderResourceView(0, TLAS->GetGPUVirtualAddress());
             // Output texture (u1)
-            commandList->SetComputeRootDescriptorTable(1, descriptorHeap->GetGPUDescriptorHandleForHeapStart());
+            commandList->SetComputeRootDescriptorTable(0, descriptorHeap->GetGPUDescriptorHandleForHeapStart());
             // Constant buffer (b2)
-            commandList->SetComputeRootConstantBufferView(2, constantBuffer->GetGPUVirtualAddress());
-            // Index buffer (t3)
-            commandList->SetComputeRootShaderResourceView(3, indexBuffer->GetGPUVirtualAddress());
-            // Position buffer (t4)
-            commandList->SetComputeRootShaderResourceView(4, positionBuffer->GetGPUVirtualAddress());
-            // Normal buffer (t5)
-            commandList->SetComputeRootShaderResourceView(5, normalBuffer->GetGPUVirtualAddress());
+            commandList->SetComputeRootConstantBufferView(1, constantBuffer->GetGPUVirtualAddress());
 
             commandList->SetPipelineState1(stateObject.Get());
 
             D3D12_DISPATCH_RAYS_DESC dispatchDesc               = {};
             dispatchDesc.RayGenerationShaderRecord.StartAddress = rgenSRT->GetGPUVirtualAddress();
             dispatchDesc.RayGenerationShaderRecord.SizeInBytes  = rgenSRT->GetDesc().Width;
-            dispatchDesc.MissShaderTable.StartAddress           = missSRT->GetGPUVirtualAddress();
-            dispatchDesc.MissShaderTable.SizeInBytes            = missSRT->GetDesc().Width;
-            dispatchDesc.MissShaderTable.StrideInBytes          = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
-            dispatchDesc.HitGroupTable.StartAddress             = hitgSRT->GetGPUVirtualAddress();
-            dispatchDesc.HitGroupTable.SizeInBytes              = hitgSRT->GetDesc().Width;
-            dispatchDesc.HitGroupTable.StrideInBytes            = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
             dispatchDesc.Width                                  = gWindowWidth;
             dispatchDesc.Height                                 = gWindowHeight;
             dispatchDesc.Depth                                  = 1;
@@ -348,41 +318,45 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     range.RegisterSpace                     = 0;
     range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[6];
-    // Accleration structure (t0)
-    rootParameters[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[0].Descriptor.ShaderRegister = 0;
-    rootParameters[0].Descriptor.RegisterSpace  = 0;
-    rootParameters[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+    D3D12_ROOT_PARAMETER rootParameters[2];
     // Output texture (u1) - descriptor table because texture resources can't be root descriptors
-    rootParameters[1].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[1].DescriptorTable.pDescriptorRanges   = &range;
-    rootParameters[1].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[0].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[0].DescriptorTable.pDescriptorRanges   = &range;
+    rootParameters[0].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
     // Constant buffer (b2)
-    rootParameters[2].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
-    rootParameters[2].Descriptor.ShaderRegister = 2;
-    rootParameters[2].Descriptor.RegisterSpace  = 0;
-    rootParameters[2].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // Index buffer (t3)
-    rootParameters[3].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[3].Descriptor.ShaderRegister = 3;
-    rootParameters[3].Descriptor.RegisterSpace  = 0;
-    rootParameters[3].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // Position buffer (t4)
-    rootParameters[4].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[4].Descriptor.ShaderRegister = 4;
-    rootParameters[4].Descriptor.RegisterSpace  = 0;
-    rootParameters[4].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // Normal buffer (t5)
-    rootParameters[5].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[5].Descriptor.ShaderRegister = 5;
-    rootParameters[5].Descriptor.RegisterSpace  = 0;
-    rootParameters[5].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[1].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[1].Descriptor.ShaderRegister = 2;
+    rootParameters[1].Descriptor.RegisterSpace  = 0;
+    rootParameters[1].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
 
     D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-    rootSigDesc.NumParameters             = 6;
+    rootSigDesc.NumParameters             = 2;
     rootSigDesc.pParameters               = rootParameters;
+
+    ComPtr<ID3DBlob> blob;
+    ComPtr<ID3DBlob> error;
+    CHECK_CALL(D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error));
+    CHECK_CALL(pRenderer->Device->CreateRootSignature(
+        0,                         // nodeMask
+        blob->GetBufferPointer(),  // pBloblWithRootSignature
+        blob->GetBufferSize(),     // blobLengthInBytes
+        IID_PPV_ARGS(ppRootSig))); // riid, ppvRootSignature
+}
+
+void CreateLocalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
+{
+    D3D12_ROOT_PARAMETER rootParameter;
+    rootParameter.ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameter.Descriptor.ShaderRegister = 2;
+    rootParameter.Descriptor.RegisterSpace  = 0;
+    rootParameter.ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+
+    // Constant buffer (b2)
+    D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
+    rootSigDesc.NumParameters             = 1;
+    rootSigDesc.pParameters               = &rootParameter;
+    rootSigDesc.Flags                     = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
 
     ComPtr<ID3DBlob> blob;
     ComPtr<ID3DBlob> error;
@@ -404,10 +378,9 @@ void CreateRayTracingStateObject(
     enum
     {
         DXIL_LIBRARY_INDEX       = 0,
-        TRIANGLE_HIT_GROUP_INDEX = 1,
-        SHADER_CONFIG_INDEX      = 2,
-        GLOBAL_ROOT_SIG_INDEX    = 3,
-        PIPELINE_CONFIG_INDEX    = 4,
+        SHADER_CONFIG_INDEX      = 1,
+        GLOBAL_ROOT_SIG_INDEX    = 2,
+        PIPELINE_CONFIG_INDEX    = 3,
         SUBOBJECT_COUNT,
     };
 
@@ -436,20 +409,8 @@ void CreateRayTracingStateObject(
     rgenExport.ExportToRename    = nullptr;
     rgenExport.Flags             = D3D12_EXPORT_FLAG_NONE;
 
-    D3D12_EXPORT_DESC missExport = {};
-    missExport.Name              = gMissShaderName;
-    missExport.ExportToRename    = nullptr;
-    missExport.Flags             = D3D12_EXPORT_FLAG_NONE;
-
-    D3D12_EXPORT_DESC chitExport = {};
-    chitExport.Name              = gClosestHitShaderName;
-    chitExport.ExportToRename    = nullptr;
-    chitExport.Flags             = D3D12_EXPORT_FLAG_NONE;
-
     std::vector<D3D12_EXPORT_DESC> exports;
     exports.push_back(rgenExport);
-    exports.push_back(missExport);
-    exports.push_back(chitExport);
 
     D3D12_DXIL_LIBRARY_DESC dxilLibraryDesc = {};
     dxilLibraryDesc.DXILLibrary             = {pShaderBinary, shadeBinarySize};
@@ -459,24 +420,6 @@ void CreateRayTracingStateObject(
     D3D12_STATE_SUBOBJECT* pSubobject = &subobjects[DXIL_LIBRARY_INDEX];
     pSubobject->Type                  = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY;
     pSubobject->pDesc                 = &dxilLibraryDesc;
-
-    // ---------------------------------------------------------------------
-    // Triangle hit group
-    //
-    // A hit group specifies closest hit, any hit and intersection shaders
-    // to be executed when a ray intersects the geometry's triangle/AABB.
-    // In this sample, we only use triangle geometry with a closest hit
-    // shader, so others are not set.
-    //
-    // ---------------------------------------------------------------------
-    D3D12_HIT_GROUP_DESC hitGroupDesc   = {};
-    hitGroupDesc.HitGroupExport         = gHitGroupName;
-    hitGroupDesc.Type                   = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-    hitGroupDesc.ClosestHitShaderImport = gClosestHitShaderName;
-
-    pSubobject        = &subobjects[TRIANGLE_HIT_GROUP_INDEX];
-    pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
-    pSubobject->pDesc = &hitGroupDesc;
 
     // ---------------------------------------------------------------------
     // Shader config
@@ -535,16 +478,12 @@ void CreateRayTracingStateObject(
 void CreateShaderRecordTables(
     DxRenderer*        pRenderer,
     ID3D12StateObject* pStateObject,
-    ID3D12Resource**   ppRayGenSRT,
-    ID3D12Resource**   ppMissSRT,
-    ID3D12Resource**   ppHitGroupSRT)
+    ID3D12Resource**   ppRayGenSRT)
 {
     ComPtr<ID3D12StateObjectProperties> stateObjectProperties;
     CHECK_CALL(pStateObject->QueryInterface(IID_PPV_ARGS(&stateObjectProperties)));
 
     void* pRayGenShaderIdentifier   = stateObjectProperties->GetShaderIdentifier(gRayGenShaderName);
-    void* pMissShaderIdentifier     = stateObjectProperties->GetShaderIdentifier(gMissShaderName);
-    void* pHitGroupShaderIdentifier = stateObjectProperties->GetShaderIdentifier(gHitGroupName);
 
     UINT shaderRecordSize = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
 
@@ -586,241 +525,6 @@ void CreateShaderRecordTables(
             (*ppRayGenSRT)->Unmap(0, nullptr);
         }
     }
-
-    // Miss
-    {
-        CHECK_CALL(pRenderer->Device->CreateCommittedResource(
-            &heapProperties,                   // pHeapProperties
-            D3D12_HEAP_FLAG_NONE,              // HeapFlags
-            &desc,                             // pDesc
-            D3D12_RESOURCE_STATE_GENERIC_READ, // InitialResourceState
-            nullptr,                           // pOptimizedClearValue
-            IID_PPV_ARGS(ppMissSRT)));         // riidResource, ppvResource
-
-        // Copy shader identifier
-        {
-            char* pData;
-            CHECK_CALL((*ppMissSRT)->Map(0, nullptr, reinterpret_cast<void**>(&pData)));
-
-            memcpy(pData, pMissShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-
-            (*ppMissSRT)->Unmap(0, nullptr);
-        }
-    }
-
-    // Hit group
-    {
-        CHECK_CALL(pRenderer->Device->CreateCommittedResource(
-            &heapProperties,                   // pHeapProperties
-            D3D12_HEAP_FLAG_NONE,              // HeapFlags
-            &desc,                             // pDesc
-            D3D12_RESOURCE_STATE_GENERIC_READ, // InitialResourceState
-            nullptr,                           // pOptimizedClearValue
-            IID_PPV_ARGS(ppHitGroupSRT)));     // riidResource, ppvResource
-
-        // Copy shader identifier
-        {
-            char* pData;
-            CHECK_CALL((*ppHitGroupSRT)->Map(0, nullptr, reinterpret_cast<void**>(&pData)));
-
-            memcpy(pData, pHitGroupShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-
-            (*ppHitGroupSRT)->Unmap(0, nullptr);
-        }
-    }
-}
-void CreateGeometry(
-    DxRenderer*      pRenderer,
-    uint32_t*        pIndexCount,
-    ID3D12Resource** ppIndexBuffer,
-    uint32_t*        pVertexCount,
-    ID3D12Resource** ppPositionBuffer,
-    ID3D12Resource** ppNormalBuffer)
-{
-    TriMesh mesh = TriMesh::Sphere(1.0f, 16, 8, {.enableNormals = true});
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTriangles()),
-        DataPtr(mesh.GetTriangles()),
-        ppIndexBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetPositions()),
-        DataPtr(mesh.GetPositions()),
-        ppPositionBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetNormals()),
-        DataPtr(mesh.GetNormals()),
-        ppNormalBuffer));
-
-    *pIndexCount  = 3 * mesh.GetNumTriangles();
-    *pVertexCount = mesh.GetNumVertices();
-}
-
-void CreateBLAS(
-    DxRenderer*      pRenderer,
-    uint32_t         indexCount,
-    ID3D12Resource*  pIndexBuffer,
-    uint32_t         vertexCount,
-    ID3D12Resource*  pPositionBuffer,
-    ID3D12Resource** ppBLAS)
-{
-    D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc       = {};
-    geometryDesc.Type                                 = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-    geometryDesc.Triangles.IndexFormat                = DXGI_FORMAT_R32_UINT;
-    geometryDesc.Triangles.IndexCount                 = indexCount;
-    geometryDesc.Triangles.IndexBuffer                = pIndexBuffer->GetGPUVirtualAddress();
-    geometryDesc.Triangles.VertexFormat               = DXGI_FORMAT_R32G32B32_FLOAT;
-    geometryDesc.Triangles.VertexCount                = vertexCount;
-    geometryDesc.Triangles.VertexBuffer.StartAddress  = pPositionBuffer->GetGPUVirtualAddress();
-    geometryDesc.Triangles.VertexBuffer.StrideInBytes = 12;
-    geometryDesc.Flags                                = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-
-    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
-    //
-    inputs.Type           = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-    inputs.Flags          = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
-    inputs.DescsLayout    = D3D12_ELEMENTS_LAYOUT_ARRAY;
-    inputs.NumDescs       = 1;
-    inputs.pGeometryDescs = &geometryDesc;
-
-    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo = {};
-    pRenderer->Device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &prebuildInfo);
-
-    // Scratch buffer
-    ComPtr<ID3D12Resource> scratchBuffer;
-    CHECK_CALL(CreateUAVBuffer(
-        pRenderer,
-        prebuildInfo.ScratchDataSizeInBytes,
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        &scratchBuffer));
-
-    // Storage buffer
-    CHECK_CALL(CreateUAVBuffer(
-        pRenderer,
-        prebuildInfo.ResultDataMaxSizeInBytes,
-        D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
-        ppBLAS));
-
-    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildDesc = {};
-    //
-    buildDesc.Inputs                           = inputs;
-    buildDesc.DestAccelerationStructureData    = (*ppBLAS)->GetGPUVirtualAddress();
-    buildDesc.ScratchAccelerationStructureData = scratchBuffer->GetGPUVirtualAddress();
-
-    // Command allocator
-    ComPtr<ID3D12CommandAllocator> commandAllocator;
-    {
-        CHECK_CALL(pRenderer->Device->CreateCommandAllocator(
-            D3D12_COMMAND_LIST_TYPE_DIRECT,    // type
-            IID_PPV_ARGS(&commandAllocator))); // ppCommandList
-    }
-
-    // Command list
-    ComPtr<ID3D12GraphicsCommandList5> commandList;
-    {
-        CHECK_CALL(pRenderer->Device->CreateCommandList1(
-            0,                              // nodeMask
-            D3D12_COMMAND_LIST_TYPE_DIRECT, // type
-            D3D12_COMMAND_LIST_FLAG_NONE,   // flags
-            IID_PPV_ARGS(&commandList)));   // ppCommandList
-    }
-
-    // Build acceleration structure
-    CHECK_CALL(commandAllocator->Reset());
-    CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
-    commandList->BuildRaytracingAccelerationStructure(&buildDesc, 0, nullptr);
-    commandList->Close();
-
-    ID3D12CommandList* pList = commandList.Get();
-    pRenderer->Queue->ExecuteCommandLists(1, &pList);
-
-    bool waitres = WaitForGpu(pRenderer);
-    assert(waitres && "WaitForGpu failed");
-}
-
-void CreateTLAS(DxRenderer* pRenderer, ID3D12Resource* pBLAS, ID3D12Resource** ppTLAS)
-{
-    // clang-format off
-	float transformMatrix[3][4] = {
-        {1.0f, 0.0f, 0.0f, 0.0f},
-        {0.0f, 1.0f, 0.0f, 0.0f},
-        {0.0f, 0.0f, 1.0f, 0.0f} 
-    };
-    // clang-format on
-
-    D3D12_RAYTRACING_INSTANCE_DESC instanceDesc = {};
-    instanceDesc.InstanceMask                   = 1;
-    instanceDesc.AccelerationStructure          = pBLAS->GetGPUVirtualAddress();
-    memcpy(instanceDesc.Transform, &transformMatrix, 12 * sizeof(float));
-
-    ComPtr<ID3D12Resource> instanceBuffer;
-    CHECK_CALL(CreateBuffer(pRenderer, sizeof(instanceDesc), &instanceDesc, &instanceBuffer));
-
-    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
-    //
-    inputs.Type          = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-    inputs.Flags         = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
-    inputs.DescsLayout   = D3D12_ELEMENTS_LAYOUT_ARRAY;
-    inputs.NumDescs      = 1;
-    inputs.InstanceDescs = instanceBuffer->GetGPUVirtualAddress();
-
-    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo = {};
-    pRenderer->Device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &prebuildInfo);
-
-    // Scratch buffer
-    ComPtr<ID3D12Resource> scratchBuffer;
-    CHECK_CALL(CreateUAVBuffer(
-        pRenderer,
-        prebuildInfo.ScratchDataSizeInBytes,
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        &scratchBuffer));
-
-    // Storage buffer
-    CHECK_CALL(CreateUAVBuffer(
-        pRenderer,
-        prebuildInfo.ResultDataMaxSizeInBytes,
-        D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
-        ppTLAS));
-
-    // Command allocator
-    ComPtr<ID3D12CommandAllocator> commandAllocator;
-    {
-        CHECK_CALL(pRenderer->Device->CreateCommandAllocator(
-            D3D12_COMMAND_LIST_TYPE_DIRECT,    // type
-            IID_PPV_ARGS(&commandAllocator))); // ppCommandList
-    }
-
-    // Command list
-    ComPtr<ID3D12GraphicsCommandList5> commandList;
-    {
-        CHECK_CALL(pRenderer->Device->CreateCommandList1(
-            0,                              // nodeMask
-            D3D12_COMMAND_LIST_TYPE_DIRECT, // type
-            D3D12_COMMAND_LIST_FLAG_NONE,   // flags
-            IID_PPV_ARGS(&commandList)));   // ppCommandList
-    }
-
-    // Build acceleration structure
-    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildDesc = {};
-    buildDesc.Inputs                                             = inputs;
-    buildDesc.DestAccelerationStructureData                      = (*ppTLAS)->GetGPUVirtualAddress();
-    buildDesc.ScratchAccelerationStructureData                   = scratchBuffer->GetGPUVirtualAddress();
-
-    CHECK_CALL(commandAllocator->Reset());
-    CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
-    commandList->BuildRaytracingAccelerationStructure(&buildDesc, 0, nullptr);
-    commandList->Close();
-
-    ID3D12CommandList* pList = commandList.Get();
-    pRenderer->Queue->ExecuteCommandLists(1, &pList);
-
-    bool waitres = WaitForGpu(pRenderer);
-    assert(waitres && "WaitForGpu failed");
 }
 
 void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)
@@ -849,7 +553,7 @@ void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)
         IID_PPV_ARGS(ppBuffer)));              // riidResource, ppvResource
 }
 
-void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource** ppConstantBuffer)
+void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource* pRayGenSRT, ID3D12Resource** ppConstantBuffer)
 {
     struct Camera
     {

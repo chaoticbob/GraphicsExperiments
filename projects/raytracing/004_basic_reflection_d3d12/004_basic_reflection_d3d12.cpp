@@ -1,11 +1,13 @@
 #include "window.h"
 
 #include "dx_renderer.h"
-#include "tri_mesh.h"
+
+#include "sphereflake.h"
 
 #include <glm/glm.hpp>
 #include <glm/matrix.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+using glm::vec3;
 
 #define CHECK_CALL(FN)                               \
     {                                                \
@@ -22,21 +24,248 @@
     }
 
 // =============================================================================
+// Shader code
+// =============================================================================
+const char* gRayTracingShaders = R"(
+
+struct CameraProperties {
+    float4x4 ViewInverse;
+    float4x4 ProjInverse;
+    float3   EyePosition;
+};
+
+struct Sphere {
+    float minX; 
+    float minY;
+    float minZ;
+    float maxX; 
+    float maxY;
+    float maxZ;
+};
+
+RaytracingAccelerationStructure  Scene        : register(t0); // Acceleration structure
+RWTexture2D<float4>              RenderTarget : register(u1); // Output texture
+ConstantBuffer<CameraProperties> Cam          : register(b2); // Constant buffer
+StructuredBuffer<Sphere>         SphereBuffer : register(t3); // Sphere buffer
+
+struct RayPayload
+{
+    float4 color;
+    uint   recursionDepth;
+};
+
+struct ProceduralPrimitiveAttributes
+{
+    float3 normal;
+};
+
+// -----------------------------------------------------------------------------
+
+[shader("raygeneration")]
+void MyRaygenShader()
+{
+	const float2 pixelCenter = (float2)DispatchRaysIndex() + float2(0.5, 0.5);
+	const float2 inUV = pixelCenter/(float2)DispatchRaysDimensions();
+	float2 d = inUV * 2.0 - 1.0;
+    d.y = -d.y;
+
+	float4 origin = mul(Cam.ViewInverse, float4(0,0,0,1));
+	float4 target = mul(Cam.ProjInverse, float4(d.x, d.y, 1, 1));
+	float4 direction = mul(Cam.ViewInverse, float4(normalize(target.xyz), 0));
+
+    RayDesc ray;
+    ray.Origin = origin.xyz;
+    ray.Direction = direction.xyz;
+    ray.TMin = 0.001;
+    ray.TMax = 10000.0;
+
+    RayPayload payload = (RayPayload)0;
+
+    TraceRay(
+        Scene,                 // AccelerationStructure
+        RAY_FLAG_FORCE_OPAQUE, // RayFlags
+        ~0,                    // InstanceInclusionMask
+        0,                     // RayContributionToHitGroupIndex
+        1,                     // MultiplierForGeometryContributionToHitGroupIndex
+        0,                     // MissShaderIndex
+        ray,                   // Ray
+        payload);              // Payload
+
+    RenderTarget[DispatchRaysIndex().xy] = payload.color;
+}
+
+// -----------------------------------------------------------------------------
+
+float3 CubicBezier(float t, float3 P0, float3 P1, float3 P2, float3 P3)
+{
+    float s = (1 - t);
+    float a = s * s * s;
+    float b = 3 * s * s * t;
+    float c = 3 * s * t * t;
+    float d = t * t * t;
+    return a * P0 + b * P1 + c * P2 + d * P3;
+}
+
+[shader("miss")]
+void MyMissShader(inout RayPayload payload)
+{
+    float3 P = normalize(WorldRayDirection());
+    float  t = (P.y + 1) / 2;
+    
+    float3 C0 = float3(0.010, 0.010, 0.020);
+    float3 C1 = float3(0.920, 0.920, 0.990);
+    float3 C2 = float3(0.437, 0.609, 0.747);
+    float3 C3 = float3(0.190, 0.312, 0.579);
+    float3 C = CubicBezier(t, C0, C1, C2, C3);
+    
+    payload.color = float4(C, 1);
+}
+
+// -----------------------------------------------------------------------------
+
+// Fresnel reflectance - schlick approximation.
+float3 FresnelReflectanceSchlick(in float3 I, in float3 N, in float3 f0)
+{
+    float cosi = saturate(dot(-I, N));
+    return f0 + (1 - f0)*pow(1 - cosi, 5);
+}
+
+[shader("closesthit")]
+void MyClosestHitShader(inout RayPayload payload, in ProceduralPrimitiveAttributes attr)
+{
+    float3 GROUND = float3(0.980, 0.863, 0.596);
+    float3 SPHERE = float3(0.549, 0.556, 0.554);
+
+    float3 hitPosition = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
+    float3 hitNormal = attr.normal;
+
+    // Diffuse
+    float3 lightPos = float3(2, 25, 5);
+    float3 lightDir = normalize(lightPos - hitPosition);
+    float d = saturate(dot(lightDir, hitNormal));
+
+    if (PrimitiveIndex() > 0) {
+        float3 reflectedColor = (float3)0;
+
+        uint currentRecursionDepth = payload.recursionDepth + 1;
+        if (currentRecursionDepth < 5) {
+            RayDesc ray;
+            ray.Origin = hitPosition + 0.001 * hitNormal;
+            ray.Direction = reflect(WorldRayDirection(), hitNormal);
+            ray.TMin = 0.001;
+            ray.TMax = 10000.0;
+
+            RayPayload subPayload = (RayPayload)0;
+            subPayload.recursionDepth = currentRecursionDepth;
+        
+            TraceRay(
+                Scene,                 // AccelerationStructure
+                RAY_FLAG_FORCE_OPAQUE, // RayFlags
+                ~0,                    // InstanceInclusionMask
+                0,                     // RayContributionToHitGroupIndex
+                1,                     // MultiplierForGeometryContributionToHitGroupIndex
+                0,                     // MissShaderIndex
+                ray,                   // Ray
+                subPayload);           // Payload
+
+            float3 fresnelR = FresnelReflectanceSchlick(WorldRayDirection(), hitNormal, SPHERE);
+            reflectedColor = 0.95 * fresnelR * subPayload.color.xyz;
+        }
+
+        float3 V = normalize(Cam.EyePosition - hitPosition);
+        float3 R = reflect(-lightDir, hitNormal);
+        float  RdotV = saturate(dot(R, V));
+        float  s = pow(RdotV, 30.0);
+
+        const float kD = 0.8;
+        const float kS = 0.5;
+
+        float3 color = ((kD * d + kS * s) * SPHERE) + reflectedColor;
+        payload.color = float4(color, 0);                 
+    }
+    else {
+        payload.color = float4(d * GROUND, 0);
+    }
+}
+
+// -----------------------------------------------------------------------------
+
+//
+// Based on:
+//   https://github.com/georgeouzou/vk_exp/blob/master/shaders/sphere.rint
+//
+// this method is documented in raytracing gems book
+float2 gems_intersections(float3 orig, float3 dir, float3 center, float radius)
+{
+	float3 f = orig - center;
+	float  a = dot(dir, dir);
+	float  bi = dot(-f, dir);
+	float  c = dot(f, f) - radius * radius;
+	float3 s = f + (bi/a)*dir;
+	float  discr = radius * radius - dot(s, s);
+
+	float2 t = float2(-1.0, -1.0);
+	if (discr >= 0) {
+		float q = bi + sign(bi) * sqrt(a*discr);
+		float t1 = c / q;
+		float t2 = q / a;
+		t = float2(t1, t2);
+	}
+	return t;
+}
+
+[shader("intersection")]
+void MyIntersectionShader()
+{
+	float3 orig = ObjectRayOrigin();
+	float3 dir = ObjectRayDirection();
+
+    Sphere sphere = SphereBuffer[PrimitiveIndex()];
+    
+	float3 aabb_min = float3(sphere.minX, sphere.minY, sphere.minZ);
+	float3 aabb_max = float3(sphere.maxX, sphere.maxY, sphere.maxZ);
+
+	float3 center = (aabb_max + aabb_min) / (float3)2.0;
+	float radius = (aabb_max.x - aabb_min.x) / 2.0;
+
+    // Might be some wonky behavior if inside sphere
+	float2 t = gems_intersections(orig, dir, center, radius);
+    float thit = min(t.x, t.y);    
+
+    ProceduralPrimitiveAttributes attr;
+
+    if (t.x > 0) {
+	    attr.normal = normalize((orig + t.x * dir) - center);
+	    ReportHit(t.x, 0, attr);
+    }
+    
+    if (t.y > 0) {
+	    attr.normal = normalize((orig + t.y * dir) - center);
+	    ReportHit(t.y, 0, attr);
+    }
+}
+)";
+
+// =============================================================================
 // Globals
 // =============================================================================
 static uint32_t gWindowWidth  = 1280;
 static uint32_t gWindowHeight = 720;
 static bool     gEnableDebug  = true;
 
-static LPCWSTR gHitGroupName         = L"MyHitGroup";
-static LPCWSTR gRayGenShaderName     = L"MyRaygenShader";
-static LPCWSTR gMissShaderName       = L"MyMissShader";
-static LPCWSTR gClosestHitShaderName = L"MyClosestHitShader";
+static LPCWSTR gHitGroupName           = L"MyHitGroup";
+static LPCWSTR gRayGenShaderName       = L"MyRaygenShader";
+static LPCWSTR gMissShaderName         = L"MyMissShader";
+static LPCWSTR gClosestHitShaderName   = L"MyClosestHitShader";
+static LPCWSTR gIntersectionShaderName = L"MyIntersectionShader";
 
+void CreateSphereBuffer(DxRenderer* pRenderer, uint32_t* pNumSpheres, ID3D12Resource** ppBuffer);
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
+void CreateLocalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
 void CreateRayTracingStateObject(
     DxRenderer*          pRenderer,
     ID3D12RootSignature* pGlobalRootSig,
+    ID3D12RootSignature* pLocalRootSig,
     size_t               shadeBinarySize,
     const void*          pShaderBinary,
     ID3D12StateObject**  ppStateObject);
@@ -46,23 +275,14 @@ void CreateShaderRecordTables(
     ID3D12Resource**   ppRayGenSRT,
     ID3D12Resource**   ppMissSRT,
     ID3D12Resource**   ppHitGroupSRT);
-void CreateGeometry(
-    DxRenderer*      pRenderer,
-    uint32_t*        pIndexCount,
-    ID3D12Resource** ppIndexBuffer,
-    uint32_t*        pVertexCount,
-    ID3D12Resource** ppPositionBuffer,
-    ID3D12Resource** ppNormalBuffer);
 void CreateBLAS(
     DxRenderer*      pRenderer,
-    uint32_t         indexCount,
-    ID3D12Resource*  pIndexBuffer,
-    uint32_t         vertexCount,
-    ID3D12Resource*  pPositionBuffer,
+    uint32_t         numSpheres,
+    ID3D12Resource*  pSphereBuffer,
     ID3D12Resource** ppBLAS);
 void CreateTLAS(DxRenderer* pRenderer, ID3D12Resource* pBLAS, ID3D12Resource** ppTLAS);
 void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer);
-void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource** ppConstantBuffer);
+void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource* pRayGenSRT, ID3D12Resource** ppConstantBuffer);
 void CreateDescriptorHeap(DxRenderer* pRenderer, ID3D12DescriptorHeap** ppHeap);
 
 // =============================================================================
@@ -89,22 +309,48 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Compile shaders
     // *************************************************************************
-    std::vector<char> dxil;
+    ComPtr<IDxcBlob> shaderBinary;
     {
-        auto source = LoadString("projects/021_raytracing_triangles/shaders.hlsl");
-        assert((!source.empty()) && "no shader source!");
+        ComPtr<IDxcLibrary> dxcLibrary;
+        CHECK_CALL(DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&dxcLibrary)));
 
-        std::string errorMsg;
-        HRESULT     hr = CompileHLSL(source, "", "lib_6_3", &dxil, &errorMsg);
-        if (FAILED(hr)) {
+        ComPtr<IDxcCompiler3> dxcCompiler;
+        CHECK_CALL(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxcCompiler)));
+
+        DxcBuffer source = {};
+        source.Ptr       = gRayTracingShaders;
+        source.Size      = strlen(gRayTracingShaders);
+
+        LPCWSTR args[2] = {L"-T", L"lib_6_3"};
+
+        ComPtr<IDxcResult> result;
+        CHECK_CALL(dxcCompiler->Compile(
+            &source,
+            args,
+            ARRAYSIZE(args),
+            nullptr,
+            IID_PPV_ARGS(&result)));
+
+        ComPtr<IDxcBlob> errors;
+        CHECK_CALL(result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errors), nullptr));
+        if (errors && (errors->GetBufferSize() > 0)) {
+            std::string       errorMsg = std::string(reinterpret_cast<const char*>(errors->GetBufferPointer()), errors->GetBufferSize());
             std::stringstream ss;
             ss << "\n"
-               << "Shader compiler error (raytracing): " << errorMsg << "\n";
+               << "Shader compiler error: " << errorMsg << "\n";
             GREX_LOG_ERROR(ss.str().c_str());
-            assert(false);
             return EXIT_FAILURE;
         }
+
+        CHECK_CALL(result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shaderBinary), nullptr));
     }
+
+    // *************************************************************************
+    // Sphere buffer
+    // *************************************************************************
+    uint32_t               numSpheres = 0;
+    ComPtr<ID3D12Resource> sphereBuffer;
+    CreateSphereBuffer(renderer.get(), &numSpheres, &sphereBuffer);
 
     // *************************************************************************
     // Global root signature
@@ -117,14 +363,25 @@ int main(int argc, char** argv)
     CreateGlobalRootSig(renderer.get(), &globalRootSig);
 
     // *************************************************************************
+    // Local root signature
+    //
+    // This is a root signature that enables a shader to have unique arguments
+    // that come from shader tables.
+    //
+    // *************************************************************************
+    ComPtr<ID3D12RootSignature> localRootSig;
+    CreateLocalRootSig(renderer.get(), &localRootSig);
+
+    // *************************************************************************
     // Ray tracing pipeline state object
     // *************************************************************************
     ComPtr<ID3D12StateObject> stateObject;
     CreateRayTracingStateObject(
         renderer.get(),
         globalRootSig.Get(),
-        dxil.size(),
-        dxil.data(),
+        localRootSig.Get(),
+        shaderBinary->GetBufferSize(),
+        shaderBinary->GetBufferPointer(),
         &stateObject);
 
     // *************************************************************************
@@ -141,38 +398,16 @@ int main(int argc, char** argv)
         &hitgSRT);
 
     // *************************************************************************
-    // Create geometry
-    // *************************************************************************
-    uint32_t               indexCount  = 0;
-    uint32_t               vertexCount = 0;
-    ComPtr<ID3D12Resource> indexBuffer;
-    ComPtr<ID3D12Resource> positionBuffer;
-    ComPtr<ID3D12Resource> normalBuffer;
-    CreateGeometry(
-        renderer.get(),
-        &indexCount,
-        &indexBuffer,
-        &vertexCount,
-        &positionBuffer,
-        &normalBuffer);
-
-    // *************************************************************************
     // Bottom level acceleration structure
     // *************************************************************************
-    ComPtr<ID3D12Resource> BLAS;
-    CreateBLAS(
-        renderer.get(),
-        indexCount,
-        indexBuffer.Get(),
-        vertexCount,
-        positionBuffer.Get(),
-        &BLAS);
+    ComPtr<ID3D12Resource> blasBuffer;
+    CreateBLAS(renderer.get(), numSpheres, sphereBuffer.Get(), &blasBuffer);
 
     // *************************************************************************
     // Top level acceleration structure
     // *************************************************************************
-    ComPtr<ID3D12Resource> TLAS;
-    CreateTLAS(renderer.get(), BLAS.Get(), &TLAS);
+    ComPtr<ID3D12Resource> tlasBuffer;
+    CreateTLAS(renderer.get(), blasBuffer.Get(), &tlasBuffer);
 
     // *************************************************************************
     // Output texture
@@ -184,7 +419,25 @@ int main(int argc, char** argv)
     // Constant buffer
     // *************************************************************************
     ComPtr<ID3D12Resource> constantBuffer;
-    CreateConstantBuffer(renderer.get(), &constantBuffer);
+    CreateConstantBuffer(renderer.get(), rgenSRT.Get(), &constantBuffer);
+
+    // Update local root signature descriptor
+    //
+    // NOTE: Descriptors for local root signatures are written directly
+    //       into the shader record table for the shader that it
+    //       corresponds to.
+    //
+    {
+        auto va = sphereBuffer->GetGPUVirtualAddress();
+
+        char* pData = nullptr;
+        CHECK_CALL(hitgSRT->Map(0, nullptr, reinterpret_cast<void**>(&pData)));
+
+        size_t offset = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+        memcpy(pData + offset, &va, 8);
+
+        hitgSRT->Unmap(0, nullptr);
+    }
 
     // *************************************************************************
     // Descriptor heaps
@@ -206,7 +459,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "021_raytracing_triangles_d3d12");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "004_basic_reflection_d3d12");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -255,17 +508,11 @@ int main(int argc, char** argv)
             commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
 
             // Acceleration structure (t0)
-            commandList->SetComputeRootShaderResourceView(0, TLAS->GetGPUVirtualAddress());
+            commandList->SetComputeRootShaderResourceView(0, tlasBuffer->GetGPUVirtualAddress());
             // Output texture (u1)
             commandList->SetComputeRootDescriptorTable(1, descriptorHeap->GetGPUDescriptorHandleForHeapStart());
             // Constant buffer (b2)
             commandList->SetComputeRootConstantBufferView(2, constantBuffer->GetGPUVirtualAddress());
-            // Index buffer (t3)
-            commandList->SetComputeRootShaderResourceView(3, indexBuffer->GetGPUVirtualAddress());
-            // Position buffer (t4)
-            commandList->SetComputeRootShaderResourceView(4, positionBuffer->GetGPUVirtualAddress());
-            // Normal buffer (t5)
-            commandList->SetComputeRootShaderResourceView(5, normalBuffer->GetGPUVirtualAddress());
 
             commandList->SetPipelineState1(stateObject.Get());
 
@@ -277,7 +524,7 @@ int main(int argc, char** argv)
             dispatchDesc.MissShaderTable.StrideInBytes          = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
             dispatchDesc.HitGroupTable.StartAddress             = hitgSRT->GetGPUVirtualAddress();
             dispatchDesc.HitGroupTable.SizeInBytes              = hitgSRT->GetDesc().Width;
-            dispatchDesc.HitGroupTable.StrideInBytes            = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
+            dispatchDesc.HitGroupTable.StrideInBytes            = Align<UINT64>(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + 8, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
             dispatchDesc.Width                                  = gWindowWidth;
             dispatchDesc.Height                                 = gWindowHeight;
             dispatchDesc.Depth                                  = 1;
@@ -339,6 +586,37 @@ int main(int argc, char** argv)
     return 0;
 }
 
+void CreateSphereBuffer(DxRenderer* pRenderer, uint32_t* pNumSpheres, ID3D12Resource** ppBuffer)
+{
+    std::vector<SphereFlake> spheres;
+
+    SphereFlake sphere = {};
+
+    // Ground plane sphere
+    float groundSize = 1000.0f;
+    sphere.aabbMin   = (groundSize * vec3(-1, -1, -1)) - vec3(0, groundSize, 0);
+    sphere.aabbMax   = (groundSize * vec3(1, 1, 1)) - vec3(0, groundSize, 0);
+    spheres.push_back(sphere);
+
+    // Initial sphere
+    float radius   = 1;
+    sphere.aabbMin = (radius * vec3(-1, -1, -1)) + vec3(0, radius, 0);
+    sphere.aabbMax = (radius * vec3(1, 1, 1)) + vec3(0, radius, 0);
+    spheres.push_back(sphere);
+
+    GenerateSphereFlake(0, 5, radius / 3.0f, radius, vec3(0, radius, 0), vec3(0, 1, 0), spheres);
+
+    *pNumSpheres = CountU32(spheres);
+
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(spheres),
+        DataPtr(spheres),
+        ppBuffer));
+
+    GREX_LOG_INFO("Num spheres: " << *pNumSpheres);
+}
+
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 {
     D3D12_DESCRIPTOR_RANGE range            = {};
@@ -348,7 +626,7 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     range.RegisterSpace                     = 0;
     range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[6];
+    D3D12_ROOT_PARAMETER rootParameters[3];
     // Accleration structure (t0)
     rootParameters[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
     rootParameters[0].Descriptor.ShaderRegister = 0;
@@ -364,25 +642,34 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     rootParameters[2].Descriptor.ShaderRegister = 2;
     rootParameters[2].Descriptor.RegisterSpace  = 0;
     rootParameters[2].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // Index buffer (t3)
-    rootParameters[3].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[3].Descriptor.ShaderRegister = 3;
-    rootParameters[3].Descriptor.RegisterSpace  = 0;
-    rootParameters[3].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // Position buffer (t4)
-    rootParameters[4].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[4].Descriptor.ShaderRegister = 4;
-    rootParameters[4].Descriptor.RegisterSpace  = 0;
-    rootParameters[4].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // Normal buffer (t5)
-    rootParameters[5].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[5].Descriptor.ShaderRegister = 5;
-    rootParameters[5].Descriptor.RegisterSpace  = 0;
-    rootParameters[5].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
 
     D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-    rootSigDesc.NumParameters             = 6;
+    rootSigDesc.NumParameters             = 3;
     rootSigDesc.pParameters               = rootParameters;
+
+    ComPtr<ID3DBlob> blob;
+    ComPtr<ID3DBlob> error;
+    CHECK_CALL(D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error));
+    CHECK_CALL(pRenderer->Device->CreateRootSignature(
+        0,                         // nodeMask
+        blob->GetBufferPointer(),  // pBloblWithRootSignature
+        blob->GetBufferSize(),     // blobLengthInBytes
+        IID_PPV_ARGS(ppRootSig))); // riid, ppvRootSignature
+}
+
+void CreateLocalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
+{
+    // Sphere buffer (t3)
+    D3D12_ROOT_PARAMETER rootParameter;
+    rootParameter.ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    rootParameter.Descriptor.ShaderRegister = 3;
+    rootParameter.Descriptor.RegisterSpace  = 0;
+    rootParameter.ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+
+    D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
+    rootSigDesc.NumParameters             = 1;
+    rootSigDesc.pParameters               = &rootParameter;
+    rootSigDesc.Flags                     = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
 
     ComPtr<ID3DBlob> blob;
     ComPtr<ID3DBlob> error;
@@ -397,6 +684,7 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 void CreateRayTracingStateObject(
     DxRenderer*          pRenderer,
     ID3D12RootSignature* pGlobalRootSig,
+    ID3D12RootSignature* pLocalRootSig,
     size_t               shadeBinarySize,
     const void*          pShaderBinary,
     ID3D12StateObject**  ppStateObject)
@@ -404,10 +692,12 @@ void CreateRayTracingStateObject(
     enum
     {
         DXIL_LIBRARY_INDEX       = 0,
-        TRIANGLE_HIT_GROUP_INDEX = 1,
+        AABB_HIT_GROUP_INDEX     = 1,
         SHADER_CONFIG_INDEX      = 2,
-        GLOBAL_ROOT_SIG_INDEX    = 3,
-        PIPELINE_CONFIG_INDEX    = 4,
+        LOCAL_ROOT_SIG_INDEX     = 3,
+        SHADER_ASSOCIATION_INDEX = 4,
+        GLOBAL_ROOT_SIG_INDEX    = 5,
+        PIPELINE_CONFIG_INDEX    = 6,
         SUBOBJECT_COUNT,
     };
 
@@ -446,10 +736,16 @@ void CreateRayTracingStateObject(
     chitExport.ExportToRename    = nullptr;
     chitExport.Flags             = D3D12_EXPORT_FLAG_NONE;
 
+    D3D12_EXPORT_DESC rintExport = {};
+    rintExport.Name              = gIntersectionShaderName;
+    rintExport.ExportToRename    = nullptr;
+    rintExport.Flags             = D3D12_EXPORT_FLAG_NONE;
+
     std::vector<D3D12_EXPORT_DESC> exports;
     exports.push_back(rgenExport);
     exports.push_back(missExport);
     exports.push_back(chitExport);
+    exports.push_back(rintExport);
 
     D3D12_DXIL_LIBRARY_DESC dxilLibraryDesc = {};
     dxilLibraryDesc.DXILLibrary             = {pShaderBinary, shadeBinarySize};
@@ -461,7 +757,7 @@ void CreateRayTracingStateObject(
     pSubobject->pDesc                 = &dxilLibraryDesc;
 
     // ---------------------------------------------------------------------
-    // Triangle hit group
+    // AABB hit group
     //
     // A hit group specifies closest hit, any hit and intersection shaders
     // to be executed when a ray intersects the geometry's triangle/AABB.
@@ -469,12 +765,13 @@ void CreateRayTracingStateObject(
     // shader, so others are not set.
     //
     // ---------------------------------------------------------------------
-    D3D12_HIT_GROUP_DESC hitGroupDesc   = {};
-    hitGroupDesc.HitGroupExport         = gHitGroupName;
-    hitGroupDesc.Type                   = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-    hitGroupDesc.ClosestHitShaderImport = gClosestHitShaderName;
+    D3D12_HIT_GROUP_DESC hitGroupDesc     = {};
+    hitGroupDesc.HitGroupExport           = gHitGroupName;
+    hitGroupDesc.Type                     = D3D12_HIT_GROUP_TYPE_PROCEDURAL_PRIMITIVE;
+    hitGroupDesc.ClosestHitShaderImport   = gClosestHitShaderName;
+    hitGroupDesc.IntersectionShaderImport = gIntersectionShaderName;
 
-    pSubobject        = &subobjects[TRIANGLE_HIT_GROUP_INDEX];
+    pSubobject        = &subobjects[AABB_HIT_GROUP_INDEX];
     pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
     pSubobject->pDesc = &hitGroupDesc;
 
@@ -486,12 +783,37 @@ void CreateRayTracingStateObject(
     //
     // ---------------------------------------------------------------------
     D3D12_RAYTRACING_SHADER_CONFIG shaderConfig = {};
-    shaderConfig.MaxPayloadSizeInBytes          = 4 * sizeof(float); // float4 color
-    shaderConfig.MaxAttributeSizeInBytes        = 2 * sizeof(float); // float2 barycentrics
+    shaderConfig.MaxPayloadSizeInBytes          = 4 * sizeof(float) + 1 * sizeof(uint32_t); // float4 color, uint recursionDepth
+    shaderConfig.MaxAttributeSizeInBytes        = 3 * sizeof(float);                        // float3 position
 
     pSubobject        = &subobjects[SHADER_CONFIG_INDEX];
     pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG;
     pSubobject->pDesc = &shaderConfig;
+
+    // ---------------------------------------------------------------------
+    // Local root signature
+    //
+    // This is a root signature that enables a shader to have unique
+    // arguments that come from shader tables.
+    //
+    // ---------------------------------------------------------------------
+    pSubobject        = &subobjects[LOCAL_ROOT_SIG_INDEX];
+    pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
+    pSubobject->pDesc = &pLocalRootSig;
+
+    // ---------------------------------------------------------------------
+    // Shader association
+    // ---------------------------------------------------------------------
+    LPCWSTR shaderAssociationExports[1] = {gHitGroupName};
+
+    D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION rootSigAssociation = {};
+    rootSigAssociation.pSubobjectToAssociate                  = &subobjects[LOCAL_ROOT_SIG_INDEX];
+    rootSigAssociation.NumExports                             = 1;
+    rootSigAssociation.pExports                               = shaderAssociationExports;
+
+    pSubobject        = &subobjects[SHADER_ASSOCIATION_INDEX];
+    pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
+    pSubobject->pDesc = &rootSigAssociation;
 
     // ---------------------------------------------------------------------
     // Global root signature
@@ -515,7 +837,7 @@ void CreateRayTracingStateObject(
     //
     // ---------------------------------------------------------------------
     D3D12_RAYTRACING_PIPELINE_CONFIG pipelineConfigDesc = {};
-    pipelineConfigDesc.MaxTraceRecursionDepth           = 1;
+    pipelineConfigDesc.MaxTraceRecursionDepth           = 5;
 
     pSubobject        = &subobjects[PIPELINE_CONFIG_INDEX];
     pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
@@ -610,6 +932,18 @@ void CreateShaderRecordTables(
 
     // Hit group
     {
+        //
+        // This hit group's shader record size is 64 since we need space after
+        // the shader identifier to store the virtual address for the sphere buffer.
+        //
+        // NOTE: A single identifier is used for all the shaders in the hit group.
+        //       This is why there is not separate shader records for the closest hit
+        //       shader and the intersection shader.
+        //
+
+        shaderRecordSize = Align<UINT32>(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + 8, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
+        desc.Width       = shaderRecordSize;
+
         CHECK_CALL(pRenderer->Device->CreateCommittedResource(
             &heapProperties,                   // pHeapProperties
             D3D12_HEAP_FLAG_NONE,              // HeapFlags
@@ -618,67 +952,31 @@ void CreateShaderRecordTables(
             nullptr,                           // pOptimizedClearValue
             IID_PPV_ARGS(ppHitGroupSRT)));     // riidResource, ppvResource
 
-        // Copy shader identifier
+        // Copy shader identifiers
+        char* pHitGroup = static_cast<char*>(pHitGroupShaderIdentifier);
         {
             char* pData;
             CHECK_CALL((*ppHitGroupSRT)->Map(0, nullptr, reinterpret_cast<void**>(&pData)));
 
-            memcpy(pData, pHitGroupShaderIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+            memcpy(pData, pHitGroup, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
 
             (*ppHitGroupSRT)->Unmap(0, nullptr);
         }
     }
 }
-void CreateGeometry(
-    DxRenderer*      pRenderer,
-    uint32_t*        pIndexCount,
-    ID3D12Resource** ppIndexBuffer,
-    uint32_t*        pVertexCount,
-    ID3D12Resource** ppPositionBuffer,
-    ID3D12Resource** ppNormalBuffer)
-{
-    TriMesh mesh = TriMesh::Sphere(1.0f, 16, 8, {.enableNormals = true});
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTriangles()),
-        DataPtr(mesh.GetTriangles()),
-        ppIndexBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetPositions()),
-        DataPtr(mesh.GetPositions()),
-        ppPositionBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetNormals()),
-        DataPtr(mesh.GetNormals()),
-        ppNormalBuffer));
-
-    *pIndexCount  = 3 * mesh.GetNumTriangles();
-    *pVertexCount = mesh.GetNumVertices();
-}
 
 void CreateBLAS(
     DxRenderer*      pRenderer,
-    uint32_t         indexCount,
-    ID3D12Resource*  pIndexBuffer,
-    uint32_t         vertexCount,
-    ID3D12Resource*  pPositionBuffer,
+    uint32_t         numSpheres,
+    ID3D12Resource*  pSphereBuffer,
     ID3D12Resource** ppBLAS)
 {
-    D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc       = {};
-    geometryDesc.Type                                 = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-    geometryDesc.Triangles.IndexFormat                = DXGI_FORMAT_R32_UINT;
-    geometryDesc.Triangles.IndexCount                 = indexCount;
-    geometryDesc.Triangles.IndexBuffer                = pIndexBuffer->GetGPUVirtualAddress();
-    geometryDesc.Triangles.VertexFormat               = DXGI_FORMAT_R32G32B32_FLOAT;
-    geometryDesc.Triangles.VertexCount                = vertexCount;
-    geometryDesc.Triangles.VertexBuffer.StartAddress  = pPositionBuffer->GetGPUVirtualAddress();
-    geometryDesc.Triangles.VertexBuffer.StrideInBytes = 12;
-    geometryDesc.Flags                                = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+    D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc = {};
+    geometryDesc.Type                           = D3D12_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS;
+    geometryDesc.AABBs.AABBCount                = numSpheres;
+    geometryDesc.AABBs.AABBs.StartAddress       = pSphereBuffer->GetGPUVirtualAddress();
+    geometryDesc.AABBs.AABBs.StrideInBytes      = sizeof(SphereFlake);
+    geometryDesc.Flags                          = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
 
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
     //
@@ -849,30 +1147,33 @@ void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)
         IID_PPV_ARGS(ppBuffer)));              // riidResource, ppvResource
 }
 
-void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource** ppConstantBuffer)
+void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource* pRayGenSRT, ID3D12Resource** ppConstantBuffer)
 {
     struct Camera
     {
         glm::mat4 viewInverse;
         glm::mat4 projInverse;
+        vec3      eyePosition;
     };
 
     Camera camera      = {};
+    camera.eyePosition = vec3(0, 2.5f, 3.5f);
+
     camera.projInverse = glm::inverse(glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 512.0f));
-    camera.viewInverse = glm::inverse(glm::translate(glm::mat4(1), glm::vec3(0.0f, 0.0f, -2.5f)));
+    auto mat           = glm::lookAt(camera.eyePosition, vec3(0, 1, 0), vec3(0, 1, 0));
+    camera.viewInverse = glm::inverse(mat);
 
     CHECK_CALL(CreateBuffer(
-        pRenderer,          // pRenderer
-        sizeof(Camera),     // srcSize
-        &camera,            // pSrcData
-        256,                // minAlignment
-        ppConstantBuffer)); // ppResource
+        pRenderer,
+        sizeof(Camera),
+        &camera,
+        ppConstantBuffer));
 }
 
 void CreateDescriptorHeap(DxRenderer* pRenderer, ID3D12DescriptorHeap** ppHeap)
 {
     D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-    desc.NumDescriptors             = 1;
+    desc.NumDescriptors             = 1; // Output texture (u1)
     desc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     desc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 

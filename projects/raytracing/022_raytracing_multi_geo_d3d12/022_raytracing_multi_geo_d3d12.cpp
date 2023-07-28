@@ -33,6 +33,15 @@ static LPCWSTR gRayGenShaderName     = L"MyRaygenShader";
 static LPCWSTR gMissShaderName       = L"MyMissShader";
 static LPCWSTR gClosestHitShaderName = L"MyClosestHitShader";
 
+struct Geometry
+{
+    uint32_t               indexCount;
+    ComPtr<ID3D12Resource> indexBuffer;
+    uint32_t               vertexCount;
+    ComPtr<ID3D12Resource> positionBuffer;
+    ComPtr<ID3D12Resource> normalBuffer;
+};
+
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
 void CreateRayTracingStateObject(
     DxRenderer*          pRenderer,
@@ -46,23 +55,16 @@ void CreateShaderRecordTables(
     ID3D12Resource**   ppRayGenSRT,
     ID3D12Resource**   ppMissSRT,
     ID3D12Resource**   ppHitGroupSRT);
-void CreateGeometry(
-    DxRenderer*      pRenderer,
-    uint32_t*        pIndexCount,
-    ID3D12Resource** ppIndexBuffer,
-    uint32_t*        pVertexCount,
-    ID3D12Resource** ppPositionBuffer,
-    ID3D12Resource** ppNormalBuffer);
+void CreateGeometries(
+    DxRenderer*            pRenderer,
+    std::vector<Geometry>& outGeometries);
 void CreateBLAS(
-    DxRenderer*      pRenderer,
-    uint32_t         indexCount,
-    ID3D12Resource*  pIndexBuffer,
-    uint32_t         vertexCount,
-    ID3D12Resource*  pPositionBuffer,
-    ID3D12Resource** ppBLAS);
+    DxRenderer*                  pRenderer,
+    const std::vector<Geometry>& geometries,
+    ID3D12Resource**             ppBLAS);
 void CreateTLAS(DxRenderer* pRenderer, ID3D12Resource* pBLAS, ID3D12Resource** ppTLAS);
 void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer);
-void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource** ppConstantBuffer);
+void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource* pRayGenSRT, ID3D12Resource** ppConstantBuffer);
 void CreateDescriptorHeap(DxRenderer* pRenderer, ID3D12DescriptorHeap** ppHeap);
 
 // =============================================================================
@@ -91,11 +93,11 @@ int main(int argc, char** argv)
     // *************************************************************************
     std::vector<char> dxil;
     {
-        auto source = LoadString("projects/021_raytracing_triangles/shaders.hlsl");
+        auto source = LoadString("projects/022_raytracing_multi_geo/shaders.hlsl");
         assert((!source.empty()) && "no shader source!");
 
         std::string errorMsg;
-        HRESULT     hr = CompileHLSL(source, "", "lib_6_3", &dxil, &errorMsg);
+        HRESULT     hr = CompileHLSL(source, "", "lib_6_5", &dxil, &errorMsg);
         if (FAILED(hr)) {
             std::stringstream ss;
             ss << "\n"
@@ -143,18 +145,10 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Create geometry
     // *************************************************************************
-    uint32_t               indexCount  = 0;
-    uint32_t               vertexCount = 0;
-    ComPtr<ID3D12Resource> indexBuffer;
-    ComPtr<ID3D12Resource> positionBuffer;
-    ComPtr<ID3D12Resource> normalBuffer;
-    CreateGeometry(
+    std::vector<Geometry> geometries;
+    CreateGeometries(
         renderer.get(),
-        &indexCount,
-        &indexBuffer,
-        &vertexCount,
-        &positionBuffer,
-        &normalBuffer);
+        geometries);
 
     // *************************************************************************
     // Bottom level acceleration structure
@@ -162,10 +156,7 @@ int main(int argc, char** argv)
     ComPtr<ID3D12Resource> BLAS;
     CreateBLAS(
         renderer.get(),
-        indexCount,
-        indexBuffer.Get(),
-        vertexCount,
-        positionBuffer.Get(),
+        geometries,
         &BLAS);
 
     // *************************************************************************
@@ -181,10 +172,23 @@ int main(int argc, char** argv)
     CreateOutputTexture(renderer.get(), &outputTexture);
 
     // *************************************************************************
+    // Material buffer
+    // *************************************************************************
+    ComPtr<ID3D12Resource> materialBuffer;
+    {
+        std::vector<glm::vec3> materials = {
+            glm::vec3(1, 0, 0), // Red cube
+            glm::vec3(0, 1, 0), // Green sphere
+            glm::vec3(0, 0, 1), // Blue cone
+        };
+        CreateBuffer(renderer.get(), SizeInBytes(materials), DataPtr(materials), &materialBuffer);
+    }
+
+    // *************************************************************************
     // Constant buffer
     // *************************************************************************
     ComPtr<ID3D12Resource> constantBuffer;
-    CreateConstantBuffer(renderer.get(), &constantBuffer);
+    CreateConstantBuffer(renderer.get(), rgenSRT.Get(), &constantBuffer);
 
     // *************************************************************************
     // Descriptor heaps
@@ -201,12 +205,29 @@ int main(int argc, char** argv)
 
         // Output texture (u1)
         renderer->Device->CreateUnorderedAccessView(outputTexture.Get(), nullptr, &uavDesc, descriptor);
+        descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+        // Index buffers
+        for (uint32_t i = 0; i < geometries.size(); ++i) {
+            CreateDescriptoBufferSRV(renderer.get(), 0, geometries[i].indexCount / 3, 12, geometries[i].indexBuffer.Get(), descriptor);
+            descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        }
+        // Position buffers
+        for (uint32_t i = 0; i < geometries.size(); ++i) {
+            CreateDescriptoBufferSRV(renderer.get(), 0, geometries[i].vertexCount, 4, geometries[i].positionBuffer.Get(), descriptor);
+            descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        }
+        // Normal buffers
+        for (uint32_t i = 0; i < geometries.size(); ++i) {
+            CreateDescriptoBufferSRV(renderer.get(), 0, geometries[i].vertexCount, 4, geometries[i].normalBuffer.Get(), descriptor);
+            descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        }
     }
 
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "021_raytracing_triangles_d3d12");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "022_raytracing_multi_geo_d3d12");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -260,12 +281,14 @@ int main(int argc, char** argv)
             commandList->SetComputeRootDescriptorTable(1, descriptorHeap->GetGPUDescriptorHandleForHeapStart());
             // Constant buffer (b2)
             commandList->SetComputeRootConstantBufferView(2, constantBuffer->GetGPUVirtualAddress());
-            // Index buffer (t3)
-            commandList->SetComputeRootShaderResourceView(3, indexBuffer->GetGPUVirtualAddress());
-            // Position buffer (t4)
-            commandList->SetComputeRootShaderResourceView(4, positionBuffer->GetGPUVirtualAddress());
-            // Normal buffer (t5)
-            commandList->SetComputeRootShaderResourceView(5, normalBuffer->GetGPUVirtualAddress());
+            // Materials (t3)
+            commandList->SetComputeRootShaderResourceView(3, materialBuffer->GetGPUVirtualAddress());
+            // Index buffer (t4)
+            // Position buffer (t7)
+            // Normal buffer (t10)
+            D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
+            descriptorTable.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            commandList->SetComputeRootDescriptorTable(4, descriptorTable);
 
             commandList->SetPipelineState1(stateObject.Get());
 
@@ -348,7 +371,14 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     range.RegisterSpace                     = 0;
     range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[6];
+    D3D12_DESCRIPTOR_RANGE rangeGeometryBuffers            = {};
+    rangeGeometryBuffers.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    rangeGeometryBuffers.NumDescriptors                    = 9;
+    rangeGeometryBuffers.BaseShaderRegister                = 4;
+    rangeGeometryBuffers.RegisterSpace                     = 0;
+    rangeGeometryBuffers.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    D3D12_ROOT_PARAMETER rootParameters[5];
     // Accleration structure (t0)
     rootParameters[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
     rootParameters[0].Descriptor.ShaderRegister = 0;
@@ -364,29 +394,35 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     rootParameters[2].Descriptor.ShaderRegister = 2;
     rootParameters[2].Descriptor.RegisterSpace  = 0;
     rootParameters[2].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // Index buffer (t3)
+    // Material colors (t3)
     rootParameters[3].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
     rootParameters[3].Descriptor.ShaderRegister = 3;
     rootParameters[3].Descriptor.RegisterSpace  = 0;
     rootParameters[3].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // Position buffer (t4)
-    rootParameters[4].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[4].Descriptor.ShaderRegister = 4;
-    rootParameters[4].Descriptor.RegisterSpace  = 0;
-    rootParameters[4].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // Normal buffer (t5)
-    rootParameters[5].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[5].Descriptor.ShaderRegister = 5;
-    rootParameters[5].Descriptor.RegisterSpace  = 0;
-    rootParameters[5].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+    // Index buffers (t4)
+    // Position buffers (t7)
+    // Normal buffers (t10)
+    rootParameters[4].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[4].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[4].DescriptorTable.pDescriptorRanges   = &rangeGeometryBuffers;
+    rootParameters[4].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
 
     D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-    rootSigDesc.NumParameters             = 6;
+    rootSigDesc.NumParameters             = 5;
     rootSigDesc.pParameters               = rootParameters;
 
     ComPtr<ID3DBlob> blob;
     ComPtr<ID3DBlob> error;
-    CHECK_CALL(D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error));
+    HRESULT          hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error);
+    if (FAILED(hr)) {
+        std::string errorMsg = std::string(reinterpret_cast<const char*>(error->GetBufferPointer()), error->GetBufferSize());
+
+        std::stringstream ss;
+        ss << "\n"
+           << "D3D12SerializeRootSignature failed: " << errorMsg << "\n";
+        GREX_LOG_ERROR(ss.str().c_str());
+        assert(false);
+    }
     CHECK_CALL(pRenderer->Device->CreateRootSignature(
         0,                         // nodeMask
         blob->GetBufferPointer(),  // pBloblWithRootSignature
@@ -629,64 +665,150 @@ void CreateShaderRecordTables(
         }
     }
 }
-void CreateGeometry(
-    DxRenderer*      pRenderer,
-    uint32_t*        pIndexCount,
-    ID3D12Resource** ppIndexBuffer,
-    uint32_t*        pVertexCount,
-    ID3D12Resource** ppPositionBuffer,
-    ID3D12Resource** ppNormalBuffer)
+void CreateGeometries(
+    DxRenderer*            pRenderer,
+    std::vector<Geometry>& outGeometries)
 {
-    TriMesh mesh = TriMesh::Sphere(1.0f, 16, 8, {.enableNormals = true});
+    // Cube
+    {
+        TriMesh  mesh = TriMesh::Cube(glm::vec3(1), false, {.enableNormals = true});
+        Geometry geo  = {};
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTriangles()),
-        DataPtr(mesh.GetTriangles()),
-        ppIndexBuffer));
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTriangles()),
+            DataPtr(mesh.GetTriangles()),
+            &geo.indexBuffer));
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetPositions()),
-        DataPtr(mesh.GetPositions()),
-        ppPositionBuffer));
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetPositions()),
+            DataPtr(mesh.GetPositions()),
+            &geo.positionBuffer));
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetNormals()),
-        DataPtr(mesh.GetNormals()),
-        ppNormalBuffer));
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetNormals()),
+            DataPtr(mesh.GetNormals()),
+            &geo.normalBuffer));
 
-    *pIndexCount  = 3 * mesh.GetNumTriangles();
-    *pVertexCount = mesh.GetNumVertices();
+        geo.indexCount  = 3 * mesh.GetNumTriangles();
+        geo.vertexCount = mesh.GetNumVertices();
+
+        outGeometries.push_back(geo);
+    }
+
+    // Sphere
+    {
+        TriMesh  mesh = TriMesh::Sphere(0.5f, 16, 8, {.enableNormals = true});
+        Geometry geo  = {};
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTriangles()),
+            DataPtr(mesh.GetTriangles()),
+            &geo.indexBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetPositions()),
+            DataPtr(mesh.GetPositions()),
+            &geo.positionBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetNormals()),
+            DataPtr(mesh.GetNormals()),
+            &geo.normalBuffer));
+
+        geo.indexCount  = 3 * mesh.GetNumTriangles();
+        geo.vertexCount = mesh.GetNumVertices();
+
+        outGeometries.push_back(geo);
+    }
+
+    // Cone
+    {
+        TriMesh  mesh = TriMesh::Cone(1.0f, 0.5f, 16, {.enableNormals = true});
+        Geometry geo  = {};
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTriangles()),
+            DataPtr(mesh.GetTriangles()),
+            &geo.indexBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetPositions()),
+            DataPtr(mesh.GetPositions()),
+            &geo.positionBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetNormals()),
+            DataPtr(mesh.GetNormals()),
+            &geo.normalBuffer));
+
+        geo.indexCount  = 3 * mesh.GetNumTriangles();
+        geo.vertexCount = mesh.GetNumVertices();
+
+        outGeometries.push_back(geo);
+    }
 }
 
 void CreateBLAS(
-    DxRenderer*      pRenderer,
-    uint32_t         indexCount,
-    ID3D12Resource*  pIndexBuffer,
-    uint32_t         vertexCount,
-    ID3D12Resource*  pPositionBuffer,
-    ID3D12Resource** ppBLAS)
+    DxRenderer*                  pRenderer,
+    const std::vector<Geometry>& geometries,
+    ID3D12Resource**             ppBLAS)
 {
-    D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc       = {};
-    geometryDesc.Type                                 = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-    geometryDesc.Triangles.IndexFormat                = DXGI_FORMAT_R32_UINT;
-    geometryDesc.Triangles.IndexCount                 = indexCount;
-    geometryDesc.Triangles.IndexBuffer                = pIndexBuffer->GetGPUVirtualAddress();
-    geometryDesc.Triangles.VertexFormat               = DXGI_FORMAT_R32G32B32_FLOAT;
-    geometryDesc.Triangles.VertexCount                = vertexCount;
-    geometryDesc.Triangles.VertexBuffer.StartAddress  = pPositionBuffer->GetGPUVirtualAddress();
-    geometryDesc.Triangles.VertexBuffer.StrideInBytes = 12;
-    geometryDesc.Flags                                = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+    const size_t kTransform3x4Size = 12 * sizeof(float);
+
+    // clang-format off
+	float transformMatrices[9][4] = {
+        // Cube
+        {1.0f, 0.0f, 0.0f, -1.5f},
+        {0.0f, 1.0f, 0.0f,  0.0f},
+        {0.0f, 0.0f, 1.0f,  0.0f},
+        // Sphere
+        {1.0f, 0.0f, 0.0f, 0.0f},
+        {0.0f, 1.0f, 0.0f, 0.0f},
+        {0.0f, 0.0f, 1.0f, 0.0f},
+        // Cone
+        {1.0f, 0.0f, 0.0f, 1.5f},
+        {0.0f, 1.0f, 0.0f, -0.5f},
+        {0.0f, 0.0f, 1.0f, 0.0f},
+    };
+    // clang-format on
+
+    ComPtr<ID3D12Resource> transformBuffer;
+    CreateBuffer(pRenderer, 3 * kTransform3x4Size, transformMatrices, &transformBuffer);
+
+    std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometryDescs;
+    for (uint32_t i = 0; i < geometries.size(); ++i) {
+        D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc = {};
+
+        geometryDesc.Type                                 = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+        geometryDesc.Triangles.Transform3x4               = transformBuffer->GetGPUVirtualAddress() + i * kTransform3x4Size;
+        geometryDesc.Triangles.IndexFormat                = DXGI_FORMAT_R32_UINT;
+        geometryDesc.Triangles.IndexCount                 = geometries[i].indexCount;
+        geometryDesc.Triangles.IndexBuffer                = geometries[i].indexBuffer->GetGPUVirtualAddress();
+        geometryDesc.Triangles.VertexFormat               = DXGI_FORMAT_R32G32B32_FLOAT;
+        geometryDesc.Triangles.VertexCount                = geometries[i].vertexCount;
+        geometryDesc.Triangles.VertexBuffer.StartAddress  = geometries[i].positionBuffer->GetGPUVirtualAddress();
+        geometryDesc.Triangles.VertexBuffer.StrideInBytes = 12;
+        geometryDesc.Flags                                = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+
+        geometryDescs.push_back(geometryDesc);
+    }
 
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
     //
     inputs.Type           = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
     inputs.Flags          = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
     inputs.DescsLayout    = D3D12_ELEMENTS_LAYOUT_ARRAY;
-    inputs.NumDescs       = 1;
-    inputs.pGeometryDescs = &geometryDesc;
+    inputs.NumDescs       = CountU32(geometryDescs);
+    inputs.pGeometryDescs = DataPtr(geometryDescs);
 
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo = {};
     pRenderer->Device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &prebuildInfo);
@@ -849,7 +971,7 @@ void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)
         IID_PPV_ARGS(ppBuffer)));              // riidResource, ppvResource
 }
 
-void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource** ppConstantBuffer)
+void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource* pRayGenSRT, ID3D12Resource** ppConstantBuffer)
 {
     struct Camera
     {
@@ -859,7 +981,7 @@ void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource** ppConstantBuff
 
     Camera camera      = {};
     camera.projInverse = glm::inverse(glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 512.0f));
-    camera.viewInverse = glm::inverse(glm::translate(glm::mat4(1), glm::vec3(0.0f, 0.0f, -2.5f)));
+    camera.viewInverse = glm::inverse(glm::translate(glm::mat4(1), glm::vec3(0.0f, 0.0f, -3.0f)));
 
     CHECK_CALL(CreateBuffer(
         pRenderer,          // pRenderer
@@ -872,7 +994,7 @@ void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource** ppConstantBuff
 void CreateDescriptorHeap(DxRenderer* pRenderer, ID3D12DescriptorHeap** ppHeap)
 {
     D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-    desc.NumDescriptors             = 1;
+    desc.NumDescriptors             = 256;
     desc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     desc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 

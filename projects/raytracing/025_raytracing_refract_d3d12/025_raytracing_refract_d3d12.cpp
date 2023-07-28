@@ -6,6 +6,8 @@
 #include <glm/glm.hpp>
 #include <glm/matrix.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/transform.hpp>
+using namespace glm;
 
 #define CHECK_CALL(FN)                               \
     {                                                \
@@ -22,6 +24,13 @@
     }
 
 // =============================================================================
+// Macros, enums, and constants
+// =============================================================================
+const uint32_t kOutputResourcesOffset = 0;
+const uint32_t kGeoBuffersOffset      = 20;
+const uint32_t kIBLTextureOffset      = 3;
+
+// =============================================================================
 // Globals
 // =============================================================================
 static uint32_t gWindowWidth  = 1280;
@@ -32,6 +41,49 @@ static LPCWSTR gHitGroupName         = L"MyHitGroup";
 static LPCWSTR gRayGenShaderName     = L"MyRaygenShader";
 static LPCWSTR gMissShaderName       = L"MyMissShader";
 static LPCWSTR gClosestHitShaderName = L"MyClosestHitShader";
+
+static float gTargetAngle = 0.0f;
+static float gAngle       = 0.0f;
+
+struct Light
+{
+    vec3  Position;
+    vec3  Color;
+    float Intensity;
+};
+
+struct SceneParameters
+{
+    mat4  ViewInverseMatrix;
+    mat4  ProjectionInverseMatrix;
+    mat4  ViewProjectionMatrix;
+    vec3  EyePosition;
+    uint  NumLights;
+    Light Lights[8];
+};
+
+struct Geometry
+{
+    uint32_t               indexCount;
+    ComPtr<ID3D12Resource> indexBuffer;
+    uint32_t               vertexCount;
+    ComPtr<ID3D12Resource> positionBuffer;
+    ComPtr<ID3D12Resource> normalBuffer;
+};
+
+struct IBLTextures
+{
+    ComPtr<ID3D12Resource> irrTexture;
+    ComPtr<ID3D12Resource> envTexture;
+    uint32_t               envNumLevels;
+};
+
+struct MaterialParameters
+{
+    vec3  baseColor;
+    float roughness;
+    vec3  absorbColor;
+};
 
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
 void CreateRayTracingStateObject(
@@ -46,24 +98,53 @@ void CreateShaderRecordTables(
     ID3D12Resource**   ppRayGenSRT,
     ID3D12Resource**   ppMissSRT,
     ID3D12Resource**   ppHitGroupSRT);
-void CreateGeometry(
+void CreateGeometries(
+    DxRenderer* pRenderer,
+    Geometry&   outSphereGeometry,
+    Geometry&   outBoxGeometry);
+void CreateBLASes(
     DxRenderer*      pRenderer,
-    uint32_t*        pIndexCount,
-    ID3D12Resource** ppIndexBuffer,
-    uint32_t*        pVertexCount,
-    ID3D12Resource** ppPositionBuffer,
-    ID3D12Resource** ppNormalBuffer);
-void CreateBLAS(
-    DxRenderer*      pRenderer,
-    uint32_t         indexCount,
-    ID3D12Resource*  pIndexBuffer,
-    uint32_t         vertexCount,
-    ID3D12Resource*  pPositionBuffer,
-    ID3D12Resource** ppBLAS);
-void CreateTLAS(DxRenderer* pRenderer, ID3D12Resource* pBLAS, ID3D12Resource** ppTLAS);
+    const Geometry&  sphereGeometry,
+    const Geometry&  boxGeometry,
+    ID3D12Resource** ppSphereBLAS,
+    ID3D12Resource** ppBoxBLAS);
+void CreateTLAS(
+    DxRenderer*                      pRenderer,
+    ID3D12Resource*                  pSphereBLAS,
+    ID3D12Resource*                  pBoxBLAS,
+    ID3D12Resource**                 ppTLAS,
+    std::vector<MaterialParameters>& outMaterialParams);
 void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer);
-void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource** ppConstantBuffer);
+void CreateAccumTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer);
+void CreateIBLTextures(
+    DxRenderer*  pRenderer,
+    IBLTextures& outIBLTextures);
 void CreateDescriptorHeap(DxRenderer* pRenderer, ID3D12DescriptorHeap** ppHeap);
+void WriteDescriptors(
+    DxRenderer*           pRenderer,
+    ID3D12DescriptorHeap* pDescriptorHeap,
+    ID3D12Resource*       pOutputTexture,
+    ID3D12Resource*       pAccumTexture,
+    ID3D12Resource*       pRayGenSamplesBuffer,
+    const Geometry&       sphereGeometry,
+    const Geometry&       boxGeometry,
+    const IBLTextures&    iblTextures);
+
+void MouseMove(int x, int y, int buttons)
+{
+    static int prevX = x;
+    static int prevY = y;
+
+    if (buttons & MOUSE_BUTTON_LEFT) {
+        int dx = x - prevX;
+        int dy = y - prevY;
+
+        gTargetAngle += 0.25f * dx;
+    }
+
+    prevX = x;
+    prevY = y;
+}
 
 // =============================================================================
 // main()
@@ -89,13 +170,13 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Compile shaders
     // *************************************************************************
-    std::vector<char> dxil;
+    std::vector<char> rayTraceDxil;
     {
-        auto source = LoadString("projects/021_raytracing_triangles/shaders.hlsl");
+        auto source = LoadString("projects/025_raytracing_refract/shaders.hlsl");
         assert((!source.empty()) && "no shader source!");
 
         std::string errorMsg;
-        HRESULT     hr = CompileHLSL(source, "", "lib_6_3", &dxil, &errorMsg);
+        HRESULT     hr = CompileHLSL(source, "", "lib_6_5", &rayTraceDxil, &errorMsg);
         if (FAILED(hr)) {
             std::stringstream ss;
             ss << "\n"
@@ -123,8 +204,8 @@ int main(int argc, char** argv)
     CreateRayTracingStateObject(
         renderer.get(),
         globalRootSig.Get(),
-        dxil.size(),
-        dxil.data(),
+        rayTraceDxil.size(),
+        rayTraceDxil.data(),
         &stateObject);
 
     // *************************************************************************
@@ -143,48 +224,82 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Create geometry
     // *************************************************************************
-    uint32_t               indexCount  = 0;
-    uint32_t               vertexCount = 0;
-    ComPtr<ID3D12Resource> indexBuffer;
-    ComPtr<ID3D12Resource> positionBuffer;
-    ComPtr<ID3D12Resource> normalBuffer;
-    CreateGeometry(
+    Geometry sphereGeometry;
+    Geometry boxGeometry;
+    CreateGeometries(
         renderer.get(),
-        &indexCount,
-        &indexBuffer,
-        &vertexCount,
-        &positionBuffer,
-        &normalBuffer);
+        sphereGeometry,
+        boxGeometry);
 
     // *************************************************************************
     // Bottom level acceleration structure
     // *************************************************************************
-    ComPtr<ID3D12Resource> BLAS;
-    CreateBLAS(
+    ComPtr<ID3D12Resource> sphereBLAS;
+    ComPtr<ID3D12Resource> boxBLAS;
+    CreateBLASes(
         renderer.get(),
-        indexCount,
-        indexBuffer.Get(),
-        vertexCount,
-        positionBuffer.Get(),
-        &BLAS);
+        sphereGeometry,
+        boxGeometry,
+        &sphereBLAS,
+        &boxBLAS);
 
     // *************************************************************************
     // Top level acceleration structure
     // *************************************************************************
-    ComPtr<ID3D12Resource> TLAS;
-    CreateTLAS(renderer.get(), BLAS.Get(), &TLAS);
+    ComPtr<ID3D12Resource>          tlasBuffer;
+    std::vector<MaterialParameters> materialParams;
+    CreateTLAS(
+        renderer.get(),
+        sphereBLAS.Get(),
+        boxBLAS.Get(),
+        &tlasBuffer,
+        materialParams);
 
     // *************************************************************************
-    // Output texture
+    // Output and accumulation texture
     // *************************************************************************
     ComPtr<ID3D12Resource> outputTexture;
+    ComPtr<ID3D12Resource> accumTexture;
     CreateOutputTexture(renderer.get(), &outputTexture);
+    CreateAccumTexture(renderer.get(), &accumTexture);
 
     // *************************************************************************
-    // Constant buffer
+    // Material params buffer
     // *************************************************************************
-    ComPtr<ID3D12Resource> constantBuffer;
-    CreateConstantBuffer(renderer.get(), &constantBuffer);
+    ComPtr<ID3D12Resource> materialParamsBuffer;
+    CreateBuffer(
+        renderer.get(),
+        SizeInBytes(materialParams),
+        DataPtr(materialParams),
+        &materialParamsBuffer);
+
+    // *************************************************************************
+    // Scene params constant buffer
+    // *************************************************************************
+    ComPtr<ID3D12Resource> sceneParamsBuffer;
+    CHECK_CALL(CreateBuffer(
+        renderer.get(),
+        Align<size_t>(sizeof(SceneParameters), 256),
+        nullptr,
+        &sceneParamsBuffer));
+
+    // *************************************************************************
+    // Ray gen samples buffer
+    // *************************************************************************
+    ComPtr<ID3D12Resource> rayGenSamplesBuffer;
+    CHECK_CALL(CreateUAVBuffer(
+        renderer.get(),
+        (gWindowWidth * gWindowHeight * sizeof(uint32_t)),
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        &rayGenSamplesBuffer));
+
+    // *************************************************************************
+    // Descriptor heaps
+    // *************************************************************************
+    IBLTextures iblTextures = {};
+    CreateIBLTextures(
+        renderer.get(),
+        iblTextures);
 
     // *************************************************************************
     // Descriptor heaps
@@ -193,24 +308,25 @@ int main(int argc, char** argv)
     CreateDescriptorHeap(renderer.get(), &descriptorHeap);
 
     // Write descriptor to descriptor heap
-    {
-        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-        uavDesc.ViewDimension                    = D3D12_UAV_DIMENSION_TEXTURE2D;
-
-        D3D12_CPU_DESCRIPTOR_HANDLE descriptor = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
-
-        // Output texture (u1)
-        renderer->Device->CreateUnorderedAccessView(outputTexture.Get(), nullptr, &uavDesc, descriptor);
-    }
+    WriteDescriptors(
+        renderer.get(),
+        descriptorHeap.Get(),
+        outputTexture.Get(),
+        accumTexture.Get(),
+        rayGenSamplesBuffer.Get(),
+        sphereGeometry,
+        boxGeometry,
+        iblTextures);
 
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "021_raytracing_triangles_d3d12");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "025_raytracing_refract_d3d12");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
     }
+    window->AddMouseMoveCallbacks(MouseMove);
 
     // *************************************************************************
     // Swapchain
@@ -243,11 +359,32 @@ int main(int argc, char** argv)
     }
 
     // *************************************************************************
+    // Persistent map scene parameters
+    // *************************************************************************
+    SceneParameters* pSceneParams = nullptr;
+    CHECK_CALL(sceneParamsBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pSceneParams)));
+
+    // *************************************************************************
     // Main loop
     // *************************************************************************
     while (window->PollEvents()) {
         CHECK_CALL(commandAllocator->Reset());
         CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
+
+        // Smooth out the rotation on Y
+        gAngle += (gTargetAngle - gAngle) * 0.1f;
+
+        // Camera matrices
+        mat4 transformEyeMat     = glm::rotate(glm::radians(-gAngle), vec3(0, 1, 0));
+        vec3 startingEyePosition = vec3(0, 1.0f, 4.5f);
+        vec3 eyePosition         = transformEyeMat * vec4(startingEyePosition, 1);
+        mat4 viewMat             = glm::lookAt(eyePosition, vec3(0, 0, 0), vec3(0, 1, 0));
+        mat4 projMat             = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+
+        // Set constant buffer values
+        pSceneParams->ViewInverseMatrix       = glm::inverse(viewMat);
+        pSceneParams->ProjectionInverseMatrix = glm::inverse(projMat);
+        pSceneParams->EyePosition             = eyePosition;
 
         // Trace rays
         {
@@ -255,17 +392,23 @@ int main(int argc, char** argv)
             commandList->SetDescriptorHeaps(1, descriptorHeap.GetAddressOf());
 
             // Acceleration structure (t0)
-            commandList->SetComputeRootShaderResourceView(0, TLAS->GetGPUVirtualAddress());
+            commandList->SetComputeRootShaderResourceView(0, tlasBuffer->GetGPUVirtualAddress());
             // Output texture (u1)
             commandList->SetComputeRootDescriptorTable(1, descriptorHeap->GetGPUDescriptorHandleForHeapStart());
-            // Constant buffer (b2)
-            commandList->SetComputeRootConstantBufferView(2, constantBuffer->GetGPUVirtualAddress());
-            // Index buffer (t3)
-            commandList->SetComputeRootShaderResourceView(3, indexBuffer->GetGPUVirtualAddress());
-            // Position buffer (t4)
-            commandList->SetComputeRootShaderResourceView(4, positionBuffer->GetGPUVirtualAddress());
-            // Normal buffer (t5)
-            commandList->SetComputeRootShaderResourceView(5, normalBuffer->GetGPUVirtualAddress());
+            // Scene params (b5)
+            commandList->SetComputeRootConstantBufferView(2, sceneParamsBuffer->GetGPUVirtualAddress());
+            //  Index buffer (t20)
+            //  Position buffer (t25)
+            //  Normal buffer (t30)
+            D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
+            descriptorTable.ptr += kGeoBuffersOffset * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            commandList->SetComputeRootDescriptorTable(3, descriptorTable);
+            // Environment map (t12)
+            descriptorTable = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
+            descriptorTable.ptr += kIBLTextureOffset * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            commandList->SetComputeRootDescriptorTable(4, descriptorTable);
+            // Material params (t9)
+            commandList->SetComputeRootShaderResourceView(5, materialParamsBuffer->GetGPUVirtualAddress());
 
             commandList->SetPipelineState1(stateObject.Get());
 
@@ -341,12 +484,29 @@ int main(int argc, char** argv)
 
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 {
-    D3D12_DESCRIPTOR_RANGE range            = {};
-    range.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-    range.NumDescriptors                    = 1;
-    range.BaseShaderRegister                = 1;
-    range.RegisterSpace                     = 0;
-    range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    // Output range
+    D3D12_DESCRIPTOR_RANGE rangeOutput            = {};
+    rangeOutput.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+    rangeOutput.NumDescriptors                    = 1;
+    rangeOutput.BaseShaderRegister                = 1;
+    rangeOutput.RegisterSpace                     = 0;
+    rangeOutput.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    // Geometry buffers range
+    D3D12_DESCRIPTOR_RANGE rangeGeometryBuffers            = {};
+    rangeGeometryBuffers.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    rangeGeometryBuffers.NumDescriptors                    = 15;
+    rangeGeometryBuffers.BaseShaderRegister                = 20;
+    rangeGeometryBuffers.RegisterSpace                     = 0;
+    rangeGeometryBuffers.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    // IBLrange
+    D3D12_DESCRIPTOR_RANGE rangeIBL            = {};
+    rangeIBL.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    rangeIBL.NumDescriptors                    = 1;
+    rangeIBL.BaseShaderRegister                = 12;
+    rangeIBL.RegisterSpace                     = 0;
+    rangeIBL.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
     D3D12_ROOT_PARAMETER rootParameters[6];
     // Accleration structure (t0)
@@ -354,39 +514,67 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     rootParameters[0].Descriptor.ShaderRegister = 0;
     rootParameters[0].Descriptor.RegisterSpace  = 0;
     rootParameters[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // Output texture (u1) - descriptor table because texture resources can't be root descriptors
+    // Output texture (u1)
     rootParameters[1].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[1].DescriptorTable.pDescriptorRanges   = &range;
+    rootParameters[1].DescriptorTable.pDescriptorRanges   = &rangeOutput;
     rootParameters[1].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-    // Constant buffer (b2)
+    // Scene params (b5)
     rootParameters[2].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
-    rootParameters[2].Descriptor.ShaderRegister = 2;
+    rootParameters[2].Descriptor.ShaderRegister = 5;
     rootParameters[2].Descriptor.RegisterSpace  = 0;
     rootParameters[2].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // Index buffer (t3)
-    rootParameters[3].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[3].Descriptor.ShaderRegister = 3;
-    rootParameters[3].Descriptor.RegisterSpace  = 0;
-    rootParameters[3].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // Position buffer (t4)
-    rootParameters[4].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[4].Descriptor.ShaderRegister = 4;
-    rootParameters[4].Descriptor.RegisterSpace  = 0;
-    rootParameters[4].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // Normal buffer (t5)
+    //  Index buffers (t20)
+    //  Position buffers (t25)
+    //  Normal buffers (t30)
+    rootParameters[3].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[3].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[3].DescriptorTable.pDescriptorRanges   = &rangeGeometryBuffers;
+    rootParameters[3].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
+    // Environment map (t12)
+    rootParameters[4].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[4].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[4].DescriptorTable.pDescriptorRanges   = &rangeIBL;
+    rootParameters[4].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
+    // Material params (t9)
     rootParameters[5].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[5].Descriptor.ShaderRegister = 5;
+    rootParameters[5].Descriptor.ShaderRegister = 9;
     rootParameters[5].Descriptor.RegisterSpace  = 0;
     rootParameters[5].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
+    // Map Sampler (s14)
+    staticSamplers[0].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    staticSamplers[0].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplers[0].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[0].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[0].MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
+    staticSamplers[0].MaxAnisotropy    = 0;
+    staticSamplers[0].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    staticSamplers[0].MinLOD           = 0;
+    staticSamplers[0].MaxLOD           = D3D12_FLOAT32_MAX;
+    staticSamplers[0].ShaderRegister   = 14;
+    staticSamplers[0].RegisterSpace    = 0;
+    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
     D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
     rootSigDesc.NumParameters             = 6;
     rootSigDesc.pParameters               = rootParameters;
+    rootSigDesc.NumStaticSamplers         = 1;
+    rootSigDesc.pStaticSamplers           = staticSamplers;
 
     ComPtr<ID3DBlob> blob;
     ComPtr<ID3DBlob> error;
-    CHECK_CALL(D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error));
+    HRESULT          hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error);
+    if (FAILED(hr)) {
+        std::string errorMsg = std::string(reinterpret_cast<const char*>(error->GetBufferPointer()), error->GetBufferSize());
+
+        std::stringstream ss;
+        ss << "\n"
+           << "D3D12SerializeRootSignature failed: " << errorMsg << "\n";
+        GREX_LOG_ERROR(ss.str().c_str());
+        assert(false);
+    }
     CHECK_CALL(pRenderer->Device->CreateRootSignature(
         0,                         // nodeMask
         blob->GetBufferPointer(),  // pBloblWithRootSignature
@@ -486,8 +674,8 @@ void CreateRayTracingStateObject(
     //
     // ---------------------------------------------------------------------
     D3D12_RAYTRACING_SHADER_CONFIG shaderConfig = {};
-    shaderConfig.MaxPayloadSizeInBytes          = 4 * sizeof(float); // float4 color
-    shaderConfig.MaxAttributeSizeInBytes        = 2 * sizeof(float); // float2 barycentrics
+    shaderConfig.MaxPayloadSizeInBytes          = 4 * sizeof(float) + 3 * sizeof(uint32_t); // color, ray depth, sample count, rayType
+    shaderConfig.MaxAttributeSizeInBytes        = 2 * sizeof(float);                        // barycentrics
 
     pSubobject        = &subobjects[SHADER_CONFIG_INDEX];
     pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG;
@@ -515,7 +703,7 @@ void CreateRayTracingStateObject(
     //
     // ---------------------------------------------------------------------
     D3D12_RAYTRACING_PIPELINE_CONFIG pipelineConfigDesc = {};
-    pipelineConfigDesc.MaxTraceRecursionDepth           = 1;
+    pipelineConfigDesc.MaxTraceRecursionDepth           = 16;
 
     pSubobject        = &subobjects[PIPELINE_CONFIG_INDEX];
     pSubobject->Type  = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
@@ -629,144 +817,247 @@ void CreateShaderRecordTables(
         }
     }
 }
-void CreateGeometry(
-    DxRenderer*      pRenderer,
-    uint32_t*        pIndexCount,
-    ID3D12Resource** ppIndexBuffer,
-    uint32_t*        pVertexCount,
-    ID3D12Resource** ppPositionBuffer,
-    ID3D12Resource** ppNormalBuffer)
+void CreateGeometries(
+    DxRenderer* pRenderer,
+    Geometry&   outSphereGeometry,
+    Geometry&   outBoxGeometryy)
 {
-    TriMesh mesh = TriMesh::Sphere(1.0f, 16, 8, {.enableNormals = true});
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetTriangles()),
-        DataPtr(mesh.GetTriangles()),
-        ppIndexBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetPositions()),
-        DataPtr(mesh.GetPositions()),
-        ppPositionBuffer));
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,
-        SizeInBytes(mesh.GetNormals()),
-        DataPtr(mesh.GetNormals()),
-        ppNormalBuffer));
-
-    *pIndexCount  = 3 * mesh.GetNumTriangles();
-    *pVertexCount = mesh.GetNumVertices();
-}
-
-void CreateBLAS(
-    DxRenderer*      pRenderer,
-    uint32_t         indexCount,
-    ID3D12Resource*  pIndexBuffer,
-    uint32_t         vertexCount,
-    ID3D12Resource*  pPositionBuffer,
-    ID3D12Resource** ppBLAS)
-{
-    D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc       = {};
-    geometryDesc.Type                                 = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-    geometryDesc.Triangles.IndexFormat                = DXGI_FORMAT_R32_UINT;
-    geometryDesc.Triangles.IndexCount                 = indexCount;
-    geometryDesc.Triangles.IndexBuffer                = pIndexBuffer->GetGPUVirtualAddress();
-    geometryDesc.Triangles.VertexFormat               = DXGI_FORMAT_R32G32B32_FLOAT;
-    geometryDesc.Triangles.VertexCount                = vertexCount;
-    geometryDesc.Triangles.VertexBuffer.StartAddress  = pPositionBuffer->GetGPUVirtualAddress();
-    geometryDesc.Triangles.VertexBuffer.StrideInBytes = 12;
-    geometryDesc.Flags                                = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-
-    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
-    //
-    inputs.Type           = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-    inputs.Flags          = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
-    inputs.DescsLayout    = D3D12_ELEMENTS_LAYOUT_ARRAY;
-    inputs.NumDescs       = 1;
-    inputs.pGeometryDescs = &geometryDesc;
-
-    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo = {};
-    pRenderer->Device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &prebuildInfo);
-
-    // Scratch buffer
-    ComPtr<ID3D12Resource> scratchBuffer;
-    CHECK_CALL(CreateUAVBuffer(
-        pRenderer,
-        prebuildInfo.ScratchDataSizeInBytes,
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        &scratchBuffer));
-
-    // Storage buffer
-    CHECK_CALL(CreateUAVBuffer(
-        pRenderer,
-        prebuildInfo.ResultDataMaxSizeInBytes,
-        D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
-        ppBLAS));
-
-    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildDesc = {};
-    //
-    buildDesc.Inputs                           = inputs;
-    buildDesc.DestAccelerationStructureData    = (*ppBLAS)->GetGPUVirtualAddress();
-    buildDesc.ScratchAccelerationStructureData = scratchBuffer->GetGPUVirtualAddress();
-
-    // Command allocator
-    ComPtr<ID3D12CommandAllocator> commandAllocator;
+    // Sphere
     {
-        CHECK_CALL(pRenderer->Device->CreateCommandAllocator(
-            D3D12_COMMAND_LIST_TYPE_DIRECT,    // type
-            IID_PPV_ARGS(&commandAllocator))); // ppCommandList
+        TriMesh mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
+
+        Geometry& geo = outSphereGeometry;
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTriangles()),
+            DataPtr(mesh.GetTriangles()),
+            &geo.indexBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetPositions()),
+            DataPtr(mesh.GetPositions()),
+            &geo.positionBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetNormals()),
+            DataPtr(mesh.GetNormals()),
+            &geo.normalBuffer));
+
+        geo.indexCount  = 3 * mesh.GetNumTriangles();
+        geo.vertexCount = mesh.GetNumVertices();
     }
 
-    // Command list
-    ComPtr<ID3D12GraphicsCommandList5> commandList;
+    // Box
     {
-        CHECK_CALL(pRenderer->Device->CreateCommandList1(
-            0,                              // nodeMask
-            D3D12_COMMAND_LIST_TYPE_DIRECT, // type
-            D3D12_COMMAND_LIST_FLAG_NONE,   // flags
-            IID_PPV_ARGS(&commandList)));   // ppCommandList
+        TriMesh   mesh = TriMesh::Cube(glm::vec3(15, 1, 4.5f), false, {.enableNormals = true});
+        Geometry& geo  = outBoxGeometryy;
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTriangles()),
+            DataPtr(mesh.GetTriangles()),
+            &geo.indexBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetPositions()),
+            DataPtr(mesh.GetPositions()),
+            &geo.positionBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetNormals()),
+            DataPtr(mesh.GetNormals()),
+            &geo.normalBuffer));
+
+        geo.indexCount  = 3 * mesh.GetNumTriangles();
+        geo.vertexCount = mesh.GetNumVertices();
     }
-
-    // Build acceleration structure
-    CHECK_CALL(commandAllocator->Reset());
-    CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
-    commandList->BuildRaytracingAccelerationStructure(&buildDesc, 0, nullptr);
-    commandList->Close();
-
-    ID3D12CommandList* pList = commandList.Get();
-    pRenderer->Queue->ExecuteCommandLists(1, &pList);
-
-    bool waitres = WaitForGpu(pRenderer);
-    assert(waitres && "WaitForGpu failed");
 }
 
-void CreateTLAS(DxRenderer* pRenderer, ID3D12Resource* pBLAS, ID3D12Resource** ppTLAS)
+void CreateBLASes(
+    DxRenderer*      pRenderer,
+    const Geometry&  sphereGeometry,
+    const Geometry&  boxGeometry,
+    ID3D12Resource** ppSphereBLAS,
+    ID3D12Resource** ppBoxBLAS)
+{
+    std::vector<const Geometry*>  geometries = {&sphereGeometry, &boxGeometry};
+    std::vector<ID3D12Resource**> BLASes     = {ppSphereBLAS, ppBoxBLAS};
+
+    for (uint32_t i = 0; i < 2; ++i) {
+        auto pGeometry = geometries[i];
+        auto ppBLAS    = BLASes[i];
+
+        D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc       = {};
+        geometryDesc.Type                                 = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+        geometryDesc.Triangles.IndexFormat                = DXGI_FORMAT_R32_UINT;
+        geometryDesc.Triangles.IndexCount                 = pGeometry->indexCount;
+        geometryDesc.Triangles.IndexBuffer                = pGeometry->indexBuffer->GetGPUVirtualAddress();
+        geometryDesc.Triangles.VertexFormat               = DXGI_FORMAT_R32G32B32_FLOAT;
+        geometryDesc.Triangles.VertexCount                = pGeometry->vertexCount;
+        geometryDesc.Triangles.VertexBuffer.StartAddress  = pGeometry->positionBuffer->GetGPUVirtualAddress();
+        geometryDesc.Triangles.VertexBuffer.StrideInBytes = 12;
+        geometryDesc.Flags                                = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE; // D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
+        //
+        inputs.Type           = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+        inputs.Flags          = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+        inputs.DescsLayout    = D3D12_ELEMENTS_LAYOUT_ARRAY;
+        inputs.NumDescs       = 1;
+        inputs.pGeometryDescs = &geometryDesc;
+
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo = {};
+        pRenderer->Device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &prebuildInfo);
+
+        // Scratch buffer
+        ComPtr<ID3D12Resource> scratchBuffer;
+        CHECK_CALL(CreateUAVBuffer(
+            pRenderer,
+            prebuildInfo.ScratchDataSizeInBytes,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            &scratchBuffer));
+
+        // Storage buffer
+        CHECK_CALL(CreateUAVBuffer(
+            pRenderer,
+            prebuildInfo.ResultDataMaxSizeInBytes,
+            D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
+            ppBLAS));
+
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildDesc = {};
+        //
+        buildDesc.Inputs                           = inputs;
+        buildDesc.DestAccelerationStructureData    = (*ppBLAS)->GetGPUVirtualAddress();
+        buildDesc.ScratchAccelerationStructureData = scratchBuffer->GetGPUVirtualAddress();
+
+        // Command allocator
+        ComPtr<ID3D12CommandAllocator> commandAllocator;
+        {
+            CHECK_CALL(pRenderer->Device->CreateCommandAllocator(
+                D3D12_COMMAND_LIST_TYPE_DIRECT,    // type
+                IID_PPV_ARGS(&commandAllocator))); // ppCommandList
+        }
+
+        // Command list
+        ComPtr<ID3D12GraphicsCommandList5> commandList;
+        {
+            CHECK_CALL(pRenderer->Device->CreateCommandList1(
+                0,                              // nodeMask
+                D3D12_COMMAND_LIST_TYPE_DIRECT, // type
+                D3D12_COMMAND_LIST_FLAG_NONE,   // flags
+                IID_PPV_ARGS(&commandList)));   // ppCommandList
+        }
+
+        // Build acceleration structure
+        CHECK_CALL(commandAllocator->Reset());
+        CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
+        commandList->BuildRaytracingAccelerationStructure(&buildDesc, 0, nullptr);
+        commandList->Close();
+
+        ID3D12CommandList* pList = commandList.Get();
+        pRenderer->Queue->ExecuteCommandLists(1, &pList);
+
+        bool waitres = WaitForGpu(pRenderer);
+        assert(waitres && "WaitForGpu failed");
+    }
+}
+
+void CreateTLAS(
+    DxRenderer*                      pRenderer,
+    ID3D12Resource*                  pSphereBLAS,
+    ID3D12Resource*                  pBoxBLAS,
+    ID3D12Resource**                 ppTLAS,
+    std::vector<MaterialParameters>& outMaterialParams)
 {
     // clang-format off
-	float transformMatrix[3][4] = {
-        {1.0f, 0.0f, 0.0f, 0.0f},
-        {0.0f, 1.0f, 0.0f, 0.0f},
-        {0.0f, 0.0f, 1.0f, 0.0f} 
-    };
+     std::vector<glm::mat3x4> transforms = {
+         // Glass sphere (clear)
+         {{1.0f, 0.0f, 0.0f,  0.0f},
+          {0.0f, 1.0f, 0.0f,  0.0f},
+          {0.0f, 0.0f, 1.0f,  0.0f}},
+         // Glass sphere (red)
+         {{1.0f, 0.0f, 0.0f,  -2.5f},
+          {0.0f, 1.0f, 0.0f,  0.0f},
+          {0.0f, 0.0f, 1.0f,  0.0f}},
+         // Glass sphere (blue)
+         {{1.0f, 0.0f, 0.0f,  2.5f},
+          {0.0f, 1.0f, 0.0f,  0.0f},
+          {0.0f, 0.0f, 1.0f,  0.0f}},
+     };
     // clang-format on
 
-    D3D12_RAYTRACING_INSTANCE_DESC instanceDesc = {};
-    instanceDesc.InstanceMask                   = 1;
-    instanceDesc.AccelerationStructure          = pBLAS->GetGPUVirtualAddress();
-    memcpy(instanceDesc.Transform, &transformMatrix, 12 * sizeof(float));
+    // Material params
+    {
+        // Glass sphere (clear)
+        {
+            MaterialParameters materialParams = {};
+            materialParams.baseColor          = vec3(1, 1, 1);
+            materialParams.roughness          = 0.0f;
+            materialParams.absorbColor        = vec3(0, 0, 0);
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Glass sphere (red)
+        {
+            MaterialParameters materialParams = {};
+            materialParams.baseColor          = vec3(1, 0, 0);
+            materialParams.roughness          = 0.0f;
+            materialParams.absorbColor        = vec3(0, 8, 8);
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Glass sphere (blue)
+        {
+            MaterialParameters materialParams = {};
+            materialParams.baseColor          = vec3(0, 0, 1);
+            materialParams.roughness          = 0.0f;
+            materialParams.absorbColor        = vec3(15, 15, 6);
+
+            outMaterialParams.push_back(materialParams);
+        }
+    }
+
+    std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
+    {
+        D3D12_RAYTRACING_INSTANCE_DESC instanceDesc = {};
+        instanceDesc.InstanceMask                   = 1;
+        instanceDesc.AccelerationStructure          = pSphereBLAS->GetGPUVirtualAddress();
+        instanceDesc.Flags                          = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+
+        uint32_t transformIdx = 0;
+
+        // Glass sphere (clear)
+        memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instanceDescs.push_back(instanceDesc);
+        ++transformIdx;
+
+        // Glass sphere (red)
+        memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instanceDescs.push_back(instanceDesc);
+        ++transformIdx;
+
+        // Glass sphere (blue)
+        memcpy(instanceDesc.Transform, &transforms[transformIdx], sizeof(glm::mat3x4));
+        instanceDescs.push_back(instanceDesc);
+        ++transformIdx;
+    }
 
     ComPtr<ID3D12Resource> instanceBuffer;
-    CHECK_CALL(CreateBuffer(pRenderer, sizeof(instanceDesc), &instanceDesc, &instanceBuffer));
+    CHECK_CALL(CreateBuffer(pRenderer, SizeInBytes(instanceDescs), DataPtr(instanceDescs), &instanceBuffer));
 
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
     //
     inputs.Type          = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
     inputs.Flags         = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
     inputs.DescsLayout   = D3D12_ELEMENTS_LAYOUT_ARRAY;
-    inputs.NumDescs      = 1;
+    inputs.NumDescs      = CountU32(instanceDescs);
     inputs.InstanceDescs = instanceBuffer->GetGPUVirtualAddress();
 
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuildInfo = {};
@@ -849,32 +1140,159 @@ void CreateOutputTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)
         IID_PPV_ARGS(ppBuffer)));              // riidResource, ppvResource
 }
 
-void CreateConstantBuffer(DxRenderer* pRenderer, ID3D12Resource** ppConstantBuffer)
+void CreateAccumTexture(DxRenderer* pRenderer, ID3D12Resource** ppBuffer)
 {
-    struct Camera
+    D3D12_HEAP_PROPERTIES heapProperties = {};
+    heapProperties.Type                  = D3D12_HEAP_TYPE_DEFAULT;
+
+    D3D12_RESOURCE_DESC desc = {};
+    desc.Dimension           = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Alignment           = 0;
+    desc.Width               = gWindowWidth;
+    desc.Height              = gWindowHeight;
+    desc.DepthOrArraySize    = 1;
+    desc.MipLevels           = 1;
+    desc.Format              = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    desc.SampleDesc          = {1, 0};
+    desc.Layout              = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    desc.Flags               = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+    CHECK_CALL(pRenderer->Device->CreateCommittedResource(
+        &heapProperties,                       // pHeapProperties
+        D3D12_HEAP_FLAG_NONE,                  // HeapFlags
+        &desc,                                 // pDesc
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS, // InitialResourceState
+        nullptr,                               // pOptimizedClearValue
+        IID_PPV_ARGS(ppBuffer)));              // riidResource, ppvResource
+}
+
+void CreateIBLTextures(
+    DxRenderer*  pRenderer,
+    IBLTextures& outIBLTextures)
+{
+    // IBL file
+    auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
+
+    IBLMaps ibl = {};
+    if (!LoadIBLMaps32f(iblFile, &ibl)) {
+        GREX_LOG_ERROR("failed to load: " << iblFile);
+        return;
+    }
+
+    outIBLTextures.envNumLevels = ibl.numLevels;
+
+    // Environment only, irradiance is not used
     {
-        glm::mat4 viewInverse;
-        glm::mat4 projInverse;
-    };
+        const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
+        const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
 
-    Camera camera      = {};
-    camera.projInverse = glm::inverse(glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 512.0f));
-    camera.viewInverse = glm::inverse(glm::translate(glm::mat4(1), glm::vec3(0.0f, 0.0f, -2.5f)));
+        std::vector<MipOffset> mipOffsets;
+        uint32_t                 levelOffset = 0;
+        uint32_t                 levelWidth  = ibl.baseWidth;
+        uint32_t                 levelHeight = ibl.baseHeight;
+        for (uint32_t i = 0; i < ibl.numLevels; ++i) {
+            MipOffset mipOffset = {};
+            mipOffset.Offset      = levelOffset;
+            mipOffset.RowStride   = rowStride;
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,          // pRenderer
-        sizeof(Camera),     // srcSize
-        &camera,            // pSrcData
-        256,                // minAlignment
-        ppConstantBuffer)); // ppResource
+            mipOffsets.push_back(mipOffset);
+
+            levelOffset += (rowStride * levelHeight);
+            levelWidth >>= 1;
+            levelHeight >>= 1;
+        }
+
+        CHECK_CALL(CreateTexture(
+            pRenderer,
+            ibl.baseWidth,
+            ibl.baseHeight,
+            DXGI_FORMAT_R32G32B32A32_FLOAT,
+            mipOffsets,
+            ibl.environmentMap.GetSizeInBytes(),
+            ibl.environmentMap.GetPixels(),
+            &outIBLTextures.envTexture));
+    }
+
+    GREX_LOG_INFO("Loaded " << iblFile);
 }
 
 void CreateDescriptorHeap(DxRenderer* pRenderer, ID3D12DescriptorHeap** ppHeap)
 {
     D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-    desc.NumDescriptors             = 1;
+    desc.NumDescriptors             = 256;
     desc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     desc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 
     CHECK_CALL(pRenderer->Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(ppHeap)));
+}
+
+void WriteDescriptors(
+    DxRenderer*           pRenderer,
+    ID3D12DescriptorHeap* pDescriptorHeap,
+    ID3D12Resource*       pOutputTexture,
+    ID3D12Resource*       pAccumTexture,
+    ID3D12Resource*       pRayGenSamplesBuffer,
+    const Geometry&       sphereGeometry,
+    const Geometry&       boxGeometry,
+    const IBLTextures&    iblTextures)
+{
+    {
+        UINT descriptorIncSize = pRenderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+        // Outputs resources
+        {
+            D3D12_CPU_DESCRIPTOR_HANDLE descriptor = pDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+            descriptor.ptr += kOutputResourcesOffset * descriptorIncSize;
+
+            // Output texture (u1)
+            D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+
+            uavDesc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM;
+            uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+            pRenderer->Device->CreateUnorderedAccessView(pOutputTexture, nullptr, &uavDesc, descriptor);
+            descriptor.ptr += descriptorIncSize;
+        }
+
+        // Geometry
+        {
+            const uint32_t kGeometryStride      = 5;
+            const uint32_t kNumSpheres          = 3;
+            const uint32_t kIndexBufferIndex    = 0;
+            const uint32_t kPositionBufferIndex = 1;
+            const uint32_t kNormalBufferIndex   = 2;
+
+            const D3D12_CPU_DESCRIPTOR_HANDLE kBaseDescriptor = pDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+            const UINT                        kIncrementSize  = pRenderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+            // Spheres
+            for (uint32_t i = 0; i < kNumSpheres; ++i) {
+                uint32_t                    offset     = 0;
+                D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
+
+                // Index buffer (t20)
+                offset     = kGeoBuffersOffset + (kIndexBufferIndex * kGeometryStride) + i;
+                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
+                CreateDescriptoBufferSRV(pRenderer, 0, sphereGeometry.indexCount / 3, 12, sphereGeometry.indexBuffer.Get(), descriptor);
+
+                // Position buffer (t25)
+                offset     = kGeoBuffersOffset + (kPositionBufferIndex * kGeometryStride) + i;
+                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
+                CreateDescriptoBufferSRV(pRenderer, 0, sphereGeometry.vertexCount, 4, sphereGeometry.positionBuffer.Get(), descriptor);
+
+                // Normal buffer (t30)
+                offset     = kGeoBuffersOffset + (kNormalBufferIndex * kGeometryStride) + i;
+                descriptor = {kBaseDescriptor.ptr + offset * kIncrementSize};
+                CreateDescriptoBufferSRV(pRenderer, 0, sphereGeometry.vertexCount, 4, sphereGeometry.normalBuffer.Get(), descriptor);
+            }
+        }
+
+        // IBL Textures
+        {
+            D3D12_CPU_DESCRIPTOR_HANDLE descriptor = pDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+            descriptor.ptr += kIBLTextureOffset * descriptorIncSize;
+
+            // Environment map
+            CreateDescriptorTexture2D(pRenderer, iblTextures.envTexture.Get(), descriptor, 0, iblTextures.envNumLevels);
+        }
+    }
 }
