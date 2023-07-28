@@ -300,7 +300,8 @@ NS::Error* CreateDrawNormalPipeline(
     MTL::PixelFormat          rtvFormat,
     MTL::PixelFormat          dsvFormat,
     MetalPipelineRenderState* pPipelineRenderState,
-    MetalDepthStencilState*   pDepthStencilState)
+    MetalDepthStencilState*   pDepthStencilState,
+	bool                      enableTangents)
 {
     NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
 
@@ -329,6 +330,32 @@ NS::Error* CreateDrawNormalPipeline(
             vertexBufferLayout->setStride(12);
             vertexBufferLayout->setStepRate(1);
             vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+        }
+		if (enableTangents) {
+            // Vertex Tangent Buffer
+            {
+                MTL::VertexAttributeDescriptor* vertexAttribute = pVertexDescriptor->attributes()->object(2);
+                vertexAttribute->setOffset(0);
+                vertexAttribute->setFormat(MTL::VertexFormatFloat3);
+                vertexAttribute->setBufferIndex(2);
+
+                MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = pVertexDescriptor->layouts()->object(2);
+                vertexBufferLayout->setStride(12);
+                vertexBufferLayout->setStepRate(1);
+                vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+            }
+            // Vertex Bitangent Buffer
+            {
+                MTL::VertexAttributeDescriptor* vertexAttribute = pVertexDescriptor->attributes()->object(3);
+                vertexAttribute->setOffset(0);
+                vertexAttribute->setFormat(MTL::VertexFormatFloat3);
+                vertexAttribute->setBufferIndex(3);
+
+                MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = pVertexDescriptor->layouts()->object(3);
+                vertexBufferLayout->setStride(12);
+                vertexBufferLayout->setStepRate(1);
+                vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+            }
         }
     }
     else {
