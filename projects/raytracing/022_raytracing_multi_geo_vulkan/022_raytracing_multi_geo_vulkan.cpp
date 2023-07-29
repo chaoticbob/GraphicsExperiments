@@ -523,21 +523,21 @@ void CreateRayTracePipelineLayout(
             VkDescriptorSetLayoutBinding binding = {};
             binding.binding                      = 4;
             binding.descriptorType               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-            binding.descriptorCount              = 2;
+            binding.descriptorCount              = 3;
             binding.stageFlags                   = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
             bindings.push_back(binding);
 
             binding                 = {};
             binding.binding         = 7;
             binding.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-            binding.descriptorCount = 2;
+            binding.descriptorCount = 3;
             binding.stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
             bindings.push_back(binding);
 
             binding                 = {};
             binding.binding         = 10;
             binding.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-            binding.descriptorCount = 2;
+            binding.descriptorCount = 3;
             binding.stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
             bindings.push_back(binding);
         }

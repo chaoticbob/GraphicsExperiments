@@ -14,9 +14,9 @@ struct Triangle {
 };
 
 StructuredBuffer<float3>   Materials    : register(t3);  // Material colors
-StructuredBuffer<Triangle> Triangles[2] : register(t4);  // Index buffers
-StructuredBuffer<float3>   Positions[2] : register(t7);  // Position buffers
-StructuredBuffer<float3>   Normals[2]   : register(t10); // Normal buffers
+StructuredBuffer<Triangle> Triangles[3] : register(t4);  // Index buffers
+StructuredBuffer<float3>   Positions[3] : register(t7);  // Position buffers
+StructuredBuffer<float3>   Normals[3]   : register(t10); // Normal buffers
 
 typedef BuiltInTriangleIntersectionAttributes MyAttributes;
 
