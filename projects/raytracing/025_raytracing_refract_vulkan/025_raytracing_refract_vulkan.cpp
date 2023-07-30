@@ -657,7 +657,7 @@ void CreateRayTracePipelineLayout(
       {
          VkDescriptorSetLayoutBinding binding = {};
          binding.binding                      = 12;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE; // VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
          binding.descriptorCount              = 1;
          binding.stageFlags                   = VK_SHADER_STAGE_MISS_BIT_KHR;
          bindings.push_back(binding);
@@ -1503,7 +1503,7 @@ void WriteDescriptors(
       VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       &materialParamsBuffer);
 
-   // IBL Textures
+   // IBL Texture (t12)
    {
       VkImageView imageView = VK_NULL_HANDLE;
       CHECK_CALL(CreateImageView(
@@ -1521,7 +1521,7 @@ void WriteDescriptors(
          pRenderer,
          pDescriptorBufferStartAddress,
          descriptorSetLayout,
-         100, // binding
+         12, // binding
          0,   // arrayElement
          VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
          imageView,
