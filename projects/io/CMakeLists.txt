@@ -15,4 +15,5 @@ endif()
 
 if (GREX_ENABLE_VULKAN)
     add_subdirectory(401_gltf_basic_geo_vulkan)
+    add_subdirectory(402_gltf_basic_texture_vulkan)
 endif()
