@@ -292,10 +292,13 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
         VkPhysicalDeviceScalarBlockLayoutFeatures scalarBlockLayoutFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES, &descriptorBufferFeatures};
         scalarBlockLayoutFeatures.scalarBlockLayout                         = VK_TRUE;
 
+        VkPhysicalDeviceRobustness2FeaturesEXT robustnessFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT, &scalarBlockLayoutFeatures};
+        robustnessFeatures.nullDescriptor                         = true;
+
         VkPhysicalDeviceFeatures enabledFeatures = {};
 
         VkDeviceCreateInfo vkci      = {VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
-        vkci.pNext                   = &scalarBlockLayoutFeatures;
+        vkci.pNext                   = &robustnessFeatures;
         vkci.flags                   = 0;
         vkci.queueCreateInfoCount    = 1;
         vkci.pQueueCreateInfos       = &queueCreateInfo;
@@ -1322,22 +1325,11 @@ VkResult CreateTexture(
     }
 
     if ((srcSizeBytes > 0) && !IsNull(pSrcData)) {
-        const uint32_t rowStride = width * PixelStride(format);
-        // Calculate the total number of rows for all mip maps
-        uint32_t numRows = 0;
-        {
-            uint32_t mipHeight = height;
-            for (UINT level = 0; level < mipLevels; ++level) {
-                numRows += mipHeight;
-                mipHeight >>= 1;
-            }
-        }
-
         VulkanBuffer stagingBuffer = {};
         //
         vkres = CreateBuffer(
             pRenderer,
-            rowStride * numRows,
+            srcSizeBytes,
             pSrcData,
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
             DEFAULT_MIN_ALIGNMENT_SIZE,
@@ -1371,13 +1363,12 @@ VkResult CreateTexture(
             for (UINT level = 0; level < mipLevels; ++level) {
                 const auto&    mipOffset    = mipOffsets[level];
                 const uint32_t mipRowStride = mipOffset.RowStride;
-                const uint32_t mipRowStrideInPixels = mipRowStride / formatSizeInBytes;
-
+                const uint32_t mipRowStrideInPixels = mipRowStride;
                 VkImageAspectFlagBits aspectFlags     = VK_IMAGE_ASPECT_COLOR_BIT;
                 VkBufferImageCopy     srcRegion       = {};
                 srcRegion.bufferOffset                = mipOffset.Offset;
-                srcRegion.bufferRowLength             = mipRowStrideInPixels; // Row stride but in Pixels/texels 
-                srcRegion.bufferImageHeight           = levelHeight;          // Pixels/texels
+                srcRegion.bufferRowLength             = 0; // Row stride but in Pixels/texels 
+                srcRegion.bufferImageHeight           = 0; // Pixels/texels
                 srcRegion.imageSubresource.aspectMask = aspectFlags;
                 srcRegion.imageSubresource.layerCount = 1;
                 srcRegion.imageSubresource.mipLevel   = level;
@@ -2599,12 +2590,14 @@ HRESULT CreateGraphicsPipeline2(
     color_blend_state.blendConstants[2]                   = 0.0f;
     color_blend_state.blendConstants[3]                   = 0.0f;
 
-    VkDynamicState dynamic_states[2] = {};
-    dynamic_states[0]                = VK_DYNAMIC_STATE_VIEWPORT;
-    dynamic_states[1]                = VK_DYNAMIC_STATE_SCISSOR;
+    const int      dynamicStateCount                 = 3;
+    VkDynamicState dynamic_states[dynamicStateCount] = {};
+    dynamic_states[0]                                = VK_DYNAMIC_STATE_VIEWPORT;
+    dynamic_states[1]                                = VK_DYNAMIC_STATE_SCISSOR;
+    dynamic_states[2]                                = VK_DYNAMIC_STATE_VERTEX_INPUT_BINDING_STRIDE;
 
     VkPipelineDynamicStateCreateInfo dynamic_state = {VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
-    dynamic_state.dynamicStateCount                = 2;
+    dynamic_state.dynamicStateCount                = dynamicStateCount;
     dynamic_state.pDynamicStates                   = dynamic_states;
 
     VkPipelineMultisampleStateCreateInfo pipelineMultiStateCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};

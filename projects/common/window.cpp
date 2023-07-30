@@ -231,7 +231,7 @@ Window::~Window()
     }
 #endif
 
-#if defined(ENABLE_IMGUI_VULKAN)
+#if defined(ENABLE_IMGUI_METAL)
     if (mImGuiEnabled) {
         ImGui_ImplMetal_Shutdown();
         ImGui_ImplGlfw_Shutdown();

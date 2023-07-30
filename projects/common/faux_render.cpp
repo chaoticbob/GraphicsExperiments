@@ -1221,6 +1221,7 @@ static bool LoadGLTFImageKTX(
 
         MipOffset mipOffset = {};
         mipOffset.Offset    = static_cast<uint32_t>(imageOffset);
+        mipOffset.RowStride = static_cast<uint32_t>(scopedTexture.pTexture->baseWidth >> mipLevel);
         //
         mipOffsets.push_back(mipOffset);
     }
