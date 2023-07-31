@@ -64,6 +64,7 @@ static uint32_t gCurrentMaxSamples  = 0;
 static float    gSelectedColor[3] = {0.0f, 0.0f, 0.0f};
 static uint32_t gSelectedPixel[2] = {0, 0};
 static bool     gSelectedPixelChanged = false;
+static bool     gSelectedPixelShowAsFloat = false;
 
 struct Light
 {
@@ -692,10 +693,16 @@ int main(int argc, char** argv)
 
             ImGui::Text("Render time: %0.3f seconds", elapsedTime);
 
+            ImGui::Separator();
+
             std::string colorDescription;
             std::stringstream pixelDescription;
+            ImGuiColorEditFlags displayFlags = gSelectedPixelShowAsFloat ? ImGuiColorEditFlags_Float : 0;
+
             pixelDescription << "Pixel (" << gSelectedPixel[0] << ", " << gSelectedPixel[1] << ")";
-            ImGui::ColorEdit3(pixelDescription.str().c_str(), gSelectedColor);
+            ImGui::ColorEdit3(pixelDescription.str().c_str(), gSelectedColor, displayFlags);
+
+            ImGui::Checkbox("Show as float", &gSelectedPixelShowAsFloat);
         }
         ImGui::End();
 
