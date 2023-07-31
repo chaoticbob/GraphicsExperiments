@@ -118,6 +118,9 @@ VkResult GetSwapchainImages(VulkanRenderer* pRenderer, std::vector<VkImage>& ima
 VkResult AcquireNextImage(VulkanRenderer* pRenderer, uint32_t* pImageIndex);
 bool     SwapchainPresent(VulkanRenderer* pRenderer, uint32_t imageIndex);
 
+uint32_t BitsPerPixel(VkFormat fmt);
+uint32_t BytesPerPixel(VkFormat fmt);
+
 VkResult CreateCommandBuffer(VulkanRenderer* pRenderer, VkCommandPoolCreateFlags poolCreateFlags, CommandObjects* pCmdBuf);
 void     DestroyCommandBuffer(VulkanRenderer* pRenderer, CommandObjects* pCmdBuf);
 VkResult ExecuteCommandBuffer(VulkanRenderer* pRenderer, const CommandObjects* pCmdBuf, VkFence fence = VK_NULL_HANDLE);
