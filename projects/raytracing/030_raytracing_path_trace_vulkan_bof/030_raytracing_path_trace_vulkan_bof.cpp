@@ -968,42 +968,11 @@ int main(int argc, char** argv)
 
         if (gSelectedPixelChanged)
         {
-            char* pReadBackData = nullptr;
+            unsigned char* pReadBackData = nullptr;
             vmaMapMemory(renderer->Allocator, readbackSwapchainSurface.Allocation, reinterpret_cast<void**>(&pReadBackData));
 
             if (pReadBackData)
             {
-                std::ofstream ppmFile;
-                const char *tempDir = std::getenv("TEMP");
-                std::string   ppmFilename = tempDir;
-                ppmFilename += "\\output_file.ppm";
-                ppmFile.open(ppmFilename.c_str(), std::ios::out | std::ios::trunc);
-
-                if (ppmFile.is_open())
-                {
-                    ppmFile << "P6 " << gWindowWidth << " " << gWindowHeight << " 255\n";
-                    for (uint32_t row = 0; row < gWindowHeight; row++)
-                    {
-                        for (uint32_t col = 0; col < gWindowWidth; col++)
-                        {
-                            size_t   pixelOffset = row * gWindowWidth + col * BytesPerPixel(GREX_DEFAULT_RTV_FORMAT);
-                            uint32_t red         = pReadBackData[pixelOffset + 2];
-                            uint32_t green       = pReadBackData[pixelOffset + 1];
-                            uint32_t blue        = pReadBackData[pixelOffset + 0];
-
-                            red = std::max<uint32_t>(std::min<uint32_t>(red, 0), 255);
-                            blue = std::max<uint32_t>(std::min<uint32_t>(blue, 0), 255);
-                            green = std::max<uint32_t>(std::min<uint32_t>(green, 0), 255);
-
-                            ppmFile << red << " " << green << " " << blue << " ";
-                        }
-
-                        ppmFile << "\n";
-                    }
-
-                    ppmFile.close();
-                }
-
                 size_t pixelOffset = (gSelectedPixel[1] * gWindowWidth + gSelectedPixel[0]) * BytesPerPixel(GREX_DEFAULT_RTV_FORMAT);
                 gSelectedColor[0]  = pReadBackData[pixelOffset + 2] / 255.0f;
                 gSelectedColor[1]  = pReadBackData[pixelOffset + 1] / 255.0f;
