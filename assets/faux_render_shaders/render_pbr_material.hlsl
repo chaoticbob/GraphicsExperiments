@@ -1,6 +1,12 @@
 #define PI 3.1415292
 #define EPSILON 0.00001
 
+#if defined(__spirv__)
+#define DEFINE_AS_PUSH_CONSTANT   [[vk::push_constant]]
+#else
+#define DEFINE_AS_PUSH_CONSTANT
+#endif 
+
 #define MAX_INSTANCES         100
 #define MAX_MATERIALS         100
 #define MAX_MATERIAL_SAMPLERS 32
@@ -77,7 +83,10 @@ struct MaterialData
 
 ConstantBuffer<SceneData>      Scene                                   : register(SCENE_REGISTER);                     // Scene constants
 ConstantBuffer<CameraData>     Camera                                  : register(CAMERA_REGISTER);                     // Camera constants
+
+DEFINE_AS_PUSH_CONSTANT
 ConstantBuffer<DrawData>       Draw                                    : register(DRAW_REGISTER);                       // Draw root constants        
+
 StructuredBuffer<InstanceData> Instances                               : register(INSTANCE_BUFFER_REGISTER);            // Instance data
 StructuredBuffer<MaterialData> Materials                               : register(MATERIAL_BUFFER_REGISTER);            // Material data
 SamplerState                   MaterialSamplers[MAX_MATERIAL_SAMPLERS] : register(MATERIAL_SAMPLER_START_REGISTER);     // Material samplers
