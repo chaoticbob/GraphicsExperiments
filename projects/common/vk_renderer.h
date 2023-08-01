@@ -118,8 +118,12 @@ VkResult GetSwapchainImages(VulkanRenderer* pRenderer, std::vector<VkImage>& ima
 VkResult AcquireNextImage(VulkanRenderer* pRenderer, uint32_t* pImageIndex);
 bool     SwapchainPresent(VulkanRenderer* pRenderer, uint32_t imageIndex);
 
-VkFormat ToVkFormat(GREXFormat format);
+
+VkFormat    ToVkFormat(GREXFormat format);
 VkIndexType ToVkIndexType(GREXFormat format);
+
+uint32_t BitsPerPixel(VkFormat fmt);
+uint32_t BytesPerPixel(VkFormat fmt);
 
 VkResult CreateCommandBuffer(VulkanRenderer* pRenderer, VkCommandPoolCreateFlags poolCreateFlags, CommandObjects* pCmdBuf);
 void     DestroyCommandBuffer(VulkanRenderer* pRenderer, CommandObjects* pCmdBuf);

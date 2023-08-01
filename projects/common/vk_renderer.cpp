@@ -28,14 +28,6 @@ PFN_vkGetDescriptorEXT                         fn_vkGetDescriptorEXT            
 PFN_vkCmdBindDescriptorBuffersEXT              fn_vkCmdBindDescriptorBuffersEXT              = nullptr;
 PFN_vkCmdSetDescriptorBufferOffsetsEXT         fn_vkCmdSetDescriptorBufferOffsetsEXT         = nullptr;
 
-uint32_t BitsPerPixel(VkFormat fmt);
-
-uint32_t PixelStride(VkFormat fmt)
-{
-    uint32_t nbytes = BitsPerPixel(fmt) / 8;
-    return nbytes;
-}
-
 std::vector<std::string> EnumeratePhysicalDeviceExtensionNames(VkPhysicalDevice physicalDevice)
 {
     uint32_t count = 0;
@@ -1322,7 +1314,7 @@ VkResult CreateTexture(
     }
 
     if ((srcSizeBytes > 0) && !IsNull(pSrcData)) {
-        const uint32_t rowStride = width * PixelStride(format);
+        const uint32_t rowStride = width * BytesPerPixel(format);
         // Calculate the total number of rows for all mip maps
         uint32_t numRows = 0;
         {
@@ -1367,7 +1359,7 @@ VkResult CreateTexture(
         {
             uint32_t levelWidth  = width;
             uint32_t levelHeight = height;
-            uint32_t formatSizeInBytes = PixelStride(format);
+            uint32_t formatSizeInBytes = BytesPerPixel(format);
             for (UINT level = 0; level < mipLevels; ++level) {
                 const auto&    mipOffset    = mipOffsets[level];
                 const uint32_t mipRowStride = mipOffset.RowStride;
@@ -1446,7 +1438,7 @@ VkResult CreateTexture(
 {
     MipOffset mipOffset   = {};
     mipOffset.Offset      = 0;
-    mipOffset.RowStride   = width * PixelStride(format);
+    mipOffset.RowStride   = width * BytesPerPixel(format);
 
     return CreateTexture(
         pRenderer,
@@ -3200,6 +3192,12 @@ void WriteDescriptor(
         &descriptorInfo,   // pDescriptorInfo
         descriptorSize,    // dataSize
         pDescriptor);      // pDescriptor
+}
+
+uint32_t BytesPerPixel(VkFormat fmt)
+{
+    uint32_t nbytes = BitsPerPixel(fmt) / 8;
+    return nbytes;
 }
 
 uint32_t BitsPerPixel(VkFormat fmt)
