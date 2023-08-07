@@ -1153,7 +1153,7 @@ void CreateRayTracingPipeline(
     // Closest hit
     {
         VkRayTracingShaderGroupCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR};
-        createInfo.type                                 = VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR;
+        createInfo.type                                 = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
         createInfo.generalShader                        = VK_SHADER_UNUSED_KHR;
         createInfo.closestHitShader                     = 2; // shaderStages[2]
         createInfo.anyHitShader                         = VK_SHADER_UNUSED_KHR;
