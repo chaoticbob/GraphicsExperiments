@@ -28,6 +28,15 @@ PFN_vkGetDescriptorEXT                         fn_vkGetDescriptorEXT            
 PFN_vkCmdBindDescriptorBuffersEXT              fn_vkCmdBindDescriptorBuffersEXT              = nullptr;
 PFN_vkCmdSetDescriptorBufferOffsetsEXT         fn_vkCmdSetDescriptorBufferOffsetsEXT         = nullptr;
 
+bool     IsCompressed(VkFormat fmt);
+uint32_t BitsPerPixel(VkFormat fmt);
+
+uint32_t PixelStride(VkFormat fmt)
+{
+    uint32_t nbytes = BitsPerPixel(fmt) / 8;
+    return nbytes;
+}
+
 std::vector<std::string> EnumeratePhysicalDeviceExtensionNames(VkPhysicalDevice physicalDevice)
 {
     uint32_t count = 0;
@@ -48,7 +57,7 @@ std::vector<std::string> EnumeratePhysicalDeviceExtensionNames(VkPhysicalDevice 
 }
 
 // =================================================================================================
-// DxRenderer
+// VkRenderer
 // =================================================================================================
 VulkanRenderer::VulkanRenderer()
 {
@@ -1318,14 +1327,38 @@ VkResult CreateTexture(
 
     if ((srcSizeBytes > 0) && !IsNull(pSrcData)) {
         VulkanBuffer stagingBuffer = {};
-        //
-        vkres = CreateBuffer(
-            pRenderer,
-            srcSizeBytes,
-            pSrcData,
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-            DEFAULT_MIN_ALIGNMENT_SIZE,
-            &stagingBuffer);
+        if (IsCompressed(format))
+        {
+            vkres = CreateBuffer(
+                pRenderer,
+                srcSizeBytes,
+                pSrcData,
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                DEFAULT_MIN_ALIGNMENT_SIZE,
+                &stagingBuffer);
+        }
+        else
+        {
+            const uint32_t rowStride = width * PixelStride(format);
+            // Calculate the total number of rows for all mip maps
+            uint32_t numRows = 0;
+            {
+                uint32_t mipHeight = height;
+                for (UINT level = 0; level < mipLevels; ++level) {
+                    numRows += mipHeight;
+                    mipHeight >>= 1;
+                }
+            }
+
+            //
+            vkres = CreateBuffer(
+                pRenderer,
+                rowStride * numRows,
+                pSrcData,
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                DEFAULT_MIN_ALIGNMENT_SIZE,
+                &stagingBuffer);
+        }
         if (vkres != VK_SUCCESS) {
             assert(false && "create staging buffer failed");
             return vkres;
@@ -1353,14 +1386,24 @@ VkResult CreateTexture(
             uint32_t levelHeight = height;
             uint32_t formatSizeInBytes = BytesPerPixel(format);
             for (UINT level = 0; level < mipLevels; ++level) {
-                const auto&    mipOffset    = mipOffsets[level];
-                const uint32_t mipRowStride = mipOffset.RowStride;
-                const uint32_t mipRowStrideInPixels = mipRowStride;
+                const auto& mipOffset    = mipOffsets[level];
+                uint32_t    mipRowStrideInPixels = mipOffset.RowStride / formatSizeInBytes;
+                uint32_t    mipLevelHeight = levelHeight;
+
+                if (IsCompressed(format))
+                {
+                    //
+                    // If it's compressed, just set the variables to zero and let the API figure it out based on the imageExtents
+                    //
+                    mipRowStrideInPixels = 0;
+                    mipLevelHeight       = 0;
+                }
+
                 VkImageAspectFlagBits aspectFlags     = VK_IMAGE_ASPECT_COLOR_BIT;
                 VkBufferImageCopy     srcRegion       = {};
                 srcRegion.bufferOffset                = mipOffset.Offset;
-                srcRegion.bufferRowLength             = 0; // Row stride but in Pixels/texels 
-                srcRegion.bufferImageHeight           = 0; // Pixels/texels
+                srcRegion.bufferRowLength             = mipRowStrideInPixels; // Row stride but in Pixels/texels
+                srcRegion.bufferImageHeight           = mipLevelHeight;       // Pixels/texels
                 srcRegion.imageSubresource.aspectMask = aspectFlags;
                 srcRegion.imageSubresource.layerCount = 1;
                 srcRegion.imageSubresource.mipLevel   = level;
@@ -3187,10 +3230,31 @@ void WriteDescriptor(
         pDescriptor);      // pDescriptor
 }
 
-uint32_t BytesPerPixel(VkFormat fmt)
+bool IsCompressed(VkFormat fmt)
 {
-    uint32_t nbytes = BitsPerPixel(fmt) / 8;
-    return nbytes;
+    switch (fmt)
+    {
+        case VK_FORMAT_BC1_RGB_UNORM_BLOCK:
+        case VK_FORMAT_BC1_RGB_SRGB_BLOCK:
+        case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
+        case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
+        case VK_FORMAT_BC2_UNORM_BLOCK:
+        case VK_FORMAT_BC2_SRGB_BLOCK:
+        case VK_FORMAT_BC3_UNORM_BLOCK:
+        case VK_FORMAT_BC3_SRGB_BLOCK:
+        case VK_FORMAT_BC4_UNORM_BLOCK:
+        case VK_FORMAT_BC4_SNORM_BLOCK:
+        case VK_FORMAT_BC5_UNORM_BLOCK:
+        case VK_FORMAT_BC5_SNORM_BLOCK:
+        case VK_FORMAT_BC6H_UFLOAT_BLOCK:
+        case VK_FORMAT_BC6H_SFLOAT_BLOCK:
+        case VK_FORMAT_BC7_UNORM_BLOCK:
+        case VK_FORMAT_BC7_SRGB_BLOCK:
+            return true;
+
+         default: 
+            return false;
+    }
 }
 
 uint32_t BitsPerPixel(VkFormat fmt)
