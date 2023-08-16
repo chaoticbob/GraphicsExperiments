@@ -284,10 +284,13 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
         VkPhysicalDeviceScalarBlockLayoutFeatures scalarBlockLayoutFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES, &descriptorBufferFeatures};
         scalarBlockLayoutFeatures.scalarBlockLayout                         = VK_TRUE;
 
+        VkPhysicalDeviceRobustness2FeaturesEXT robustness2Features          = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT, &scalarBlockLayoutFeatures};
+        robustness2Features.nullDescriptor                                  = VK_TRUE;
+
         VkPhysicalDeviceFeatures enabledFeatures = {};
 
         VkDeviceCreateInfo vkci      = {VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
-        vkci.pNext                   = &scalarBlockLayoutFeatures;
+        vkci.pNext                   = &robustness2Features;
         vkci.flags                   = 0;
         vkci.queueCreateInfoCount    = 1;
         vkci.pQueueCreateInfos       = &queueCreateInfo;
