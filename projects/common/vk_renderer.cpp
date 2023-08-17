@@ -1333,7 +1333,7 @@ VkResult CreateTexture(
         }
         else
         {
-            const uint32_t rowStride = width * PixelStride(format);
+        const uint32_t rowStride = width * BytesPerPixel(format);
             // Calculate the total number of rows for all mip maps
             uint32_t numRows = 0;
             {
