@@ -1333,7 +1333,7 @@ VkResult CreateTexture(
         }
         else
         {
-            const uint32_t rowStride = width * PixelStride(format);
+        const uint32_t rowStride = width * BytesPerPixel(format);
             // Calculate the total number of rows for all mip maps
             uint32_t numRows = 0;
             {
@@ -3222,6 +3222,12 @@ void WriteDescriptor(
         &descriptorInfo,   // pDescriptorInfo
         descriptorSize,    // dataSize
         pDescriptor);      // pDescriptor
+}
+
+uint32_t BytesPerPixel(VkFormat fmt)
+{
+    uint32_t nbytes = BitsPerPixel(fmt) / 8;
+    return nbytes;
 }
 
 bool IsCompressed(VkFormat fmt)
