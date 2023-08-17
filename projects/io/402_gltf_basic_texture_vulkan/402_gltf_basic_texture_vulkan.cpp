@@ -101,7 +101,7 @@ int main(int argc, char** argv)
     std::vector<uint32_t> spirvVS;
     std::vector<uint32_t> spirvFS;
     {
-        std::string shaderSource = LoadString("faux_render_shaders/render_pbr_material.hlsl");
+        std::string shaderSource = LoadString("faux_render_shaders/render_base_color.hlsl");
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &spirvVS, &errorMsg);
@@ -205,8 +205,8 @@ int main(int argc, char** argv)
                     renderer.get(),
                     pDescriptorBufferStartAddress,
                     pipelineLayout.DescriptorSetLayout,
-                    static_cast<uint32_t>(MATERIAL_IMAGES_START_REGISTER + i),
-                    0,
+                    MATERIAL_IMAGES_START_REGISTER,
+                    static_cast<uint32_t>(i),
                     VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                     imageView,
                     VK_IMAGE_LAYOUT_GENERAL);
@@ -229,10 +229,10 @@ int main(int argc, char** argv)
                 clampedSamplerInfo.anisotropyEnable        = VK_FALSE;
                 clampedSamplerInfo.maxAnisotropy           = 0;
                 clampedSamplerInfo.compareEnable           = VK_TRUE;
-                clampedSamplerInfo.compareOp               = VK_COMPARE_OP_NEVER;
+                clampedSamplerInfo.compareOp               = VK_COMPARE_OP_LESS_OR_EQUAL;
                 clampedSamplerInfo.minLod                  = 0;
                 clampedSamplerInfo.maxLod                  = 1;
-                clampedSamplerInfo.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+                clampedSamplerInfo.borderColor             = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
                 clampedSamplerInfo.unnormalizedCoordinates = VK_FALSE;
 
                 VkSampler clampedSampler = VK_NULL_HANDLE;
@@ -258,17 +258,17 @@ int main(int argc, char** argv)
                 repeatSamplerInfo.magFilter               = VK_FILTER_LINEAR;
                 repeatSamplerInfo.minFilter               = VK_FILTER_LINEAR;
                 repeatSamplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-                repeatSamplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                repeatSamplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                repeatSamplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+                repeatSamplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                repeatSamplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+                repeatSamplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
                 repeatSamplerInfo.mipLodBias              = 0;
                 repeatSamplerInfo.anisotropyEnable        = VK_FALSE;
                 repeatSamplerInfo.maxAnisotropy           = 0;
                 repeatSamplerInfo.compareEnable           = VK_TRUE;
-                repeatSamplerInfo.compareOp               = VK_COMPARE_OP_NEVER;
+                repeatSamplerInfo.compareOp               = VK_COMPARE_OP_LESS_OR_EQUAL;
                 repeatSamplerInfo.minLod                  = 0;
                 repeatSamplerInfo.maxLod                  = 1;
-                repeatSamplerInfo.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+                repeatSamplerInfo.borderColor             = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
                 repeatSamplerInfo.unnormalizedCoordinates = VK_FALSE;
 
                 VkSampler repeatSampler = VK_NULL_HANDLE;
@@ -282,8 +282,8 @@ int main(int argc, char** argv)
                     renderer.get(),
                     pDescriptorBufferStartAddress,
                     pipelineLayout.DescriptorSetLayout,
-                    MATERIAL_SAMPLER_START_REGISTER + 1, // binding
-                    0,                                   // arrayElement
+                    MATERIAL_SAMPLER_START_REGISTER, // binding
+                    1,                               // arrayElement
                     repeatSampler);
            }
         }
