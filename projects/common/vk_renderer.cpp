@@ -31,12 +31,6 @@ PFN_vkCmdSetDescriptorBufferOffsetsEXT         fn_vkCmdSetDescriptorBufferOffset
 bool     IsCompressed(VkFormat fmt);
 uint32_t BitsPerPixel(VkFormat fmt);
 
-uint32_t PixelStride(VkFormat fmt)
-{
-    uint32_t nbytes = BitsPerPixel(fmt) / 8;
-    return nbytes;
-}
-
 std::vector<std::string> EnumeratePhysicalDeviceExtensionNames(VkPhysicalDevice physicalDevice)
 {
     uint32_t count = 0;
@@ -1349,7 +1343,7 @@ VkResult CreateTexture(
         }
         else
         {
-            const uint32_t rowStride = width * PixelStride(format);
+        const uint32_t rowStride = width * BytesPerPixel(format);
             // Calculate the total number of rows for all mip maps
             uint32_t numRows = 0;
             {
