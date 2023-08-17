@@ -101,7 +101,7 @@ int main(int argc, char** argv)
     std::vector<uint32_t> spirvVS;
     std::vector<uint32_t> spirvFS;
     {
-        std::string shaderSource = LoadString("faux_render_shaders/render_pbr_material.hlsl");
+        std::string shaderSource = LoadString("faux_render_shaders/render_base_color.hlsl");
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &spirvVS, &errorMsg);
