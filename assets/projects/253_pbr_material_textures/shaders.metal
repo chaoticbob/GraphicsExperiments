@@ -13,7 +13,7 @@ using namespace metal;
 #define NUM_MATERIALS           16
 #define TOTAL_MATERIAL_TEXTURES (NUM_MATERIALS * MATERIAL_TEXTURE_STRIDE)
 
-#define MAX_IBLS                                 16
+#define MAX_IBLS                                 32
 #define IBL_INTEGRATION_LUT_DESCRIPTOR_OFFSET    3
 #define IBL_INTEGRATION_MS_LUT_DESCRIPTOR_OFFSET 4
 #define IBL_IRRADIANCE_MAPS_DESCRIPTOR_OFFSET    16
@@ -50,6 +50,19 @@ struct DrawParameters
 struct MaterialParameters
 {
     float Specular;
+};
+
+struct IBLTextures
+{
+    texture2d<float>                    IntegrationLUT;
+    texture2d<float>                    IntegrationMultiscatterLUT;
+    array<texture2d<float>, MAX_IBLS>   IrradianceMaps;
+    array<texture2d<float>, MAX_IBLS>   EnvironmentMaps;
+};
+
+struct EnvironmentMaterials
+{
+    array<texture2d<float>, TOTAL_MATERIAL_TEXTURES> Textures;
 };
 
 // =================================================================================================
@@ -307,15 +320,12 @@ float3 ACESFilm(float3 x)
 }
 
 float4 fragment psmain(
-    VSOutput                                         input                           [[stage_in]],
-    constant DrawParameters&                         DrawParams                      [[buffer(2)]],
-    constant SceneParameters&                        SceneParams                     [[buffer(3)]],
-    constant MaterialParameters*                     MaterialParams                  [[buffer(4)]],
-    texture2d<float>                                 IBLIntegrationLUT               [[texture(IBL_INTEGRATION_LUT_DESCRIPTOR_OFFSET)]],
-    texture2d<float>                                 IBLIntegrationMultiscatterLUT   [[texture(IBL_INTEGRATION_MS_LUT_DESCRIPTOR_OFFSET)]],
-    array<texture2d<float>, MAX_IBLS>                IBLIrradianceMaps               [[texture(IBL_IRRADIANCE_MAPS_DESCRIPTOR_OFFSET)]],
-    array<texture2d<float>, MAX_IBLS>                IBLEnvironmentMaps              [[texture(IBL_ENVIRONMENT_MAPS_DESCRIPTOR_OFFSET)]],
-    array<texture2d<float>, TOTAL_MATERIAL_TEXTURES> MaterialTextures                [[texture(MATERIAL_TEXTURES_DESCRIPTOR_OFFSET)]])
+    VSOutput                       input            [[stage_in]],
+    constant DrawParameters&       DrawParams       [[buffer(2)]],
+    constant SceneParameters&      SceneParams      [[buffer(3)]],
+    constant MaterialParameters*   MaterialParams   [[buffer(4)]],
+	constant IBLTextures*          IBLTextures      [[buffer(5)]],
+	constant EnvironmentMaterials* MaterialTextures [[buffer(6)]])
 {
     // Scene and geometry variables - world space
     float3 P = input.PositionWS;                         // Position
@@ -330,10 +340,10 @@ float4 fragment psmain(
     // Material variables
     float  specular           = MaterialParams[DrawParams.MaterialIndex].Specular;
     float2 texCoord           = input.TexCoord;
-    float3 baseColor          = MaterialTextures[baseColorTexIdx].sample(MaterialSampler, texCoord).rgb;
-    float3 normal             = MaterialTextures[normalTexIdx].sample(MaterialNormalMapSampler, texCoord).rgb;
-    float  roughness          = MaterialTextures[roughnessTexIdx].sample(MaterialSampler, texCoord).r;
-    float  metallic           = MaterialTextures[metallicTexIdx].sample(MaterialSampler, texCoord).r > 0 ? 1 : 0;
+    float3 baseColor          = MaterialTextures->Textures[baseColorTexIdx].sample(MaterialSampler, texCoord).rgb;
+    float3 normal             = MaterialTextures->Textures[normalTexIdx].sample(MaterialNormalMapSampler, texCoord).rgb;
+    float  roughness          = MaterialTextures->Textures[roughnessTexIdx].sample(MaterialSampler, texCoord).r;
+    float  metallic           = MaterialTextures->Textures[metallicTexIdx].sample(MaterialSampler, texCoord).r > 0 ? 1 : 0;
     float  clearCoat          = 0;
     float  clearCoatRoughness = 0;
     float  anisotropy         = 0;
@@ -423,7 +433,7 @@ float4 fragment psmain(
         float3 Rs = (D * F * Vis);
 
         if (SceneParams.Multiscatter) {
-            float2 envBRDF            = GetBRDFIntegrationMultiscatterMap(IBLIntegrationLUT, saturate(dot(N, H)), alpha);
+            float2 envBRDF            = GetBRDFIntegrationMultiscatterMap(IBLTextures->IntegrationLUT, saturate(dot(N, H)), alpha);
             float3 energyCompensation = 1.0 + F0 * (1.0 / envBRDF.y - 1.0);
             Rs *= energyCompensation;
         }
@@ -459,23 +469,23 @@ float4 fragment psmain(
         }
 
         // Diffuse IBL component
-        float3 irradiance = GetIBLIrradiance(IBLIrradianceMaps[SceneParams.IBLIndex], N);
+        float3 irradiance = GetIBLIrradiance(IBLTextures->IrradianceMaps[SceneParams.IBLIndex], N);
         float3 Rd         = irradiance * diffuseColor * Fd_Lambert();
 
         // Specular IBL component
         float  lod              = alpha * (SceneParams.IBLEnvironmentNumLevels - 1);
-        float3 prefilteredColor = GetIBLEnvironment(IBLEnvironmentMaps[SceneParams.IBLIndex], Rr, lod);
+        float3 prefilteredColor = GetIBLEnvironment(IBLTextures->EnvironmentMaps[SceneParams.IBLIndex], Rr, lod);
         float2 envBRDF          = (float2)0;
         float3 Rs               = (float3)0;
         if (SceneParams.Multiscatter) {
-            envBRDF = GetBRDFIntegrationMultiscatterMap(IBLIntegrationMultiscatterLUT, NoV, alpha);
+            envBRDF = GetBRDFIntegrationMultiscatterMap(IBLTextures->IntegrationMultiscatterLUT, NoV, alpha);
             Rs      = prefilteredColor * mix(envBRDF.xxx, envBRDF.yyy, F0);
 
             float3 energyCompensation = 1.0 + F0 * (1.0 / envBRDF.y - 1.0);
             Rs *= energyCompensation;
         }
         else {
-            envBRDF = GetBRDFIntegrationMap(IBLIntegrationLUT, NoV, alpha);
+            envBRDF = GetBRDFIntegrationMap(IBLTextures->IntegrationLUT, NoV, alpha);
             Rs      = prefilteredColor * (F * envBRDF.x + envBRDF.y);
         }
         float3 Rs_dieletric = (specular * dielectric * Rs);
@@ -485,8 +495,8 @@ float4 fragment psmain(
         if (clearCoat > 0) {
             float3 clearCoatFresnel = Fresnel_SchlickRoughness(NoV, 0.04, clearCoatAlpha);
             lod                     = clearCoatAlpha * (SceneParams.IBLEnvironmentNumLevels - 1);
-            prefilteredColor        = GetIBLEnvironment(IBLEnvironmentMaps[SceneParams.IBLIndex], R, lod);
-            envBRDF                 = GetBRDFIntegrationMap(IBLIntegrationLUT, NoV, clearCoatAlpha);
+            prefilteredColor        = GetIBLEnvironment(IBLTextures->EnvironmentMaps[SceneParams.IBLIndex], R, lod);
+            envBRDF                 = GetBRDFIntegrationMap(IBLTextures->IntegrationLUT, NoV, clearCoatAlpha);
             float3 Rs_clearCoat     = prefilteredColor * (clearCoatFresnel * envBRDF.x + envBRDF.y);
             BRDF                    = (BRDF * (1.0 - (clearCoat * clearCoatFresnel))) + (clearCoat * Rs_clearCoat);
         }

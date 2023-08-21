@@ -1,7 +1,7 @@
 #include <metal_stdlib>
 using namespace metal;
 
-#define MAX_IBLS 16
+#define MAX_IBLS 32
 
 struct SceneParameters
 {

@@ -31,7 +31,7 @@ using namespace glm;
 #define NUM_MATERIALS           16
 #define TOTAL_MATERIAL_TEXTURES (NUM_MATERIALS * MATERIAL_TEXTURE_STRIDE)
 
-#define MAX_IBLS                                 16
+#define MAX_IBLS                                 32
 #define IBL_INTEGRATION_LUT_DESCRIPTOR_OFFSET    3
 #define IBL_INTEGRATION_MS_LUT_DESCRIPTOR_OFFSET 4
 #define IBL_IRRADIANCE_MAPS_DESCRIPTOR_OFFSET    16
@@ -330,27 +330,58 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Texture Arrays
     // *************************************************************************
+    MTL::Buffer*               pbrIBLTexturesArgBuffer = nullptr;
+    std::vector<MTL::Texture*> iblEnvTextures;
 
-    // Irradiance
-    std::vector<MTL::Texture*> irrMetalTextures;
-    for (size_t i = 0; i < irrTextures.size(); ++i) {
-        irrMetalTextures.push_back(irrTextures[i].Texture.get());
-    }
+    {
+        MTL::ArgumentEncoder* pbrIBLTexturesArgEncoder = pbrFsShader.Function->newArgumentEncoder(5);
 
-    // Environment
-    std::vector<MTL::Texture*> envMetalTextures;
-    for (size_t i = 0; i < envTextures.size(); ++i) {
-        envMetalTextures.push_back(envTextures[i].Texture.get());
+        pbrIBLTexturesArgBuffer = renderer->Device->newBuffer(pbrIBLTexturesArgEncoder->encodedLength(), MTL::ResourceStorageModeManaged);
+
+        pbrIBLTexturesArgEncoder->setArgumentBuffer(pbrIBLTexturesArgBuffer, 0);
+
+        uint32_t argBufferIndex = 0;
+        pbrIBLTexturesArgEncoder->setTexture(brdfLUT.Texture.get(), argBufferIndex++);
+        pbrIBLTexturesArgEncoder->setTexture(multiscatterBRDFLUT.Texture.get(), argBufferIndex++);
+
+        // Irradiance
+        for (size_t i = 0; i < irrTextures.size(); ++i) {
+            pbrIBLTexturesArgEncoder->setTexture(irrTextures[i].Texture.get(), argBufferIndex++);
+        }
+
+        // Environment
+        for (size_t i = 0; i < envTextures.size(); ++i) {
+            iblEnvTextures.push_back(envTextures[i].Texture.get());
+            pbrIBLTexturesArgEncoder->setTexture(envTextures[i].Texture.get(), argBufferIndex++);
+        }
+
+        pbrIBLTexturesArgBuffer->didModifyRange(NS::Range::Make(0, pbrIBLTexturesArgBuffer->length()));
+
+        pbrIBLTexturesArgEncoder->release();
     }
 
     // Materials
-    std::vector<MTL::Texture*> materialMetalTextures;
-    for (size_t i = 0; i < materialTexturesSets.size(); ++i) {
-        const MaterialTextures* currentMaterial = &materialTexturesSets[i];
-        materialMetalTextures.push_back(currentMaterial->baseColorTexture.Texture.get());
-        materialMetalTextures.push_back(currentMaterial->normalTexture.Texture.get());
-        materialMetalTextures.push_back(currentMaterial->roughnessTexture.Texture.get());
-        materialMetalTextures.push_back(currentMaterial->metallicTexture.Texture.get());
+    MTL::Buffer* pbrEnvMaterialTexturesArgBuffer = nullptr;
+
+    {
+        MTL::ArgumentEncoder* pbrEnvMaterialTexturesArgEncoder = pbrFsShader.Function->newArgumentEncoder(6);
+
+        pbrEnvMaterialTexturesArgBuffer = renderer->Device->newBuffer(pbrEnvMaterialTexturesArgEncoder->encodedLength(), MTL::ResourceStorageModeManaged);
+
+        pbrEnvMaterialTexturesArgEncoder->setArgumentBuffer(pbrEnvMaterialTexturesArgBuffer, 0);
+
+        uint32_t argBufferIndex = 0;
+        for (size_t i = 0; i < materialTexturesSets.size(); ++i) {
+            const MaterialTextures* currentMaterial = &materialTexturesSets[i];
+            pbrEnvMaterialTexturesArgEncoder->setTexture(currentMaterial->baseColorTexture.Texture.get(), argBufferIndex++);
+            pbrEnvMaterialTexturesArgEncoder->setTexture(currentMaterial->normalTexture.Texture.get(), argBufferIndex++);
+            pbrEnvMaterialTexturesArgEncoder->setTexture(currentMaterial->roughnessTexture.Texture.get(), argBufferIndex++);
+            pbrEnvMaterialTexturesArgEncoder->setTexture(currentMaterial->metallicTexture.Texture.get(), argBufferIndex++);
+        }
+
+        pbrEnvMaterialTexturesArgBuffer->didModifyRange(NS::Range::Make(0, pbrEnvMaterialTexturesArgBuffer->length()));
+
+        pbrEnvMaterialTexturesArgEncoder->release();
     }
 
     // *************************************************************************
@@ -559,7 +590,7 @@ int main(int argc, char** argv)
             pRenderEncoder->setFragmentBytes(&envSceneParams, sizeof(envSceneParams), 2);
 
             // Textures
-            pRenderEncoder->setFragmentTextures(DataPtr(envMetalTextures), NS::Range(0, gMaxIBLs));
+            pRenderEncoder->setFragmentTextures(DataPtr(iblEnvTextures), NS::Range(0, gMaxIBLs));
 
             // Vertex buffers
             MTL::Buffer* vbvs[2]    = {};
@@ -592,11 +623,38 @@ int main(int argc, char** argv)
             // MaterialParameters [[buffer(4)]]
             pRenderEncoder->setFragmentBytes(DataPtr(materialParametersSets), sizeof(MaterialParameters) * CountU32(materialParametersSets), 4);
             // Textures
-            pRenderEncoder->setFragmentTexture(brdfLUT.Texture.get(), IBL_INTEGRATION_LUT_DESCRIPTOR_OFFSET);
-            pRenderEncoder->setFragmentTexture(multiscatterBRDFLUT.Texture.get(), IBL_INTEGRATION_MS_LUT_DESCRIPTOR_OFFSET);
-            pRenderEncoder->setFragmentTextures(DataPtr(irrMetalTextures), NS::Range(IBL_IRRADIANCE_MAPS_DESCRIPTOR_OFFSET, gMaxIBLs));
-            pRenderEncoder->setFragmentTextures(DataPtr(envMetalTextures), NS::Range(IBL_ENVIRONMENT_MAPS_DESCRIPTOR_OFFSET, gMaxIBLs));
-            pRenderEncoder->setFragmentTextures(DataPtr(materialMetalTextures), NS::Range(MATERIAL_TEXTURES_DESCRIPTOR_OFFSET, TOTAL_MATERIAL_TEXTURES));
+            pRenderEncoder->setFragmentBuffer(pbrIBLTexturesArgBuffer, 0, 5);
+            pRenderEncoder->setFragmentBuffer(pbrEnvMaterialTexturesArgBuffer, 0, 6);
+
+            // Setup ArgBuffers Usages
+            {
+                pRenderEncoder->useResource(brdfLUT.Texture.get(), MTL::ResourceUsageRead);
+                pRenderEncoder->useResource(brdfLUT.Texture.get(), MTL::ResourceUsageRead);
+
+                uint32_t argBufferIndex = 0;
+                pRenderEncoder->useResource(brdfLUT.Texture.get(), MTL::ResourceUsageRead);
+                pRenderEncoder->useResource(multiscatterBRDFLUT.Texture.get(), MTL::ResourceUsageRead);
+
+                // Irradiance
+                for (size_t i = 0; i < irrTextures.size(); ++i) {
+                    pRenderEncoder->useResource(irrTextures[i].Texture.get(), MTL::ResourceUsageRead);
+                }
+
+                // Environment
+                for (size_t i = 0; i < envTextures.size(); ++i) {
+                    pRenderEncoder->useResource(envTextures[i].Texture.get(), MTL::ResourceUsageRead);
+                }
+
+                for (size_t i = 0; i < materialTexturesSets.size(); ++i) {
+                    const MaterialTextures* currentMaterial = &materialTexturesSets[i];
+                    pRenderEncoder->useResource(currentMaterial->baseColorTexture.Texture.get(), MTL::ResourceUsageRead);
+                    pRenderEncoder->useResource(currentMaterial->normalTexture.Texture.get(), MTL::ResourceUsageRead);
+                    pRenderEncoder->useResource(currentMaterial->roughnessTexture.Texture.get(), MTL::ResourceUsageRead);
+                    pRenderEncoder->useResource(currentMaterial->metallicTexture.Texture.get(), MTL::ResourceUsageRead);
+                }
+            }
+
+            pRenderEncoder->useResource(brdfLUT.Texture.get(), MTL::ResourceUsageRead);
 
             // Select which model to draw
             const GeometryBuffers& geoBuffers = matGeoBuffers[gModelIndex];
