@@ -340,19 +340,18 @@ int main(int argc, char** argv)
 
         pbrIBLTexturesArgEncoder->setArgumentBuffer(pbrIBLTexturesArgBuffer, 0);
 
-        uint32_t argBufferIndex = 0;
-        pbrIBLTexturesArgEncoder->setTexture(brdfLUT.Texture.get(), argBufferIndex++);
-        pbrIBLTexturesArgEncoder->setTexture(multiscatterBRDFLUT.Texture.get(), argBufferIndex++);
+        pbrIBLTexturesArgEncoder->setTexture(brdfLUT.Texture.get(), 0);
+        pbrIBLTexturesArgEncoder->setTexture(multiscatterBRDFLUT.Texture.get(), 1);
 
         // Irradiance
         for (size_t i = 0; i < irrTextures.size(); ++i) {
-            pbrIBLTexturesArgEncoder->setTexture(irrTextures[i].Texture.get(), argBufferIndex++);
+            pbrIBLTexturesArgEncoder->setTexture(irrTextures[i].Texture.get(), 2 + i);
         }
 
         // Environment
         for (size_t i = 0; i < envTextures.size(); ++i) {
             iblEnvTextures.push_back(envTextures[i].Texture.get());
-            pbrIBLTexturesArgEncoder->setTexture(envTextures[i].Texture.get(), argBufferIndex++);
+            pbrIBLTexturesArgEncoder->setTexture(envTextures[i].Texture.get(), 2 + MAX_IBLS + i);
         }
 
         pbrIBLTexturesArgBuffer->didModifyRange(NS::Range::Make(0, pbrIBLTexturesArgBuffer->length()));
