@@ -131,7 +131,7 @@ The purpose of this experiment is to show how to use HLSL's `PrimitiveIndex()` t
 indices for an intersected triangle. These vertex indices then can be used to look up vertex attributes
 such as normals for shading. 
 
-Shaders are found in the [assets/projects/021_raytracing_triangles_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/021_raytracing_triangles_d3d12) directory.
+Shaders are found in the [assets/projects/021_raytracing_triangles](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/021_raytracing_triangles) directory.
 
 ## raytracing_multi_geo
 ![alt text](../../images/screenshots/raytracing/raytracing_multi_geo.png?raw=true)
@@ -148,7 +148,7 @@ A single BLAS is used to contain 3 difference pieces of geometry: cube, sphere, 
 Note the argument value for  `TraceRay()`'s `MultiplierForGeometryContributionToHitGroupIndex` is set to 0.
 This is necessary for `GeometryIndex()` to work correctly.
 
-Shaders are found in the [assets/projects/023_raytracing_multi_geo_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/023_raytracing_multi_geo_d3d12) directory.
+Shaders are found in the [assets/projects/022_raytracing_multi_geo](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/022_raytracing_multi_geo) directory.
 
 ## raytracing_multi_instance
 ![alt text](../../images/screenshots/raytracing/raytracing_multi_instance.png?raw=true)
@@ -163,7 +163,7 @@ vertex indices then can be used to look up vertex attributes such as normals for
 There are 3 BLASes in this experiment - each containing a different geometry.  
 The TLAS has 3 instance descriptions - each pointing to one of the 3 BLASes.
 
-Shaders are found in the [assets/projects/025_raytracing_multi_instance_d3d12](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/025_raytracing_multi_instance_d3d12) directory.
+Shaders are found in the [assets/projects/023_raytracing_multi_instance](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/023_raytracing_multi_instance) directory.
 
 ## pbr_spheres
 ![alt text](../../images/screenshots/raytracing/pbr_spheres.png?raw=true)
@@ -177,7 +177,7 @@ since there's a large number of samples for both the diffuse and specular calcul
 There are no punctual lights in this sample, all the lighting is done via IBL. Punctual lights might
 get added later.
 
-Shaders are found in the [assets/projects/027_28_raytracing_pbr_spheres](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/027_28_raytracing_pbr_spheres) directory.
+Shaders are found in the [assets/projects/024_raytracing_pbr_spheres](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/024_raytracing_pbr_spheres) directory.
 
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
@@ -193,7 +193,7 @@ to achieve the look you want.
 There are no punctual lights in this sample, all the lighting is done via IBL. Punctual lights might
 get added later.
 
-Shaders are found in the [assets/projects/029_30_raytracing_refract](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/029_30_raytracing_refract) directory.
+Shaders are found in the [assets/projects/025_raytracing_refract](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/025_raytracing_refract) directory.
 
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 
@@ -210,7 +210,7 @@ But fun to see it starting to work. Sample count get reset if camera is move usi
 There are no punctual lights in this sample, all the lighting is done via IBL. Punctual lights might
 get added later.
 
-Shaders are found in the [assets/projects/031_032_raytracing_path_trace](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/031_032_raytracing_path_trace) directory.
+Shaders are found in the [assets/projects/030_raytracing_path_trace](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/030_raytracing_path_trace) directory.
 
 This experiment uses [Nathan Reed's PCG has function](https://www.reedbeta.com/blog/hash-functions-for-gpu-rendering/)
 
@@ -233,7 +233,7 @@ of the IBL and diffuse began to look more like specular - which wasn't desirable
 There are no punctual lights in this sample, all the lighting is done via IBL. Punctual lights might
 get added later.
 
-Shaders are found in the [assets/projects/031_032_raytracing_path_trace](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/031_032_raytracing_path_trace) directory.
+Shaders are found in the [assets/projects/031_raytracing_path_trace_pbr](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects/031_raytracing_path_trace_pbr) directory.
 
 HDRI images for IBL are from [Poly Haven](https://polyhaven.com/hdris), which are generously provided under [CC0](https://polyhaven.com/license).
 

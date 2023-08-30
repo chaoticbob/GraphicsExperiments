@@ -231,15 +231,6 @@ void CreateIBLTextures(
     std::vector<MetalTexture>& outEnvironmentTextures,
     std::vector<uint32_t>&     outEnvNumLevels);
 
-/*
-void CreateMaterialSphereVertexBuffers(
-    MetalRenderer* pRenderer,
-    uint32_t*      pNumIndices,
-    MetalBuffer*   pIndexBuffer,
-    MetalBuffer*   pPositionBuffer,
-    MetalBuffer*   pNormalBuffer);
-*/
-
 void MouseMove(int x, int y, int buttons)
 {
     static int prevX = x;

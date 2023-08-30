@@ -15,12 +15,6 @@ enum DxPipelineFlags
     DX_PIPELINE_FLAGS_INTERLEAVED_ATTRS = 0x00000001
 };
 
-// struct DxMipOffset
-//{
-//     uint32_t offset    = 0;
-//     uint32_t rowStride = 0;
-// };
-
 struct DxRenderer
 {
     bool                                     DebugEnabled                  = true;
@@ -54,10 +48,25 @@ bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t he
 bool WaitForGpu(DxRenderer* pRenderer);
 bool SwapchainPresent(DxRenderer* pRenderer);
 
+DXGI_FORMAT ToDxFormat(GREXFormat format);
+
+HRESULT CreateBuffer(DxRenderer* pRenderer, size_t size, D3D12_HEAP_TYPE heapType, ID3D12Resource** ppResource);
+HRESULT CreateBuffer(DxRenderer* pRenderer, ID3D12Resource* pSrcBuffer, D3D12_HEAP_TYPE heapType, ID3D12Resource** ppResource);
+HRESULT CreateBuffer(DxRenderer* pRenderer, size_t bufferSize, size_t srcSize, const void* pSrcData, D3D12_HEAP_TYPE heapType, ID3D12Resource** ppResource);
+HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData, D3D12_HEAP_TYPE heapType, ID3D12Resource** ppResource);
 HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData, ID3D12Resource** ppResource);
 HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData, size_t minAlignment, ID3D12Resource** ppResource);
 HRESULT CreateBuffer(DxRenderer* pRenderer, size_t rowStride, size_t totalNumRows, const void* pSrcData, ID3D12Resource** ppResource);
 HRESULT CreateUAVBuffer(DxRenderer* pRenderer, size_t size, D3D12_RESOURCE_STATES initialResourceState, ID3D12Resource** ppResource);
+
+HRESULT CreateTexture(
+    DxRenderer*      pRenderer,
+    uint32_t         width,
+    uint32_t         height,
+    DXGI_FORMAT      format,
+    uint32_t         numMipLevels,
+    uint32_t         numArrayLayers,
+    ID3D12Resource** ppResource);
 
 HRESULT CreateTexture(
     DxRenderer*                   pRenderer,
@@ -157,6 +166,16 @@ HRESULT CreateDrawBasicPipeline(
     D3D12_CULL_MODE          cullMode = D3D12_CULL_MODE_BACK);
 
 HRESULT CreateGraphicsPipeline1(
+    DxRenderer*              pRenderer,
+    ID3D12RootSignature*     pRootSig,
+    const std::vector<char>& vsShaderBytecode,
+    const std::vector<char>& psShaderBytecode,
+    DXGI_FORMAT              rtvFormat,
+    DXGI_FORMAT              dsvFormat,
+    ID3D12PipelineState**    ppPipeline,
+    D3D12_CULL_MODE          cullMode = D3D12_CULL_MODE_BACK);
+
+HRESULT CreateGraphicsPipeline2(
     DxRenderer*              pRenderer,
     ID3D12RootSignature*     pRootSig,
     const std::vector<char>& vsShaderBytecode,

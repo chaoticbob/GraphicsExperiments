@@ -6,6 +6,7 @@ cmake_minimum_required(VERSION 3.0)
 set(GREX_PROJECTS_COMMON_DIR "${GREX_PROJECTS_DIR}/common")
 
 add_subdirectory(geometry)
+add_subdirectory(io)
 add_subdirectory(pbr)
 add_subdirectory(raytracing)
 add_subdirectory(texture)

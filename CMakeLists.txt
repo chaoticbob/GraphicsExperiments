@@ -51,8 +51,15 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Compile flags and definitions
 # ------------------------------------------------------------------------------
 if (MSVC)
-    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} /MP -D_CRT_SECURE_NO_WARNINGS")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP -D_CRT_SECURE_NO_WARNINGS")
+    #
+    # KTX-Software has some stuff in it that that doesn't get along with the
+    # Visual Studio C++20 compiler. KTX-Software turns on /W4 so we need to 
+    # globally disable these warnings:
+    #    5054
+    #    4005
+    #
+    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} /MP -D_CRT_SECURE_NO_WARNINGS /wd5054 /wd4005")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP -D_CRT_SECURE_NO_WARNINGS /wd5054  /wd4005")
 endif()
 
 if (GREX_LINUX)
@@ -148,6 +155,17 @@ set(GLFW_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_DOCS     OFF CACHE BOOL "" FORCE)
 set(GLFW_VULKAN_STATIC  OFF CACHE BOOL "" FORCE)
 add_subdirectory(${GREX_THIRD_PARTY_DIR}/glfw)
+
+# ------------------------------------------------------------------------------
+# Configure KTX-Software
+# ------------------------------------------------------------------------------
+set(KTX_FEATURE_STATIC_LIBRARY ON  CACHE BOOL "" FORCE)
+set(KTX_FEATURE_TOOLS          OFF CACHE BOOL "" FORCE)
+set(KTX_FEATURE_DOC            OFF CACHE BOOL "" FORCE)
+set(KTX_FEATURE_JNI            OFF CACHE BOOL "" FORCE)
+set(KTX_FEATURE_TESTS          OFF CACHE BOOL "" FORCE)
+set(KTX_FEATURE_TOOLS_CTS      OFF CACHE BOOL "" FORCE)
+add_subdirectory(${GREX_THIRD_PARTY_DIR}/KTX-Software)
 
 # ------------------------------------------------------------------------------
 # ImGui

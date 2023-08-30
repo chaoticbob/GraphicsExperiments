@@ -118,6 +118,13 @@ VkResult GetSwapchainImages(VulkanRenderer* pRenderer, std::vector<VkImage>& ima
 VkResult AcquireNextImage(VulkanRenderer* pRenderer, uint32_t* pImageIndex);
 bool     SwapchainPresent(VulkanRenderer* pRenderer, uint32_t imageIndex);
 
+
+VkFormat    ToVkFormat(GREXFormat format);
+VkIndexType ToVkIndexType(GREXFormat format);
+
+uint32_t BitsPerPixel(VkFormat fmt);
+uint32_t BytesPerPixel(VkFormat fmt);
+
 VkResult CreateCommandBuffer(VulkanRenderer* pRenderer, VkCommandPoolCreateFlags poolCreateFlags, CommandObjects* pCmdBuf);
 void     DestroyCommandBuffer(VulkanRenderer* pRenderer, CommandObjects* pCmdBuf);
 VkResult ExecuteCommandBuffer(VulkanRenderer* pRenderer, const CommandObjects* pCmdBuf, VkFence fence = VK_NULL_HANDLE);
@@ -154,6 +161,7 @@ struct VulkanPipelineLayout
 struct VulkanBuffer
 {
     VkBuffer          Buffer;
+    VmaAllocator      Allocator;
     VmaAllocation     Allocation;
     VmaAllocationInfo AllocationInfo;
     VkDeviceSize      Size;
@@ -186,6 +194,17 @@ struct VulkanRenderPass
     VkRenderPass  RenderPass;
     VkFramebuffer Framebuffer;
 };
+
+//! @fn CreateBuffer
+//!
+//! Creates a buffer object with memory allocated and filled with
+//! data from pSrcBuffer.
+//!
+VkResult CreateBuffer(
+    VulkanRenderer*    pRenderer,
+    VkBufferUsageFlags usageFlags,
+    VulkanBuffer*      pSrcBuffer,
+    VulkanBuffer*      pBuffer);
 
 //! @fn CreateBuffer
 //!
@@ -350,6 +369,16 @@ HRESULT CreateDrawBasicPipeline(
     const char*        fsEntryPoint = "main");
 
 HRESULT CreateGraphicsPipeline1(
+   VulkanRenderer*      pRenderer,
+   VkPipelineLayout     pipelineLayout,
+   VkShaderModule       vsShaderModule,
+   VkShaderModule       fsShaderModule,
+   VkFormat             rtvFormat,
+   VkFormat             dsvFormat,
+   VkPipeline*          pPipeline,
+   VkCullModeFlagBits   cullMode = VK_CULL_MODE_BACK_BIT);
+
+HRESULT CreateGraphicsPipeline2(
    VulkanRenderer*      pRenderer,
    VkPipelineLayout     pipelineLayout,
    VkShaderModule       vsShaderModule,

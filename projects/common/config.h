@@ -28,12 +28,45 @@ using Microsoft::WRL::ComPtr;
         Print(ss_grex_log_info.str().c_str());             \
     }
 
+#define GREX_LOG_WARN(MSG)                                 \
+    {                                                      \
+        std::stringstream ss_grex_log_info;                \
+        ss_grex_log_info << "WARN : " << MSG << std::endl; \
+        Print(ss_grex_log_info.str().c_str());             \
+    }
+
 #define GREX_LOG_ERROR(MSG)                                \
     {                                                      \
         std::stringstream ss_grex_log_info;                \
         ss_grex_log_info << "ERROR: " << MSG << std::endl; \
         Print(ss_grex_log_info.str().c_str());             \
     }
+
+#define GREX_MAX_VERTEX_ATTRIBUTES 6
+
+enum GREXFormat
+{
+    GREX_FORMAT_UNKNOWN            = 0,
+    GREX_FORMAT_R8_UNORM           = 1,
+    GREX_FORMAT_R8G8_UNORM         = 2,
+    GREX_FORMAT_R8G8B8A8_UNORM     = 3,
+    GREX_FORMAT_R8_UINT            = 4,
+    GREX_FORMAT_R16_UINT           = 5,
+    GREX_FORMAT_R16G16_UINT        = 6,
+    GREX_FORMAT_R16G16B16A16_UINT  = 7,
+    GREX_FORMAT_R32_UINT           = 8,
+    GREX_FORMAT_R32_FLOAT          = 9,
+    GREX_FORMAT_R32G32_FLOAT       = 10,
+    GREX_FORMAT_R32G32B32_FLOAT    = 11,
+    GREX_FORMAT_R32G32B32A32_FLOAT = 12,
+    GREX_FORMAT_BC1_RGB            = 13,
+    GREX_FORMAT_BC3_RGBA           = 14,
+    GREX_FORMAT_BC4_R              = 15,
+    GREX_FORMAT_BC5_RG             = 16,
+    GREX_FORMAT_BC6H_SFLOAT        = 17,
+    GREX_FORMAT_BC6H_UFLOAT        = 18,
+    GREX_FORMAT_BC7_RGBA           = 19,
+};
 
 struct MipOffset
 {

@@ -683,6 +683,7 @@ public:
     }
 
     static bool Load(const std::filesystem::path& absPath, BitmapRGBA8u* pBitmap);
+    static bool Load(const size_t srcDataSize, const void* pSrcData, BitmapRGBA8u* pBitmap);
     static bool Save(const std::filesystem::path& absPath, const BitmapRGBA8u* pBitmap);
 };
 
@@ -744,6 +745,7 @@ public:
 // Load functions
 // =================================================================================================
 BitmapRGBA8u  LoadImage8u(const std::filesystem::path& subPath);
+BitmapRGBA8u  LoadImage8u(const size_t srcDataSize, const void* pSrcData);
 BitmapRGBA32f LoadImage32f(const std::filesystem::path& subPath);
 
 // =================================================================================================
