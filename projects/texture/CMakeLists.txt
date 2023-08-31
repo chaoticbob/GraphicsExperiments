@@ -27,3 +27,7 @@ if (GREX_ENABLE_VULKAN)
     add_subdirectory(307_parallax_occlusion_map_explorer_vulkan)
     add_subdirectory(308_normal_map_vs_pom_vulkan)
 endif()
+
+if (GREX_ENABLE_METAL)
+    add_subdirectory(301_textured_cube_metal)
+endif()
