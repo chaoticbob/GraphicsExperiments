@@ -66,16 +66,22 @@ VSOutput vertex vertexMain(
 constexpr sampler Sampler0;
 
 float4 fragment fragmentMain( 
-	VSOutput         input    [[stage_in]],
-	texture2d<float> Texture0 [[texture(0)]])
+	         VSOutput         input    [[stage_in]],
+	constant Camera&          Cam      [[buffer(3)]],
+	         texture2d<float> Texture0 [[texture(0)]])
 {
-    float3 lightPos = float3(1, 3, 5);
+    float3 lightPos = float3(1, 2, 5);
     float3 lightDir = normalize(lightPos - input.PositionWS.xyz);
     float  diffuse = 0.8 * saturate(dot(input.Normal, lightDir));
     float  ambient = 0.2;
 
+    float3 R = reflect(-lightDir, input.Normal);
+    float3 V = normalize(Cam.EyePosition - input.PositionWS.xyz);
+    float  RdotV = saturate(dot(R, V));
+    float  specular = pow(RdotV, 6);
+
     float3 color = Texture0.sample(Sampler0, input.TexCoord).xyz;
-    color = (ambient + diffuse) * color;
+    color = (ambient + diffuse + specular) * color;
     return float4(color, 1);
 }
 )";
@@ -183,7 +189,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "302_labmert_textured_cube_metal");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "303_phong_textured_cube_metal");
     if (!window)
     {
         assert(false && "Window::Create failed");
@@ -240,16 +246,18 @@ int main(int argc, char** argv)
         // Update the camera model view projection matrix
         mat4 modelMat = rotate(static_cast<float>(glfwGetTime()), vec3(0, 1, 0)) *
                         rotate(static_cast<float>(glfwGetTime()), vec3(1, 0, 0));
-        mat4 viewMat     = lookAt(vec3(0, 0, 2), vec3(0, 0, 0), vec3(0, 1, 0));
+        vec3 eyePos      = vec3(0, 0, 2);
+        mat4 viewMat     = lookAt(eyePos, vec3(0, 0, 0), vec3(0, 1, 0));
         mat4 projMat     = perspective(radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
         mat4 projViewMat = projMat * viewMat;
 
         Camera cam               = {};
         cam.ModelMatrix          = modelMat;
         cam.ViewProjectionMatrix = projViewMat;
-        cam.EyePosition          = vec3(0, 0, 2);
+        cam.EyePosition          = eyePos;
 
         pRenderEncoder->setVertexBytes(&cam, sizeof(Camera), 3);
+        pRenderEncoder->setFragmentBytes(&cam, sizeof(Camera), 3);
         pRenderEncoder->setFragmentTexture(texture.Texture.get(), 0);
 
         MTL::Buffer* vbvs[3]    = {positionBuffer.Buffer.get(), texCoordBuffer.Buffer.get(), normalBuffer.Buffer.get()};
