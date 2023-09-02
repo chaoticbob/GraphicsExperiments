@@ -72,9 +72,9 @@ float4 fragment psmain(
     vB = (Camera.ModelMatrix * float4(vB, 0)).xyz;
     vN = (Camera.ModelMatrix * float4(vN, 0)).xyz;
     float3x3 tangentToWorldSpace = float3x3(
-        float3(vT.x, vB.x, vN.x),
-        float3(vT.y, vB.y, vN.y),
-        float3(vT.z, vB.z, vN.z));
+        float3(vT.x, vT.y, vT.z),
+        float3(vB.x, vB.y, vB.z),
+        float3(vN.x, vN.y, vN.z));
     float3x3 worldToTangentSpace = transpose(tangentToWorldSpace);
 
     // These are in tangent space...except uv
