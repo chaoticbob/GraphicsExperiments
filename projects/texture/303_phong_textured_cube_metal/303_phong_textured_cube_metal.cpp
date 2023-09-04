@@ -243,11 +243,11 @@ int main(int argc, char** argv)
         pRenderEncoder->setDepthStencilState(depthStencilState.State.get());
 
         // Update the camera model view projection matrix
-        mat4 modelMat = rotate(static_cast<float>(glfwGetTime()), vec3(0, 1, 0)) *
-                        rotate(static_cast<float>(glfwGetTime()), vec3(1, 0, 0));
+        mat4 modelMat = glm::rotate(static_cast<float>(glfwGetTime()), vec3(0, 1, 0)) *
+                        glm::rotate(static_cast<float>(glfwGetTime()), vec3(1, 0, 0));
         vec3 eyePos      = vec3(0, 0, 2);
-        mat4 viewMat     = lookAt(eyePos, vec3(0, 0, 0), vec3(0, 1, 0));
-        mat4 projMat     = perspective(radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+        mat4 viewMat     = glm::lookAt(eyePos, vec3(0, 0, 0), vec3(0, 1, 0));
+        mat4 projMat     = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
         mat4 projViewMat = projMat * viewMat;
 
         Camera cam               = {};
