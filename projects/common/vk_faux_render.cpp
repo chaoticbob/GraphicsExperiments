@@ -391,6 +391,8 @@ void Draw(const FauxRender::SceneGraph* pGraph, uint32_t instanceIndex, const Fa
             UINT         numBufferViews                            = 0;
             VkBuffer     bufferViews[GREX_MAX_VERTEX_ATTRIBUTES]   = {};
             VkDeviceSize bufferOffsets[GREX_MAX_VERTEX_ATTRIBUTES] = {};
+            VkDeviceSize bufferSizes[GREX_MAX_VERTEX_ATTRIBUTES]   = {};
+            VkDeviceSize bufferStrides[GREX_MAX_VERTEX_ATTRIBUTES] = {};
 
             // Position
             if (batch.PositionBufferView.Format != GREX_FORMAT_UNKNOWN)
@@ -398,6 +400,8 @@ void Draw(const FauxRender::SceneGraph* pGraph, uint32_t instanceIndex, const Fa
                 auto& srcView                 = batch.PositionBufferView;
                 bufferViews[numBufferViews]   = pBuffer->Resource.Buffer;
                 bufferOffsets[numBufferViews] = srcView.Offset;
+                bufferSizes[numBufferViews]   = srcView.Size;
+                bufferStrides[numBufferViews] = srcView.Stride;
 
                 ++numBufferViews;
             }
@@ -407,6 +411,8 @@ void Draw(const FauxRender::SceneGraph* pGraph, uint32_t instanceIndex, const Fa
                 auto& srcView = batch.TexCoordBufferView;
                 bufferViews[numBufferViews] = pBuffer->Resource.Buffer;
                 bufferOffsets[numBufferViews] = srcView.Offset;
+                bufferSizes[numBufferViews]   = srcView.Size;
+                bufferStrides[numBufferViews] = srcView.Stride;
 
                 ++numBufferViews;
             }
@@ -416,6 +422,8 @@ void Draw(const FauxRender::SceneGraph* pGraph, uint32_t instanceIndex, const Fa
                 auto& srcView                 = batch.NormalBufferView;
                 bufferViews[numBufferViews]   = pBuffer->Resource.Buffer;
                 bufferOffsets[numBufferViews] = srcView.Offset;
+                bufferSizes[numBufferViews]   = srcView.Size;
+                bufferStrides[numBufferViews] = srcView.Stride;
 
                 ++numBufferViews;
             }
@@ -425,11 +433,13 @@ void Draw(const FauxRender::SceneGraph* pGraph, uint32_t instanceIndex, const Fa
                 auto& srcView                 = batch.TangentBufferView;
                 bufferViews[numBufferViews]   = pBuffer->Resource.Buffer;
                 bufferOffsets[numBufferViews] = srcView.Offset;
+                bufferSizes[numBufferViews]   = srcView.Size;
+                bufferStrides[numBufferViews] = srcView.Stride;
 
                 ++numBufferViews;
             }
 
-            vkCmdBindVertexBuffers(pCmdObjects->CommandBuffer, 0, numBufferViews, bufferViews, bufferOffsets);
+            vkCmdBindVertexBuffers2(pCmdObjects->CommandBuffer, 0, 4, bufferViews, bufferOffsets, bufferSizes, bufferStrides);
         }
 
         // Draw root constants
