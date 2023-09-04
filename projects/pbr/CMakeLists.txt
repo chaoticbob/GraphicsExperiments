@@ -20,6 +20,7 @@ if (GREX_ENABLE_METAL)
     add_subdirectory(203_pbr_align_metal)
     add_subdirectory(251_pbr_explorer_metal)
     add_subdirectory(252_pbr_material_properties_metal)
+    add_subdirectory(253_pbr_material_textures_metal)
 endif()
 
 if (GREX_ENABLE_VULKAN)

@@ -118,8 +118,10 @@ NS::Error* CreateBuffer(
     pBuffer->Buffer = NS::TransferPtr(pRenderer->Device->newBuffer(srcSize, MTL::ResourceStorageModeManaged));
 
     if (pBuffer->Buffer.get() != nullptr) {
-        memcpy(pBuffer->Buffer->contents(), pSrcData, srcSize);
-        pBuffer->Buffer->didModifyRange(NS::Range::Make(0, pBuffer->Buffer->length()));
+       if (pSrcData != nullptr) {
+          memcpy(pBuffer->Buffer->contents(), pSrcData, srcSize);
+          pBuffer->Buffer->didModifyRange(NS::Range::Make(0, pBuffer->Buffer->length()));
+       }
     }
     else {
         assert(false && "CreateBuffer() - MTL::Device::newBuffer() failed");
