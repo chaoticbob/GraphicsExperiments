@@ -1320,16 +1320,6 @@ VkResult CreateTexture(
     }
 
     if ((srcSizeBytes > 0) && !IsNull(pSrcData)) {
-        const uint32_t rowStride = width * BytesPerPixel(format);
-        // Calculate the total number of rows for all mip maps
-        uint32_t numRows = 0;
-        {
-            uint32_t mipHeight = height;
-            for (UINT level = 0; level < mipLevels; ++level) {
-                numRows += mipHeight;
-                mipHeight >>= 1;
-            }
-        }
         VulkanBuffer stagingBuffer = {};
         if (IsCompressed(format))
         {
@@ -3238,6 +3228,33 @@ uint32_t BytesPerPixel(VkFormat fmt)
 {
     uint32_t nbytes = BitsPerPixel(fmt) / 8;
     return nbytes;
+}
+
+bool IsCompressed(VkFormat fmt)
+{
+    switch (fmt)
+    {
+        case VK_FORMAT_BC1_RGB_UNORM_BLOCK:
+        case VK_FORMAT_BC1_RGB_SRGB_BLOCK:
+        case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
+        case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
+        case VK_FORMAT_BC2_UNORM_BLOCK:
+        case VK_FORMAT_BC2_SRGB_BLOCK:
+        case VK_FORMAT_BC3_UNORM_BLOCK:
+        case VK_FORMAT_BC3_SRGB_BLOCK:
+        case VK_FORMAT_BC4_UNORM_BLOCK:
+        case VK_FORMAT_BC4_SNORM_BLOCK:
+        case VK_FORMAT_BC5_UNORM_BLOCK:
+        case VK_FORMAT_BC5_SNORM_BLOCK:
+        case VK_FORMAT_BC6H_UFLOAT_BLOCK:
+        case VK_FORMAT_BC6H_SFLOAT_BLOCK:
+        case VK_FORMAT_BC7_UNORM_BLOCK:
+        case VK_FORMAT_BC7_SRGB_BLOCK:
+            return true;
+
+         default: 
+            return false;
+    }
 }
 
 uint32_t BitsPerPixel(VkFormat fmt)
