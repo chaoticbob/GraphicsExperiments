@@ -30,4 +30,5 @@ endif()
 
 if (GREX_ENABLE_METAL)
     add_subdirectory(301_textured_cube_metal)
+    add_subdirectory(302_lambert_textured_cube_metal)
 endif()
