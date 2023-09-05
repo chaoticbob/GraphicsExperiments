@@ -287,6 +287,10 @@ struct CameraParams
 {
     float4x4 ViewProjectionMatrix;
     float3   EyePosition;
+   
+#ifdef __APPLE__
+   uint32_t _padding0;
+#endif // __APPLE__
 };
 
 struct DrawParams
@@ -310,7 +314,13 @@ struct TextureParams
 struct MaterialParams
 {
     uint          MaterialFlags;
+#ifdef __APPLE__
+   uint _padding0[3];
+#endif // __APPLE__
     float3        BaseColor;
+#ifdef __APPLE__
+   uint _padding1;
+#endif // __APPLE__
     float         RoughnessFactor;
     float         MetallicFactor;
     TextureParams BaseColorTexture;
@@ -322,6 +332,9 @@ struct MaterialParams
     vec2  TexCoordTranslate;
     vec2  TexCoordScale;
     float TexCoordRotate;
+#ifdef __APPLE__
+   uint padding2[3];
+#endif // __APPLE__
 };
 
 } // namespace Shader
