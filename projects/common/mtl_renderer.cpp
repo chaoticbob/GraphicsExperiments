@@ -8,6 +8,7 @@
 #include "mtl_renderer.h"
 #include "mtl_renderer_utils.h"
 
+bool     IsCompressed(MTL::PixelFormat fmt);
 uint32_t BitsPerPixel(MTL::PixelFormat fmt);
 
 uint32_t PixelStride(MTL::PixelFormat fmt)
@@ -263,7 +264,14 @@ NS::Error* CreateTexture(
         auto        region  = MTL::Region::Make2D(0, 0, mipWidth, mipHeight);
         const void* mipData = reinterpret_cast<const char*>(pSrcData) + mipOffset.Offset;
 
-        pResource->Texture->replaceRegion(region, mipIndex, mipData, mipOffset.RowStride);
+        uint32_t mipRowStride = mipOffset.RowStride;
+        if (IsCompressed(format))
+        {
+            mipRowStride = mipWidth * 4;
+            mipRowStride = (mipRowStride > 16) ? mipRowStride : 16;
+        }
+
+        pResource->Texture->replaceRegion(region, mipIndex, mipData, mipRowStride);
 
         mipWidth >>= 1;
         mipHeight >>= 1;
@@ -742,7 +750,7 @@ NS::Error* CreateGraphicsPipeline1(
             MTL::VertexFormatFloat3,  // Tangent
             MTL::VertexFormatFloat3}; // Bitangent
 
-        uint32_t strides[inputCount] = {12, 8, 12, 12, 12};
+       uint32_t strides[inputCount] = {12, 8, 12, 12, 12};
         uint32_t offsets[inputCount] = { 0, 0,  0,  0,  0};
 
         for (int inputIndex = 0; inputIndex < inputCount; inputIndex++) {
@@ -809,6 +817,184 @@ NS::Error* CreateGraphicsPipeline1(
     pVertexDescriptor->release();
 
     return pError;
+}
+
+NS::Error* CreateGraphicsPipeline2(
+    MetalRenderer*            pRenderer,
+    MetalShader*              pVsShaderModule,
+    MetalShader*              pFsShaderModule,
+    MTL::PixelFormat          rtvFormat,
+    MTL::PixelFormat          dsvFormat,
+    MetalPipelineRenderState* pPipelineRenderState,
+    MetalDepthStencilState*   pDepthStencilState,
+    uint32_t*                 pOptionalVertexStrides)
+{
+    MTL::VertexDescriptor* pVertexDescriptor = MTL::VertexDescriptor::alloc()->init();
+    if (pVertexDescriptor != nullptr) {
+        const uint32_t    inputCount          = 4;
+
+        MTL::VertexFormat formats[inputCount] = {
+            MTL::VertexFormatFloat3,  // Position
+            MTL::VertexFormatFloat2,  // TexCoord
+            MTL::VertexFormatFloat3,  // Normal
+            MTL::VertexFormatFloat3}; // Tangent
+
+        uint32_t strides[inputCount] = {12, 8, 12, 12};
+        uint32_t offsets[inputCount] = {0, 0, 0, 0};
+
+        if (pOptionalVertexStrides) {
+            memcpy(strides, pOptionalVertexStrides, inputCount * sizeof(uint32_t));
+        }
+
+        for (int inputIndex = 0; inputIndex < inputCount; inputIndex++) {
+            MTL::VertexAttributeDescriptor* vertexAttribute = pVertexDescriptor->attributes()->object(inputIndex);
+            vertexAttribute->setOffset(offsets[inputIndex]);
+            vertexAttribute->setFormat(formats[inputIndex]);
+            vertexAttribute->setBufferIndex(inputIndex);
+
+            MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = pVertexDescriptor->layouts()->object(inputIndex);
+            vertexBufferLayout->setStride(strides[inputIndex]);
+            vertexBufferLayout->setStepRate(1);
+            vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+        }
+    }
+    else {
+        assert(false && "CreateGraphicsPipeline2() - MTL::VertexDescriptor::alloc::init() failed");
+    }
+
+    NS::Error* pError = nullptr;
+    {
+        MTL::RenderPipelineDescriptor* pDesc = MTL::RenderPipelineDescriptor::alloc()->init();
+
+        if (pDesc != nullptr) {
+            pDesc->setVertexFunction(pVsShaderModule->Function.get());
+            pDesc->setFragmentFunction(pFsShaderModule->Function.get());
+            pDesc->setVertexDescriptor(pVertexDescriptor);
+            pDesc->colorAttachments()->object(0)->setPixelFormat(rtvFormat);
+            pDesc->setDepthAttachmentPixelFormat(dsvFormat);
+
+            MTL::RenderPipelineState* pLocalPipelineState = pRenderer->Device->newRenderPipelineState(pDesc, &pError);
+            if (pLocalPipelineState != nullptr) {
+                pPipelineRenderState->State = NS::TransferPtr(pLocalPipelineState);
+            }
+            else {
+                assert(false && "CreateGraphicsPipeline2() - MTL::Device::newRenderPipelineState() failed");
+            }
+
+            pDesc->release();
+        }
+        else {
+            assert(false && "CreateGraphicsPipeline2() - MTL::RenderPipelineDescriptor::alloc()->init() failed");
+        }
+    }
+
+    if (pError == nullptr) {
+        MTL::DepthStencilDescriptor* pDepthStateDesc = MTL::DepthStencilDescriptor::alloc()->init();
+
+        if (pDepthStateDesc != nullptr) {
+            pDepthStateDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
+            pDepthStateDesc->setDepthWriteEnabled(true);
+
+            MTL::DepthStencilState* pLocalDepthState = pRenderer->Device->newDepthStencilState(pDepthStateDesc);
+            if (pLocalDepthState != nullptr) {
+                pDepthStencilState->State = NS::TransferPtr(pLocalDepthState);
+            }
+            else {
+                assert(false && "CreateGraphicsPipeline2() - MTL::Device::newDepthStencilState() failed");
+            }
+
+            pDepthStateDesc->release();
+        }
+    }
+
+    pVertexDescriptor->release();
+
+    return pError;
+}
+
+bool IsCompressed(MTL::PixelFormat fmt)
+{
+	switch(fmt)
+	{
+        case MTL::PixelFormatBC1_RGBA:
+        case MTL::PixelFormatBC1_RGBA_sRGB:
+        case MTL::PixelFormatPVRTC_RGB_2BPP:
+        case MTL::PixelFormatPVRTC_RGB_2BPP_sRGB:
+        case MTL::PixelFormatBC2_RGBA:
+        case MTL::PixelFormatBC2_RGBA_sRGB:
+        case MTL::PixelFormatBC3_RGBA:
+        case MTL::PixelFormatBC3_RGBA_sRGB:
+        case MTL::PixelFormatBC4_RUnorm:
+        case MTL::PixelFormatBC4_RSnorm:
+        case MTL::PixelFormatBC5_RGUnorm:
+        case MTL::PixelFormatBC5_RGSnorm:
+        case MTL::PixelFormatBC6H_RGBFloat:
+        case MTL::PixelFormatBC6H_RGBUfloat:
+        case MTL::PixelFormatBC7_RGBAUnorm:
+        case MTL::PixelFormatBC7_RGBAUnorm_sRGB:
+        case MTL::PixelFormatPVRTC_RGBA_2BPP:
+        case MTL::PixelFormatPVRTC_RGBA_2BPP_sRGB:
+        case MTL::PixelFormatEAC_R11Unorm:
+        case MTL::PixelFormatEAC_R11Snorm:
+        case MTL::PixelFormatPVRTC_RGB_4BPP:
+        case MTL::PixelFormatPVRTC_RGB_4BPP_sRGB:
+        case MTL::PixelFormatPVRTC_RGBA_4BPP:
+        case MTL::PixelFormatPVRTC_RGBA_4BPP_sRGB:
+        case MTL::PixelFormatEAC_RG11Unorm:
+        case MTL::PixelFormatEAC_RG11Snorm:
+        case MTL::PixelFormatETC2_RGB8:
+        case MTL::PixelFormatETC2_RGB8_sRGB:
+        case MTL::PixelFormatEAC_RGBA8:
+        case MTL::PixelFormatEAC_RGBA8_sRGB:
+        case MTL::PixelFormatETC2_RGB8A1:
+        case MTL::PixelFormatETC2_RGB8A1_sRGB:
+        case MTL::PixelFormatASTC_4x4_sRGB:
+        case MTL::PixelFormatASTC_5x4_sRGB:
+        case MTL::PixelFormatASTC_5x5_sRGB:
+        case MTL::PixelFormatASTC_6x5_sRGB:
+        case MTL::PixelFormatASTC_6x6_sRGB:
+        case MTL::PixelFormatASTC_8x5_sRGB:
+        case MTL::PixelFormatASTC_8x6_sRGB:
+        case MTL::PixelFormatASTC_8x8_sRGB:
+        case MTL::PixelFormatASTC_10x5_sRGB:
+        case MTL::PixelFormatASTC_10x6_sRGB:
+        case MTL::PixelFormatASTC_10x8_sRGB:
+        case MTL::PixelFormatASTC_10x10_sRGB:
+        case MTL::PixelFormatASTC_12x10_sRGB:
+        case MTL::PixelFormatASTC_12x12_sRGB:
+        case MTL::PixelFormatASTC_4x4_LDR:
+        case MTL::PixelFormatASTC_5x4_LDR:
+        case MTL::PixelFormatASTC_5x5_LDR:
+        case MTL::PixelFormatASTC_6x5_LDR:
+        case MTL::PixelFormatASTC_6x6_LDR:
+        case MTL::PixelFormatASTC_8x5_LDR:
+        case MTL::PixelFormatASTC_8x6_LDR:
+        case MTL::PixelFormatASTC_8x8_LDR:
+        case MTL::PixelFormatASTC_10x5_LDR:
+        case MTL::PixelFormatASTC_10x6_LDR:
+        case MTL::PixelFormatASTC_10x8_LDR:
+        case MTL::PixelFormatASTC_10x10_LDR:
+        case MTL::PixelFormatASTC_12x10_LDR:
+        case MTL::PixelFormatASTC_12x12_LDR:
+        case MTL::PixelFormatASTC_4x4_HDR:
+        case MTL::PixelFormatASTC_5x4_HDR:
+        case MTL::PixelFormatASTC_5x5_HDR:
+        case MTL::PixelFormatASTC_6x5_HDR:
+        case MTL::PixelFormatASTC_6x6_HDR:
+        case MTL::PixelFormatASTC_8x5_HDR:
+        case MTL::PixelFormatASTC_8x6_HDR:
+        case MTL::PixelFormatASTC_8x8_HDR:
+        case MTL::PixelFormatASTC_10x5_HDR:
+        case MTL::PixelFormatASTC_10x6_HDR:
+        case MTL::PixelFormatASTC_10x8_HDR:
+        case MTL::PixelFormatASTC_10x10_HDR:
+        case MTL::PixelFormatASTC_12x10_HDR:
+        case MTL::PixelFormatASTC_12x12_HDR:
+			return true;
+
+		default:
+			return false;
+    }
 }
 
 uint32_t BitsPerPixel(MTL::PixelFormat fmt)
