@@ -190,6 +190,28 @@ NS::Error* CreateTexture(
         pResource);
 }
 
+NS::Error* CreateRWTexture(
+    MetalRenderer*                pRenderer,
+    uint32_t                      width,
+    uint32_t                      height,
+    MTL::PixelFormat              format,
+    MetalTexture*                 pResource)
+{
+    auto pTextureDesc = NS::TransferPtr(MTL::TextureDescriptor::alloc()->init());
+    pTextureDesc->setWidth(width);
+    pTextureDesc->setHeight(height);
+    pTextureDesc->setPixelFormat(format);
+    pTextureDesc->setTextureType(MTL::TextureType2D);
+    pTextureDesc->setStorageMode(MTL::StorageModePrivate);
+    pTextureDesc->setUsage(MTL::TextureUsageShaderRead | MTL::TextureUsageShaderWrite);
+    pTextureDesc->setMipmapLevelCount(1);
+    pTextureDesc->setArrayLength(1);
+
+    pResource->Texture = NS::TransferPtr(pRenderer->Device->newTexture(pTextureDesc.get()));
+
+    return nullptr;
+}
+
 NS::Error* CreateDrawVertexColorPipeline(
     MetalRenderer*              pRenderer,
     MetalShader*                vsShaderModule,

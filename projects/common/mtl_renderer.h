@@ -75,6 +75,13 @@ NS::Error* CreateTexture(
     const void*      pSrcData,
     MetalTexture*    pResource);
 
+NS::Error* CreateRWTexture(
+    MetalRenderer*                pRenderer,
+    uint32_t                      width,
+    uint32_t                      height,
+    MTL::PixelFormat              format,
+    MetalTexture*                 pResource);
+
 NS::Error* CreateDrawVertexColorPipeline(
     MetalRenderer*              pRenderer,
     MetalShader*                vsShaderModule,
