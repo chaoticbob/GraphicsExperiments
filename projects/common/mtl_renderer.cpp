@@ -826,8 +826,7 @@ NS::Error* CreateGraphicsPipeline2(
     MTL::PixelFormat          rtvFormat,
     MTL::PixelFormat          dsvFormat,
     MetalPipelineRenderState* pPipelineRenderState,
-    MetalDepthStencilState*   pDepthStencilState,
-    uint32_t*                 pOptionalVertexStrides)
+    MetalDepthStencilState*   pDepthStencilState)
 {
     MTL::VertexDescriptor* pVertexDescriptor = MTL::VertexDescriptor::alloc()->init();
     if (pVertexDescriptor != nullptr) {
@@ -839,12 +838,8 @@ NS::Error* CreateGraphicsPipeline2(
             MTL::VertexFormatFloat3,  // Normal
             MTL::VertexFormatFloat3}; // Tangent
 
-        uint32_t strides[inputCount] = {12, 8, 12, 12};
+        uint32_t strides[inputCount] = {48, 48, 48, 48};
         uint32_t offsets[inputCount] = {0, 0, 0, 0};
-
-        if (pOptionalVertexStrides) {
-            memcpy(strides, pOptionalVertexStrides, inputCount * sizeof(uint32_t));
-        }
 
         for (int inputIndex = 0; inputIndex < inputCount; inputIndex++) {
             MTL::VertexAttributeDescriptor* vertexAttribute = pVertexDescriptor->attributes()->object(inputIndex);

@@ -134,5 +134,4 @@ NS::Error* CreateGraphicsPipeline2(
     MTL::PixelFormat          rtvFormat,
     MTL::PixelFormat          dsvFormat,
     MetalPipelineRenderState* pPipeline,
-    MetalDepthStencilState*   pDepthStencilState,
-    uint32_t*                 pOptionalStrides);
+    MetalDepthStencilState*   pDepthStencilState);
