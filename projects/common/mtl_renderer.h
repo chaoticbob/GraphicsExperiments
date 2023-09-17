@@ -54,6 +54,11 @@ struct MetalShader
     NS::SharedPtr<MTL::Function> Function;
 };
 
+struct MetalAS
+{
+   NS::SharedPtr<MTL::AccelerationStructure> AS;
+};
+
 NS::Error* CreateBuffer(MetalRenderer* pRenderer, size_t srcSize, const void* pSrcData, MetalBuffer* pBuffer);
 
 NS::Error* CreateTexture(
@@ -81,6 +86,11 @@ NS::Error* CreateRWTexture(
     uint32_t                      height,
     MTL::PixelFormat              format,
     MetalTexture*                 pResource);
+
+NS::Error* CreateAccelerationStructure(
+    MetalRenderer*                        pRenderer,
+    MTL::AccelerationStructureDescriptor* pAccelDesc,
+    MetalAS*                              pAccelStructure);
 
 NS::Error* CreateDrawVertexColorPipeline(
     MetalRenderer*              pRenderer,

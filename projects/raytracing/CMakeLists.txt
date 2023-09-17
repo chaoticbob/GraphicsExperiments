@@ -42,4 +42,5 @@ endif()
 
 if (GREX_ENABLE_METAL)
     add_subdirectory(000_raygen_uv_metal)
+    add_subdirectory(001_raytracing_basic_metal)
 endif()
