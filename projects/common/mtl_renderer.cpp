@@ -319,6 +319,84 @@ NS::Error* CreateRWTexture(
     return nullptr;
 }
 
+NS::Error* CreateAccelerationStructure(
+    MetalRenderer*                        pRenderer,
+    MTL::AccelerationStructureDescriptor* pAccelDesc,
+    MetalAS*                              pAccelStructure)
+{
+    NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
+   
+   // Query for the sizes needed to store and build the acceleration structure
+   MTL::AccelerationStructureSizes accelSizes = pRenderer->Device->accelerationStructureSizes(pAccelDesc);
+   
+   // Allocate an acceleration structure large enough for this descriptor. This method
+   // doesn't actually build the acceleration strcutre, but rather allocates memory
+   MTL::AccelerationStructure* accelerationStructure =
+      pRenderer->Device->newAccelerationStructure(accelSizes.accelerationStructureSize);
+   
+   // Allocate scratch space Metal uses to build the acceleration structure.
+   // Use MTLResourceStorageModePrivate for the best performance because the sample
+   // doesn't need access to buffer's contents.
+   MTL::Buffer* scratchBuffer= pRenderer->Device->newBuffer(
+      accelSizes.buildScratchBufferSize,
+      MTL::ResourceStorageModePrivate);
+   
+   // Create a command buffer that performs the acceleration structure build
+   MTL::CommandBuffer* pCommandBuffer = pRenderer->Queue->commandBuffer();
+   
+   // Create an acceleration structure command encoder
+   MTL::AccelerationStructureCommandEncoder* pASEncoder = pCommandBuffer->accelerationStructureCommandEncoder();
+   
+   // Allocate a buffer for Metal to write the compacted accelerated structure's size into
+   MTL::Buffer* compactedSizeBuffer = pRenderer->Device->newBuffer(
+      sizeof(uint32_t),
+      MTL::ResourceStorageModeShared);
+   
+   // Schedule the actual acceleration structure build
+   pASEncoder->buildAccelerationStructure(accelerationStructure, pAccelDesc, scratchBuffer, 0);
+   
+   // Compute and write the compacted acceleration structure size into the buffer. You
+   // must already have a built acceleration structure because Metal determines the compacted
+   // size based on the final size of the acceleration structure. Compacting an acclerations
+   // structure can potentially reclaim significant amounts of memory because Metal must
+   // create the initial structur eusing a conservative approach
+   pASEncoder->writeCompactedAccelerationStructureSize(accelerationStructure, compactedSizeBuffer, 0);
+   
+   // End encoding, and commit the command buffer so the GPU can start building the
+   // acceleration structure
+   pASEncoder->endEncoding();
+   pCommandBuffer->commit();
+   
+   // This code waits for Metal to finish executing the command buffer so it can
+   // read back the compacted size
+   pCommandBuffer->waitUntilCompleted();
+   
+   uint32_t compactedSize = *(uint32_t*)compactedSizeBuffer->contents();
+   
+   // Allocate a smaller acceleration structure based on the returned size
+   MTL::AccelerationStructure* compactedAS = pRenderer->Device->newAccelerationStructure(compactedSize);
+   
+   // Create anotehr command buffer and encoder
+   pCommandBuffer = pRenderer->Queue->commandBuffer();
+   pASEncoder = pCommandBuffer->accelerationStructureCommandEncoder();
+   
+   // Encode the command to copy and compact the acceleration structure into the
+   // smaller acceleartion structure
+   pASEncoder->copyAndCompactAccelerationStructure(accelerationStructure, compactedAS);
+   
+   // End encoding and commit the command buffer. You don't need to wait for Metal to finish
+   // executing this command buffer as long as you synchronize any ray-intersection work
+   // to run after this command buffer completes. The sample relies on Metal's default
+   // dependency trackign on resourcers to automatically synchronize access to the new
+   // compacted acceleration structure
+   pASEncoder->endEncoding();
+   pCommandBuffer->commit();
+   
+   pAccelStructure->AS = NS::TransferPtr(compactedAS);
+   
+   return nullptr;
+}
+
 NS::Error* CreateDrawVertexColorPipeline(
     MetalRenderer*              pRenderer,
     MetalShader*                vsShaderModule,
