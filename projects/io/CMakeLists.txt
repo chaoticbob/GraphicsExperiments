@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.5)
 
 # ------------------------------------------------------------------------------
 # Configure directories
@@ -19,4 +19,8 @@ if (GREX_ENABLE_VULKAN)
     add_subdirectory(403_gltf_basic_material_vulkan)
     add_subdirectory(404_gltf_basic_material_texture_vulkan)
     add_subdirectory(405_gltf_full_material_test_vulkan)
+endif()
+
+if (GREX_ENABLE_METAL)
+    add_subdirectory(401_gltf_basic_geo_metal)
 endif()

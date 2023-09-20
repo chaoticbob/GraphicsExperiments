@@ -29,6 +29,9 @@ struct MetalRenderer
 bool InitMetal(MetalRenderer* pRenderer, bool enableDebug);
 bool InitSwapchain(MetalRenderer* pRenderer, void* pCocoaWindow, uint32_t width, uint32_t height, uint32_t bufferCount = 2, MTL::PixelFormat dsvFormat = MTL::PixelFormatInvalid);
 
+MTL::PixelFormat ToMTLFormat(GREXFormat format);
+MTL::IndexType ToMTLIndexType(GREXFormat format);
+
 struct MetalBuffer
 {
     NS::SharedPtr<MTL::Buffer> Buffer;
@@ -60,6 +63,7 @@ struct MetalAS
 };
 
 NS::Error* CreateBuffer(MetalRenderer* pRenderer, size_t srcSize, const void* pSrcData, MetalBuffer* pBuffer);
+NS::Error* CreateBuffer(MetalRenderer* pRenderer, MetalBuffer* pSrcBuffer, MetalBuffer* pBuffer);
 
 NS::Error* CreateTexture(
     MetalRenderer*                pRenderer,
