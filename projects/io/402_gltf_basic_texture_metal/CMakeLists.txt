@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(401_gltf_basic_geo_metal)
+project(402_gltf_basic_texture_metal)
 
 add_executable(
-    401_gltf_basic_geo_metal
-    401_gltf_basic_geo_metal.cpp
+    402_gltf_basic_texture_metal
+    402_gltf_basic_texture_metal.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer.cpp
@@ -24,10 +24,10 @@ add_executable(
     ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/ResourceLimits.cpp
 )
 
-set_target_properties(401_gltf_basic_geo_metal PROPERTIES FOLDER "io")
+set_target_properties(402_gltf_basic_texture_metal PROPERTIES FOLDER "io")
 
 target_include_directories(
-    401_gltf_basic_geo_metal
+    402_gltf_basic_texture_metal
     PUBLIC  ${GREX_PROJECTS_COMMON_DIR}
         ${GREX_THIRD_PARTY_DIR}/glm
         ${GREX_THIRD_PARTY_DIR}/tinyobjloader
@@ -42,7 +42,7 @@ FIND_LIBRARY(METAL_LIBRARY Metal)
 FIND_LIBRARY(METALKIT_LIBRARY MetalKit)
 
 target_link_libraries(
-    401_gltf_basic_geo_metal
+    402_gltf_basic_texture_metal
     PUBLIC glfw
            glslang
            ${FOUNDATION_LIBRARY}
