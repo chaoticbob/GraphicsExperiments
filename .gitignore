@@ -9,6 +9,7 @@ include/
 lib/
 build-vs2022/
 build/
+*.swp
 
 **/CMakeFiles
 **/*.sln
