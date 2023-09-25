@@ -8,6 +8,8 @@
 #include "mtl_renderer.h"
 #include "mtl_renderer_utils.h"
 
+extern void* getMetalLayer();
+
 uint32_t BitsPerPixel(MTL::PixelFormat fmt);
 
 uint32_t PixelStride(MTL::PixelFormat fmt)
@@ -38,7 +40,6 @@ bool InitMetal(
     }
 
     pRenderer->DebugEnabled = enableDebug;
-
     pRenderer->Device = NS::TransferPtr(MTL::CreateSystemDefaultDevice());
     if (pRenderer->Device.get() == nullptr) {
         assert(false && "MTL::CreateSystemDefaultDevice() failed");
@@ -63,17 +64,23 @@ bool InitSwapchain(
     MTL::PixelFormat dsvFormat)
 {
     CGSize layerSize = {(float)width, (float)height};
-
+   
     // Don't need to Retain/Release the swapchain as the function doesn't match the
     // naming template given in the metal-cpp README.md
-    CA::MetalLayer* layer = CA::MetalLayer::layer();
+#ifdef TARGET_IOS
+   CA::MetalLayer* layer = (CA::MetalLayer*)MetalGetMetalLayer();
+#else
+   CA::MetalLayer* layer = CA::MetalLayer::layer();
+#endif
 
     if (layer != nullptr) {
         layer->setDevice(pRenderer->Device.get());
         layer->setPixelFormat(GREX_DEFAULT_RTV_FORMAT);
         layer->setDrawableSize(layerSize);
 
-        MetalSetNSWindowSwapchain(pCocoaWindow, layer);
+#ifndef TARGET_IOS
+       MetalSetNSWindowSwapchain(pCocoaWindow, layer);
+#endif
 
         pRenderer->pSwapchain            = layer;
         pRenderer->SwapchainBufferCount = bufferCount;

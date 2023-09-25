@@ -28,6 +28,7 @@ struct MetalRenderer
 
 bool InitMetal(MetalRenderer* pRenderer, bool enableDebug);
 bool InitSwapchain(MetalRenderer* pRenderer, void* pCocoaWindow, uint32_t width, uint32_t height, uint32_t bufferCount = 2, MTL::PixelFormat dsvFormat = MTL::PixelFormatInvalid);
+void SetCAMetalLayer(void *pMetalLayer);
 
 MTL::PixelFormat ToMTLFormat(GREXFormat format);
 MTL::IndexType ToMTLIndexType(GREXFormat format);

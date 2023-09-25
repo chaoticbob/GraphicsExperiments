@@ -1,5 +1,6 @@
 #include "mtl_renderer_utils.h"
 
+#if !TARGET_IOS
 #include <Cocoa/Cocoa.h>
 #include <QuartzCore/QuartzCore.h>
 
@@ -13,3 +14,14 @@ void MetalSetNSWindowSwapchain(
     pNSWindow.contentView.layer      = pSwapchain;
     pNSWindow.contentView.wantsLayer = YES;
 }
+
+#else // TARGET_IOS
+
+#include "ios/AAPLViewController.h"
+
+void* MetalGetMetalLayer()
+{
+   return (void*)getMetalLayer();
+}
+
+#endif

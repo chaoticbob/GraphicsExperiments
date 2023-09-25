@@ -26,6 +26,11 @@ using namespace glm;
         }                                                                            \
     }
 
+struct BoundingBox {
+    MTL::PackedFloat3 min;
+    MTL::PackedFloat3 max;
+};
+
 // =============================================================================
 // Shader code
 // =============================================================================
@@ -56,8 +61,6 @@ float4 MyMissShader(intersector<instancing>::result_type intersection)
 
 float4 MyClosestHitShader(intersector<instancing>::result_type intersection, float3 positionWS)
 {
-	// const device Sphere* sphereArray = (const device Sphere*)intersection.primitive_data;
-	// Sphere sphere = sphereArray[intersection.geometry_id];
 	Sphere sphere = *(const device Sphere*)intersection.primitive_data;
 
 	float3 sphereMin = float3(sphere.minX, sphere.minY, sphere.minZ);
@@ -220,12 +223,12 @@ static bool     gEnableDebug  = true;
 
 void CreateSphereBuffer(
     MetalRenderer* pRenderer,
-    uint32_t*      pNumSpheres,
+    std::vector<SphereFlake>& spheres,
     MetalBuffer*   pBuffer);
 
 void CreateBLAS(
     MetalRenderer*        pRenderer,
-    uint32_t              numSpheres,
+    std::vector<SphereFlake>& spheres,
     MetalBuffer*          pSphereBuffer,
     std::vector<MetalAS>& BLAS);
 
@@ -306,9 +309,9 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Sphere buffer
     // *************************************************************************
-    uint32_t    numSpheres = 0;
     MetalBuffer sphereBuffer;
-    CreateSphereBuffer(renderer.get(), &numSpheres, &sphereBuffer);
+    std::vector<SphereFlake> spheres;
+    CreateSphereBuffer(renderer.get(), spheres, &sphereBuffer);
 
     // *************************************************************************
     // Ray trace pipeline
@@ -354,7 +357,7 @@ int main(int argc, char** argv)
     // Bottom level acceleration structure
     // *************************************************************************
     std::vector<MetalAS> blasBuffer;
-    CreateBLAS(renderer.get(), numSpheres, &sphereBuffer, blasBuffer);
+    CreateBLAS(renderer.get(), spheres, &sphereBuffer, blasBuffer);
 
     // *************************************************************************
     // Top level acceleration structure
@@ -473,11 +476,9 @@ int main(int argc, char** argv)
 
 void CreateSphereBuffer(
     MetalRenderer* pRenderer,
-    uint32_t*      pNumSpheres,
+    std::vector<SphereFlake>& spheres,
     MetalBuffer*   pBuffer)
 {
-    std::vector<SphereFlake> spheres;
-
     SphereFlake sphere = {};
 
     // Ground plane sphere
@@ -494,8 +495,6 @@ void CreateSphereBuffer(
 
     GenerateSphereFlake(0, 4, radius / 3.0f, radius, vec3(0, radius, 0), vec3(0, 1, 0), spheres);
 
-    *pNumSpheres = CountU32(spheres);
-
     CHECK_CALL(CreateBuffer(
         pRenderer,
         SizeInBytes(spheres),
@@ -505,17 +504,37 @@ void CreateSphereBuffer(
 
 void CreateBLAS(
     MetalRenderer*        pRenderer,
-    uint32_t              numSpheres,
+   std::vector<SphereFlake>& spheres,
     MetalBuffer*          pSphereBuffer,
     std::vector<MetalAS>& BLAS)
 {
     NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
+   
+   uint32_t sphereCount = CountU32(spheres);
+   std::vector<BoundingBox> sphereAABBs;
+   
+   for (uint32_t sphereIndex = 0; sphereIndex < sphereCount; sphereIndex++) {
+      BoundingBox bounds;
+      
+      bounds.min.x = spheres[sphereIndex].aabbMin.x;
+      bounds.min.y = spheres[sphereIndex].aabbMin.y;
+      bounds.min.z = spheres[sphereIndex].aabbMin.z;
+      
+      bounds.max.x = spheres[sphereIndex].aabbMax.x;
+      bounds.max.y = spheres[sphereIndex].aabbMax.y;
+      bounds.max.z = spheres[sphereIndex].aabbMax.z;
+      
+      sphereAABBs.push_back(bounds);
+   }
 
     MTL::AccelerationStructureBoundingBoxGeometryDescriptor* aabbGeoDesc = MTL::AccelerationStructureBoundingBoxGeometryDescriptor::alloc()->init();
-
-    aabbGeoDesc->setBoundingBoxBuffer(pSphereBuffer->Buffer.get());
-    aabbGeoDesc->setBoundingBoxCount(numSpheres);
-    aabbGeoDesc->setBoundingBoxStride(sizeof(SphereFlake));
+   
+   MTL::Buffer* sphereAABBBuffer = pRenderer->Device->newBuffer(sphereCount * sizeof(BoundingBox), MTL::ResourceStorageModeManaged);
+   memcpy(sphereAABBBuffer->contents(), sphereAABBs.data(), sphereAABBBuffer->length());
+   
+    aabbGeoDesc->setBoundingBoxBuffer(sphereAABBBuffer);
+    aabbGeoDesc->setBoundingBoxCount(sphereCount);
+    aabbGeoDesc->setBoundingBoxStride(sizeof(BoundingBox));
     aabbGeoDesc->setIntersectionFunctionTableOffset(0);
 
     aabbGeoDesc->setPrimitiveDataBuffer(pSphereBuffer->Buffer.get());

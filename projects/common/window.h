@@ -3,19 +3,21 @@
 #include "config.h"
 #include "bitmap.h"
 
-#if !defined(GLFW_INCLUDE_NONE)
-#    define GLFW_INCLUDE_NONE
-#endif
-#include <GLFW/glfw3.h>
+#ifndef TARGET_IOS
+#	if !defined(GLFW_INCLUDE_NONE)
+#	    define GLFW_INCLUDE_NONE
+#	endif
+#	include <GLFW/glfw3.h>
 
-#if defined(__linux__)
-#    define GLFW_EXPOSE_NATIVE_X11
-#elif defined(__APPLE__)
-#    define GLFW_EXPOSE_NATIVE_COCOA
-#elif defined(WIN32)
-#    define GLFW_EXPOSE_NATIVE_WIN32
+#	if defined(__linux__)
+#	    define GLFW_EXPOSE_NATIVE_X11
+#	elif defined(__APPLE__)
+#	    define GLFW_EXPOSE_NATIVE_COCOA
+#	elif defined(WIN32)
+#	    define GLFW_EXPOSE_NATIVE_WIN32
+#	endif
+#	include <GLFW/glfw3native.h>
 #endif
-#include <GLFW/glfw3native.h>
 
 #include <filesystem>
 #include <functional>
@@ -58,13 +60,16 @@ public:
 
     uint32_t    GetWidth() const { return mWidth; }
     uint32_t    GetHeight() const { return mHeight; }
-    GLFWwindow* GetWindow() const { return mWindow; }
+   
+#ifndef TARGET_IOS
+   GLFWwindow* GetWindow() const { return mWindow; }
+#endif
 
 #if defined(WIN32)
     HWND GetHWND() const;
 #endif
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(TARGET_IOS)
     void* GetNativeWindow() const;
 #endif
 
@@ -102,8 +107,13 @@ public:
 private:
     uint32_t    mWidth        = 0;
     uint32_t    mHeight       = 0;
-    GLFWwindow* mWindow       = nullptr;
     bool        mImGuiEnabled = false;
+   
+#ifdef TARGET_IOS
+   
+#else
+   GLFWwindow* mWindow       = nullptr;
+#endif
 
 private:
     friend struct WindowEvents;

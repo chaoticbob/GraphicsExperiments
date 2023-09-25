@@ -25,3 +25,7 @@ if (GREX_ENABLE_VULKAN)
     add_subdirectory(103_cone_vulkan)
     add_subdirectory(104_debug_tbn_vulkan)
 endif()
+
+if (GREX_ENABLE_IOS)
+    add_subdirectory(101_color_cube_ios)
+endif()
