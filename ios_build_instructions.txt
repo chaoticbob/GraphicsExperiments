@@ -1,6 +1,5 @@
 Goto Build options
+	For 101_color_cube_ios project
 	Change the BaseSDK to iOS
-	Add TARGET_IOS=1 to the preprocessor
 	Change the iOS Deployment Target to 13.0
 	Change to the simulator
-	Enable modules

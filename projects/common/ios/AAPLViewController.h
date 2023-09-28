@@ -20,4 +20,4 @@ Header for the cross-platform view controller
 
 @end
 
-void* getMetalLayer();
+void* getAAPLViewControllerMetalLayer();

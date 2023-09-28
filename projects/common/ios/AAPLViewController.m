@@ -37,7 +37,7 @@ CAMetalLayer *gMetalLayer = NULL;
 
 @end
 
-void* getRenderMetalLayer()
+void* getAAPLViewControllerMetalLayer()
 {
    return (void*)gMetalLayer;
 }

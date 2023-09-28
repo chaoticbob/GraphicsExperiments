@@ -21,7 +21,7 @@ void MetalSetNSWindowSwapchain(
 
 void* MetalGetMetalLayer()
 {
-   return (void*)getMetalLayer();
+   return getAAPLViewControllerMetalLayer();
 }
 
 #endif
