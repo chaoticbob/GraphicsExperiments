@@ -38,27 +38,85 @@ struct CameraProperties {
 	float4x4 ProjInverse;
 };
 
+struct RayPayload
+{
+    float4 color;
+};
+
 // Return the type for a bounding box intersection function.
 struct BoundingBoxIntersection {
 	bool  accept   [[accept_intersection]];	// Whether to accept or reject the intersection
 	float distance [[distance]]; 			// Distance from the ray origin to eh intersection point
 };
 
-float4 MyMissShader(intersector<instancing>::result_type intersection)
+// -----------------------------------------------------------------------------
+// Function Prototypes
+
+void TraceRay(
+             instance_acceleration_structure         Scene,
+             intersection_function_table<instancing> intersectionFunctionTable,
+             ray                                     ray,
+    thread   RayPayload&                             payload);
+
+// -----------------------------------------------------------------------------
+
+// [shader("raygeneration")]
+kernel void MyRayGen(
+             uint2                                   DispatchRaysIndex         [[thread_position_in_grid]],
+             uint2                                   DispatchRaysDimensions    [[threads_per_grid]],
+	         instance_acceleration_structure         Scene                     [[buffer(0)]],
+	constant CameraProperties&                       Cam                       [[buffer(1)]],
+	         intersection_function_table<instancing> intersectionFunctionTable [[buffer(2)]],
+             texture2d<float, access::write>         RenderTarget              [[texture(0)]])
 {
-	return float4(0, 0, 0, 1);
+	const float2 pixelCenter = (float2)DispatchRaysIndex + float2(0.5, 0.5);
+	const float2 inUV = pixelCenter/(float2)DispatchRaysDimensions;
+	float2 d = inUV * 2.0 - 1.0;
+    d.y = -d.y;
+
+	float4 origin = (Cam.ViewInverse * float4(0,0,0,1));
+	float4 target = (Cam.ProjInverse * float4(d.x, d.y, 1, 1));
+	float4 direction = (Cam.ViewInverse * float4(normalize(target.xyz), 0));
+
+	ray ray;
+	ray.origin = origin.xyz;
+	ray.direction = direction.xyz;
+	ray.min_distance = 0.001;
+	ray.max_distance = 10000.0;
+
+    RayPayload payload = {float4(0, 0, 0, 0)};
+
+    TraceRay(
+        Scene,                 		// AccelerationStructure
+		intersectionFunctionTable,	// Intersection Functions
+		ray,						// Ray 
+		payload);					// Payload
+
+	RenderTarget.write(payload.color, DispatchRaysIndex);
 }
 
-float4 MyClosestHitShader(intersector<instancing>::result_type intersection, float3 positionWS)
+// [shader("miss")]
+void MyMissShader(thread RayPayload& payload)
 {
+    payload.color = float4(0, 0, 0, 1);
+}
+
+// [shader("closesthit")]
+void MyClosestHitShader(
+             intersector<instancing>::result_type    intersection,
+             ray                                     WorldRay,
+    thread   RayPayload&                             payload)
+{
+	float3 position = WorldRay.origin + intersection.distance * WorldRay.direction;
+	
     // Lambert shading
     float3 lightPos = float3(2, 5, 5);
-    float3 lightDir = normalize(lightPos - positionWS);
-    float d = 0.8 * saturate(dot(lightDir, normalize(positionWS)));
+    float3 lightDir = normalize(lightPos - position);
+    float d = 0.8 * saturate(dot(lightDir, normalize(position)));
     float a = 0.2;
     
     float3 color = (float3)saturate(a + d);
-    return float4(color, 1);
+    payload.color = float4(color, 1);
 }
 
 //
@@ -85,6 +143,7 @@ float2 gems_intersections(float3 orig, float3 dir, float3 center, float radius)
 	return t;
 }
 
+// [shader("intersection")]
 [[intersection(bounding_box, instancing)]]
 BoundingBoxIntersection  MyIntersectionShader(
 	float3 orig       [[origin]],
@@ -108,51 +167,33 @@ BoundingBoxIntersection  MyIntersectionShader(
 	}
 	else {
 		ret.distance = thit;
-		ret.accept = ret.distance >= minDistance  && ret.distance <= maxDistance;
+		ret.accept = ret.distance >= minDistance && ret.distance <= maxDistance;
 	}
 
    return ret;
 }
 
-kernel void MyRayGen(
-             uint2                                   dispatchRaysIndex         [[thread_position_in_grid]],
-             uint2                                   dispatchRaysDimensions    [[threads_per_grid]],
-	         instance_acceleration_structure         Scene                     [[buffer(0)]],
-	constant CameraProperties&                       Cam                       [[buffer(1)]],
-	         intersection_function_table<instancing> intersectionFunctionTable [[buffer(2)]],
-             texture2d<float, access::write>         RenderTarget              [[texture(0)]])
+void TraceRay(
+             instance_acceleration_structure         Scene,
+             intersection_function_table<instancing> intersectionFunctionTable,
+             ray                                     ray,
+    thread   RayPayload&                             payload)
 {
-	const float2 pixelCenter = (float2)(dispatchRaysIndex) + float2(0.5, 0.5);
-	const float2 inUV = pixelCenter/(float2)(dispatchRaysDimensions);
-	float2 d = inUV * 2.0 - 1.0;
-	d.y = -d.y;
+    intersector<instancing>                intersector;
+    ::intersector<instancing>::result_type intersection;
 
-	float4 origin = (Cam.ViewInverse * float4(0,0,0,1));
-	float4 target = (Cam.ProjInverse * float4(d.x, d.y, 1, 1));
-	float4 direction = (Cam.ViewInverse * float4(normalize(target.xyz), 0));
+    intersection = intersector.intersect(ray, Scene, 1, intersectionFunctionTable);
 
-	ray ray;
-	ray.origin = origin.xyz;
-	ray.direction = direction.xyz;
-	ray.min_distance = 0.001;
-	ray.max_distance = 10000.0;
+    if (intersection.type == intersection_type::none) {
+        MyMissShader(payload);
 
-	intersector<instancing>                intersector;
-	::intersector<instancing>::result_type intersection;
+    } else if (intersection.type == intersection_type::bounding_box) {
 
-	intersection = intersector.intersect(ray, Scene, 1, intersectionFunctionTable);
-
-	float4 color = float4(1, 0, 1, 1);
-
-	if (intersection.type == intersection_type::none) {
-		color = MyMissShader(intersection);
-	}
-	else if (intersection.type == intersection_type::bounding_box) {
-		float3 positionWS = ray.origin + (ray.direction * intersection.distance);
-		color = MyClosestHitShader(intersection, positionWS);
-	}
-
-	RenderTarget.write(color, dispatchRaysIndex);
+        MyClosestHitShader(
+            intersection,
+            ray,
+            payload);
+    }
 }
 
 struct VSOutput {
@@ -182,7 +223,6 @@ fragment float4 psmain(VSOutput input [[stage_in]], texture2d<float> Tex0)
     constexpr sampler Sampler0(min_filter::nearest, mag_filter::nearest, mip_filter::none);
     return Tex0.sample(Sampler0, input.TexCoord);
 }
-
 )";
 
 // =============================================================================
