@@ -65,26 +65,26 @@ struct BoundingBoxIntersection {
 // -----------------------------------------------------------------------------
 // Function Prototypes
 
-float4 TraceRay(
+void TraceRay(
              instance_acceleration_structure         Scene,
              intersection_function_table<instancing> intersectionFunctionTable,
     constant CameraProperties&                       Cam,
              ray                                     ray,
-             uint                                    currentRecursionDepth);
+    thread   RayPayload&                             payload);
 
 // -----------------------------------------------------------------------------
 
 // [shader("raygeneration")]
 kernel void MyRayGen(
-             uint2                                   dispatchRaysIndex         [[thread_position_in_grid]],
-             uint2                                   dispatchRaysDimensions    [[threads_per_grid]],
+             uint2                                   DispatchRaysIndex         [[thread_position_in_grid]],
+             uint2                                   DispatchRaysDimensions    [[threads_per_grid]],
              instance_acceleration_structure         Scene                     [[buffer(0)]],
     constant CameraProperties&                       Cam                       [[buffer(1)]],
              intersection_function_table<instancing> intersectionFunctionTable [[buffer(2)]],
              texture2d<float, access::write>         RenderTarget              [[texture(0)]])
 {
-    const float2 pixelCenter = (float2)(dispatchRaysIndex) + float2(0.5, 0.5);
-    const float2 inUV = pixelCenter/(float2)(dispatchRaysDimensions);
+    const float2 pixelCenter = (float2)DispatchRaysIndex + float2(0.5, 0.5);
+    const float2 inUV = pixelCenter/(float2)DispatchRaysDimensions;
     float2 d = inUV * 2.0 - 1.0;
     d.y = -d.y;
 
@@ -98,14 +98,16 @@ kernel void MyRayGen(
     ray.min_distance = 0.001;
     ray.max_distance = 10000.0;
 
-    float4 color = TraceRay(
+    RayPayload payload = { float4(0,0,0,0), 0 };
+
+    TraceRay(
         Scene,                      // AccelerationStructure
         intersectionFunctionTable,  // Intersection Functions
         Cam,
         ray,                        // Ray
-        0);                         // Current Recursion Depth
+        payload);                   // Ray payload
 
-    RenderTarget.write(color, dispatchRaysIndex);
+    RenderTarget.write(payload.color, DispatchRaysIndex);
 }
 
 // -----------------------------------------------------------------------------
@@ -121,9 +123,11 @@ float3 CubicBezier(float t, float3 P0, float3 P1, float3 P2, float3 P3)
 }
 
 // [shader("miss")]
-float4 MyMissShader(ray in_ray)
+void MyMissShader(
+            ray         WorldRay,
+    thread  RayPayload& payload)
 {
-    float3 P = normalize(in_ray.direction);
+    float3 P = normalize(WorldRay.direction);
     float  t = (P.y + 1) / 2;
     
     float3 C0 = float3(0.010, 0.010, 0.020);
@@ -132,7 +136,7 @@ float4 MyMissShader(ray in_ray)
     float3 C3 = float3(0.190, 0.312, 0.579);
     float3 C = CubicBezier(t, C0, C1, C2, C3);
     
-    return float4(C, 1);
+    payload.color = float4(C, 1);
 }
 
 // -----------------------------------------------------------------------------
@@ -145,13 +149,13 @@ float3 FresnelReflectanceSchlick(float3 I, float3 N, float3 f0)
 }
 
 // [shader("closesthit")]
-float4 MyClosestHitShader(
+void MyClosestHitShader(
              instance_acceleration_structure         Scene,
     constant CameraProperties&                       Cam,
              intersection_function_table<instancing> intersectionFunctionTable,
              intersector<instancing>::result_type    intersection,
-             ray                                     in_ray,
-             uint                                    currentRecursionDepth)
+             ray                                     WorldRay,
+    thread   RayPayload&                             payload)
 {
     float3 GROUND = float3(0.980, 0.863, 0.596);
     float3 SPHERE = float3(0.549, 0.556, 0.554);
@@ -162,35 +166,36 @@ float4 MyClosestHitShader(
     float3 sphereMax = float3(sphere.maxX, sphere.maxY, sphere.maxZ);
     float3 sphereCenter = 0.5 * (sphereMax - sphereMin) + sphereMin;
 
-    float3 hitPosition = in_ray.origin + (in_ray.direction * intersection.distance);
-    float3 hitNormal = hitPosition - sphereCenter;
+    float3 hitPosition = WorldRay.origin + intersection.distance * WorldRay.direction;
+    float3 hitNormal = normalize(hitPosition - sphereCenter);
 
     // Diffuse
     float3 lightPos = float3(2, 25, 5);
     float3 lightDir = normalize(lightPos - hitPosition);
-    float d = saturate(dot(lightDir, normalize(hitNormal)));
-    
-    float3 color= float3(0,0,0);
+    float d = saturate(dot(lightDir, hitNormal));
 
     if (intersection.primitive_id > 0) {
         float3 reflectedColor = (float3)0;
 
-        if (currentRecursionDepth < 0) {
+        uint currentRecursionDepth = payload.recursionDepth + 1;
+        if (currentRecursionDepth < 5) {
             ray ray;
             ray.origin = hitPosition + 0.001 * hitNormal;
-            ray.direction = reflect(in_ray.direction, hitNormal);
+            ray.direction = reflect(WorldRay.direction, hitNormal);
             ray.min_distance = 0.001;
             ray.max_distance = 10000.0;
 
-            float4 rayColor = TraceRay(
+            RayPayload subPayload = { float4(0,0,0,0), currentRecursionDepth };
+
+            TraceRay(
                 Scene,                      // AccelerationStructure
                 intersectionFunctionTable,  // Intersection Functions
                 Cam,
                 ray,                        // Ray
-                currentRecursionDepth + 1); // Current Recursion Depth
+                subPayload);                // Payload
 
-            float3 fresnelR = FresnelReflectanceSchlick(in_ray.direction, hitNormal, SPHERE);
-            reflectedColor = 0.95 * fresnelR * rayColor.xyz;
+            float3 fresnelR = FresnelReflectanceSchlick(WorldRay.direction, hitNormal, SPHERE);
+            reflectedColor = 0.95 * fresnelR * subPayload.color.xyz;
         }
 
         float3 V = normalize(Cam.EyePosition - hitPosition);
@@ -201,13 +206,12 @@ float4 MyClosestHitShader(
         const float kD = 0.8;
         const float kS = 0.5;
 
-        color = ((kD * d + kS * s) * SPHERE) + reflectedColor;
+        float3 color = ((kD * d + kS * s) * SPHERE) + reflectedColor;
+        payload.color = float4(color, 0);                 
     }
     else {
-        color = d * GROUND;
+        payload.color = float4(d * GROUND, 0);
     }
-
-    return float4(color, 1);
 }
 
 // -----------------------------------------------------------------------------
@@ -219,21 +223,21 @@ float4 MyClosestHitShader(
 // this method is documented in raytracing gems book
 float2 gems_intersections(float3 orig, float3 dir, float3 center, float radius)
 {
-    float3 f = orig - center;
-    float  a = dot(dir, dir);
-    float  bi = dot(-f, dir);
-    float  c = dot(f, f) - radius * radius;
-    float3 s = f + (bi/a)*dir;
-    float  discr = radius * radius - dot(s, s);
+	float3 f = orig - center;
+	float  a = dot(dir, dir);
+	float  bi = dot(-f, dir);
+	float  c = dot(f, f) - radius * radius;
+	float3 s = f + (bi/a)*dir;
+	float  discr = radius * radius - dot(s, s);
 
-    float2 t = float2(-1.0, -1.0);
-    if (discr >= 0) {
-        float q = bi + sign(bi) * sqrt(a*discr);
-        float t1 = c / q;
-        float t2 = q / a;
-        t = float2(t1, t2);
-    }
-    return t;
+	float2 t = float2(-1.0, -1.0);
+	if (discr >= 0) {
+		float q = bi + sign(bi) * sqrt(a*discr);
+		float t1 = c / q;
+		float t2 = q / a;
+		t = float2(t1, t2);
+	}
+	return t;
 }
 
 // [shader("intersection")]
@@ -246,14 +250,15 @@ BoundingBoxIntersection  MyIntersectionShader(
     const device void*  perPrimitiveData [[primitive_data]])
 {
     Sphere sphere = *(const device Sphere*)perPrimitiveData;
+    
+	float3 aabb_min = float3(sphere.minX, sphere.minY, sphere.minZ);
+	float3 aabb_max = float3(sphere.maxX, sphere.maxY, sphere.maxZ);
 
-    float3 aabb_min = float3(sphere.minX, sphere.minY, sphere.minZ);
-    float3 aabb_max = float3(sphere.maxX, sphere.maxY, sphere.maxZ);
-    float3 center = (aabb_max + aabb_min) / (float3)2.0;
-    float radius = (aabb_max.x - aabb_min.x) / 2.0;
+	float3 center = (aabb_max + aabb_min) / (float3)2.0;
+	float radius = (aabb_max.x - aabb_min.x) / 2.0;
 
     // Might be some wonky behavior if inside sphere
-    float2 t = gems_intersections(orig, dir, center, radius);
+	float2 t = gems_intersections(orig, dir, center, radius);
 
     // Keep the smallest non-negative value
     float minT = any( t < 0 ) ? max(t.x, t.y) : min(t.x, t.y);
@@ -271,35 +276,31 @@ BoundingBoxIntersection  MyIntersectionShader(
    return ret;
 }
 
-float4 TraceRay(
+void TraceRay(
              instance_acceleration_structure         Scene,
              intersection_function_table<instancing> intersectionFunctionTable,
     constant CameraProperties&                       Cam,
              ray                                     ray,
-             uint                                    currentRecursionDepth)
+    thread   RayPayload&                             payload)
 {
     intersector<instancing>                intersector;
     ::intersector<instancing>::result_type intersection;
 
     intersection = intersector.intersect(ray, Scene, 1, intersectionFunctionTable);
 
-    float4 color = float4(0,0,0,0);
-
     if (intersection.type == intersection_type::none) {
-        color = MyMissShader(ray);
+        MyMissShader(ray, payload);
 
     } else if (intersection.type == intersection_type::bounding_box) {
 
-        color = MyClosestHitShader(
+        MyClosestHitShader(
             Scene,
             Cam,
             intersectionFunctionTable,
             intersection,
             ray,
-            currentRecursionDepth);
+            payload);
     }
-
-    return color;
 }
 
 struct VSOutput {
@@ -438,6 +439,7 @@ int main(int argc, char** argv)
     {
         MTL::ComputePipelineDescriptor* rayTracePipelineDesc = MTL::ComputePipelineDescriptor::alloc()->init();
         rayTracePipelineDesc->setComputeFunction(rayTraceShader.Function.get());
+        rayTracePipelineDesc->setMaxCallStackDepth(5);
 
         std::vector<MTL::Function*> linkedFunctionsVector;
         linkedFunctionsVector.push_back(rayTraceIntersectionShader.Function.get());
