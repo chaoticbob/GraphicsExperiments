@@ -178,6 +178,10 @@ int main(int argc, char** argv)
     psoDesc.SampleDesc.Count                                 = 1;
     psoDesc.SampleDesc.Quality                               = 0;
 
+    // This required unless you want to come up with own struct that handles 
+    // the stream requirements:
+    //    https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#createpipelinestate
+    //
     CD3DX12_PIPELINE_MESH_STATE_STREAM psoStream = CD3DX12_PIPELINE_MESH_STATE_STREAM(psoDesc);
 
     D3D12_PIPELINE_STATE_STREAM_DESC steamDesc = {};
