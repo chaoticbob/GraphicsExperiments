@@ -10,6 +10,7 @@ if (GREX_ENABLE_D3D12)
     add_subdirectory(102_cornell_box_d3d12)
     add_subdirectory(103_cone_d3d12)
     add_subdirectory(104_debug_tbn_d3d12)
+    add_subdirectory(110_mesh_shader_triangle_d3d12)
 endif()
 
 if (GREX_ENABLE_METAL)
