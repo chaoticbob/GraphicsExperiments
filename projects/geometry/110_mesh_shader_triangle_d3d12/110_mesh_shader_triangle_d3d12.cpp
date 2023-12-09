@@ -264,15 +264,6 @@ int main(int argc, char** argv)
             commandList->ClearRenderTargetView(renderer->SwapchainRTVDescriptorHandles[bufferIndex], clearColor, 0, nullptr);
             commandList->ClearDepthStencilView(renderer->SwapchainDSVDescriptorHandles[bufferIndex], D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0xFF, 0, nullptr);
 
-            mat4 modelMat = glm::rotate(static_cast<float>(glfwGetTime()), vec3(0, 1, 0)) *
-                            glm::rotate(static_cast<float>(glfwGetTime()), vec3(1, 0, 0));
-            mat4 viewMat = glm::lookAt(vec3(0, 0, 2), vec3(0, 0, 0), vec3(0, 1, 0));
-            mat4 projMat = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
-            mat4 mvpMat  = projMat * viewMat * modelMat;
-
-            commandList->SetGraphicsRootSignature(rootSig.Get());
-            commandList->SetGraphicsRoot32BitConstants(0, 16, &mvpMat, 0);
-
             D3D12_VIEWPORT viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
             commandList->RSSetViewports(1, &viewport);
 
