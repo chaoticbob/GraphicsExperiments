@@ -85,7 +85,6 @@ int main(int argc, char** argv)
     }
 
     D3D12_FEATURE_DATA_D3D12_OPTIONS7 options7 = {};
-    //
     CHECK_CALL(renderer->Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &options7, sizeof(options7)));
 
     bool isMeshShadingSupported = (options7.MeshShaderTier >= D3D12_MESH_SHADER_TIER_1);
