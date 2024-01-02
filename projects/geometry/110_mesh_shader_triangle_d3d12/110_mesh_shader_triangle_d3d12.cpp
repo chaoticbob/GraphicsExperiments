@@ -267,6 +267,7 @@ int main(int argc, char** argv)
             D3D12_RECT scissor = {0, 0, static_cast<long>(gWindowWidth), static_cast<long>(gWindowHeight)};
             commandList->RSSetScissorRects(1, &scissor);
 
+            commandList->SetGraphicsRootSignature(rootSig.Get());
             commandList->SetPipelineState(pipelineState.Get());
 
             commandList->DispatchMesh(1, 1, 1);
