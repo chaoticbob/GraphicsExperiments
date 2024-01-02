@@ -174,11 +174,9 @@ int main(int argc, char** argv)
     psoDesc.PrimitiveTopologyType                            = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     psoDesc.NumRenderTargets                                 = 1;
     psoDesc.RTVFormats[0]                                    = GREX_DEFAULT_RTV_FORMAT;
-    psoDesc.DSVFormat                                        = GREX_DEFAULT_DSV_FORMAT;
     psoDesc.SampleDesc.Count                                 = 1;
-    psoDesc.SampleDesc.Quality                               = 0;
 
-    // This required unless you want to come up with own struct that handles 
+    // This required unless you want to come up with own struct that handles
     // the stream requirements:
     //    https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#createpipelinestate
     //
@@ -258,11 +256,10 @@ int main(int argc, char** argv)
                 1,
                 &renderer->SwapchainRTVDescriptorHandles[bufferIndex],
                 false,
-                &renderer->SwapchainDSVDescriptorHandles[bufferIndex]);
+                nullptr);
 
             float clearColor[4] = {0.23f, 0.23f, 0.31f, 0};
             commandList->ClearRenderTargetView(renderer->SwapchainRTVDescriptorHandles[bufferIndex], clearColor, 0, nullptr);
-            commandList->ClearDepthStencilView(renderer->SwapchainDSVDescriptorHandles[bufferIndex], D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0xFF, 0, nullptr);
 
             D3D12_VIEWPORT viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1};
             commandList->RSSetViewports(1, &viewport);
@@ -301,17 +298,7 @@ int main(int argc, char** argv)
 
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 {
-    D3D12_ROOT_PARAMETER rootParameter     = {};
-    rootParameter.ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    rootParameter.Constants.Num32BitValues = 16;
-    rootParameter.Constants.ShaderRegister = 0;
-    rootParameter.Constants.RegisterSpace  = 0;
-    rootParameter.ShaderVisibility         = D3D12_SHADER_VISIBILITY_VERTEX;
-
     D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-    rootSigDesc.NumParameters             = 1;
-    rootSigDesc.pParameters               = &rootParameter;
-    rootSigDesc.Flags                     = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     ComPtr<ID3DBlob> blob;
     ComPtr<ID3DBlob> error;
