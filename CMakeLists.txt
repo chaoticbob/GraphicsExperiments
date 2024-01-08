@@ -210,6 +210,11 @@ list(APPEND IMGUI_METAL_FILES
 set(IMGUI_INC_DIR ${GREX_THIRD_PARTY_DIR}/imgui)
 
 # ------------------------------------------------------------------------------
+# meshoptimizer
+# ------------------------------------------------------------------------------
+add_subdirectory(${GREX_THIRD_PARTY_DIR}/meshoptimizer)
+
+# ------------------------------------------------------------------------------
 # Graphics experiments
 # ------------------------------------------------------------------------------
 add_subdirectory(projects)
