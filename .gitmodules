@@ -43,3 +43,6 @@
 [submodule "third_party/meshoptimizer"]
 	path = third_party/meshoptimizer
 	url = https://github.com/zeux/meshoptimizer.git
+[submodule "third_party/imGuIZMO.quat"]
+	path = third_party/imGuIZMO.quat
+	url = https://github.com/BrutPitt/imGuIZMO.quat.git

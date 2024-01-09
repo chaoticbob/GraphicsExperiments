@@ -24,7 +24,7 @@ void Camera::LookAt(const glm::vec3& eye, const glm::vec3& target, const glm::ve
     mEyePosition          = eye;
     mTarget               = target;
     mWorldUp              = up;
-    mViewDirection        = glm::normalize(mEyePosition - mTarget);
+    mViewDirection        = glm::normalize(mTarget - mEyePosition);
     mViewMatrix           = glm::scale(yAxis) * glm::lookAt(mEyePosition, mTarget, mWorldUp);
     mViewProjectionMatrix = mProjectionMatrix * mViewMatrix;
     mInverseViewMatrix    = glm::inverse(mViewMatrix);
@@ -44,8 +44,195 @@ glm::vec3 Camera::WorldToViewVector(const glm::vec3& worldVector) const
 
 void Camera::MoveAlongViewDirection(float distance)
 {
-    glm::vec3 eyePosition = mEyePosition + (distance * -mViewDirection);
+    glm::vec3 eyePosition = mEyePosition + (distance * mViewDirection);
     LookAt(eyePosition, mTarget, mWorldUp);
+}
+
+void Camera::GetFrustumPlanes(
+    Camera::FrustumPlane* pLeft,
+    Camera::FrustumPlane* pRight,
+    Camera::FrustumPlane* pTop,
+    Camera::FrustumPlane* pBottom,
+    Camera::FrustumPlane* pNear,
+    Camera::FrustumPlane* pFar) const
+{
+    auto& VP    = this->GetViewProjectionMatrix();
+    auto  invVP = glm::inverse(VP);
+
+    auto csNearTL = glm::vec3(-1, 1, -1);
+    auto csNearBL = glm::vec3(-1, -1, -1);
+    auto csNearBR = glm::vec3(1, -1, -1);
+    auto csNearTR = glm::vec3(1, 1, -1);
+
+    auto csFarTL = glm::vec3(-1, 1, 1);
+    auto csFarBL = glm::vec3(-1, -1, 1);
+    auto csFarBR = glm::vec3(1, -1, 1);
+    auto csFarTR = glm::vec3(1, 1, 1);
+
+    auto nearTL = invVP * glm::vec4(csNearTL, 1.0f);
+    auto nearBL = invVP * glm::vec4(csNearBL, 1.0f);
+    auto nearBR = invVP * glm::vec4(csNearBR, 1.0f);
+    auto nearTR = invVP * glm::vec4(csNearTR, 1.0f);
+
+    auto farTL = invVP * glm::vec4(csFarTL, 1.0f);
+    auto farBL = invVP * glm::vec4(csFarBL, 1.0f);
+    auto farBR = invVP * glm::vec4(csFarBR, 1.0f);
+    auto farTR = invVP * glm::vec4(csFarTR, 1.0f);
+
+    nearTL /= nearTL.w;
+    nearBL /= nearBL.w;
+    nearBR /= nearBR.w;
+    nearTR /= nearTR.w;
+
+    farTL /= farTL.w;
+    farBL /= farBL.w;
+    farBR /= farBR.w;
+    farTR /= farTR.w;
+
+    if (pLeft != nullptr)
+    {
+        auto nearH = glm::vec3(nearTL + nearBL) / 2.0f;
+        auto farH  = glm::vec3(farTL + farBL) / 2.0f;
+        auto u     = glm::normalize(farH - nearH);
+        auto v     = glm::normalize(glm::vec3(nearTL - nearBL));
+        auto w     = glm::cross(u, v);
+        w          = glm::normalize(w);
+
+        pLeft->Normal   = w;
+        pLeft->Position = (nearH + farH) / 2.0f;
+
+        pLeft->C0 = farTL;
+        pLeft->C1 = farBL;
+        pLeft->C2 = nearBL;
+        pLeft->C3 = nearTL;
+    }
+
+    if (pRight != nullptr)
+    {
+        auto nearH = glm::vec3(nearTR + nearBR) / 2.0f;
+        auto farH  = glm::vec3(farTR + farBR) / 2.0f;
+        auto u     = glm::normalize(farH - nearH);
+        auto v     = glm::normalize(glm::vec3(nearBL - nearTL));
+        auto w     = glm::cross(u, v);
+        w          = glm::normalize(w);
+
+        pRight->Normal   = w;
+        pRight->Position = (nearH + farH) / 2.0f;
+
+        pRight->C0 = nearTR;
+        pRight->C1 = nearBR;
+        pRight->C2 = farBR;
+        pRight->C3 = farTR;
+    }
+
+    if (pTop != nullptr)
+    {
+        auto nearH = glm::vec3(nearTL + nearTR) / 2.0f;
+        auto farH  = glm::vec3(farTL + farTR) / 2.0f;
+        auto u     = glm::normalize(farH - nearH);
+        auto v     = glm::normalize(glm::vec3(nearTR - nearTL));
+        auto w     = glm::cross(u, v);
+        w          = glm::normalize(w);
+
+        pTop->Normal   = w;
+        pTop->Position = (nearH + farH) / 2.0f;
+
+        pTop->C0 = farTL;
+        pTop->C1 = nearTL;
+        pTop->C2 = nearTR;
+        pTop->C3 = farTR;
+    }
+
+    if (pBottom != nullptr)
+    {
+        auto nearH = glm::vec3(nearBL + nearBR) / 2.0f;
+        auto farH  = glm::vec3(farBL + farBR) / 2.0f;
+        auto u     = glm::normalize(farH - nearH);
+        auto v     = glm::normalize(glm::vec3(nearBL - nearBR));
+        auto w     = glm::cross(u, v);
+        w          = glm::normalize(w);
+
+        pBottom->Normal   = w;
+        pBottom->Position = (nearH + farH) / 2.0f;
+
+        pBottom->C0 = nearBL;
+        pBottom->C1 = farBL;
+        pBottom->C2 = farBR;
+        pBottom->C3 = nearBR;
+    }
+
+    if (pNear != nullptr)
+    {
+        pNear->Normal   = mViewDirection;
+        pNear->Position = (nearTL + nearBR) / 2.0f;
+
+        pNear->C0 = nearTL;
+        pNear->C1 = nearBL;
+        pNear->C2 = nearBR;
+        pNear->C3 = nearTR;
+    }
+
+    if (pFar != nullptr)
+    {
+        pFar->Normal   = -mViewDirection;
+        pFar->Position = (farTL + farBR) / 2.0f;
+
+        pFar->C0 = farTL;
+        pFar->C1 = farBL;
+        pFar->C2 = farBR;
+        pFar->C3 = farTR;
+    }
+}
+
+glm::vec4 Camera::GetFrustumSphere() const
+{
+    auto& VP    = this->GetViewProjectionMatrix();
+    auto  invVP = glm::inverse(VP);
+
+    auto csNearTL = glm::vec3(-1, 1, -1);
+    auto csNearBL = glm::vec3(-1, -1, -1);
+    auto csNearBR = glm::vec3(1, -1, -1);
+    auto csNearTR = glm::vec3(1, 1, -1);
+
+    auto csFarTL = glm::vec3(-1, 1, 1);
+    auto csFarBL = glm::vec3(-1, -1, 1);
+    auto csFarBR = glm::vec3(1, -1, 1);
+    auto csFarTR = glm::vec3(1, 1, 1);
+
+    auto nearTL = invVP * glm::vec4(csNearTL, 1.0f);
+    auto nearBL = invVP * glm::vec4(csNearBL, 1.0f);
+    auto nearBR = invVP * glm::vec4(csNearBR, 1.0f);
+    auto nearTR = invVP * glm::vec4(csNearTR, 1.0f);
+
+    auto farTL = invVP * glm::vec4(csFarTL, 1.0f);
+    auto farBL = invVP * glm::vec4(csFarBL, 1.0f);
+    auto farBR = invVP * glm::vec4(csFarBR, 1.0f);
+    auto farTR = invVP * glm::vec4(csFarTR, 1.0f);
+
+    nearTL /= nearTL.w;
+    nearBL /= nearBL.w;
+    nearBR /= nearBR.w;
+    nearTR /= nearTR.w;
+
+    farTL /= farTL.w;
+    farBL /= farBL.w;
+    farBR /= farBR.w;
+    farTR /= farTR.w;
+
+    auto nearCenter = (nearTL + nearBL + nearBR + nearTR) / 4.0f;
+    auto farCenter  = (farTL + farBL + farBR + farTR) / 4.0f;
+    auto center     = glm::vec3(nearCenter + farCenter) / 2.0f;
+
+    float r = glm::distance(center, glm::vec3(nearTL));
+    r       = std::max(r, glm::distance(center, glm::vec3(nearBL)));
+    r       = std::max(r, glm::distance(center, glm::vec3(nearBR)));
+    r       = std::max(r, glm::distance(center, glm::vec3(nearTR)));
+    r       = std::max(r, glm::distance(center, glm::vec3(farTL)));
+    r       = std::max(r, glm::distance(center, glm::vec3(farBL)));
+    r       = std::max(r, glm::distance(center, glm::vec3(farBR)));
+    r       = std::max(r, glm::distance(center, glm::vec3(farTR)));
+
+    return glm::vec4(center, r);
 }
 
 // =============================================================================
@@ -175,13 +362,15 @@ void PerspCamera::FitToBoundingBox(const glm::vec3& bboxMinWorldSpace, const glm
     };
 
     // Tranform obb from world space to view space
-    for (uint32_t i = 0; i < 8; ++i) {
+    for (uint32_t i = 0; i < 8; ++i)
+    {
         obb[i] = viewSpaceMatrix * glm::vec4(obb[i], 1.0f);
     }
 
     // Get aabb from obb in view space
     min = max = obb[0];
-    for (uint32_t i = 1; i < 8; ++i) {
+    for (uint32_t i = 1; i < 8; ++i)
+    {
         min = glm::min(min, obb[i]);
         max = glm::max(max, obb[i]);
     }
@@ -201,6 +390,43 @@ void PerspCamera::FitToBoundingBox(const glm::vec3& bboxMinWorldSpace, const glm
 
     // Adjust camera look at
     LookAt(eye, target, up);
+}
+
+PerspCamera::FrustumCone PerspCamera::GetFrstumCone(bool fitFarClip) const
+{
+    PerspCamera::FrustumCone cone = {};
+    cone.Tip                      = mEyePosition;
+    cone.Dir                      = mViewDirection;
+    cone.Height                   = mFarClip;
+    cone.Angle                    = glm::radians((mAspect > 1.0) ? mHorizFovDegrees : mVertFovDegrees);
+
+    if (fitFarClip)
+    {
+        auto& VP    = this->GetViewProjectionMatrix();
+        auto  invVP = glm::inverse(VP);
+
+        auto csFarTL = glm::vec3(-1, 1, 1);
+        auto csFarBL = glm::vec3(-1, -1, 1);
+        auto csFarBR = glm::vec3(1, -1, 1);
+        auto csFarTR = glm::vec3(1, 1, 1);
+
+        auto farTL = invVP * glm::vec4(csFarTL, 1.0f);
+        auto farBL = invVP * glm::vec4(csFarBL, 1.0f);
+        auto farBR = invVP * glm::vec4(csFarBR, 1.0f);
+        auto farTR = invVP * glm::vec4(csFarTR, 1.0f);
+
+        farTL /= farTL.w;
+        farBL /= farBL.w;
+        farBR /= farBR.w;
+        farTR /= farTR.w;
+
+        auto farCenter = (farTL + farBL + farBR + farTR) / 4.0f;
+
+        float r    = glm::distance(farCenter, farTL);
+        cone.Angle = 2.0f * atan(r / mFarClip);
+    }
+
+    return cone;
 }
 
 // =============================================================================
@@ -314,7 +540,8 @@ static glm::quat ScreenToArcball(const glm::vec2& p)
     float dist = glm::dot(p, p);
 
     // If we're on/in the sphere return the point on it
-    if (dist <= 1.0f) {
+    if (dist <= 1.0f)
+    {
         return glm::quat(0.0f, p.x, p.y, glm::sqrt(1.0f - dist));
     }
 

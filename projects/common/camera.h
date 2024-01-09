@@ -16,6 +16,20 @@
 class Camera
 {
 public:
+    struct FrustumPlane
+    {
+        glm::vec3 Normal;
+        glm::vec3 Position;
+
+        // Corners - counter clock wise if frustum plane is
+        // transformed  to eye position.
+        //
+        glm::vec3 C0;
+        glm::vec3 C1;
+        glm::vec3 C2;
+        glm::vec3 C3;
+    };
+
     Camera(bool pixelAligned = false);
 
     Camera(float nearClip, float farClip, bool pixelAligned = false);
@@ -26,6 +40,7 @@ public:
 
     const glm::vec3& GetEyePosition() const { return mEyePosition; }
     const glm::vec3& GetTarget() const { return mTarget; }
+    const glm::vec3& GetViewDirection() const { return mViewDirection; }
 
     const glm::mat4& GetViewMatrix() const { return mViewMatrix; }
     const glm::mat4& GetProjectionMatrix() const { return mProjectionMatrix; }
@@ -35,6 +50,17 @@ public:
     glm::vec3 WorldToViewVector(const glm::vec3& worldVector) const;
 
     void MoveAlongViewDirection(float distance);
+
+    void GetFrustumPlanes(
+        Camera::FrustumPlane* pLeft   = nullptr,
+        Camera::FrustumPlane* pRight  = nullptr,
+        Camera::FrustumPlane* pTop    = nullptr,
+        Camera::FrustumPlane* pBottom = nullptr,
+        Camera::FrustumPlane* pNear   = nullptr,
+        Camera::FrustumPlane* pFar    = nullptr) const;
+
+    // xyz = pos, w = radius
+    glm::vec4 GetFrustumSphere() const;
 
 protected:
     bool              mPixelAligned         = false;
@@ -58,6 +84,16 @@ class PerspCamera
     : public Camera
 {
 public:
+
+    struct FrustumCone
+    {
+        glm::vec3 Tip;
+        glm::vec3 Dir;
+        float     Height;
+        float     Angle;
+    };
+
+
     PerspCamera();
 
     explicit PerspCamera(
@@ -97,6 +133,8 @@ public:
         float farClip  = CAMERA_DEFAULT_FAR_CLIP);
 
     void FitToBoundingBox(const glm::vec3& bboxMinWorldSpace, const glm::vec3& bbxoMaxWorldSpace);
+
+    PerspCamera::FrustumCone GetFrstumCone(bool fitFarClip = false) const;
 
 private:
     float mHorizFovDegrees = 60.0f;
