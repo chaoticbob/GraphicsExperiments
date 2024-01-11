@@ -135,6 +135,10 @@ public:
         glm::vec3 max;
 
         glm::vec3 Center() const { return (this->min + this->max) / 2.0f; }
+
+        float Width() const { return fabs(this->max.x - this->min.x); }
+        float Height() const { return fabs(this->max.y - this->min.y); }
+        float Depth() const { return fabs(this->max.z - this->min.z); }
     };
 
     // -------------------------------------------------------------------------
@@ -150,7 +154,8 @@ public:
         Group(const std::string& name, uint32_t firstIndex, uint32_t indexCount, int32_t materialIndex = -1)
             : mName(name)
         {
-            for (uint32_t i = 0; i < indexCount; ++i) {
+            for (uint32_t i = 0; i < indexCount; ++i)
+            {
                 this->AddTriangleIndex(firstIndex + i, materialIndex);
             }
         }
@@ -279,11 +284,11 @@ public:
         const Options&   options          = {});
 
     static TriMesh Plane(
-        const glm::vec2& size            = glm::vec2(1),
-        uint32_t         usegs           = 1,
-        uint32_t         vsegs           = 1,
-        glm::vec3        normalToPlane   = glm::vec3(0, 1, 0),
-        const Options&   options         = {});
+        const glm::vec2& size          = glm::vec2(1),
+        uint32_t         usegs         = 1,
+        uint32_t         vsegs         = 1,
+        glm::vec3        normalToPlane = glm::vec3(0, 1, 0),
+        const Options&   options       = {});
 
     static TriMesh Sphere(
         float          radius,

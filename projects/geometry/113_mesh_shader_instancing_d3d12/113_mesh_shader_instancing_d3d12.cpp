@@ -12,6 +12,10 @@ using namespace glm;
 
 #include "meshoptimizer.h"
 
+#include <cinttypes>
+
+using float4x4 = glm::mat4;
+
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
@@ -30,8 +34,8 @@ using namespace glm;
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth  = 1280;
-static uint32_t gWindowHeight = 720;
+static uint32_t gWindowWidth  = 1920;
+static uint32_t gWindowHeight = 1080;
 static bool     gEnableDebug  = true;
 
 static LPCWSTR gVSShaderName = L"vsmain";
@@ -49,6 +53,12 @@ void CreateGeometryBuffers(
 // =============================================================================
 int main(int argc, char** argv)
 {
+    PerspCamera camera = PerspCamera(60.0f, 1.77777f, 1.0f, 1000.0f);
+    camera.LookAt(vec3(0, 0, 1), vec3(0, 0, 0));
+
+    Camera::FrustumPlane left, right, top, bottom, nearP, farP;
+    camera.GetFrustumPlanes(&left, &right, &top, &bottom, &nearP, &farP);
+
     std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
 
     if (!InitDx(renderer.get(), gEnableDebug))
@@ -73,7 +83,7 @@ int main(int argc, char** argv)
     std::vector<char> dxilMS;
     std::vector<char> dxilPS;
     {
-        auto source = LoadString("projects/112_mesh_shader_amplification/shaders.hlsl");
+        auto source = LoadString("projects/113_mesh_shader_instancing/shaders.hlsl");
         assert((!source.empty()) && "no shader source!");
 
         std::string errorMsg;
@@ -114,6 +124,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Make them meshlets!
     // *************************************************************************
+    TriMesh::Aabb                meshBounds = {};
     std::vector<glm::vec3>       positions;
     std::vector<meshopt_Meshlet> meshlets;
     std::vector<uint32_t>        meshletVertices;
@@ -133,7 +144,8 @@ int main(int argc, char** argv)
             assert(false && "failed to load model");
         }
 
-        positions = mesh.GetPositions();
+        meshBounds = mesh.GetBounds();
+        positions  = mesh.GetPositions();
 
         const size_t kMaxVertices  = 64;
         const size_t kMaxTriangles = 124;
@@ -289,6 +301,15 @@ int main(int argc, char** argv)
     }
 
     // *************************************************************************
+    // Imgui
+    // *************************************************************************
+    if (!window->InitImGuiForD3D12(renderer.get()))
+    {
+        assert(false && "Window::InitImGuiForD3D12 failed");
+        return EXIT_FAILURE;
+    }
+
+    // *************************************************************************
     // Command allocator
     // *************************************************************************
     ComPtr<ID3D12CommandAllocator> commandAllocator;
@@ -311,10 +332,107 @@ int main(int argc, char** argv)
     }
 
     // *************************************************************************
+    // Pipeline statistics
+    // *************************************************************************
+    ComPtr<ID3D12QueryHeap> queryHeap;
+    {
+        D3D12_QUERY_HEAP_DESC desc = {D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS1, 1};
+        CHECK_CALL(renderer->Device->CreateQueryHeap(&desc, IID_PPV_ARGS(&queryHeap)));
+    }
+
+    ComPtr<ID3D12Resource> queryBuffer;
+    CreateBuffer(renderer.get(), sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS1), D3D12_HEAP_TYPE_READBACK, &queryBuffer);
+    //
+    bool hasPiplineStats = false;
+
+    // *************************************************************************
+    // Instances
+    // *************************************************************************
+    const uint32_t        kNumInstanceCols = 20;
+    const uint32_t        kNumInstanceRows = 10;
+    std::vector<float4x4> instances(kNumInstanceCols * kNumInstanceRows);
+
+    ComPtr<ID3D12Resource> instancesBuffer;
+    CreateBuffer(renderer.get(), SizeInBytes(instances), D3D12_HEAP_TYPE_UPLOAD, &instancesBuffer);
+
+    // *************************************************************************
     // Main loop
     // *************************************************************************
     while (window->PollEvents())
     {
+        // ---------------------------------------------------------------------
+
+        D3D12_QUERY_DATA_PIPELINE_STATISTICS1 pipelineStatistics = {};
+        if (hasPiplineStats)
+        {
+            void* ptr = nullptr;
+            CHECK_CALL(queryBuffer->Map(0, nullptr, &ptr));
+            memcpy(&pipelineStatistics, ptr, sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS1));
+            queryBuffer->Unmap(0, nullptr);
+        }
+
+        // ---------------------------------------------------------------------
+        window->ImGuiNewFrameD3D12();
+
+        if (ImGui::Begin("Params"))
+        {
+            ImGui::Columns(2);
+            // clang-format off
+            ImGui::Text("IAVertices");    ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics.IAVertices); ImGui::NextColumn();                
+            ImGui::Text("IAPrimitives");  ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics.IAPrimitives); ImGui::NextColumn();                
+            ImGui::Text("VSInvocations"); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics.VSInvocations); ImGui::NextColumn();                
+            ImGui::Text("GSInvocations"); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics.GSInvocations); ImGui::NextColumn();                
+            ImGui::Text("GSPrimitives");  ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics.GSPrimitives); ImGui::NextColumn();                
+            ImGui::Text("CInvocations");  ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics.CInvocations); ImGui::NextColumn();                
+            ImGui::Text("CPrimitives");   ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics.CPrimitives); ImGui::NextColumn();                
+            ImGui::Text("PSInvocations"); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics.PSInvocations); ImGui::NextColumn();                
+            ImGui::Text("HSInvocations"); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics.HSInvocations); ImGui::NextColumn();                
+            ImGui::Text("DSInvocations"); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics.DSInvocations); ImGui::NextColumn();                
+            ImGui::Text("CSInvocations"); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics.CSInvocations); ImGui::NextColumn();                
+            ImGui::Text("ASInvocations"); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics.ASInvocations); ImGui::NextColumn();                
+            ImGui::Text("MSInvocations"); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics.MSInvocations); ImGui::NextColumn();                
+            ImGui::Text("MSPrimitives");  ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics.MSPrimitives); ImGui::NextColumn();
+            // clang-format on
+        }
+        ImGui::End();
+
+        // ---------------------------------------------------------------------
+
+        // Update instance transforms
+        {
+            float maxSpan       = std::max<float>(meshBounds.Width(), meshBounds.Depth());
+            float instanceSpanX = 2.0f * maxSpan;
+            float instanceSpanZ = 4.5f * maxSpan;
+            float totalSpanX    = kNumInstanceCols * instanceSpanX;
+            float totalSpanZ    = kNumInstanceRows * instanceSpanZ;
+
+            for (uint32_t j = 0; j < kNumInstanceRows; ++j)
+            {
+                for (uint32_t i = 0; i < kNumInstanceCols; ++i)
+                {
+                    float x = i * instanceSpanX - (totalSpanX / 2.0f) + instanceSpanX / 2.0f;
+                    float y = 0;
+                    float z = j * instanceSpanZ - (totalSpanZ / 2.0f) - 2.15f * instanceSpanZ;
+
+                    uint32_t index   = j * kNumInstanceCols + i;
+                    float    t       = static_cast<float>(glfwGetTime()) + ((i ^ j + i) / 10.0f);
+                    instances[index] = glm::translate(glm::vec3(x, y, z)) * glm::rotate(t, glm::vec3(0, 1, 0));
+                }
+            }
+        }
+
+        // ---------------------------------------------------------------------
+
+        // Copy instances transforms to instances buffer
+        {
+            void* pDst = nullptr;
+            CHECK_CALL(instancesBuffer->Map(0, nullptr, &pDst));
+            memcpy(pDst, instances.data(), SizeInBytes(instances));
+            instancesBuffer->Unmap(0, nullptr);
+        }
+
+        // ---------------------------------------------------------------------
+
         UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
 
         ComPtr<ID3D12Resource> swapchainBuffer;
@@ -345,21 +463,36 @@ int main(int argc, char** argv)
             commandList->SetGraphicsRootSignature(rootSig.Get());
             commandList->SetPipelineState(pipelineState.Get());
 
-            PerspCamera camera = PerspCamera(60.0f, window->GetAspectRatio());
-            camera.LookAt(vec3(0, 0.105f, 0.40f), vec3(0, 0.105f, 0));
+            PerspCamera camera = PerspCamera(45.0f, window->GetAspectRatio());
+            camera.LookAt(vec3(0, 0.7f, 3.0f), vec3(0, 0.105f, 0));
 
-            mat4 R   = glm::rotate(static_cast<float>(glfwGetTime()), glm::vec3(0, 1, 0));
-            mat4 MVP = camera.GetViewProjectionMatrix() * R;
+            mat4 VP = camera.GetViewProjectionMatrix();
+            uint32_t meshletCount = static_cast<uint32_t>(meshlets.size());
 
-            commandList->SetGraphicsRoot32BitConstants(0, 16, &MVP, 0);
+            commandList->SetGraphicsRoot32BitConstants(0, 16, &VP, 0);
+            commandList->SetGraphicsRoot32BitConstants(0, 1, &meshletCount, 16);
             commandList->SetGraphicsRootShaderResourceView(1, positionBuffer->GetGPUVirtualAddress());
             commandList->SetGraphicsRootShaderResourceView(2, meshletBuffer->GetGPUVirtualAddress());
             commandList->SetGraphicsRootShaderResourceView(3, meshletVerticesBuffer->GetGPUVirtualAddress());
             commandList->SetGraphicsRootShaderResourceView(4, meshletTrianglesBuffer->GetGPUVirtualAddress());
+            commandList->SetGraphicsRootShaderResourceView(5, instancesBuffer->GetGPUVirtualAddress());
 
-            // Amplification shader uses 32 for thread group size
-            UINT threadGroupCountX = static_cast<UINT>((meshlets.size() / 32) + 1);
-            commandList->DispatchMesh(threadGroupCountX, 1, 1);
+            // DispatchMesh with pipeline statistics
+            {
+                commandList->BeginQuery(queryHeap.Get(), D3D12_QUERY_TYPE_PIPELINE_STATISTICS1, 0);
+
+                // Amplification shader uses 32 for thread group size
+                UINT threadGroupCountX = static_cast<UINT>((meshlets.size() / 32) + 1) * static_cast<UINT>(instances.size());
+                commandList->DispatchMesh(threadGroupCountX, 1, 1);
+
+                commandList->EndQuery(queryHeap.Get(), D3D12_QUERY_TYPE_PIPELINE_STATISTICS1, 0);
+            }
+
+            // Resolve query
+            commandList->ResolveQueryData(queryHeap.Get(), D3D12_QUERY_TYPE_PIPELINE_STATISTICS1, 0, 1, queryBuffer.Get(), 0);
+
+            // ImGui
+            window->ImGuiRenderDrawData(renderer.get(), commandList.Get());
         }
         D3D12_RESOURCE_BARRIER postRenderBarrier = CreateTransition(swapchainBuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
         commandList->ResourceBarrier(1, &postRenderBarrier);
@@ -374,6 +507,9 @@ int main(int argc, char** argv)
             assert(false && "WaitForGpu failed");
             break;
         }
+
+        // Command list execution is done we can read the pipeline stats
+        hasPiplineStats = true;
 
         // Present
         if (!SwapchainPresent(renderer.get()))
@@ -394,10 +530,10 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     {
         D3D12_ROOT_PARAMETER rootParameter     = {};
         rootParameter.ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        rootParameter.Constants.Num32BitValues = 16;
+        rootParameter.Constants.Num32BitValues = 17;
         rootParameter.Constants.ShaderRegister = 0;
         rootParameter.Constants.RegisterSpace  = 0;
-        rootParameter.ShaderVisibility         = D3D12_SHADER_VISIBILITY_MESH;
+        rootParameter.ShaderVisibility         = D3D12_SHADER_VISIBILITY_ALL;
         rootParameters.push_back(rootParameter);
     }
 
@@ -436,6 +572,16 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
         D3D12_ROOT_PARAMETER rootParameter      = {};
         rootParameter.ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
         rootParameter.Descriptor.ShaderRegister = 4;
+        rootParameter.Descriptor.RegisterSpace  = 0;
+        rootParameter.ShaderVisibility          = D3D12_SHADER_VISIBILITY_MESH;
+        rootParameters.push_back(rootParameter);
+    }
+
+    // StructuredBuffer<Instance> Instances : register(t5);
+    {
+        D3D12_ROOT_PARAMETER rootParameter      = {};
+        rootParameter.ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        rootParameter.Descriptor.ShaderRegister = 5;
         rootParameter.Descriptor.RegisterSpace  = 0;
         rootParameter.ShaderVisibility          = D3D12_SHADER_VISIBILITY_MESH;
         rootParameters.push_back(rootParameter);

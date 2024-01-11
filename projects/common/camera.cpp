@@ -392,7 +392,7 @@ void PerspCamera::FitToBoundingBox(const glm::vec3& bboxMinWorldSpace, const glm
     LookAt(eye, target, up);
 }
 
-PerspCamera::FrustumCone PerspCamera::GetFrstumCone(bool fitFarClip) const
+PerspCamera::FrustumCone PerspCamera::GetFrustumCone(bool fitFarClip) const
 {
     PerspCamera::FrustumCone cone = {};
     cone.Tip                      = mEyePosition;

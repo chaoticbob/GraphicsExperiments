@@ -134,7 +134,7 @@ public:
 
     void FitToBoundingBox(const glm::vec3& bboxMinWorldSpace, const glm::vec3& bbxoMaxWorldSpace);
 
-    PerspCamera::FrustumCone GetFrstumCone(bool fitFarClip = false) const;
+    PerspCamera::FrustumCone GetFrustumCone(bool fitFarClip = false) const;
 
 private:
     float mHorizFovDegrees = 60.0f;

@@ -13,6 +13,8 @@ if (GREX_ENABLE_D3D12)
     add_subdirectory(110_mesh_shader_triangle_d3d12)
 	add_subdirectory(111_mesh_shader_meshlets_d3d12)
 	add_subdirectory(112_mesh_shader_amplification_d3d12)
+	add_subdirectory(113_mesh_shader_instancing_d3d12)
+	add_subdirectory(114_mesh_shader_culling_d3d12)
 endif()
 
 if (GREX_ENABLE_METAL)

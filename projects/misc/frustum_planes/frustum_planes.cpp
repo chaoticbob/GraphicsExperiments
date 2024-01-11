@@ -384,7 +384,7 @@ int main(int argc, char** argv)
                 // Frustum sphere
                 auto frSphere = virtCam.GetFrustumSphere();
                 // Frustum cone
-                auto frCone = virtCam.GetFrstumCone(gFitConeToFarClip);
+                auto frCone = virtCam.GetFrustumCone(gFitConeToFarClip);
 
                 ctx.SetDepthRead(false);
                 ctx.SetDepthWrite(false);

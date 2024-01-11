@@ -1,11 +1,12 @@
 
 #define AS_GROUP_SIZE 32
 
-struct CameraProperties {
-    float4x4 MVP;
+struct SceneProperties {
+    float4x4 CameraVP;
+    uint     MeshletCount;
 };
 
-ConstantBuffer<CameraProperties> Cam : register(b0);
+ConstantBuffer<SceneProperties> Scene : register(b0);
 
 struct Vertex {
     float3 Position;
@@ -18,10 +19,16 @@ struct Meshlet {
 	uint TriangleCount;
 };
 
-StructuredBuffer<Vertex>  Vertices        : register(t1);
-StructuredBuffer<Meshlet> Meshlets        : register(t2);
-StructuredBuffer<uint>    VertexIndices   : register(t3);
-StructuredBuffer<uint>    TriangleIndices : register(t4);
+struct Instance
+{
+    float4x4 M;
+};
+
+StructuredBuffer<Vertex>   Vertices        : register(t1);
+StructuredBuffer<Meshlet>  Meshlets        : register(t2);
+StructuredBuffer<uint>     VertexIndices   : register(t3);
+StructuredBuffer<uint>     TriangleIndices : register(t4);
+StructuredBuffer<Instance> Instances       : register(t5);
 
 struct MeshOutput {
     float4 Position : SV_POSITION;
@@ -29,6 +36,7 @@ struct MeshOutput {
 };
 
 struct Payload {
+    uint InstanceIndices[AS_GROUP_SIZE];
     uint MeshletIndices[AS_GROUP_SIZE];
 };
 
@@ -44,7 +52,8 @@ void asmain(
     uint gid  : SV_GroupID
 )
 {
-    sPayload.MeshletIndices[gtid] = dtid;
+    sPayload.InstanceIndices[gtid] = dtid / Scene.MeshletCount;    
+    sPayload.MeshletIndices[gtid]  = dtid % Scene.MeshletCount;
     // Assumes all meshlets are visible
     DispatchMesh(AS_GROUP_SIZE, 1, 1, sPayload);
 }
@@ -61,7 +70,12 @@ void msmain(
     out indices  uint3      triangles[126], 
     out vertices MeshOutput vertices[64]) 
 {
+    uint instanceIndex = payload.InstanceIndices[gid];
     uint meshletIndex = payload.MeshletIndices[gid];
+
+    if (meshletIndex >= Scene.MeshletCount) {
+        return;
+    }
 
     Meshlet m = Meshlets[meshletIndex];
     SetMeshOutputCounts(m.VertexCount, m.TriangleCount);
@@ -78,7 +92,9 @@ void msmain(
         uint vertexIndex = m.VertexOffset + gtid;        
         vertexIndex = VertexIndices[vertexIndex];
 
-        vertices[gtid].Position = mul(Cam.MVP, float4(Vertices[vertexIndex].Position, 1.0));
+        float4x4 MVP = mul(Scene.CameraVP, Instances[instanceIndex].M);
+
+        vertices[gtid].Position = mul(MVP, float4(Vertices[vertexIndex].Position, 1.0));
         
         float3 color = float3(
             float(meshletIndex & 1),
