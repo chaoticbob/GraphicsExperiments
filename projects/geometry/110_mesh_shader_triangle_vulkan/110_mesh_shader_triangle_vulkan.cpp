@@ -351,7 +351,7 @@ void CreatePipelineLayout(VulkanRenderer* pRenderer, VkPipelineLayout* pLayout)
 
 void CreateShaderModules(
     VulkanRenderer*              pRenderer,
-    const std::vector<uint32_t>& spirvVS,
+    const std::vector<uint32_t>& spirvMS,
     const std::vector<uint32_t>& spirvFS,
     VkShaderModule*              pModuleVS,
     VkShaderModule*              pModuleFS)
@@ -359,8 +359,8 @@ void CreateShaderModules(
     // Vertex Shader
     {
         VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        createInfo.codeSize                 = SizeInBytes(spirvVS);
-        createInfo.pCode                    = DataPtr(spirvVS);
+        createInfo.codeSize                 = SizeInBytes(spirvMS);
+        createInfo.pCode                    = DataPtr(spirvMS);
 
         CHECK_CALL(vkCreateShaderModule(pRenderer->Device, &createInfo, nullptr, pModuleVS));
     }
