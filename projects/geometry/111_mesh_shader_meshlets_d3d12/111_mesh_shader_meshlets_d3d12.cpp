@@ -34,9 +34,6 @@ static uint32_t gWindowWidth  = 1280;
 static uint32_t gWindowHeight = 720;
 static bool     gEnableDebug  = true;
 
-static LPCWSTR gVSShaderName = L"vsmain";
-static LPCWSTR gPSShaderName = L"psmain";
-
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
 
 // =============================================================================
