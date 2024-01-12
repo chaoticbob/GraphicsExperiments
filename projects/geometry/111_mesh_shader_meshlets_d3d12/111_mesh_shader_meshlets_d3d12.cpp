@@ -38,11 +38,6 @@ static LPCWSTR gVSShaderName = L"vsmain";
 static LPCWSTR gPSShaderName = L"psmain";
 
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
-void CreateGeometryBuffers(
-    DxRenderer*      pRenderer,
-    ID3D12Resource** ppIndexBuffer,
-    ID3D12Resource** ppVertexBuffer,
-    ID3D12Resource** ppVertexColorBuffer);
 
 // =============================================================================
 // main()

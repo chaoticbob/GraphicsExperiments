@@ -105,7 +105,7 @@ int main(int argc, char** argv)
         {
             std::stringstream ss;
             ss << "\n"
-               << "Shader compiler error (VS): " << errorMsg << "\n";
+               << "Shader compiler error (MS): " << errorMsg << "\n";
             GREX_LOG_ERROR(ss.str().c_str());
             return EXIT_FAILURE;
         }
