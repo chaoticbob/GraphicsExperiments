@@ -401,7 +401,7 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
         rootParameters.push_back(rootParameter);
     }
 
-    // ByteAddressBuffer VertexIndices : register(t4);
+    // ByteAddressBuffer VertexIndices : register(t3);
     {
         D3D12_ROOT_PARAMETER rootParameter      = {};
         rootParameter.ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
@@ -411,7 +411,7 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
         rootParameters.push_back(rootParameter);
     }
 
-    // StructuredBuffer<uint> TriangleIndices : register(t5);
+    // StructuredBuffer<uint> TriangleIndices : register(t4);
     {
         D3D12_ROOT_PARAMETER rootParameter      = {};
         rootParameter.ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
