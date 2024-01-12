@@ -497,7 +497,7 @@ void CreateShaderModules(
     VkShaderModule*              pModuleVS,
     VkShaderModule*              pModuleFS)
 {
-    // Vertex Shader
+    // Mesh Shader
     {
         VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
         createInfo.codeSize                 = SizeInBytes(spirvMS);
