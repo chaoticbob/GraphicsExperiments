@@ -141,14 +141,10 @@ void MouseMove(int x, int y, int buttons)
 // =============================================================================
 int main(int argc, char** argv)
 {
-    PerspCamera camera = PerspCamera(60.0f, 1.77777f, 1.0f, 1000.0f);
-    camera.LookAt(vec3(0, 0, 1), vec3(0, 0, 0));
-
-    Camera::FrustumPlane left, right, top, bottom, nearP, farP;
-    camera.GetFrustumPlanes(&left, &right, &top, &bottom, &nearP, &farP);
-
+    // *************************************************************************
+    // Renderer
+    // *************************************************************************
     std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
-
     if (!InitDx(renderer.get(), gEnableDebug))
     {
         return EXIT_FAILURE;
@@ -423,6 +419,9 @@ int main(int argc, char** argv)
         assert(false && "Window::InitImGuiForD3D12 failed");
         return EXIT_FAILURE;
     }
+
+    // Set locale to get thousands separators for large numbers
+    setlocale(LC_NUMERIC, "");
 
     // *************************************************************************
     // Command allocator

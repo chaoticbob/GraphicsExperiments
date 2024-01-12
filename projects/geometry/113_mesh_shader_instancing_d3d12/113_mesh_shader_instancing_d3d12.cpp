@@ -53,12 +53,9 @@ void CreateGeometryBuffers(
 // =============================================================================
 int main(int argc, char** argv)
 {
-    PerspCamera camera = PerspCamera(60.0f, 1.77777f, 1.0f, 1000.0f);
-    camera.LookAt(vec3(0, 0, 1), vec3(0, 0, 0));
-
-    Camera::FrustumPlane left, right, top, bottom, nearP, farP;
-    camera.GetFrustumPlanes(&left, &right, &top, &bottom, &nearP, &farP);
-
+    // *************************************************************************
+    // Renderer
+    // *************************************************************************
     std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
 
     if (!InitDx(renderer.get(), gEnableDebug))
