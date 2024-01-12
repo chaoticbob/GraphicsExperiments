@@ -28,6 +28,7 @@ PFN_vkGetDescriptorEXT                         fn_vkGetDescriptorEXT            
 PFN_vkCmdBindDescriptorBuffersEXT              fn_vkCmdBindDescriptorBuffersEXT              = nullptr;
 PFN_vkCmdSetDescriptorBufferOffsetsEXT         fn_vkCmdSetDescriptorBufferOffsetsEXT         = nullptr;
 PFN_vkCmdDrawMeshTasksEXT                      fn_vkCmdDrawMeshTasksEXT                      = nullptr;
+PFN_vkCmdPushDescriptorSetKHR                  fn_vkCmdPushDescriptorSetKHR                  = nullptr;
 
 bool     IsCompressed(VkFormat fmt);
 uint32_t BitsPerPixel(VkFormat fmt);
@@ -73,15 +74,16 @@ CommandObjects::~CommandObjects()
     }
 }
 
-bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTracing, bool enableMeshShader, uint32_t apiVersion)
+bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTracing, bool enableMeshShader, bool enablePushDescriptor, uint32_t apiVersion)
 {
     if (IsNull(pRenderer)) {
         return false;
     }
 
-    pRenderer->DebugEnabled      = enableDebug;
-    pRenderer->RayTracingEnabled = enableRayTracing;
-    pRenderer->MeshShaderEnabled = enableMeshShader;
+    pRenderer->DebugEnabled          = enableDebug;
+    pRenderer->RayTracingEnabled     = enableRayTracing;
+    pRenderer->MeshShaderEnabled     = enableMeshShader;
+    pRenderer->PushDescriptorEnabled = enablePushDescriptor;
 
     // Instance
     {
@@ -136,6 +138,7 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
         fn_vkCmdBindDescriptorBuffersEXT              = (PFN_vkCmdBindDescriptorBuffersEXT)vkGetInstanceProcAddr(pRenderer->Instance, "vkCmdBindDescriptorBuffersEXT");
         fn_vkCmdSetDescriptorBufferOffsetsEXT         = (PFN_vkCmdSetDescriptorBufferOffsetsEXT)vkGetInstanceProcAddr(pRenderer->Instance, "vkCmdSetDescriptorBufferOffsetsEXT");
         fn_vkCmdDrawMeshTasksEXT                      = (PFN_vkCmdDrawMeshTasksEXT)vkGetInstanceProcAddr(pRenderer->Instance, "vkCmdDrawMeshTasksEXT");
+        fn_vkCmdPushDescriptorSetKHR                  = (PFN_vkCmdPushDescriptorSetKHR)vkGetInstanceProcAddr(pRenderer->Instance, "vkCmdPushDescriptorSetKHR");
     }
 
     // Physical device
@@ -223,6 +226,10 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
             enabledExtensions.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
         }
 
+        if (pRenderer->PushDescriptorEnabled) {
+            enabledExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
+        }
+
         // Make sure all the extenions are present
         auto enumeratedExtensions = EnumeratePhysicalDeviceExtensionNames(pRenderer->PhysicalDevice);
         for (auto& elem : enabledExtensions) {
@@ -260,6 +267,21 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
         bufferDeviceAddressFeatures.pNext                                       = nullptr;
         bufferDeviceAddressFeatures.bufferDeviceAddress                         = VK_TRUE;
 
+        //
+        // Optional features
+        //
+        VkBaseInStructure* pStruct = reinterpret_cast<VkBaseInStructure*>(&bufferDeviceAddressFeatures);
+        if (pRenderer->RayTracingEnabled) {
+            pStruct->pNext = reinterpret_cast<VkBaseInStructure*>(&rayTracingPipelineFeatures);
+            // accelerationStructure is the end of the ray tracing features chain
+            pStruct = reinterpret_cast<VkBaseInStructure*>(&accelerationStructureFeatures);
+        }
+        if (pRenderer->MeshShaderEnabled) {
+            pStruct->pNext = reinterpret_cast<VkBaseInStructure*>(&meshShaderFeatures);
+            pStruct = reinterpret_cast<VkBaseInStructure*>(&meshShaderFeatures);
+        }
+
+        /*
         // Need a better way to do this
         if (pRenderer->RayTracingEnabled && pRenderer->MeshShaderEnabled) {
             accelerationStructureFeatures.pNext = &meshShaderFeatures;
@@ -272,6 +294,7 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
                 bufferDeviceAddressFeatures.pNext = &meshShaderFeatures;
             }
         }
+        */
 
         VkPhysicalDeviceImagelessFramebufferFeatures imagelessFramebufferFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGELESS_FRAMEBUFFER_FEATURES, &bufferDeviceAddressFeatures};
         imagelessFramebufferFeatures.imagelessFramebuffer                         = VK_TRUE;
@@ -3365,6 +3388,36 @@ void WriteDescriptor(
         &descriptorInfo,   // pDescriptorInfo
         descriptorSize,    // dataSize
         pDescriptor);      // pDescriptor
+}
+
+void PushGraphicsDescriptor(
+    VkCommandBuffer     commandBuffer,
+    VkPipelineLayout    pipelineLayout,
+    uint32_t            set,
+    uint32_t            binding,
+    VkDescriptorType    descriptorType,
+    const VulkanBuffer* pBuffer)
+{
+    VkDescriptorBufferInfo bufferInfo = {};
+    bufferInfo.buffer                 = pBuffer->Buffer;
+    bufferInfo.offset                 = 0;
+    bufferInfo.range                  = VK_WHOLE_SIZE;
+
+    VkWriteDescriptorSet write = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    write.dstSet               = VK_NULL_HANDLE;
+    write.dstBinding           = binding;
+    write.dstArrayElement      = 0;
+    write.descriptorCount      = 1;
+    write.descriptorType       = descriptorType;
+    write.pBufferInfo          = &bufferInfo;
+
+    fn_vkCmdPushDescriptorSetKHR(
+        commandBuffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        pipelineLayout,
+        set,
+        1,
+        &write);
 }
 
 uint32_t BytesPerPixel(VkFormat fmt)

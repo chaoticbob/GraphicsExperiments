@@ -81,6 +81,7 @@ struct VulkanRenderer
     bool              DebugEnabled             = true;
     bool              RayTracingEnabled        = false;
     bool              MeshShaderEnabled        = false;
+    bool              PushDescriptorEnabled    = false;
     VkInstance        Instance                 = VK_NULL_HANDLE;
     VkPhysicalDevice  PhysicalDevice           = VK_NULL_HANDLE;
     VkDevice          Device                   = VK_NULL_HANDLE;
@@ -111,7 +112,7 @@ struct CommandObjects
     ~CommandObjects();
 };
 
-bool     InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTracing, bool enableMeshShader = false, uint32_t apiVersion = VK_API_VERSION_1_3);
+bool     InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTracing, bool enableMeshShader = false, bool enablePushDescriptor = false, uint32_t apiVersion = VK_API_VERSION_1_3);
 bool     InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t height, uint32_t imageCount = 2);
 bool     WaitForGpu(VulkanRenderer* pRenderer);
 bool     WaitForFence(VulkanRenderer* pRenderer, VkFence fence);
@@ -454,6 +455,15 @@ void WriteDescriptor(
     uint32_t              arrayElement,
     VkSampler             sampler);
 
+// Buffer
+void PushGraphicsDescriptor(
+    VkCommandBuffer     commandBuffer,
+    VkPipelineLayout    pipelineLayout,
+    uint32_t            set,
+    uint32_t            binding,
+    VkDescriptorType    descriptorType,
+    const VulkanBuffer* pBuffer);
+
 // Loaded funtions
 extern PFN_vkCreateRayTracingPipelinesKHR             fn_vkCreateRayTracingPipelinesKHR;
 extern PFN_vkGetRayTracingShaderGroupHandlesKHR       fn_vkGetRayTracingShaderGroupHandlesKHR;
@@ -468,3 +478,4 @@ extern PFN_vkGetDescriptorEXT                         fn_vkGetDescriptorEXT;
 extern PFN_vkCmdBindDescriptorBuffersEXT              fn_vkCmdBindDescriptorBuffersEXT;
 extern PFN_vkCmdSetDescriptorBufferOffsetsEXT         fn_vkCmdSetDescriptorBufferOffsetsEXT;
 extern PFN_vkCmdDrawMeshTasksEXT                      fn_vkCmdDrawMeshTasksEXT;
+extern PFN_vkCmdPushDescriptorSetKHR                  fn_vkCmdPushDescriptorSetKHR;
