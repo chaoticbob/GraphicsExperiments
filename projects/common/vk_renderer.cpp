@@ -2757,7 +2757,7 @@ VkResult CreateMeshShaderPipeline(
     rasterization_state.depthBiasEnable                        = VK_TRUE;
     rasterization_state.depthBiasConstantFactor                = 0.0f;
     rasterization_state.depthBiasClamp                         = 0.0f;
-    rasterization_state.depthBiasSlopeFactor                   = 1.0f;
+    rasterization_state.depthBiasSlopeFactor                   = 0.0f;
     rasterization_state.lineWidth                              = 1.0f;
 
     VkPipelineDepthStencilStateCreateInfo depth_stencil_state = {VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
@@ -2768,7 +2768,7 @@ VkResult CreateMeshShaderPipeline(
     depth_stencil_state.stencilTestEnable                     = VK_FALSE;
     depth_stencil_state.front.failOp                          = VK_STENCIL_OP_KEEP;
     depth_stencil_state.front.depthFailOp                     = VK_STENCIL_OP_KEEP;
-    depth_stencil_state.front.compareOp                       = VK_COMPARE_OP_ALWAYS;
+    depth_stencil_state.front.compareOp                       = VK_COMPARE_OP_NEVER;
     depth_stencil_state.back                                  = depth_stencil_state.front;
 
     VkPipelineColorBlendAttachmentState color_blend_attachment_state = {};
