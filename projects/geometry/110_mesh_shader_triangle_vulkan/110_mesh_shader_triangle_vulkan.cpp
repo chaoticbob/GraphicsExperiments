@@ -59,9 +59,9 @@ float4 psmain(MeshOutput input) : SV_TARGET
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth      = 1280;
-static uint32_t gWindowHeight     = 720;
-static bool     gEnableDebug      = true;
+static uint32_t gWindowWidth  = 1280;
+static uint32_t gWindowHeight = 720;
+static bool     gEnableDebug  = true;
 
 void CreatePipelineLayout(VulkanRenderer* pRenderer, VkPipelineLayout* pLayout);
 void CreateShaderModules(
@@ -78,8 +78,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    VulkanFeatures features       = {};
-    features.EnableMeshShader     = true;
+    VulkanFeatures features   = {};
+    features.EnableMeshShader = true;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
         return EXIT_FAILURE;
@@ -94,8 +94,8 @@ int main(int argc, char** argv)
     std::vector<uint32_t> spirvMS;
     std::vector<uint32_t> spirvFS;
     {
-        std::string   errorMsg;
-        auto hr = CompileHLSL(gShaders, "msmain", "ms_6_5", &spirvMS, &errorMsg);
+        std::string errorMsg;
+        auto        hr = CompileHLSL(gShaders, "msmain", "ms_6_5", &spirvMS, &errorMsg);
         if (FAILED(hr))
         {
             std::stringstream ss;
@@ -106,7 +106,7 @@ int main(int argc, char** argv)
         }
 
         hr = CompileHLSL(gShaders, "psmain", "ps_6_5", &spirvFS, &errorMsg);
-        if (FAILED(hr))        
+        if (FAILED(hr))
         {
             std::stringstream ss;
             ss << "\n"

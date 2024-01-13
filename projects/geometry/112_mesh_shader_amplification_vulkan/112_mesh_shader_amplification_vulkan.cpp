@@ -55,7 +55,6 @@ int main(int argc, char** argv)
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
     VulkanFeatures features       = {};
-    features.EnableRayTracing     = false;
     features.EnableMeshShader     = true;
     features.EnablePushDescriptor = true;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))

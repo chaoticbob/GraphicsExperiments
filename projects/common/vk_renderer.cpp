@@ -29,6 +29,7 @@ PFN_vkCmdBindDescriptorBuffersEXT              fn_vkCmdBindDescriptorBuffersEXT 
 PFN_vkCmdSetDescriptorBufferOffsetsEXT         fn_vkCmdSetDescriptorBufferOffsetsEXT         = nullptr;
 PFN_vkCmdDrawMeshTasksEXT                      fn_vkCmdDrawMeshTasksEXT                      = nullptr;
 PFN_vkCmdPushDescriptorSetKHR                  fn_vkCmdPushDescriptorSetKHR                  = nullptr;
+PFN_vkCmdDrawMeshTasksNV                       fn_vkCmdDrawMeshTasksNV                       = nullptr;
 
 bool     IsCompressed(VkFormat fmt);
 uint32_t BitsPerPixel(VkFormat fmt);
@@ -137,6 +138,7 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
         fn_vkCmdSetDescriptorBufferOffsetsEXT         = (PFN_vkCmdSetDescriptorBufferOffsetsEXT)vkGetInstanceProcAddr(pRenderer->Instance, "vkCmdSetDescriptorBufferOffsetsEXT");
         fn_vkCmdDrawMeshTasksEXT                      = (PFN_vkCmdDrawMeshTasksEXT)vkGetInstanceProcAddr(pRenderer->Instance, "vkCmdDrawMeshTasksEXT");
         fn_vkCmdPushDescriptorSetKHR                  = (PFN_vkCmdPushDescriptorSetKHR)vkGetInstanceProcAddr(pRenderer->Instance, "vkCmdPushDescriptorSetKHR");
+        fn_vkCmdDrawMeshTasksNV                       = (PFN_vkCmdDrawMeshTasksNV)vkGetInstanceProcAddr(pRenderer->Instance, "vkCmdDrawMeshTasksNV");
     }
 
     // Physical device
@@ -259,6 +261,10 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
         meshShaderFeatures.taskShader                            = VK_TRUE;
         meshShaderFeatures.meshShader                            = VK_TRUE;
         meshShaderFeatures.meshShaderQueries                     = VK_TRUE;
+
+        VkPhysicalDeviceMeshShaderFeaturesNV meshShaderFeaturesNV = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV};
+        meshShaderFeaturesNV.meshShader                          = VK_TRUE;
+        meshShaderFeaturesNV.taskShader                          = VK_TRUE;
 
         // ---------------------------------------------------------------------
 

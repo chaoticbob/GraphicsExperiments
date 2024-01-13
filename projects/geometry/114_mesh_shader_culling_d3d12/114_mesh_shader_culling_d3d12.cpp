@@ -85,8 +85,8 @@ static uint32_t gWindowWidth  = 1920;
 static uint32_t gWindowHeight = 1080;
 static bool     gEnableDebug  = true;
 
-static float gTargetAngle = 0.0f;
-static float gAngle       = 0.0f;
+static float gTargetAngle = 55.0f;
+static float gAngle       = gTargetAngle;
 
 static bool gFitConeToFarClip = false;
 
@@ -107,7 +107,7 @@ static std::vector<std::string> gVisibilityFuncNames = {
     "Frustum Cone and Near Plane",
 };
 
-static int gVisibilityFunc = VISIBILITY_FUNC_NONE;
+static int gVisibilityFunc = VISIBILITY_FUNC_PLANES;
 
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
 void CreateGeometryBuffers(
@@ -593,7 +593,8 @@ int main(int argc, char** argv)
 
         // Update scene
         {
-            float3 target = float3(0, 0.0f, -1.3f);
+            float3  eyePosition = float3(0, 0.2f, 0.0f);
+            float3  target      = float3(0, 0.0f, -1.3f);
 
             // Smooth out the rotation on Y
             gAngle += (gTargetAngle - gAngle) * 0.1f;
@@ -601,7 +602,7 @@ int main(int argc, char** argv)
             target      = rotMat * float4(target, 1.0);
 
             PerspCamera camera = PerspCamera(45.0f, window->GetAspectRatio(), 0.1f, farDist);
-            camera.LookAt(float3(0, 0.2f, 0.0f), target);
+            camera.LookAt(eyePosition, target);
 
             Camera::FrustumPlane frLeft, frRight, frTop, frBottom, frNear, frFar;
             camera.GetFrustumPlanes(&frLeft, &frRight, &frTop, &frBottom, &frNear, &frFar);

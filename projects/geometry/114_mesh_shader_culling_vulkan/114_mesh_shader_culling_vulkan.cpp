@@ -81,8 +81,8 @@ static uint32_t gWindowWidth  = 1920;
 static uint32_t gWindowHeight = 1080;
 static bool     gEnableDebug  = true;
 
-static float gTargetAngle = 0.0f;
-static float gAngle       = 0.0f;
+static float gTargetAngle = 55.0f;
+static float gAngle       = gTargetAngle;
 
 static bool gFitConeToFarClip = false;
 
@@ -146,7 +146,6 @@ int main(int argc, char** argv)
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
     VulkanFeatures features       = {};
-    features.EnableRayTracing     = false;
     features.EnableMeshShader     = true;
     features.EnablePushDescriptor = true;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
@@ -505,8 +504,12 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Instances
     // *************************************************************************
-    const uint32_t    kNumInstanceCols = 40;
-    const uint32_t    kNumInstanceRows = 40;
+    // 
+    // NOTE: These values are lower than the D3D12 version because for some reason
+    //       mesh pipelines are extremely slow in Vulkan.
+    //
+    const uint32_t    kNumInstanceCols = 10; // 40
+    const uint32_t    kNumInstanceRows = 10; // 40
     std::vector<mat4> instances(kNumInstanceCols * kNumInstanceRows);
 
     VulkanBuffer instancesBuffer;
@@ -650,15 +653,16 @@ int main(int argc, char** argv)
 
         // Update scene
         {
-            vec3 target = vec3(0, 0.0f, -1.3f);
+            vec3  eyePosition = vec3(0, 0.2f, 0.0f);
+            vec3  target      = vec3(0, 0.0f, -1.3f);
 
             // Smooth out the rotation on Y
             gAngle += (gTargetAngle - gAngle) * 0.1f;
             mat4 rotMat = glm::rotate(glm::radians(gAngle), vec3(0, 1, 0));
-            target      = rotMat * vec4(target, 1.0);
+            target         = rotMat * vec4(target, 1.0);
 
             PerspCamera camera = PerspCamera(45.0f, window->GetAspectRatio(), 0.1f, farDist);
-            camera.LookAt(vec3(0, 0.2f, 0.0f), target);
+            camera.LookAt(eyePosition, target);
 
             Camera::FrustumPlane frLeft, frRight, frTop, frBottom, frNear, frFar;
             camera.GetFrustumPlanes(&frLeft, &frRight, &frTop, &frBottom, &frNear, &frFar);

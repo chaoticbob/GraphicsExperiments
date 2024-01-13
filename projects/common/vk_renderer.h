@@ -496,3 +496,4 @@ extern PFN_vkCmdBindDescriptorBuffersEXT              fn_vkCmdBindDescriptorBuff
 extern PFN_vkCmdSetDescriptorBufferOffsetsEXT         fn_vkCmdSetDescriptorBufferOffsetsEXT;
 extern PFN_vkCmdDrawMeshTasksEXT                      fn_vkCmdDrawMeshTasksEXT;
 extern PFN_vkCmdPushDescriptorSetKHR                  fn_vkCmdPushDescriptorSetKHR;
+extern PFN_vkCmdDrawMeshTasksNV                       fn_vkCmdDrawMeshTasksNV;
