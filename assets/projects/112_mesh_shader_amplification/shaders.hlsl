@@ -1,10 +1,17 @@
 
+#ifdef __spirv__
+#define DEFINE_AS_PUSH_CONSTANT [[vk::push_constant]]
+#else
+#define DEFINE_AS_PUSH_CONSTANT
+#endif
+
 #define AS_GROUP_SIZE 32
 
 struct CameraProperties {
     float4x4 MVP;
 };
 
+DEFINE_AS_PUSH_CONSTANT
 ConstantBuffer<CameraProperties> Cam : register(b0);
 
 struct Vertex {

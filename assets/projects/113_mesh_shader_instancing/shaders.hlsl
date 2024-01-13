@@ -1,4 +1,10 @@
 
+#ifdef __spirv__
+#define DEFINE_AS_PUSH_CONSTANT [[vk::push_constant]]
+#else
+#define DEFINE_AS_PUSH_CONSTANT
+#endif
+
 #define AS_GROUP_SIZE 32
 
 struct SceneProperties {
@@ -6,6 +12,7 @@ struct SceneProperties {
     uint     MeshletCount;
 };
 
+DEFINE_AS_PUSH_CONSTANT
 ConstantBuffer<SceneProperties> Scene : register(b0);
 
 struct Vertex {

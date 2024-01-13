@@ -392,7 +392,20 @@ HRESULT CreateGraphicsPipeline2(
 
 VkResult CreateMeshShaderPipeline(
    VulkanRenderer*      pRenderer,
-   VkPipelineLayout     pipeline_layout,
+   VkPipelineLayout     pipelineLayout,
+   VkShaderModule       asShaderModule,
+   VkShaderModule       msShaderModule,
+   VkShaderModule       fsShaderModule,
+   VkFormat             rtvFormat,
+   VkFormat             dsvFormat,
+   VkPipeline*          pPipeline,
+   VkCullModeFlags      cullMode = VK_CULL_MODE_BACK_BIT,
+   VkPrimitiveTopology  topologyType = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+   uint32_t             pipelineFlags = 0);
+
+VkResult CreateMeshShaderPipeline(
+   VulkanRenderer*      pRenderer,
+   VkPipelineLayout     pipelineLayout,
    VkShaderModule       msShaderModule,
    VkShaderModule       fsShaderModule,
    VkFormat             rtvFormat,

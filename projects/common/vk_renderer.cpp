@@ -260,6 +260,7 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
         VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT};
         meshShaderFeatures.taskShader                            = VK_TRUE;
         meshShaderFeatures.meshShader                            = VK_TRUE;
+        meshShaderFeatures.meshShaderQueries                     = VK_TRUE;
 
         // ---------------------------------------------------------------------
 
@@ -280,21 +281,6 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
             pStruct->pNext = reinterpret_cast<VkBaseInStructure*>(&meshShaderFeatures);
             pStruct = reinterpret_cast<VkBaseInStructure*>(&meshShaderFeatures);
         }
-
-        /*
-        // Need a better way to do this
-        if (pRenderer->RayTracingEnabled && pRenderer->MeshShaderEnabled) {
-            accelerationStructureFeatures.pNext = &meshShaderFeatures;
-        }
-        else {
-            if (pRenderer->RayTracingEnabled) {
-                bufferDeviceAddressFeatures.pNext = &rayTracingPipelineFeatures;
-            }
-            else if (pRenderer->MeshShaderEnabled) {
-                bufferDeviceAddressFeatures.pNext = &meshShaderFeatures;
-            }
-        }
-        */
 
         VkPhysicalDeviceImagelessFramebufferFeatures imagelessFramebufferFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGELESS_FRAMEBUFFER_FEATURES, &bufferDeviceAddressFeatures};
         imagelessFramebufferFeatures.imagelessFramebuffer                         = VK_TRUE;
@@ -340,6 +326,7 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
         robustness2Features.nullDescriptor                                  = VK_TRUE;
 
         VkPhysicalDeviceFeatures enabledFeatures = {};
+        enabledFeatures.pipelineStatisticsQuery = VK_TRUE;
 
         VkDeviceCreateInfo vkci      = {VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
         vkci.pNext                   = &robustness2Features;
@@ -2713,7 +2700,8 @@ HRESULT CreateGraphicsPipeline2(
 
 VkResult CreateMeshShaderPipeline(
     VulkanRenderer*      pRenderer,
-    VkPipelineLayout     pipeline_layout,
+    VkPipelineLayout     pipelineLayout,
+    VkShaderModule       asShaderModule,
     VkShaderModule       msShaderModule,
     VkShaderModule       fsShaderModule,
     VkFormat             rtvFormat,
@@ -2730,20 +2718,31 @@ VkResult CreateMeshShaderPipeline(
     pipeline_rendering_create_info.pColorAttachmentFormats       = &rtv_format;
     pipeline_rendering_create_info.depthAttachmentFormat         = GREX_DEFAULT_DSV_FORMAT;
 
-    VkPipelineShaderStageCreateInfo shader_stages[2] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
-    shader_stages[0].stage                           = VK_SHADER_STAGE_MESH_BIT_EXT;
-    shader_stages[0].module                          = msShaderModule;
-    shader_stages[0].pName                           = "msmain";
-    shader_stages[1].sType                           = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    shader_stages[1].stage                           = VK_SHADER_STAGE_FRAGMENT_BIT;
-    shader_stages[1].module                          = fsShaderModule;
-    shader_stages[1].pName                           = "psmain";
-
+    std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
+    // Task (amplification) shader
+    if (asShaderModule != VK_NULL_HANDLE) {
+        VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        shaderStageCreateInfo.stage                           = VK_SHADER_STAGE_TASK_BIT_EXT;
+        shaderStageCreateInfo.module                          = asShaderModule;
+        shaderStageCreateInfo.pName                           = "asmain";
+        shaderStages.push_back(shaderStageCreateInfo);
+    }
+    // Mesh shader
+    VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+    shaderStageCreateInfo.stage                           = VK_SHADER_STAGE_MESH_BIT_EXT;
+    shaderStageCreateInfo.module                          = msShaderModule;
+    shaderStageCreateInfo.pName                           = "msmain";
+    shaderStages.push_back(shaderStageCreateInfo);
+    // Fragment shader
+    shaderStageCreateInfo        = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+    shaderStageCreateInfo.stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+    shaderStageCreateInfo.module = fsShaderModule;
+    shaderStageCreateInfo.pName  = "psmain";
+    shaderStages.push_back(shaderStageCreateInfo);
 
     VkPipelineViewportStateCreateInfo viewport_state = {VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
     viewport_state.viewportCount                     = 1;
     viewport_state.scissorCount                      = 1;
-
 
     VkPipelineRasterizationStateCreateInfo rasterization_state = {VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
     rasterization_state.depthClampEnable                       = VK_FALSE;
@@ -2801,8 +2800,8 @@ VkResult CreateMeshShaderPipeline(
 
     VkGraphicsPipelineCreateInfo pipeline_info = {VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
     pipeline_info.pNext                        = &pipeline_rendering_create_info;
-    pipeline_info.stageCount                   = 2;
-    pipeline_info.pStages                      = shader_stages;
+    pipeline_info.stageCount                   = CountU32(shaderStages);
+    pipeline_info.pStages                      = DataPtr(shaderStages);
     pipeline_info.pVertexInputState            = nullptr;
     pipeline_info.pInputAssemblyState          = nullptr;
     pipeline_info.pViewportState               = &viewport_state;
@@ -2811,7 +2810,7 @@ VkResult CreateMeshShaderPipeline(
     pipeline_info.pDepthStencilState           = &depth_stencil_state;
     pipeline_info.pColorBlendState             = &color_blend_state;
     pipeline_info.pDynamicState                = &dynamic_state;
-    pipeline_info.layout                       = pipeline_layout;
+    pipeline_info.layout                       = pipelineLayout;
     pipeline_info.renderPass                   = VK_NULL_HANDLE;
     pipeline_info.subpass                      = 0;
     pipeline_info.basePipelineHandle           = VK_NULL_HANDLE;
@@ -2826,6 +2825,32 @@ VkResult CreateMeshShaderPipeline(
         pPipeline);
 
     return vkres;
+}
+
+VkResult CreateMeshShaderPipeline(
+    VulkanRenderer*      pRenderer,
+    VkPipelineLayout     pipelineLayout,
+    VkShaderModule       msShaderModule,
+    VkShaderModule       fsShaderModule,
+    VkFormat             rtvFormat,
+    VkFormat             dsvFormat,
+    VkPipeline*          pPipeline,
+    VkCullModeFlags      cullMode,
+    VkPrimitiveTopology  topologyType,
+    uint32_t             pipelineFlags)
+{
+    return CreateMeshShaderPipeline(
+        pRenderer,      // pRenderer
+        pipelineLayout, // pipelineLayout
+        VK_NULL_HANDLE, // asShaderModul,
+        msShaderModule, // msShaderModule
+        fsShaderModule, // fsShaderModule
+        rtvFormat,      // rtvFormat
+        dsvFormat,      // dsvFormat
+        pPipeline,      // pPipeline
+        cullMode,       // cullMode
+        topologyType,   // topologyType
+        pipelineFlags); // pipelineFlags
 }
 
 CompileResult CompileGLSL(
