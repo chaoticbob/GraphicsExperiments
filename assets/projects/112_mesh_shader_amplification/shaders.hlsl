@@ -75,7 +75,7 @@ void msmain(
        
     if (gtid < m.TriangleCount) {
         //
-        // meshopt stores the triangle offset in bytes since it use stores the
+        // meshopt stores the triangle offset in bytes since it stores the
         // triangle indices as 3 consecutive bytes. 
         //
         // Since we repacked those 3 bytes to a 32-bit uint, our offset is now
