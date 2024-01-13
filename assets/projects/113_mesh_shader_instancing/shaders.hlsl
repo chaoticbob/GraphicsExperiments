@@ -9,6 +9,7 @@
 
 struct SceneProperties {
     float4x4 CameraVP;
+    uint     InstanceCount;
     uint     MeshletCount;
 };
 
@@ -59,10 +60,19 @@ void asmain(
     uint gid  : SV_GroupID
 )
 {
-    sPayload.InstanceIndices[gtid] = dtid / Scene.MeshletCount;    
-    sPayload.MeshletIndices[gtid]  = dtid % Scene.MeshletCount;
-    // Assumes all meshlets are visible
-    DispatchMesh(AS_GROUP_SIZE, 1, 1, sPayload);
+    bool visible = false;
+
+    uint instanceIndex = dtid / Scene.MeshletCount;
+    uint meshletIndex  = dtid % Scene.MeshletCount;
+
+    if ((instanceIndex < Scene.InstanceCount) && (meshletIndex < Scene.MeshletCount)) {
+        visible = true;
+        sPayload.InstanceIndices[gtid] = instanceIndex;
+        sPayload.MeshletIndices[gtid]  = meshletIndex;
+    }
+
+    uint visibleCount = WaveActiveCountBits(visible);   
+    DispatchMesh(visibleCount, 1, 1, sPayload);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -79,10 +89,6 @@ void msmain(
 {
     uint instanceIndex = payload.InstanceIndices[gid];
     uint meshletIndex = payload.MeshletIndices[gid];
-
-    if (meshletIndex >= Scene.MeshletCount) {
-        return;
-    }
 
     Meshlet m = Meshlets[meshletIndex];
     SetMeshOutputCounts(m.VertexCount, m.TriangleCount);

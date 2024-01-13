@@ -70,6 +70,7 @@ struct SceneProperties
 {
     mat4        CameraVP;
     FrustumData Frustum;
+    uint        InstanceCount;
     uint        MeshletCount;
     uint        VisibilityFunc;
 };
@@ -79,7 +80,7 @@ struct SceneProperties
 // =============================================================================
 static uint32_t gWindowWidth  = 1920;
 static uint32_t gWindowHeight = 1080;
-static bool     gEnableDebug  = true;
+static bool     gEnableDebug  = false;
 
 static float gTargetAngle = 55.0f;
 static float gAngle       = gTargetAngle;
@@ -303,12 +304,13 @@ int main(int argc, char** argv)
     VulkanBuffer meshletBoundsBuffer;
     {
         VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        VmaMemoryUsage     memoryUsage      = VMA_MEMORY_USAGE_CPU_TO_GPU;
 
-        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(positions), DataPtr(positions), usageFlags, 0, &positionBuffer));
-        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshlets), DataPtr(meshlets), usageFlags, 0, &meshletBuffer));
-        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshletVertices), DataPtr(meshletVertices), usageFlags, 0, &meshletVerticesBuffer));
-        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshletTrianglesU32), DataPtr(meshletTrianglesU32), usageFlags, 0, &meshletTrianglesBuffer));
-        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshletBounds), DataPtr(meshletBounds), usageFlags, 0, &meshletBoundsBuffer));
+        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(positions), DataPtr(positions), usageFlags, memoryUsage, 0, &positionBuffer));
+        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshlets), DataPtr(meshlets), usageFlags, memoryUsage, 0, &meshletBuffer));
+        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshletVertices), DataPtr(meshletVertices), usageFlags, memoryUsage, 0, &meshletVerticesBuffer));
+        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshletTrianglesU32), DataPtr(meshletTrianglesU32), usageFlags, memoryUsage, 0, &meshletTrianglesBuffer));
+        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshletBounds), DataPtr(meshletBounds), usageFlags, memoryUsage, 0, &meshletBoundsBuffer));
     }
 
     // *************************************************************************
@@ -499,14 +501,18 @@ int main(int argc, char** argv)
     SceneProperties scene = {};
 
     VulkanBuffer sceneBuffer;
-    CHECK_CALL(CreateBuffer(renderer.get(), sizeof(SceneProperties), nullptr, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 0, &sceneBuffer));
+    {   
+        size_t size = Align<size_t>(sizeof(SceneProperties), 256);        
+        CHECK_CALL(CreateBuffer(renderer.get(), sizeof(SceneProperties), nullptr, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 0, &sceneBuffer));
+    }
 
     // *************************************************************************
     // Instances
     // *************************************************************************
-    // 
+    //
     // NOTE: These values are lower than the D3D12 version because for some reason
-    //       mesh pipelines are extremely slow in Vulkan.
+    //       mesh pipelines are extremely slow...except for when launched within
+    //       NVIDIA NSight.
     //
     const uint32_t    kNumInstanceCols = 10; // 40
     const uint32_t    kNumInstanceRows = 10; // 40
@@ -653,13 +659,13 @@ int main(int argc, char** argv)
 
         // Update scene
         {
-            vec3  eyePosition = vec3(0, 0.2f, 0.0f);
-            vec3  target      = vec3(0, 0.0f, -1.3f);
+            vec3 eyePosition = vec3(0, 0.2f, 0.0f);
+            vec3 target      = vec3(0, 0.0f, -1.3f);
 
             // Smooth out the rotation on Y
             gAngle += (gTargetAngle - gAngle) * 0.1f;
             mat4 rotMat = glm::rotate(glm::radians(gAngle), vec3(0, 1, 0));
-            target         = rotMat * vec4(target, 1.0);
+            target      = rotMat * vec4(target, 1.0);
 
             PerspCamera camera = PerspCamera(45.0f, window->GetAspectRatio(), 0.1f, farDist);
             camera.LookAt(eyePosition, target);
@@ -681,6 +687,7 @@ int main(int argc, char** argv)
             scene.Frustum.Cone.Height                  = frCone.Height;
             scene.Frustum.Cone.Direction               = frCone.Dir;
             scene.Frustum.Cone.Angle                   = frCone.Angle;
+            scene.InstanceCount                        = static_cast<uint32_t>(instances.size());
             scene.MeshletCount                         = static_cast<uint32_t>(meshlets.size());
             scene.VisibilityFunc                       = gVisibilityFunc;
 
@@ -756,12 +763,6 @@ int main(int argc, char** argv)
             vkCmdSetScissor(cmdBuf.CommandBuffer, 0, 1, &scissor);
 
             vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-
-            PerspCamera camera = PerspCamera(45.0f, window->GetAspectRatio());
-            camera.LookAt(vec3(0, 0.7f, 3.0f), vec3(0, 0.105f, 0));
-
-            mat4     VP           = camera.GetViewProjectionMatrix();
-            uint32_t meshletCount = static_cast<uint32_t>(meshlets.size());
 
             PushGraphicsDescriptor(cmdBuf.CommandBuffer, pipelineLayout, 0, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &sceneBuffer);
             PushGraphicsDescriptor(cmdBuf.CommandBuffer, pipelineLayout, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &positionBuffer);

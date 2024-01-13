@@ -32,9 +32,9 @@ using namespace glm;
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth          = 1280;
-static uint32_t gWindowHeight         = 720;
-static bool     gEnableDebug          = true;
+static uint32_t gWindowWidth  = 1280;
+static uint32_t gWindowHeight = 720;
+static bool     gEnableDebug  = false;
 
 void CreatePipelineLayout(
     VulkanRenderer*        pRenderer,
@@ -380,8 +380,13 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Instances
     // *************************************************************************
-    const uint32_t         kNumInstanceCols = 20;
-    const uint32_t         kNumInstanceRows = 10;
+    //
+    // NOTE: These values are lower than the D3D12 version because for some reason
+    //       mesh pipelines are extremely slow...except for when launched within
+    //       NVIDIA NSight.
+    //
+    const uint32_t         kNumInstanceCols = 10;  // 20;
+    const uint32_t         kNumInstanceRows = 10; // 10;
     std::vector<glm::mat4> instances(kNumInstanceCols * kNumInstanceRows);
 
     VulkanBuffer instancesBuffer;
@@ -540,14 +545,16 @@ int main(int argc, char** argv)
 
             vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-            PerspCamera camera = PerspCamera(45.0f, window->GetAspectRatio());
+            PerspCamera camera = PerspCamera(45.0f, window->GetAspectRatio(), 0.1f, 1000.0f);
             camera.LookAt(vec3(0, 0.7f, 3.0f), vec3(0, 0.105f, 0));
 
-            mat4     VP           = camera.GetViewProjectionMatrix();
-            uint32_t meshletCount = static_cast<uint32_t>(meshlets.size());
+            mat4     VP            = camera.GetViewProjectionMatrix();
+            uint32_t instanceCount = static_cast<uint32_t>(instances.size());
+            uint32_t meshletCount  = static_cast<uint32_t>(meshlets.size());
 
             vkCmdPushConstants(cmdBuf.CommandBuffer, pipelineLayout, VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_TASK_BIT_EXT, 0, sizeof(mat4), &VP);
-            vkCmdPushConstants(cmdBuf.CommandBuffer, pipelineLayout, VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_TASK_BIT_EXT, sizeof(mat4), sizeof(uint32_t), &meshletCount);
+            vkCmdPushConstants(cmdBuf.CommandBuffer, pipelineLayout, VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_TASK_BIT_EXT, sizeof(mat4), sizeof(uint32_t), &instanceCount);
+            vkCmdPushConstants(cmdBuf.CommandBuffer, pipelineLayout, VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_TASK_BIT_EXT, sizeof(mat4) + sizeof(uint32_t), sizeof(uint32_t), &meshletCount);
             PushGraphicsDescriptor(cmdBuf.CommandBuffer, pipelineLayout, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &positionBuffer);
             PushGraphicsDescriptor(cmdBuf.CommandBuffer, pipelineLayout, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &meshletBuffer);
             PushGraphicsDescriptor(cmdBuf.CommandBuffer, pipelineLayout, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &meshletVerticesBuffer);
@@ -628,7 +635,7 @@ void CreatePipelineLayout(
 {
     VkPushConstantRange push_constant = {};
     push_constant.offset              = 0;
-    push_constant.size                = sizeof(mat4) + sizeof(uint32_t);
+    push_constant.size                = sizeof(mat4) + 2 * sizeof(uint32_t);
     push_constant.stageFlags          = VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_TASK_BIT_EXT;
 
     std::vector<VkDescriptorSetLayoutBinding> bindings = {};

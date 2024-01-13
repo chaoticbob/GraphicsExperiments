@@ -42,6 +42,7 @@ struct FrustumData {
 struct SceneProperties {
     float4x4    CameraVP;
     FrustumData Frustum;
+    uint        InstanceCount;
     uint        MeshletCount;
     uint        VisibilityFunc;
 };
@@ -163,12 +164,12 @@ void asmain(
     uint instanceIndex = dtid / Scene.MeshletCount;
     uint meshletIndex  = dtid % Scene.MeshletCount;
 
-    if (meshletIndex < Scene.MeshletCount) {
+    if ((instanceIndex < Scene.InstanceCount) && (meshletIndex < Scene.MeshletCount)) {
         // Transform meshlet's bounding sphere into world space
         float4x4 M = Instances[instanceIndex].M;
         float4 meshletBoundingSphere = mul(M, float4(MeshletBounds[meshletIndex].xyz, 1.0));
         meshletBoundingSphere.w = MeshletBounds[meshletIndex].w;
-
+        
         if (Scene.VisibilityFunc == VISIBILITY_FUNC_NONE) {
             visible = true;
         }
@@ -183,9 +184,9 @@ void asmain(
         }
         else if (Scene.VisibilityFunc == VISIBILITY_FUNC_CONE_AND_NEAR_PLANE) {
             visible = VisibleFrustumConeAndNearPlane(meshletBoundingSphere);
-        }
+        }        
     }
-    
+
     if (visible) {
         uint index = WavePrefixCountBits(visible);
         sPayload.InstanceIndices[index] = instanceIndex;
@@ -209,7 +210,7 @@ void msmain(
     out vertices MeshOutput vertices[64]) 
 {
     uint instanceIndex = payload.InstanceIndices[gid];
-    uint meshletIndex = payload.MeshletIndices[gid];
+    uint meshletIndex  = payload.MeshletIndices[gid];
 
     Meshlet m = Meshlets[meshletIndex];
     SetMeshOutputCounts(m.VertexCount, m.TriangleCount);
@@ -235,7 +236,7 @@ void msmain(
             float(meshletIndex & 3) / 4,
             float(meshletIndex & 7) / 8);
         vertices[gtid].Color = color;
-    }
+    }    
 }
 
 // -------------------------------------------------------------------------------------------------

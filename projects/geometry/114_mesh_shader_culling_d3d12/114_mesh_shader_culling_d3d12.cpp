@@ -74,6 +74,7 @@ struct SceneProperties
 {
     float4x4    CameraVP;
     FrustumData Frustum;
+    uint        InstanceCount;
     uint        MeshletCount;
     uint        VisibilityFunc;
 };
@@ -83,7 +84,7 @@ struct SceneProperties
 // =============================================================================
 static uint32_t gWindowWidth  = 1920;
 static uint32_t gWindowHeight = 1080;
-static bool     gEnableDebug  = true;
+static bool     gEnableDebug  = false;
 
 static float gTargetAngle = 55.0f;
 static float gAngle       = gTargetAngle;
@@ -462,7 +463,10 @@ int main(int argc, char** argv)
     SceneProperties scene = {};
 
     ComPtr<ID3D12Resource> sceneBuffer;
-    CHECK_CALL(CreateBuffer(renderer.get(), sizeof(SceneProperties), D3D12_HEAP_TYPE_UPLOAD, &sceneBuffer));
+    {
+        size_t size = Align<size_t>(sizeof(SceneProperties), 256);
+        CHECK_CALL(CreateBuffer(renderer.get(), size, D3D12_HEAP_TYPE_UPLOAD, &sceneBuffer));
+    }
 
     // *************************************************************************
     // Instances
@@ -593,8 +597,8 @@ int main(int argc, char** argv)
 
         // Update scene
         {
-            float3  eyePosition = float3(0, 0.2f, 0.0f);
-            float3  target      = float3(0, 0.0f, -1.3f);
+            float3 eyePosition = float3(0, 0.2f, 0.0f);
+            float3 target      = float3(0, 0.0f, -1.3f);
 
             // Smooth out the rotation on Y
             gAngle += (gTargetAngle - gAngle) * 0.1f;
@@ -621,6 +625,7 @@ int main(int argc, char** argv)
             scene.Frustum.Cone.Height                  = frCone.Height;
             scene.Frustum.Cone.Direction               = frCone.Dir;
             scene.Frustum.Cone.Angle                   = frCone.Angle;
+            scene.InstanceCount                        = static_cast<uint32_t>(instances.size());
             scene.MeshletCount                         = static_cast<uint32_t>(meshlets.size());
             scene.VisibilityFunc                       = gVisibilityFunc;
 
@@ -680,6 +685,7 @@ int main(int argc, char** argv)
             commandList->SetGraphicsRootShaderResourceView(5, meshletTrianglesBuffer->GetGPUVirtualAddress());
             commandList->SetGraphicsRootShaderResourceView(6, instancesBuffer->GetGPUVirtualAddress());
 
+            
             // DispatchMesh with pipeline statistics
             {
                 commandList->BeginQuery(queryHeap.Get(), D3D12_QUERY_TYPE_PIPELINE_STATISTICS1, 0);
@@ -693,6 +699,7 @@ int main(int argc, char** argv)
 
             // Resolve query
             commandList->ResolveQueryData(queryHeap.Get(), D3D12_QUERY_TYPE_PIPELINE_STATISTICS1, 0, 1, queryBuffer.Get(), 0);
+            
 
             // ImGui
             window->ImGuiRenderDrawData(renderer.get(), commandList.Get());

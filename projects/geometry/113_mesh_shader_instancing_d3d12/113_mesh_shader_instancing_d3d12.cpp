@@ -36,7 +36,7 @@ using float4x4 = glm::mat4;
 // =============================================================================
 static uint32_t gWindowWidth  = 1920;
 static uint32_t gWindowHeight = 1080;
-static bool     gEnableDebug  = true;
+static bool     gEnableDebug  = false;
 
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
 void CreateGeometryBuffers(
@@ -457,14 +457,16 @@ int main(int argc, char** argv)
             commandList->SetGraphicsRootSignature(rootSig.Get());
             commandList->SetPipelineState(pipelineState.Get());
 
-            PerspCamera camera = PerspCamera(45.0f, window->GetAspectRatio());
+            PerspCamera camera = PerspCamera(45.0f, window->GetAspectRatio(), 0.1f, 1000.0f);
             camera.LookAt(vec3(0, 0.7f, 3.0f), vec3(0, 0.105f, 0));
 
             mat4 VP = camera.GetViewProjectionMatrix();
+            uint32_t instanceCount = static_cast<uint32_t>(instances.size());
             uint32_t meshletCount = static_cast<uint32_t>(meshlets.size());
 
             commandList->SetGraphicsRoot32BitConstants(0, 16, &VP, 0);
-            commandList->SetGraphicsRoot32BitConstants(0, 1, &meshletCount, 16);
+            commandList->SetGraphicsRoot32BitConstants(0, 1, &instanceCount, 16);
+            commandList->SetGraphicsRoot32BitConstants(0, 1, &meshletCount, 17);
             commandList->SetGraphicsRootShaderResourceView(1, positionBuffer->GetGPUVirtualAddress());
             commandList->SetGraphicsRootShaderResourceView(2, meshletBuffer->GetGPUVirtualAddress());
             commandList->SetGraphicsRootShaderResourceView(3, meshletVerticesBuffer->GetGPUVirtualAddress());
@@ -524,7 +526,7 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     {
         D3D12_ROOT_PARAMETER rootParameter     = {};
         rootParameter.ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        rootParameter.Constants.Num32BitValues = 17;
+        rootParameter.Constants.Num32BitValues = 18;
         rootParameter.Constants.ShaderRegister = 0;
         rootParameter.Constants.RegisterSpace  = 0;
         rootParameter.ShaderVisibility         = D3D12_SHADER_VISIBILITY_ALL;
