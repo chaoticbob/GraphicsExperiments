@@ -72,11 +72,6 @@ void CreateShaderModules(
     const std::vector<uint32_t>& spirvFS,
     VkShaderModule*              pModuleMS,
     VkShaderModule*              pModuleFS);
-void CreateGeometryBuffers(
-    VulkanRenderer* pRenderer,
-    VulkanBuffer*   ppIndexBuffer,
-    VulkanBuffer*   ppPositionBuffer,
-    VulkanBuffer*   ppVertexColorBuffer);
 
 // =============================================================================
 // main()

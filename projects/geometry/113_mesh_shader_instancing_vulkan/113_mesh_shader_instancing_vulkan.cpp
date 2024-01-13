@@ -34,7 +34,7 @@ using namespace glm;
 // =============================================================================
 static uint32_t gWindowWidth          = 1280;
 static uint32_t gWindowHeight         = 720;
-static bool     gEnableDebug          = false;
+static bool     gEnableDebug          = true;
 static bool     gEnableRayTracing     = false;
 static bool     gEnableMeshShader     = true;
 static bool     gEnablePushDescriptor = true;
@@ -51,11 +51,6 @@ void CreateShaderModules(
     VkShaderModule*              pModuleAS,
     VkShaderModule*              pModuleMS,
     VkShaderModule*              pModuleFS);
-void CreateGeometryBuffers(
-    VulkanRenderer* pRenderer,
-    VulkanBuffer*   ppIndexBuffer,
-    VulkanBuffer*   ppPositionBuffer,
-    VulkanBuffer*   ppVertexColorBuffer);
 
 // =============================================================================
 // main()
@@ -229,11 +224,6 @@ int main(int argc, char** argv)
 
     // *************************************************************************
     // Create the pipeline
-    //
-    // The pipeline is created with 2 shaders
-    //    1) Mesh Shader
-    //    2) Fragment Shader
-    //
     // *************************************************************************
     VkPipeline pipeline = VK_NULL_HANDLE;
     CreateMeshShaderPipeline(
@@ -410,34 +400,35 @@ int main(int argc, char** argv)
 
     while (window->PollEvents())
     {
+        // Should match up with what was specified in the query pool's create info
+        std::vector<uint64_t> pipelineStatistics(13);
+        std::memset(DataPtr(pipelineStatistics), 0, SizeInBytes(pipelineStatistics));
+
+        if (hasPiplineStats)
+        {
+            VkDeviceSize stride = static_cast<VkDeviceSize>(SizeInBytes(pipelineStatistics));
+
+            //
+            // NOTE: For some reason pipeline statistics returns information for tessellation
+            //       shaders even though there's no tessellation shader present in the pipeline.
+            //
+            vkGetQueryPoolResults(
+                renderer.get()->Device,                             // device
+                queryPool,                                          // queryPool
+                0,                                                  // firstQuery
+                1,                                                  // queryCount
+                SizeInBytes(pipelineStatistics),                    // dataSize
+                DataPtr(pipelineStatistics),                        // pData
+                stride,                                             // stride
+                VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT); // flags
+        }
+
         // ---------------------------------------------------------------------
+
         window->ImGuiNewFrameVulkan();
 
         if (ImGui::Begin("Params"))
         {
-            // Should match up with what was specified in the query pool's create info
-            std::vector<uint64_t> pipelineStatistics(13);
-            std::memset(DataPtr(pipelineStatistics), 0, SizeInBytes(pipelineStatistics));
-
-            if (hasPiplineStats)
-            {
-                VkDeviceSize stride = static_cast<VkDeviceSize>(SizeInBytes(pipelineStatistics));
-
-                //
-                // NOTE: For some reason pipeline statistics returns information for tessellation
-                //       shaders even though there's no tessellation shader present in the pipeline.
-                //
-                vkGetQueryPoolResults(
-                    renderer.get()->Device,                             // device
-                    queryPool,                                          // queryPool
-                    0,                                                  // firstQuery
-                    1,                                                  // queryCount
-                    SizeInBytes(pipelineStatistics),                    // dataSize
-                    DataPtr(pipelineStatistics),                        // pData
-                    stride,                                             // stride
-                    VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT); // flags
-            }
-
             ImGui::Columns(2);
             // clang-format off
             ImGui::Text("Input Assembly Vertices"     ); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics[ 0]); ImGui::NextColumn();
@@ -453,7 +444,6 @@ int main(int argc, char** argv)
             ImGui::Text("Compute Shader Invocations"  ); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics[10]); ImGui::NextColumn();
             ImGui::Text("Task Shader Invocations"     ); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics[11]); ImGui::NextColumn();
             ImGui::Text("Mesh Shader Invocations"     ); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics[12]); ImGui::NextColumn();
-
             // clang-format on
         }
         ImGui::End();

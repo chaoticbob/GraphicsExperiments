@@ -209,7 +209,7 @@ int main(int argc, char** argv)
     // Make them meshlets!
     // *************************************************************************
     TriMesh::Aabb                meshBounds = {};
-    std::vector<glm::vec3>       positions;
+    std::vector<float3>          positions;
     std::vector<meshopt_Meshlet> meshlets;
     std::vector<uint32_t>        meshletVertices;
     std::vector<uint8_t>         meshletTriangles;
@@ -219,7 +219,7 @@ int main(int argc, char** argv)
         //
         // Use a cube to debug when needed
         //
-        // TriMesh mesh = TriMesh::Cube(glm::vec3(0.25f), false, options);
+        // TriMesh mesh = TriMesh::Cube(float3(0.25f), false, options);
 
         TriMesh mesh = {};
         bool    res  = TriMesh::LoadOBJ(GetAssetPath("models/horse_statue_01_1k.obj").string(), "", options, &mesh);
@@ -249,7 +249,7 @@ int main(int argc, char** argv)
             mesh.GetNumIndices(),
             reinterpret_cast<const float*>(mesh.GetPositions().data()),
             mesh.GetNumVertices(),
-            sizeof(glm::vec3),
+            sizeof(float3),
             kMaxVertices,
             kMaxTriangles,
             kConeWeight);
@@ -261,7 +261,7 @@ int main(int argc, char** argv)
     }
 
     // Meshlet bounds (we're using bounding spheres)
-    std::vector<glm::vec4> meshletBounds;
+    std::vector<float4> meshletBounds;
     for (auto& meshlet : meshlets)
     {
         auto bounds = meshopt_computeMeshletBounds(
@@ -270,8 +270,8 @@ int main(int argc, char** argv)
             meshlet.triangle_count,
             reinterpret_cast<const float*>(positions.data()),
             positions.size(),
-            sizeof(glm::vec3));
-        meshletBounds.push_back(glm::vec4(bounds.center[0], bounds.center[1], bounds.center[2], bounds.radius));
+            sizeof(float3));
+        meshletBounds.push_back(float4(bounds.center[0], bounds.center[1], bounds.center[2], bounds.radius));
     }
 
     // Get some counts to use later
@@ -419,9 +419,6 @@ int main(int argc, char** argv)
         assert(false && "Window::InitImGuiForD3D12 failed");
         return EXIT_FAILURE;
     }
-
-    // Set locale to get thousands separators for large numbers
-    setlocale(LC_NUMERIC, "");
 
     // *************************************************************************
     // Command allocator
@@ -587,7 +584,7 @@ int main(int argc, char** argv)
 
                     uint32_t index   = j * kNumInstanceCols + i;
                     float    t       = static_cast<float>(glfwGetTime()) + ((i ^ j + i) / 10.0f);
-                    instances[index] = glm::translate(glm::vec3(x, y, z)) * glm::rotate(t, glm::vec3(0, 1, 0));
+                    instances[index] = glm::translate(float3(x, y, z)) * glm::rotate(t, float3(0, 1, 0));
                 }
             }
         }
@@ -596,15 +593,15 @@ int main(int argc, char** argv)
 
         // Update scene
         {
-            vec3 target = vec3(0, 0.0f, -1.3f);
+            float3 target = float3(0, 0.0f, -1.3f);
 
             // Smooth out the rotation on Y
             gAngle += (gTargetAngle - gAngle) * 0.1f;
-            mat4 rotMat = glm::rotate(glm::radians(gAngle), vec3(0, 1, 0));
+            mat4 rotMat = glm::rotate(glm::radians(gAngle), float3(0, 1, 0));
             target      = rotMat * float4(target, 1.0);
 
             PerspCamera camera = PerspCamera(45.0f, window->GetAspectRatio(), 0.1f, farDist);
-            camera.LookAt(vec3(0, 0.2f, 0.0f), target);
+            camera.LookAt(float3(0, 0.2f, 0.0f), target);
 
             Camera::FrustumPlane frLeft, frRight, frTop, frBottom, frNear, frFar;
             camera.GetFrustumPlanes(&frLeft, &frRight, &frTop, &frBottom, &frNear, &frFar);
@@ -674,7 +671,6 @@ int main(int argc, char** argv)
             commandList->SetGraphicsRootSignature(rootSig.Get());
             commandList->SetPipelineState(pipelineState.Get());
 
-            // commandList->SetGraphicsRoot32BitConstants(0, 16, &VP, 0);
             commandList->SetGraphicsRootConstantBufferView(0, sceneBuffer->GetGPUVirtualAddress());
             commandList->SetGraphicsRootShaderResourceView(1, positionBuffer->GetGPUVirtualAddress());
             commandList->SetGraphicsRootShaderResourceView(2, meshletBuffer->GetGPUVirtualAddress());

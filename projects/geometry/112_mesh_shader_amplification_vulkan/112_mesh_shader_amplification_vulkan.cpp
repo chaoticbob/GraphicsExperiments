@@ -49,11 +49,6 @@ void CreateShaderModules(
     VkShaderModule*              pModuleAS,
     VkShaderModule*              pModuleMS,
     VkShaderModule*              pModuleFS);
-void CreateGeometryBuffers(
-    VulkanRenderer* pRenderer,
-    VulkanBuffer*   ppIndexBuffer,
-    VulkanBuffer*   ppPositionBuffer,
-    VulkanBuffer*   ppVertexColorBuffer);
 
 // =============================================================================
 // main()
