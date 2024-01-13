@@ -74,16 +74,14 @@ CommandObjects::~CommandObjects()
     }
 }
 
-bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTracing, bool enableMeshShader, bool enablePushDescriptor, uint32_t apiVersion)
+bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeatures& features, uint32_t apiVersion)
 {
     if (IsNull(pRenderer)) {
         return false;
     }
 
-    pRenderer->DebugEnabled          = enableDebug;
-    pRenderer->RayTracingEnabled     = enableRayTracing;
-    pRenderer->MeshShaderEnabled     = enableMeshShader;
-    pRenderer->PushDescriptorEnabled = enablePushDescriptor;
+    pRenderer->DebugEnabled = enableDebug;
+    pRenderer->Features     = features;
 
     // Instance
     {
@@ -213,7 +211,7 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
             VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
             VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME};
 
-        if (pRenderer->RayTracingEnabled) {
+        if (pRenderer->Features.EnableRayTracing) {
             enabledExtensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
             enabledExtensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
             enabledExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
@@ -222,11 +220,11 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
             enabledExtensions.push_back(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
         }
 
-        if (pRenderer->MeshShaderEnabled) {
+        if (pRenderer->Features.EnableMeshShader) {
             enabledExtensions.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
         }
 
-        if (pRenderer->PushDescriptorEnabled) {
+        if (pRenderer->Features.EnablePushDescriptor) {
             enabledExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
         }
 
@@ -272,12 +270,12 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
         // Optional features
         //
         VkBaseInStructure* pStruct = reinterpret_cast<VkBaseInStructure*>(&bufferDeviceAddressFeatures);
-        if (pRenderer->RayTracingEnabled) {
+        if (pRenderer->Features.EnableRayTracing) {
             pStruct->pNext = reinterpret_cast<VkBaseInStructure*>(&rayTracingPipelineFeatures);
             // accelerationStructure is the end of the ray tracing features chain
             pStruct = reinterpret_cast<VkBaseInStructure*>(&accelerationStructureFeatures);
         }
-        if (pRenderer->MeshShaderEnabled) {
+        if (pRenderer->Features.EnableMeshShader) {
             pStruct->pNext = reinterpret_cast<VkBaseInStructure*>(&meshShaderFeatures);
             pStruct = reinterpret_cast<VkBaseInStructure*>(&meshShaderFeatures);
         }

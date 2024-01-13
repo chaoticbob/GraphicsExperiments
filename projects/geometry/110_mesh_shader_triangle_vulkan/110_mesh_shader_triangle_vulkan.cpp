@@ -62,8 +62,6 @@ float4 psmain(MeshOutput input) : SV_TARGET
 static uint32_t gWindowWidth      = 1280;
 static uint32_t gWindowHeight     = 720;
 static bool     gEnableDebug      = true;
-static bool     gEnableRayTracing = false;
-static bool     gEnableMeshShader = true;
 
 void CreatePipelineLayout(VulkanRenderer* pRenderer, VkPipelineLayout* pLayout);
 void CreateShaderModules(
@@ -80,7 +78,9 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRayTracing, gEnableMeshShader))
+    VulkanFeatures features       = {};
+    features.EnableMeshShader     = true;
+    if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
         return EXIT_FAILURE;
     }

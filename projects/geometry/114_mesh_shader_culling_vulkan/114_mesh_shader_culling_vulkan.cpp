@@ -77,12 +77,9 @@ struct SceneProperties
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth          = 1920;
-static uint32_t gWindowHeight         = 1080;
-static bool     gEnableDebug          = true;
-static bool     gEnableRayTracing     = false;
-static bool     gEnableMeshShader     = true;
-static bool     gEnablePushDescriptor = true;
+static uint32_t gWindowWidth  = 1920;
+static uint32_t gWindowHeight = 1080;
+static bool     gEnableDebug  = true;
 
 static float gTargetAngle = 0.0f;
 static float gAngle       = 0.0f;
@@ -148,7 +145,11 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRayTracing, gEnableMeshShader, gEnablePushDescriptor))
+    VulkanFeatures features       = {};
+    features.EnableRayTracing     = false;
+    features.EnableMeshShader     = true;
+    features.EnablePushDescriptor = true;
+    if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
         return EXIT_FAILURE;
     }

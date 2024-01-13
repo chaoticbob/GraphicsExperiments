@@ -76,12 +76,16 @@ enum VkPipelineFlags
    VK_PIPELINE_FLAGS_INTERLEAVED_ATTRS = 0x00000001
 };
 
+struct VulkanFeatures {
+    bool EnableRayTracing     = false;
+    bool EnableMeshShader     = false;
+    bool EnablePushDescriptor = false;
+};
+
 struct VulkanRenderer
 {
     bool              DebugEnabled             = true;
-    bool              RayTracingEnabled        = false;
-    bool              MeshShaderEnabled        = false;
-    bool              PushDescriptorEnabled    = false;
+    VulkanFeatures    Features                 = {};
     VkInstance        Instance                 = VK_NULL_HANDLE;
     VkPhysicalDevice  PhysicalDevice           = VK_NULL_HANDLE;
     VkDevice          Device                   = VK_NULL_HANDLE;
@@ -112,7 +116,7 @@ struct CommandObjects
     ~CommandObjects();
 };
 
-bool     InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTracing, bool enableMeshShader = false, bool enablePushDescriptor = false, uint32_t apiVersion = VK_API_VERSION_1_3);
+bool     InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeatures& features, uint32_t apiVersion = VK_API_VERSION_1_3);
 bool     InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t height, uint32_t imageCount = 2);
 bool     WaitForGpu(VulkanRenderer* pRenderer);
 bool     WaitForFence(VulkanRenderer* pRenderer, VkFence fence);

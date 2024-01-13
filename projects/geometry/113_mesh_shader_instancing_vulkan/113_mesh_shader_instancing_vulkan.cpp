@@ -35,9 +35,6 @@ using namespace glm;
 static uint32_t gWindowWidth          = 1280;
 static uint32_t gWindowHeight         = 720;
 static bool     gEnableDebug          = true;
-static bool     gEnableRayTracing     = false;
-static bool     gEnableMeshShader     = true;
-static bool     gEnablePushDescriptor = true;
 
 void CreatePipelineLayout(
     VulkanRenderer*        pRenderer,
@@ -59,7 +56,11 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRayTracing, gEnableMeshShader, gEnablePushDescriptor))
+    VulkanFeatures features       = {};
+    features.EnableRayTracing     = false;
+    features.EnableMeshShader     = true;
+    features.EnablePushDescriptor = true;
+    if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
         return EXIT_FAILURE;
     }

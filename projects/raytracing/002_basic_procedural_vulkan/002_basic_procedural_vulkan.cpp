@@ -160,7 +160,6 @@ void main()
 static uint32_t gWindowWidth        = 1280;
 static uint32_t gWindowHeight       = 720;
 static bool     gEnableDebug        = true;
-static bool     gEnableRayTracing   = true;
 static uint32_t gUniformmBufferSize = 256;
 
 void CreateDescriptorSetLayout(VulkanRenderer* pRenderer, VkDescriptorSetLayout* pLayout);
@@ -205,7 +204,10 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRayTracing)) {
+    VulkanFeatures features   = {};
+    features.EnableRayTracing = true;
+    if (!InitVulkan(renderer.get(), gEnableDebug, features))
+    {
         return EXIT_FAILURE;
     }
 
