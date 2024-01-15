@@ -223,7 +223,6 @@ int main(int argc, char** argv)
     psoDesc.DepthStencilState.FrontFace.StencilPassOp        = D3D12_STENCIL_OP_KEEP;
     psoDesc.DepthStencilState.FrontFace.StencilFunc          = D3D12_COMPARISON_FUNC_NEVER;
     psoDesc.DepthStencilState.BackFace                       = psoDesc.DepthStencilState.FrontFace;
-    psoDesc.PrimitiveTopologyType                            = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     psoDesc.NumRenderTargets                                 = 1;
     psoDesc.RTVFormats[0]                                    = GREX_DEFAULT_RTV_FORMAT;
     psoDesc.DSVFormat                                        = GREX_DEFAULT_DSV_FORMAT;
