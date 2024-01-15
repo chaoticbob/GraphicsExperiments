@@ -97,9 +97,6 @@ static uint32_t gWindowWidth  = 1920;
 static uint32_t gWindowHeight = 1080;
 static bool     gEnableDebug  = false;
 
-static float gTargetAngle = 0.0f;
-static float gAngle       = gTargetAngle;
-
 static bool gFitConeToFarClip = false;
 
 enum VisibilityFunc
@@ -131,36 +128,10 @@ void CreateGeometryBuffers(
     ID3D12Resource** ppVertexColorBuffer);
 
 // =============================================================================
-// Event functions
-// =============================================================================
-void MouseMove(int x, int y, int buttons)
-{
-    static int prevX = x;
-    static int prevY = y;
-
-    if (buttons & MOUSE_BUTTON_LEFT)
-    {
-        int dx = x - prevX;
-        int dy = y - prevY;
-
-        gTargetAngle += 0.25f * dx;
-    }
-
-    prevX = x;
-    prevY = y;
-}
-
-// =============================================================================
 // main()
 // =============================================================================
 int main(int argc, char** argv)
 {
-    //auto off0 = offsetof(SceneProperties, Meshlet_LOD_Offsets);
-    //auto off1 = offsetof(SceneProperties, Meshlet_LOD_Counts);
-    //auto off2 = offsetof(SceneProperties, ScreenResolution);
-    //auto off3 = offsetof(SceneProperties, MeshBoundsMin);
-    //auto off4 = offsetof(SceneProperties, MeshBoundsMax);
-
     // *************************************************************************
     // Renderer
     // *************************************************************************
@@ -449,8 +420,6 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
-    window->AddMouseMoveCallbacks(MouseMove);
-
     // *************************************************************************
     // Swapchain
     // *************************************************************************
@@ -665,13 +634,8 @@ int main(int argc, char** argv)
 
         // Update scene
         {
-            float3 eyePosition = float3(0.3f, 0.125f, 0.525f); // float3(0, 0.2f, 0.0f);
+            float3 eyePosition = float3(0.3f, 0.125f, 0.525f);
             float3 target      = float3(0, 0.1f, -0.425f);
-
-            // Smooth out the rotation on Y
-            gAngle += (gTargetAngle - gAngle) * 0.1f;
-            mat4 rotMat = glm::rotate(glm::radians(gAngle), float3(0, 1, 0));
-            target      = rotMat * float4(target, 1.0);
 
             PerspCamera camera = PerspCamera(45.0f, window->GetAspectRatio(), 0.1f, farDist);
             camera.LookAt(eyePosition, target);
