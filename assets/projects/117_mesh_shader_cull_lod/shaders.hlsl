@@ -233,18 +233,13 @@ void asmain(
 // -------------------------------------------------------------------------------------------------
 // Mesh Shader
 // -------------------------------------------------------------------------------------------------
-//
-// NOTE: For some reason, if the size of the triangles array isn't 128 or above, 
-//       there's a lot (more) of artifacting on the screen - at least for NVIDIA. 
-//       Not entirely sure why.
-//
 [outputtopology("triangle")]
 [numthreads(128, 1, 1)]
 void msmain(
                  uint       gtid : SV_GroupThreadID, 
                  uint       gid  : SV_GroupID, 
      in payload  Payload    payload, 
-    out indices  uint3      triangles[128], // Size of array wants to line up with X dim in num threads
+    out indices  uint3      triangles[128],
     out vertices MeshOutput vertices[64]) 
 {
     uint instanceIndex = payload.InstanceIndices[gid];
@@ -259,9 +254,10 @@ void msmain(
         // triangle indices as 3 consecutive bytes. 
         //
         // Since we repacked those 3 bytes to a 32-bit uint, our offset is now
-        // aligned to 4 and we can easily grab it to unpack.
+        // aligned to 4 and we can easily grab it as a uint without any 
+        // additional offset math.
         //
-        uint packed = TriangleIndices[m.TriangleOffset/4 + gtid];
+        uint packed = TriangleIndices[m.TriangleOffset + gtid];
         uint vIdx0  = (packed >>  0) & 0xFF;
         uint vIdx1  = (packed >>  8) & 0xFF;
         uint vIdx2  = (packed >> 16) & 0xFF;

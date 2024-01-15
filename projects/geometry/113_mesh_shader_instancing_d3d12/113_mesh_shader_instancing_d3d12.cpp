@@ -170,10 +170,16 @@ int main(int argc, char** argv)
         meshlets.resize(meshletCount);
     }
 
-    // Repack
+    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to 
+    // make it easier to unpack on the GPU.
+    //
     std::vector<uint32_t> meshletTrianglesU32;
     for (auto& m : meshlets)
     {
+        // Save triangle offset for current meshlet
+        uint32_t triangleOffset = static_cast<uint32_t>(meshletTrianglesU32.size());
+
+        // Repack to uint32_t
         for (uint32_t i = 0; i < m.triangle_count; ++i)
         {
             uint32_t i0 = 3 * i + 0 + m.triangle_offset;
@@ -188,6 +194,9 @@ int main(int argc, char** argv)
                               ((static_cast<uint32_t>(vIdx2) & 0xFF) << 16);
             meshletTrianglesU32.push_back(packed);
         }
+
+        // Update triangle offset for current meshlet
+        m.triangle_offset = triangleOffset;
     }
 
     ComPtr<ID3D12Resource> positionBuffer;

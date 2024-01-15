@@ -298,8 +298,10 @@ int main(int argc, char** argv)
     std::vector<uint32_t>        meshlet_LOD_Offsets;
     std::vector<uint32_t>        meshlet_LOD_Counts;
 
-    for (auto& mesh : meshLODs)
+    for (size_t lodIdx = 0; lodIdx < meshLODs.size(); ++lodIdx)
     {
+        const auto& mesh = meshLODs[lodIdx];
+
         const size_t kMaxVertices  = 64;
         const size_t kMaxTriangles = 124;
         const float  kConeWeight   = 0.0f;
@@ -330,7 +332,7 @@ int main(int argc, char** argv)
         auto& last = meshlets[meshletCount - 1];
         meshletVertices.resize(last.vertex_offset + last.vertex_count);
         meshletTriangles.resize(last.triangle_offset + ((last.triangle_count * 3 + 3) & ~3));
-        meshlets.resize(meshletCount);
+        meshlets.resize(meshletCount);       
 
         // Meshlet LOD offset and count
         meshlet_LOD_Offsets.push_back(static_cast<uint32_t>(combinedMeshlets.size()));
@@ -383,10 +385,16 @@ int main(int argc, char** argv)
         combinedMeshletTriangleCount += m.triangle_count;
     }
 
-    // Repack
+    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to 
+    // make it easier to unpack on the GPU.
+    //
     std::vector<uint32_t> meshletTrianglesU32;
     for (auto& m : combinedMeshlets)
     {
+        // Save triangle offset for current meshlet
+        uint32_t triangleOffset = static_cast<uint32_t>(meshletTrianglesU32.size());
+
+        // Repack to uint32_t
         for (uint32_t i = 0; i < m.triangle_count; ++i)
         {
             uint32_t i0 = 3 * i + 0 + m.triangle_offset;
@@ -401,6 +409,9 @@ int main(int argc, char** argv)
                               ((static_cast<uint32_t>(vIdx2) & 0xFF) << 16);
             meshletTrianglesU32.push_back(packed);
         }
+
+        // Update triangle offset for current meshlet
+        m.triangle_offset = triangleOffset;
     }
 
     ComPtr<ID3D12Resource> positionBuffer;
