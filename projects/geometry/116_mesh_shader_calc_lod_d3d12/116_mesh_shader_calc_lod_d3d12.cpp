@@ -86,7 +86,6 @@ struct SceneProperties
     uint        Meshlet_LOD_Offsets[20]; // Align array element to 16 bytes
     uint        Meshlet_LOD_Counts[17];  // Align array element to 16 bytes
     float3      MeshBoundsMin;
-    uint        __pad1;
     float3      MeshBoundsMax;
 };
 

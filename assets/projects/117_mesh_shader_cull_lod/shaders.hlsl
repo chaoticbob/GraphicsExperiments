@@ -53,6 +53,7 @@ struct SceneProperties {
     uint        Meshlet_LOD_Counts[5];
     float3      MeshBoundsMin;
     float3      MeshBoundsMax;
+    uint        EnableLOD;
 };
 
 ConstantBuffer<SceneProperties> Scene : register(b0);
@@ -177,19 +178,24 @@ void asmain(
         // Instance's model transform matrix
         float4x4 M  = Instances[instanceIndex].M;
 
-        // Get center of transformed bounding box to use in LOD distance calculation
-        float4 instanceBoundsMinWS = mul(M, float4(Scene.MeshBoundsMin, 1.0));
-        float4 instanceBoundsMaxWS = mul(M, float4(Scene.MeshBoundsMax, 1.0));
-        float4 instanceCenter = (instanceBoundsMinWS + instanceBoundsMaxWS) / 2.0;
+        // Assume LOD 0
+        uint lod = 0;
 
-        // Distance between transformed bounding box and camera eye position
-        float dist = distance(instanceCenter.xyz, Scene.EyePosition);
-        
-        // Normalize distance using MaxLODDistance
-        float ndist = clamp(dist / Scene.MaxLODDistance, 0.0, 1.0);
-        
-        // Calculate LOD using normalized distance
-        uint lod = (uint)(pow(ndist, 0.65) * (MAX_LOD_COUNT - 1));
+        if (Scene.EnableLOD) {
+            // Get center of transformed bounding box to use in LOD distance calculation
+            float4 instanceBoundsMinWS = mul(M, float4(Scene.MeshBoundsMin, 1.0));
+            float4 instanceBoundsMaxWS = mul(M, float4(Scene.MeshBoundsMax, 1.0));
+            float4 instanceCenter = (instanceBoundsMinWS + instanceBoundsMaxWS) / 2.0;
+
+            // Distance between transformed bounding box and camera eye position
+            float dist = distance(instanceCenter.xyz, Scene.EyePosition);
+            
+            // Normalize distance using MaxLODDistance
+            float ndist = clamp(dist / Scene.MaxLODDistance, 0.0, 1.0);
+            
+            // Calculate LOD using normalized distance
+            lod = (uint)(pow(ndist, 0.65) * (MAX_LOD_COUNT - 1));
+        }
 
         // Get meshlet count for the LOD
         uint lodMeshletCount = Scene.Meshlet_LOD_Counts[lod];

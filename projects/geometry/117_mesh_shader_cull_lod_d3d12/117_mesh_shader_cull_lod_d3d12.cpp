@@ -86,8 +86,8 @@ struct SceneProperties
     uint        Meshlet_LOD_Offsets[20]; // Align array element to 16 bytes
     uint        Meshlet_LOD_Counts[17];  // Align array element to 16 bytes
     float3      MeshBoundsMin;
-    uint        __pad1;
     float3      MeshBoundsMax;
+    uint        EnableLOD;
 };
 
 // =============================================================================
@@ -122,6 +122,8 @@ static std::vector<std::string> gVisibilityFuncNames = {
 static int gVisibilityFunc = VISIBILITY_FUNC_PLANES;
 
 static float gMaxLODDistance = 10.0f;
+
+static bool gEnableLOD = true;
 
 void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
 void CreateGeometryBuffers(
@@ -332,7 +334,7 @@ int main(int argc, char** argv)
         auto& last = meshlets[meshletCount - 1];
         meshletVertices.resize(last.vertex_offset + last.vertex_count);
         meshletTriangles.resize(last.triangle_offset + ((last.triangle_count * 3 + 3) & ~3));
-        meshlets.resize(meshletCount);       
+        meshlets.resize(meshletCount);
 
         // Meshlet LOD offset and count
         meshlet_LOD_Offsets.push_back(static_cast<uint32_t>(combinedMeshlets.size()));
@@ -385,7 +387,7 @@ int main(int argc, char** argv)
         combinedMeshletTriangleCount += m.triangle_count;
     }
 
-    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to 
+    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to
     // make it easier to unpack on the GPU.
     //
     std::vector<uint32_t> meshletTrianglesU32;
@@ -572,6 +574,7 @@ int main(int argc, char** argv)
 
             ImGui::Separator();
 
+            ImGui::Checkbox("Enable LOD", &gEnableLOD);
             ImGui::DragFloat("Max LOD Distance", &gMaxLODDistance, 0.1f, 1.0f, 50.0f);
 
             ImGui::Separator();
@@ -696,6 +699,7 @@ int main(int argc, char** argv)
             scene.Meshlet_LOD_Counts[16]               = meshlet_LOD_Counts[4];
             scene.MeshBoundsMin                        = float3(meshBounds.min);
             scene.MeshBoundsMax                        = float3(meshBounds.max);
+            scene.EnableLOD                            = gEnableLOD;
 
             void* pDst = nullptr;
             CHECK_CALL(sceneBuffer->Map(0, nullptr, &pDst));
