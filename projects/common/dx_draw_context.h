@@ -94,6 +94,16 @@ public:
     // angle - radians
     void DrawWireCone(const float3& tip, const float3& dir, float height, float angle, uint32_t segs);
 
+    void DrawWireBox(
+        const float3& P0,
+        const float3& P1,
+        const float3& P2,
+        const float3& P3,
+        const float3& P4,
+        const float3& P5,
+        const float3& P6,
+        const float3& P7);
+
 private:
     enum PrimitiveMode
     {

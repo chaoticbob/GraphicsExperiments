@@ -801,8 +801,8 @@ void DxDrawContext::DrawWireCone(const float3& tip, const float3& dir, float hei
             float  t1 = static_cast<float>(i + 1) * dt;
             float3 P0 = (r * float3(cos(t0), sin(t0), 0));
             float3 P1 = (r * float3(cos(t1), sin(t1), 0));
-            P0 = rotMat * float4(P0, 1);
-            P1 = rotMat * float4(P1, 1);
+            P0        = rotMat * float4(P0, 1);
+            P1        = rotMat * float4(P1, 1);
             P0 += tip;
             P1 += tip;
             P0 += height * dir;
@@ -816,6 +816,60 @@ void DxDrawContext::DrawWireCone(const float3& tip, const float3& dir, float hei
             this->Vertex(tip);
             this->Vertex(P1);
         }
+    }
+    this->EndLines();
+}
+
+void DxDrawContext::DrawWireBox(
+    const float3& P0, // -X, +Y, +Z
+    const float3& P1, // -X, -Y, +Z
+    const float3& P2, // +X, -Y, +Z
+    const float3& P3, // +X, +Y, +Z
+    const float3& P4, // -X, +Y, -Z
+    const float3& P5, // -X, +Y, -Z
+    const float3& P6, // -X, +Y, -Z
+    const float3& P7) // -X, +Y, -Z
+{
+    this->BeginLines();
+    {
+        // Front rect
+        this->Vertex(float3(P0));
+        this->Vertex(float3(P1));
+        //
+        this->Vertex(float3(P1));
+        this->Vertex(float3(P2));
+        //
+        this->Vertex(float3(P2));
+        this->Vertex(float3(P3));
+        //
+        this->Vertex(float3(P3));
+        this->Vertex(float3(P0));
+        
+        // Back rect
+        this->Vertex(float3(P4));
+        this->Vertex(float3(P5));
+        //
+        this->Vertex(float3(P5));
+        this->Vertex(float3(P6));
+        //
+        this->Vertex(float3(P6));
+        this->Vertex(float3(P7));
+        //
+        this->Vertex(float3(P7));
+        this->Vertex(float3(P4));
+        
+        // Front to back lines
+        this->Vertex(float3(P0));
+        this->Vertex(float3(P4));
+        //
+        this->Vertex(float3(P1));
+        this->Vertex(float3(P5));
+        //
+        this->Vertex(float3(P2));
+        this->Vertex(float3(P6));
+        //
+        this->Vertex(float3(P3));
+        this->Vertex(float3(P7));
     }
     this->EndLines();
 }
