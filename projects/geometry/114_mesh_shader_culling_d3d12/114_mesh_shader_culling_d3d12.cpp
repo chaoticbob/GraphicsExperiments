@@ -630,7 +630,9 @@ int main(int argc, char** argv)
                 commandList->BeginQuery(queryHeap.Get(), D3D12_QUERY_TYPE_PIPELINE_STATISTICS1, 0);
 
                 // Amplification shader uses 32 for thread group size
-                UINT threadGroupCountX = static_cast<UINT>((meshlets.size() / 32) + 1) * static_cast<UINT>(instances.size());
+                UINT meshletCount      = static_cast<UINT>(meshlets.size());
+                UINT instanceCount     = static_cast<UINT>(instances.size());
+                UINT threadGroupCountX = ((meshletCount * instanceCount) / 32) + 1;
                 commandList->DispatchMesh(threadGroupCountX, 1, 1);
 
                 commandList->EndQuery(queryHeap.Get(), D3D12_QUERY_TYPE_PIPELINE_STATISTICS1, 0);
