@@ -173,13 +173,17 @@ void asmain(
     uint meshletIndex  = dtid % Scene.MeshletCount;
 
     if (instanceIndex < Scene.InstanceCount) {
+        // Model transform matrix
         float4x4 M  = Instances[instanceIndex].M;
+        // Get center of transformed bounding box to use in LOD distance calculation
         float4 instanceBoundsMinWS = mul(M, float4(Scene.MeshBoundsMin, 1.0));
         float4 instanceBoundsMaxWS = mul(M, float4(Scene.MeshBoundsMax, 1.0));
         float4 instanceCenter = (instanceBoundsMinWS + instanceBoundsMaxWS) / 2.0;
         float  dist = distance(instanceCenter.xyz, Scene.EyePosition);
-        float  flod = clamp(dist / Scene.MaxLODDistance, 0.0, 1.0);
-        uint   lod  = (uint)(pow(flod, 0.65) * (MAX_LOD_COUNT - 1));
+        // Normalize distance using MaxLODDistance
+        float  ndist = clamp(dist / Scene.MaxLODDistance, 0.0, 1.0);
+        // Calculate lod using normalized distance
+        uint   lod  = (uint)(pow(ndist, 0.65) * (MAX_LOD_COUNT - 1));
 
         // Get meshlet count for the LOD
         uint lodMeshletCount = Scene.Meshlet_LOD_Counts[lod];
