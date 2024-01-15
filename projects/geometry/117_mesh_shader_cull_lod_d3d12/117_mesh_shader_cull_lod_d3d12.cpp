@@ -343,7 +343,6 @@ int main(int argc, char** argv)
 
         // Copy to combined
         std::copy(mesh.GetPositions().begin(), mesh.GetPositions().end(), std::back_inserter(combinedMeshPositions));
-        bool res = mesh.GetPositions() == combinedMeshPositions;
 
         for (auto meshlet : meshlets)
         {
@@ -351,17 +350,14 @@ int main(int argc, char** argv)
             meshlet.triangle_offset += meshletTriangleOffset;
             combinedMeshlets.push_back(meshlet);
         }
-        // res = meshlets == combinedMeshlets;
 
         for (auto vertex : meshletVertices)
         {
             vertex += vertexOffset;
             combinedMeshletVertices.push_back(vertex);
         }
-        res = meshletVertices == combinedMeshletVertices;
 
         std::copy(meshletTriangles.begin(), meshletTriangles.end(), std::back_inserter(combinedMeshletTriangles));
-        res = meshletTriangles == combinedMeshletTriangles;
     }
 
     // Meshlet bounds (we're using bounding spheres)
@@ -674,7 +670,7 @@ int main(int argc, char** argv)
             scene.Frustum.Cone.Direction               = frCone.Dir;
             scene.Frustum.Cone.Angle                   = frCone.Angle;
             scene.InstanceCount                        = static_cast<uint32_t>(instances.size());
-            scene.MeshletCount                         = meshlet_LOD_Counts[0]; // static_cast<uint32_t>(combinedMeshlets.size());
+            scene.MeshletCount                         = meshlet_LOD_Counts[0];
             scene.VisibilityFunc                       = gVisibilityFunc;
             scene.MaxLODDistance                       = gMaxLODDistance;
             scene.Meshlet_LOD_Offsets[0]               = meshlet_LOD_Offsets[0];
