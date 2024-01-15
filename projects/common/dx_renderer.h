@@ -3,9 +3,9 @@
 #include "config.h"
 
 #if defined(GREX_USE_D3DX12)
-#include "directx/d3dx12.h"
+#    include "directx/d3dx12.h"
 #else
-#include <d3d12.h>
+#    include <d3d12.h>
 #endif
 
 #include <dxgidebug.h>
@@ -189,6 +189,29 @@ HRESULT CreateGraphicsPipeline2(
     DXGI_FORMAT              dsvFormat,
     ID3D12PipelineState**    ppPipeline,
     D3D12_CULL_MODE          cullMode = D3D12_CULL_MODE_BACK);
+
+#if defined(GREX_USE_D3DX12)
+HRESULT CreateMeshShaderPipeline(
+    DxRenderer*              pRenderer,
+    ID3D12RootSignature*     pRootSig,
+    const std::vector<char>& asShaderBytecode,
+    const std::vector<char>& msShaderBytecode,
+    const std::vector<char>& psShaderBytecode,
+    DXGI_FORMAT              rtvFormat,
+    DXGI_FORMAT              dsvFormat,
+    ID3D12PipelineState**    ppPipeline,
+    D3D12_CULL_MODE          cullMode = D3D12_CULL_MODE_BACK);
+
+HRESULT CreateMeshShaderPipeline(
+    DxRenderer*              pRenderer,
+    ID3D12RootSignature*     pRootSig,
+    const std::vector<char>& msShaderBytecode,
+    const std::vector<char>& psShaderBytecode,
+    DXGI_FORMAT              rtvFormat,
+    DXGI_FORMAT              dsvFormat,
+    ID3D12PipelineState**    ppPipeline,
+    D3D12_CULL_MODE          cullMode = D3D12_CULL_MODE_BACK);
+#endif // defined(GREX_USE_D3DX12)
 
 HRESULT CompileHLSL(
     const std::string& shaderSource,

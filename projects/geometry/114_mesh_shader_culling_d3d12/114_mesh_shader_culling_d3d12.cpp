@@ -327,69 +327,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Graphics pipeline state object
     // *************************************************************************
-    D3DX12_MESH_SHADER_PIPELINE_STATE_DESC psoDesc           = {};
-    psoDesc.pRootSignature                                   = rootSig.Get();
-    psoDesc.AS                                               = {dxilAS.data(), dxilAS.size()};
-    psoDesc.MS                                               = {dxilMS.data(), dxilMS.size()};
-    psoDesc.PS                                               = {dxilPS.data(), dxilPS.size()};
-    psoDesc.BlendState.AlphaToCoverageEnable                 = FALSE;
-    psoDesc.BlendState.IndependentBlendEnable                = FALSE;
-    psoDesc.BlendState.RenderTarget[0].BlendEnable           = FALSE;
-    psoDesc.BlendState.RenderTarget[0].LogicOpEnable         = FALSE;
-    psoDesc.BlendState.RenderTarget[0].SrcBlend              = D3D12_BLEND_SRC_COLOR;
-    psoDesc.BlendState.RenderTarget[0].DestBlend             = D3D12_BLEND_ZERO;
-    psoDesc.BlendState.RenderTarget[0].BlendOp               = D3D12_BLEND_OP_ADD;
-    psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha         = D3D12_BLEND_SRC_ALPHA;
-    psoDesc.BlendState.RenderTarget[0].DestBlendAlpha        = D3D12_BLEND_ZERO;
-    psoDesc.BlendState.RenderTarget[0].BlendOpAlpha          = D3D12_BLEND_OP_ADD;
-    psoDesc.BlendState.RenderTarget[0].LogicOp               = D3D12_LOGIC_OP_NOOP;
-    psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-    psoDesc.SampleMask                                       = D3D12_DEFAULT_SAMPLE_MASK;
-    psoDesc.RasterizerState.FillMode                         = D3D12_FILL_MODE_SOLID;
-    psoDesc.RasterizerState.CullMode                         = D3D12_CULL_MODE_NONE;
-    psoDesc.RasterizerState.FrontCounterClockwise            = TRUE;
-    psoDesc.RasterizerState.DepthBias                        = D3D12_DEFAULT_DEPTH_BIAS;
-    psoDesc.RasterizerState.DepthBiasClamp                   = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
-    psoDesc.RasterizerState.SlopeScaledDepthBias             = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
-    psoDesc.RasterizerState.DepthClipEnable                  = FALSE;
-    psoDesc.RasterizerState.MultisampleEnable                = FALSE;
-    psoDesc.RasterizerState.AntialiasedLineEnable            = FALSE;
-    psoDesc.RasterizerState.ForcedSampleCount                = 0;
-    psoDesc.DepthStencilState.DepthEnable                    = TRUE;
-    psoDesc.DepthStencilState.DepthWriteMask                 = D3D12_DEPTH_WRITE_MASK_ALL;
-    psoDesc.DepthStencilState.DepthFunc                      = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    psoDesc.DepthStencilState.StencilEnable                  = FALSE;
-    psoDesc.DepthStencilState.StencilReadMask                = D3D12_DEFAULT_STENCIL_READ_MASK;
-    psoDesc.DepthStencilState.StencilWriteMask               = D3D12_DEFAULT_STENCIL_WRITE_MASK;
-    psoDesc.DepthStencilState.FrontFace.StencilFailOp        = D3D12_STENCIL_OP_KEEP;
-    psoDesc.DepthStencilState.FrontFace.StencilDepthFailOp   = D3D12_STENCIL_OP_KEEP;
-    psoDesc.DepthStencilState.FrontFace.StencilPassOp        = D3D12_STENCIL_OP_KEEP;
-    psoDesc.DepthStencilState.FrontFace.StencilFunc          = D3D12_COMPARISON_FUNC_NEVER;
-    psoDesc.DepthStencilState.BackFace                       = psoDesc.DepthStencilState.FrontFace;
-    psoDesc.PrimitiveTopologyType                            = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    psoDesc.NumRenderTargets                                 = 1;
-    psoDesc.RTVFormats[0]                                    = GREX_DEFAULT_RTV_FORMAT;
-    psoDesc.DSVFormat                                        = GREX_DEFAULT_DSV_FORMAT;
-    psoDesc.SampleDesc.Count                                 = 1;
-
-    // This required unless you want to come up with own struct that handles
-    // the stream requirements:
-    //    https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#createpipelinestate
-    //
-    CD3DX12_PIPELINE_MESH_STATE_STREAM psoStream = CD3DX12_PIPELINE_MESH_STATE_STREAM(psoDesc);
-
-    D3D12_PIPELINE_STATE_STREAM_DESC steamDesc = {};
-    steamDesc.SizeInBytes                      = sizeof(psoStream);
-    steamDesc.pPipelineStateSubobjectStream    = &psoStream;
-
     ComPtr<ID3D12PipelineState> pipelineState;
-    //
-    HRESULT hr = renderer->Device->CreatePipelineState(&steamDesc, IID_PPV_ARGS(&pipelineState));
-    if (FAILED(hr))
-    {
-        assert(false && "Create pipeline state failed");
-        return EXIT_FAILURE;
-    }
+    CHECK_CALL(CreateMeshShaderPipeline(renderer.get(), rootSig.Get(), dxilAS, dxilMS, dxilPS, GREX_DEFAULT_RTV_FORMAT, GREX_DEFAULT_DSV_FORMAT, &pipelineState));
 
     // *************************************************************************
     // Window
