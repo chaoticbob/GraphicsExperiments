@@ -216,7 +216,7 @@ void msmain(
                  uint       gtid : SV_GroupThreadID, 
                  uint       gid  : SV_GroupID, 
      in payload  Payload    payload, 
-    out indices  uint3      triangles[126], 
+    out indices  uint3      triangles[128], 
     out vertices MeshOutput vertices[64]) 
 {
     uint instanceIndex = payload.InstanceIndices[gid];

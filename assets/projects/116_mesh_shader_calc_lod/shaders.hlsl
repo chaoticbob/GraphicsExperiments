@@ -172,8 +172,9 @@ void asmain(
     uint instanceIndex = dtid / Scene.MeshletCount;
     uint meshletIndex  = dtid % Scene.MeshletCount;
 
+    // Make sure instance index is within bounds
     if (instanceIndex < Scene.InstanceCount) {
-        // Model transform matrix
+        // Instance's model transform matrix
         float4x4 M  = Instances[instanceIndex].M;
 
         // Get center of transformed bounding box to use in LOD distance calculation
@@ -182,17 +183,18 @@ void asmain(
         float4 instanceCenter = (instanceBoundsMinWS + instanceBoundsMaxWS) / 2.0;
 
         // Distance between transformed bounding box and camera eye position
-        float  dist = distance(instanceCenter.xyz, Scene.EyePosition);
+        float dist = distance(instanceCenter.xyz, Scene.EyePosition);
 
         // Normalize distance using MaxLODDistance
-        float  ndist = clamp(dist / Scene.MaxLODDistance, 0.0, 1.0);
+        float ndist = clamp(dist / Scene.MaxLODDistance, 0.0, 1.0);
 
-        // Calculate lod using normalized distance
-        uint lod  = (uint)(pow(ndist, 0.65) * (MAX_LOD_COUNT - 1));
+        // Calculate LOD using normalized distance
+        uint lod = (uint)(pow(ndist, 0.65) * (MAX_LOD_COUNT - 1));
 
         // Get meshlet count for the LOD
         uint lodMeshletCount = Scene.Meshlet_LOD_Counts[lod];
 
+        // Make sure meshlet index is within bounds of current LOD's meshlet count
         if (meshletIndex < lodMeshletCount) {
             meshletIndex += Scene.Meshlet_LOD_Offsets[lod];
 
@@ -237,7 +239,7 @@ void msmain(
                  uint       gtid : SV_GroupThreadID, 
                  uint       gid  : SV_GroupID, 
      in payload  Payload    payload, 
-    out indices  uint3      triangles[126], 
+    out indices  uint3      triangles[128],
     out vertices MeshOutput vertices[64]) 
 {
     uint instanceIndex = payload.InstanceIndices[gid];
