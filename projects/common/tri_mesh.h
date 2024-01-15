@@ -223,6 +223,7 @@ public:
     const TriMesh::Options& GetOptions() const { return mOptions; }
 
     uint32_t                              GetNumIndices() const { return 3 * GetNumTriangles(); }
+    std::vector<uint32_t>                 GetIndices() const;
     uint32_t                              GetNumTriangles() const { return static_cast<uint32_t>(mTriangles.size()); }
     const TriMesh::Triangle&              GetTriangle(uint32_t triIdx) const { return mTriangles[triIdx]; }
     const std::vector<TriMesh::Triangle>& GetTriangles() const { return mTriangles; }
