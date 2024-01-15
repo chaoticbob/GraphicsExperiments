@@ -273,9 +273,13 @@ int main(int argc, char** argv)
     std::vector<uint8_t>         combinedMeshletTriangles;
     std::vector<uint32_t>        meshlet_LOD_Offsets;
     std::vector<uint32_t>        meshlet_LOD_Counts;
+    uint32_t                     LOD_0_vertexCount   = 0;
+    uint32_t                     LOD_0_triangleCount = 0;
 
-    for (auto& mesh : meshLODs)
+    for (size_t lodIdx = 0; lodIdx < meshLODs.size(); ++lodIdx)
     {
+        const auto& mesh = meshLODs[lodIdx];
+
         const size_t kMaxVertices  = 64;
         const size_t kMaxTriangles = 124;
         const float  kConeWeight   = 0.0f;
@@ -325,6 +329,11 @@ int main(int argc, char** argv)
             meshlet.vertex_offset += meshletVertexOffset;
             meshlet.triangle_offset += meshletTriangleOffset;
             combinedMeshlets.push_back(meshlet);
+
+            if (lodIdx == 0) {
+                LOD_0_vertexCount += meshlet.vertex_count;
+                LOD_0_triangleCount += meshlet.triangle_count;
+            }
         }
 
         for (auto vertex : meshletVertices)
@@ -548,17 +557,16 @@ int main(int argc, char** argv)
 
             ImGui::Separator();
 
-            auto combinedMeshletCount       = combinedMeshlets.size();
             auto instanceCount              = instances.size();
-            auto totalMeshletCount          = combinedMeshletCount * instanceCount;
-            auto totalMeshletVertexCount    = combinedMeshletVertexCount * instanceCount;
-            auto totalMeshletPrimitiveCount = combinedMeshletTriangleCount * instanceCount;
+            auto totalMeshletCount          = meshlet_LOD_Counts[0] * instanceCount;
+            auto totalMeshletVertexCount    = LOD_0_vertexCount * instanceCount;
+            auto totalMeshletPrimitiveCount = LOD_0_triangleCount * instanceCount;
 
             ImGui::Columns(2);
             // clang-format off
-            ImGui::Text("Combined Meshlet Count");            ImGui::NextColumn(); ImGui::Text("%d", combinedMeshletCount); ImGui::NextColumn();
-            ImGui::Text("Combined Meshlet Vertex Count");     ImGui::NextColumn(); ImGui::Text("%d", combinedMeshletVertexCount); ImGui::NextColumn();
-            ImGui::Text("Combined Meshlet Primitive Count");  ImGui::NextColumn(); ImGui::Text("%d", combinedMeshletTriangleCount); ImGui::NextColumn();
+            ImGui::Text("LOD 0 Meshlet Count");               ImGui::NextColumn(); ImGui::Text("%d", meshlet_LOD_Counts[0]); ImGui::NextColumn();
+            ImGui::Text("LOD 0 Meshlet Vertex Count");        ImGui::NextColumn(); ImGui::Text("%d", LOD_0_vertexCount); ImGui::NextColumn();
+            ImGui::Text("LOD 0 Meshlet Primitive Count");     ImGui::NextColumn(); ImGui::Text("%d", LOD_0_triangleCount); ImGui::NextColumn();
             ImGui::Text("Instance Count");                    ImGui::NextColumn(); ImGui::Text("%d", instanceCount); ImGui::NextColumn();                
             ImGui::Text("Instanced Meshlet Count");           ImGui::NextColumn(); ImGui::Text("%d", totalMeshletCount); ImGui::NextColumn();                
             ImGui::Text("Instanced Meshlet Vertex Count");    ImGui::NextColumn(); ImGui::Text("%d", totalMeshletVertexCount); ImGui::NextColumn();                
