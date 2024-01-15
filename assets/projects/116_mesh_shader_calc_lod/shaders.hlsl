@@ -180,6 +180,8 @@ void asmain(
         float4 instanceBoundsMinWS = mul(M, float4(Scene.MeshBoundsMin, 1.0));
         float4 instanceBoundsMaxWS = mul(M, float4(Scene.MeshBoundsMax, 1.0));
         float4 instanceCenter = (instanceBoundsMinWS + instanceBoundsMaxWS) / 2.0;
+
+        // Distance between transformed bounding box and camera eye position
         float  dist = distance(instanceCenter.xyz, Scene.EyePosition);
 
         // Normalize distance using MaxLODDistance
