@@ -155,7 +155,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "101_color_cube_metal");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, "110_mesh_shader_triangle_metal");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
