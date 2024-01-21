@@ -193,13 +193,6 @@ int main(int argc, char** argv)
         colorTargetDesc->setStoreAction(MTL::StoreActionStore);
         pRenderPassDescriptor->colorAttachments()->setObject(colorTargetDesc.get(), 0);
 
-        auto depthTargetDesc = NS::TransferPtr(MTL::RenderPassDepthAttachmentDescriptor::alloc()->init());
-        depthTargetDesc->setClearDepth(1);
-        depthTargetDesc->setTexture(renderer->SwapchainDSVBuffers[swapchainIndex].get());
-        depthTargetDesc->setLoadAction(MTL::LoadActionClear);
-        depthTargetDesc->setStoreAction(MTL::StoreActionDontCare);
-        pRenderPassDescriptor->setDepthAttachment(depthTargetDesc.get());
-
         MTL::CommandBuffer*        pCommandBuffer = renderer->Queue->commandBuffer();
         MTL::RenderCommandEncoder* pRenderEncoder = pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
 
