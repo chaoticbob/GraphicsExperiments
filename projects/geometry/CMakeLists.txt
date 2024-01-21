@@ -25,6 +25,7 @@ if (GREX_ENABLE_METAL)
     add_subdirectory(102_cornell_box_metal)
     add_subdirectory(103_cone_metal)
     add_subdirectory(104_debug_tbn_metal)
+    add_subdirectory(110_mesh_shader_triangle_metal)
 endif()
 
 if (GREX_ENABLE_VULKAN)
