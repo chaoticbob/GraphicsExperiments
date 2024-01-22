@@ -12,8 +12,6 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer_utils.mm
     ${GREX_PROJECTS_COMMON_DIR}/window.h
     ${GREX_PROJECTS_COMMON_DIR}/window.cpp
-    ${GREX_PROJECTS_COMMON_DIR}/tri_mesh.h
-    ${GREX_PROJECTS_COMMON_DIR}/tri_mesh.cpp
 )
 
 set_target_properties(110_mesh_shader_triangle_metal PROPERTIES FOLDER "geometry")

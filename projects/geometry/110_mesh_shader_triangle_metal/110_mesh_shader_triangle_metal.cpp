@@ -199,7 +199,7 @@ int main(int argc, char** argv)
         pRenderEncoder->setRenderPipelineState(renderPipelineState.State.get());
 
         // No object function, so all zeros for threadsPerObjectThreadgroup
-        pRenderEncoder->drawMeshThreads(MTL::Size(1, 1, 1), MTL::Size(0, 0, 0), MTL::Size(1, 1, 1));
+        pRenderEncoder->drawMeshThreadgroups(MTL::Size(1, 1, 1), MTL::Size(0, 0, 0), MTL::Size(1, 1, 1));
         
         pRenderEncoder->endEncoding();
 
