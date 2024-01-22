@@ -397,11 +397,6 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Instances
     // *************************************************************************
-    //
-    // NOTE: These values are lower than the D3D12 version because for some reason
-    //       mesh pipelines are extremely slow...except for when launched within
-    //       NVIDIA NSight.
-    //
     const uint32_t         kNumInstanceCols = 20;
     const uint32_t         kNumInstanceRows = 10;
     std::vector<glm::mat4> instances(kNumInstanceCols * kNumInstanceRows);
