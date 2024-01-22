@@ -6,6 +6,8 @@
 #include <memory>
 #include <vector>
 
+#define DEFAULT_DISTANCE_TRESHOLD 1e-6
+
 // F0 values
 const glm::vec3 F0_Generic         = glm::vec3(0.04f);
 const glm::vec3 F0_MetalTitanium   = glm::vec3(0.542f, 0.497f, 0.449f);
@@ -270,6 +272,24 @@ public:
     void SetVertexColors(const glm::vec3& vertexColor);
 
     void AppendMesh(const TriMesh& srcMesh, const std::string& groupPrefix = "");
+
+    // Only works if there's only positions, will return if any other attribute is present.
+    //
+    // Optional - triangles can be spatially sorted with meshopt after welding:
+    // 
+    //     auto indices = mesh.GetIndices();
+    //     positions    = mesh.GetPositions();
+    //     
+    //     std::vector<uint32_t> sortedIndices(mesh.GetNumIndices());
+    //     meshopt_spatialSortTriangles(
+    //         sortedIndices.data(),
+    //         indices.data(),
+    //         CountU32(indices),
+    //         reinterpret_cast<const float*>(positions.data()),
+    //         CountU32(positions),
+    //         sizeof(glm::vec3));
+    //
+    void WellVertices(float distanceThreshold = DEFAULT_DISTANCE_TRESHOLD);
 
     std::vector<glm::vec3> GetTBNLineSegments(uint32_t* pNumVertices, float length = 0.1f) const;
 

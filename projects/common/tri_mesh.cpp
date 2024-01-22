@@ -24,6 +24,7 @@
 #include <iomanip>
 #include <map>
 #include <sstream>
+#include <unordered_map>
 
 #include "config.h"
 
@@ -540,6 +541,56 @@ void TriMesh::AppendMesh(const TriMesh& srcMesh, const std::string& groupPrefix)
             uint32_t res = this->AddGroup(newGroup);
             assert((res != UINT32_MAX) && "AddGroup failed");
         }
+    }
+}
+
+void TriMesh::WellVertices(float distanceThreshold)
+{
+    if (mOptions.enableVertexColors || mOptions.enableTexCoords || mOptions.enableNormals || mOptions.enableTangents)
+    {
+        return;
+    }
+
+    const float distanceThresholdSq = distanceThreshold * distanceThreshold;
+
+    std::unordered_map<uint32_t, uint32_t> weldedIndexMap;
+    std::vector<glm::vec3>       weldedPositions;
+
+    const uint32_t   vertexCount       = CountU32(mPositions);
+    const glm::vec3* pPosition         = mPositions.data();
+    uint32_t         weldedVertexCount = 0;
+    for (uint32_t oldIdx = 0; oldIdx < vertexCount; ++oldIdx, ++pPosition)
+    {
+        const glm::vec3* pPosition2 = weldedPositions.data();
+        //
+        uint32_t newIdx = UINT32_MAX;
+        for (uint32_t i = 0; i < weldedVertexCount; ++i, ++pPosition2)
+        {
+            float distSq = glm::distance2(*pPosition, *pPosition2);
+            if (distSq <= distanceThresholdSq)
+            {
+                newIdx = i;
+                break;
+            }
+        }
+
+        if (newIdx == UINT32_MAX)
+        {
+            weldedPositions.push_back(*pPosition);
+            ++weldedVertexCount;
+            newIdx = weldedVertexCount - 1;
+        }
+
+        weldedIndexMap[oldIdx] = newIdx;
+    }
+
+    mPositions = weldedPositions;
+
+    for (auto& tri : mTriangles)
+    {
+        tri.vIdx0 = weldedIndexMap[tri.vIdx0];
+        tri.vIdx1 = weldedIndexMap[tri.vIdx1];
+        tri.vIdx2 = weldedIndexMap[tri.vIdx2];
     }
 }
 
