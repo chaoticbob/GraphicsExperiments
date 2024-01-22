@@ -28,6 +28,7 @@ if (GREX_ENABLE_METAL)
     add_subdirectory(110_mesh_shader_triangle_metal)
     add_subdirectory(111_mesh_shader_meshlets_metal)
     add_subdirectory(112_mesh_shader_amplification_metal)
+    add_subdirectory(113_mesh_shader_instancing_metal)
 endif()
 
 if (GREX_ENABLE_VULKAN)
