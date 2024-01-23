@@ -35,39 +35,6 @@ using float4   = glm::vec4;
 using float4x4 = glm::mat4;
 using uint4    = glm::uvec4;
 
-enum
-{
-    FRUSTUM_PLANE_LEFT   = 0,
-    FRUSTUM_PLANE_RIGHT  = 1,
-    FRUSTUM_PLANE_TOP    = 2,
-    FRUSTUM_PLANE_BOTTOM = 3,
-    FRUSTUM_PLANE_NEAR   = 4,
-    FRUSTUM_PLANE_FAR    = 5,
-};
-
-struct FrustumPlane
-{
-    float3 Normal;
-    float  __pad0;
-    float3 Position;
-    float  __pad1;
-};
-
-struct FrustumCone
-{
-    float3 Tip;
-    float  Height;
-    float3 Direction;
-    float  Angle;
-};
-
-struct FrustumData
-{
-    FrustumPlane Planes[6];
-    float4       Sphere;
-    FrustumCone  Cone;
-};
-
 //
 // NOTE: Unlike D3D12 and Vulkan, it looks like Metal arrays are tightly
 //       packed for 32-bit scalar types. This means that Meshlet_LOD_Offsets
@@ -79,10 +46,9 @@ struct SceneProperties
     uint        __pad0;
     float4x4    ViewMatrix;
     float4x4    ProjMatrix;
-    FrustumData Frustum;
     uint        InstanceCount;
     uint        MeshletCount;
-    uint        VisibilityFunc;
+    uint        __pad1;
     float       MaxLODDistance;         // Use least detail level at or beyond this distance
     uint        Meshlet_LOD_Offsets[5]; // Align array element to 16 bytes
     uint        Meshlet_LOD_Counts[5];  // Align array element to 16 bytes
@@ -96,30 +62,6 @@ struct SceneProperties
 static uint32_t gWindowWidth  = 1920;
 static uint32_t gWindowHeight = 1080;
 static bool     gEnableDebug  = true;
-
-static float gTargetAngle = 55.0f;
-static float gAngle       = gTargetAngle;
-
-static bool gFitConeToFarClip = false;
-
-enum VisibilityFunc
-{
-    VISIBILITY_FUNC_NONE                = 0,
-    VISIBILITY_FUNC_PLANES              = 1,
-    VISIBILITY_FUNC_SPHERE              = 2,
-    VISIBILITY_FUNC_CONE                = 3,
-    VISIBILITY_FUNC_CONE_AND_NEAR_PLANE = 4,
-};
-
-static std::vector<std::string> gVisibilityFuncNames = {
-    "None",
-    "Frustum Planes",
-    "Frustum Sphere",
-    "Frustum Cone",
-    "Frustum Cone and Near Plane",
-};
-
-static int gVisibilityFunc = VISIBILITY_FUNC_PLANES;
 
 static float gMaxLODDistance = 10.0f;
 
@@ -504,30 +446,6 @@ int main(int argc, char** argv)
         window->ImGuiNewFrameMetal(pRenderPassDescriptor);
 
         if (ImGui::Begin("Params")) {
-            // Visibility Func
-            static const char* currentVisibilityFuncName = gVisibilityFuncNames[gVisibilityFunc].c_str();
-            if (ImGui::BeginCombo("Visibility Func", currentVisibilityFuncName))
-            {
-                for (size_t i = 0; i < gVisibilityFuncNames.size(); ++i)
-                {
-                    bool isSelected = (currentVisibilityFuncName == gVisibilityFuncNames[i]);
-                    if (ImGui::Selectable(gVisibilityFuncNames[i].c_str(), isSelected))
-                    {
-                        currentVisibilityFuncName = gVisibilityFuncNames[i].c_str();
-                        gVisibilityFunc           = static_cast<uint32_t>(i);
-                    }
-                    if (isSelected)
-                    {
-                        ImGui::SetItemDefaultFocus();
-                    }
-                }
-                ImGui::EndCombo();
-            }
-
-            ImGui::Checkbox("Fit Cone to Far Clip", &gFitConeToFarClip);
-
-            ImGui::Separator();
-
             ImGui::DragFloat("Max LOD Distance", &gMaxLODDistance, 0.1f, 1.0f, 50.0f);
 
             ImGui::Separator();
@@ -608,26 +526,12 @@ int main(int argc, char** argv)
 
             Camera::FrustumPlane frLeft, frRight, frTop, frBottom, frNear, frFar;
             camera.GetFrustumPlanes(&frLeft, &frRight, &frTop, &frBottom, &frNear, &frFar);
-            //
-            auto frCone = camera.GetFrustumCone(gFitConeToFarClip);
 
             scene.EyePosition                          = camera.GetEyePosition();
             scene.ViewMatrix                           = camera.GetViewMatrix();
             scene.ProjMatrix                           = camera.GetProjectionMatrix();
-            scene.Frustum.Planes[FRUSTUM_PLANE_LEFT]   = {frLeft.Normal, 0.0f, frLeft.Position, 0.0f};
-            scene.Frustum.Planes[FRUSTUM_PLANE_RIGHT]  = {frRight.Normal, 0.0f, frRight.Position, 0.0f};
-            scene.Frustum.Planes[FRUSTUM_PLANE_TOP]    = {frTop.Normal, 0.0f, frTop.Position, 0.0f};
-            scene.Frustum.Planes[FRUSTUM_PLANE_BOTTOM] = {frBottom.Normal, 0.0f, frBottom.Position, 0.0f};
-            scene.Frustum.Planes[FRUSTUM_PLANE_NEAR]   = {frNear.Normal, 0.0f, frNear.Position, 0.0f};
-            scene.Frustum.Planes[FRUSTUM_PLANE_FAR]    = {frFar.Normal, 0.0f, frFar.Position, 0.0f};
-            scene.Frustum.Sphere                       = camera.GetFrustumSphere();
-            scene.Frustum.Cone.Tip                     = frCone.Tip;
-            scene.Frustum.Cone.Height                  = frCone.Height;
-            scene.Frustum.Cone.Direction               = frCone.Dir;
-            scene.Frustum.Cone.Angle                   = frCone.Angle;
             scene.InstanceCount                        = static_cast<uint32_t>(instances.size());
             scene.MeshletCount                         = meshlet_LOD_Counts[0];
-            scene.VisibilityFunc                       = gVisibilityFunc;
             scene.MaxLODDistance                       = gMaxLODDistance;
             scene.Meshlet_LOD_Offsets[0]               = meshlet_LOD_Offsets[0];
             scene.Meshlet_LOD_Offsets[1]               = meshlet_LOD_Offsets[1];
