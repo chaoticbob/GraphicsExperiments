@@ -1,11 +1,3 @@
 cmake_minimum_required(VERSION 3.5)
 
-add_subdirectory(gen_sphereflake_coords)
-add_subdirectory(window_events)
-add_subdirectory(ibl_brdf_lut)
-add_subdirectory(ibl_furnace)
-add_subdirectory(ibl_prefilter_env)
-add_subdirectory(normal_map_convert)
-add_subdirectory(sampling_vis)
-add_subdirectory(frustum_planes)
-add_subdirectory(mesh_clean)
+
