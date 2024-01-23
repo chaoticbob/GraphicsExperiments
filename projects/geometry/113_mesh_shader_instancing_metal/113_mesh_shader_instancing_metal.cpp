@@ -360,7 +360,6 @@ int main(int argc, char** argv)
             uint pad[2];
         };
         SceneProperties scene = {VP, instanceCount, meshletCount};
-        int s = sizeof(SceneProperties);
 
         pRenderEncoder->setObjectBytes(&scene, sizeof(SceneProperties), 0);
         pRenderEncoder->setMeshBytes(&scene, sizeof(SceneProperties), 0);

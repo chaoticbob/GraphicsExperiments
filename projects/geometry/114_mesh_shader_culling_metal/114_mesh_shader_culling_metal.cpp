@@ -563,13 +563,6 @@ int main(int argc, char** argv)
         pRenderEncoder->setRenderPipelineState(renderPipelineState.State.get());
         pRenderEncoder->setDepthStencilState(depthStencilState.State.get());
 
-        PerspCamera camera = PerspCamera(45.0f, window->GetAspectRatio(), 0.1f, 1000.0f);
-        camera.LookAt(vec3(0, 0.7f, 3.0f), vec3(0, 0.105f, 0));
-
-        mat4 VP = camera.GetViewProjectionMatrix();
-        uint32_t instanceCount = static_cast<uint32_t>(instances.size());
-        uint32_t meshletCount = static_cast<uint32_t>(meshlets.size());
-
         // Since Metal supports 4kb of constants data - we don't need to change
         // the scene properties to a buffer.
         //
