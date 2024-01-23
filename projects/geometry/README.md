@@ -19,7 +19,7 @@ Demonstrate how to do meshlet culling during amplification.
 Do the lights turn on? Demonstrates the most absolute basic functionality of LOD using instance index to select LOD.
 
 ## 116_mesh_shader_calc_lod
-Demonstrates how to calculate LOD using disance to camera during amplification.
+Demonstrates how to calculate LOD using distance to camera during amplification.
 
 ## 117_mesh_shader_cull_lod
-Demonstrates how to calculate LOD using disance to camera with meshlet culling during amplification.
+Demonstrates how to calculate LOD using distance to camera with meshlet culling during amplification.
