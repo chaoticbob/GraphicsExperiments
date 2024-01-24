@@ -64,6 +64,7 @@ void meshMain(
 {
     uint meshletIndex = payload.MeshletIndices[gid];
     device const Meshlet& m = Meshlets[meshletIndex];
+    outMesh.set_primitive_count(m.TriangleCount);
 
     if (gtid < m.TriangleCount) {
         //
@@ -97,11 +98,6 @@ void meshMain(
             float(gid & 7) / 8);
 
         outMesh.set_vertex(gtid, vtx);   
-    }
-
-    // Should be called at end
-    if (gtid == 0) {
-        outMesh.set_primitive_count(m.TriangleCount);
     }
 }
 

@@ -159,15 +159,7 @@ void objectMain(
 
     uint instanceIndex = dtid / Scene.MeshletCount;
     uint meshletIndex  = dtid % Scene.MeshletCount;
-
-    /*
-    if ((instanceIndex < Scene.InstanceCount) && (meshletIndex < Scene.MeshletCount)) {
-        visible = 1;
-        outPayload.InstanceIndices[gtid] = instanceIndex;
-        outPayload.MeshletIndices[gtid]  = meshletIndex;
-    }
-    */
-    
+   
     if ((instanceIndex < Scene.InstanceCount) && (meshletIndex < Scene.MeshletCount)) {
         // Transform meshlet's bounding sphere into world space
         float4x4 M = Instances[instanceIndex].M;
@@ -227,6 +219,7 @@ void meshMain(
     uint meshletIndex = payload.MeshletIndices[gid];
 
     device const Meshlet& m = Meshlets[meshletIndex];
+    outMesh.set_primitive_count(m.TriangleCount);    
 
     if (gtid < m.TriangleCount) {
         //
@@ -262,11 +255,6 @@ void meshMain(
             float(meshletIndex & 7) / 8);
 
         outMesh.set_vertex(gtid, vtx);   
-    }
-
-    // Should be called at end
-    if (gtid == 0) {
-        outMesh.set_primitive_count(m.TriangleCount);
     }
 }
 

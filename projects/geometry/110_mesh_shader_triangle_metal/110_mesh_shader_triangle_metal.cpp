@@ -36,11 +36,13 @@ struct Vertex {
 	float3 Color;
 };
 
-using Mesh = metal::mesh<Vertex, void, 128, 256, topology::triangle>;
+using Mesh = metal::mesh<Vertex, void, 3, 1, topology::triangle>;
 
 [[mesh]]
 void meshMain(Mesh outMesh)
 {
+    outMesh.set_primitive_count(3);
+    
     Vertex vertices[3];
     
     vertices[0].PositionCS = float4(-0.5, 0.5, 0.0, 1.0);
@@ -59,8 +61,6 @@ void meshMain(Mesh outMesh)
     outMesh.set_index(0, 0);
     outMesh.set_index(1, 1);
     outMesh.set_index(2, 2);
-    
-    outMesh.set_primitive_count(3);
 }
 
 struct FSInput
