@@ -60,7 +60,7 @@ void asmain(
 // Mesh Shader
 // -------------------------------------------------------------------------------------------------
 [outputtopology("triangle")]
-[numthreads(128, 1, 1)]
+[numthreads(64, 1, 1)]
 void msmain(
                  uint       gtid : SV_GroupThreadID, 
                  uint       gid  : SV_GroupID, 
