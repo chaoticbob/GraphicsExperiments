@@ -94,17 +94,13 @@ int main(int argc, char** argv)
     std::vector<uint32_t>        meshletVertices;
     std::vector<uint8_t>         meshletTriangles;
     {
-        TriMesh::Options options   = {};
-        options.enableVertexColors = true;
-        options.enableNormals      = true;
-
         //
         // Use a cube to debug when needed
         //
         // TriMesh mesh = TriMesh::Cube(glm::vec3(0.25f), false, options);
 
         TriMesh mesh = {};
-        bool    res  = TriMesh::LoadOBJ(GetAssetPath("models/horse_statue_01_1k.obj").string(), "", options, &mesh);
+        bool    res  = TriMesh::LoadOBJ2(GetAssetPath("models/horse_statue_01_1k.obj").string(), &mesh);
         if (!res)
         {
             assert(false && "failed to load model");
