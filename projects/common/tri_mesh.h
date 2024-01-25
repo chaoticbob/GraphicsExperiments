@@ -231,6 +231,8 @@ public:
     const std::vector<TriMesh::Triangle>& GetTriangles() const { return mTriangles; }
     uint32_t                              AddTriangle(const Triangle& tri);
     uint32_t                              AddTriangle(uint32_t vIdx0, uint32_t vIdx1, uint32_t vIdx2);
+    void                                  AddTriangles(size_t count, const uint32_t* pIndices);
+    void                                  SetTriangles(size_t count, const uint32_t* pIndices);
     void                                  SetTriangles(const std::vector<uint32_t>& indices);
 
     uint32_t                              GetNumMaterials() const { return static_cast<uint32_t>(mMaterials.size()); }
@@ -247,6 +249,8 @@ public:
     std::vector<TriMesh::Triangle>     GetGroupTriangles(uint32_t groupIndex) const;
 
     const std::vector<glm::vec3>& GetPositions() const { return mPositions; }
+    void                          SetPositions(size_t count, const glm::vec3* pPositions);
+
     const std::vector<glm::vec3>& GetVertexColors() const { return mVertexColors; }
     const std::vector<glm::vec2>& GetTexCoords() const { return mTexCoords; }
     const std::vector<glm::vec3>& GetNormals() const { return mNormals; }
@@ -290,7 +294,7 @@ public:
     //         CountU32(positions),
     //         sizeof(glm::vec3));
     //
-    void WellVertices(float distanceThreshold = DEFAULT_DISTANCE_TRESHOLD);
+    void WeldVertices(float distanceThreshold = DEFAULT_DISTANCE_TRESHOLD);
 
     std::vector<glm::vec3> GetTBNLineSegments(uint32_t* pNumVertices, float length = 0.1f) const;
 
@@ -327,6 +331,7 @@ public:
     static TriMesh CornellBox(const TriMesh::Options& options = {});
 
     static bool LoadOBJ(const std::string& path, const std::string& mtlBaseDir, const TriMesh::Options& options, TriMesh* pMesh);
+    static bool LoadOBJ2(const std::string& path, TriMesh* pMesh);
     static bool WriteOBJ(const std::string path, const TriMesh& mesh);
 
 private:
@@ -345,4 +350,5 @@ private:
 private:
     friend struct CalculateTangents;
     void SetTangents(uint32_t vIdx, const glm::vec3& tangent, const glm::vec3& bitangent);
+    void CalculateBounds();
 };

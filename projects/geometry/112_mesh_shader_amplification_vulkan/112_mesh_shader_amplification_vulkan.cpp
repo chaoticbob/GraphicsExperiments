@@ -30,9 +30,9 @@ using namespace glm;
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth          = 1280;
-static uint32_t gWindowHeight         = 720;
-static bool     gEnableDebug          = true;
+static uint32_t gWindowWidth  = 1280;
+static uint32_t gWindowHeight = 720;
+static bool     gEnableDebug  = true;
 
 void CreatePipelineLayout(
     VulkanRenderer*        pRenderer,
@@ -115,15 +115,8 @@ int main(int argc, char** argv)
     std::vector<uint32_t>        meshletVertices;
     std::vector<uint8_t>         meshletTriangles;
     {
-        TriMesh::Options options = {.enableVertexColors = true, .enableNormals = true};
-
-        //
-        // Use a cube to debug when needed
-        //
-        // TriMesh mesh = TriMesh::Cube(glm::vec3(0.25f), false, options);
-
         TriMesh mesh = {};
-        bool    res  = TriMesh::LoadOBJ(GetAssetPath("models/horse_statue_01_1k.obj").string(), "", options, &mesh);
+        bool    res  = TriMesh::LoadOBJ2(GetAssetPath("models/horse_statue_01_1k.obj").string(), &mesh);
         if (!res)
         {
             assert(false && "failed to load model");
@@ -160,7 +153,7 @@ int main(int argc, char** argv)
         meshlets.resize(meshletCount);
     }
 
-    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to 
+    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to
     // make it easier to unpack on the GPU.
     //
     std::vector<uint32_t> meshletTrianglesU32;

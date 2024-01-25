@@ -214,6 +214,27 @@ uint32_t TriMesh::AddTriangle(uint32_t vIdx0, uint32_t vIdx1, uint32_t vIdx2)
     return AddTriangle(tri);
 }
 
+void TriMesh::AddTriangles(size_t count, const uint32_t* pIndices)
+{
+    assert((count % 3) == 0);
+    size_t n = count / 3;
+    for (size_t i = 0; i < n; ++i)
+    {
+        uint32_t vIdx0 = pIndices[3 * i + 0];
+        uint32_t vIdx1 = pIndices[3 * i + 1];
+        uint32_t vIdx2 = pIndices[3 * i + 2];
+        this->AddTriangle(vIdx0, vIdx1, vIdx2);
+    }
+}
+
+void TriMesh::SetTriangles(size_t count, const uint32_t* pIndices)
+{
+    assert((count % 3) == 0);
+    mTriangles.clear();
+
+    this->AddTriangles(count, pIndices);
+}
+
 void TriMesh::SetTriangles(const std::vector<uint32_t>& indices)
 {
     assert((indices.size() % 3) == 0);
@@ -349,6 +370,14 @@ std::vector<TriMesh::Triangle> TriMesh::GetTrianglesForMaterial(const int32_t ma
     return triangles;
 }
 
+void TriMesh::SetPositions(size_t count, const glm::vec3* pPositions)
+{
+    assert((count > 0) && (pPositions != nullptr));
+
+    mPositions.clear();
+    std::copy(pPositions, pPositions + count, std::back_inserter(mPositions));
+}
+
 void TriMesh::AddVertex(const TriMesh::Vertex& vtx)
 {
     mPositions.push_back(vtx.position);
@@ -440,6 +469,27 @@ void TriMesh::SetTangents(uint32_t vIdx, const glm::vec3& tangent, const glm::ve
 
     mTangents[vIdx]   = tangent;
     mBitangents[vIdx] = bitangent;
+}
+
+void TriMesh::CalculateBounds()
+{
+    mBounds = {};
+
+    if (mPositions.empty())
+    {
+        return;
+    }
+
+    size_t i = 0;
+    mBounds.min = mBounds.max = mPositions[i];
+    ++i;
+
+    const size_t n = mPositions.size();
+    for (; i < n; ++i)
+    {
+        mBounds.min = glm::min(mBounds.min, mPositions[i]);
+        mBounds.max = glm::max(mBounds.max, mPositions[i]);
+    }
 }
 
 void TriMesh::AppendMesh(const TriMesh& srcMesh, const std::string& groupPrefix)
@@ -559,7 +609,7 @@ void TriMesh::AppendMesh(const TriMesh& srcMesh, const std::string& groupPrefix)
     }
 }
 
-void TriMesh::WellVertices(float distanceThreshold)
+void TriMesh::WeldVertices(float distanceThreshold)
 {
     if (mOptions.enableVertexColors || mOptions.enableTexCoords || mOptions.enableNormals || mOptions.enableTangents)
     {
@@ -1661,6 +1711,67 @@ bool TriMesh::LoadOBJ(const std::string& path, const std::string& mtlBaseDir, co
     return true;
 }
 
+bool TriMesh::LoadOBJ2(const std::string& path, TriMesh* pMesh)
+{
+    if (pMesh == nullptr)
+    {
+        return false;
+    }
+
+    tinyobj::attrib_t                attrib;
+    std::vector<tinyobj::shape_t>    shapes;
+    std::vector<tinyobj::material_t> materials;
+
+    std::string warn;
+    std::string err;
+    bool        loaded = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.c_str(), nullptr, false);
+
+    if (!loaded || !err.empty())
+    {
+        return false;
+    }
+
+    size_t numShapes = shapes.size();
+    if (numShapes == 0)
+    {
+        return false;
+    }
+
+    // Make sure all vertex positions are 3 components wide
+    if ((attrib.vertices.size() % 3) != 0)
+    {
+        return false;
+    }
+
+    // Create mesh
+    *pMesh = TriMesh();
+
+    // Set positions
+    pMesh->SetPositions(attrib.vertices.size() / 3, reinterpret_cast<const glm::vec3*>(attrib.vertices.data()));
+
+    for (size_t shapeIdx = 0; shapeIdx < numShapes; ++shapeIdx)
+    {
+        auto& shape = shapes[shapeIdx];
+        if ((shape.mesh.indices.size() % 3) != 0)
+        {
+            return false;
+        }
+
+        size_t numTriangles = shape.mesh.indices.size() / 3;
+        for (size_t triIdx = 0; triIdx < numTriangles; ++triIdx)
+        {
+            uint32_t vIdx0 = static_cast<uint32_t>(shape.mesh.indices[3 * triIdx + 0].vertex_index);
+            uint32_t vIdx1 = static_cast<uint32_t>(shape.mesh.indices[3 * triIdx + 1].vertex_index);
+            uint32_t vIdx2 = static_cast<uint32_t>(shape.mesh.indices[3 * triIdx + 2].vertex_index);
+            pMesh->AddTriangle(vIdx0, vIdx1, vIdx2);
+        }
+    }
+
+    pMesh->CalculateBounds();
+
+    return true;
+}
+
 bool TriMesh::WriteOBJ(const std::string path, const TriMesh& mesh)
 {
     std::ofstream os = std::ofstream(path.c_str());
@@ -1709,7 +1820,8 @@ bool TriMesh::WriteOBJ(const std::string path, const TriMesh& mesh)
     }
 
     os << "# triangle faces\n";
-    os << "g" << " " << std::filesystem::path(path).filename().replace_extension("") << "\n";
+    os << "g"
+       << " " << std::filesystem::path(path).filename().replace_extension("") << "\n";
     {
         auto& triangles = mesh.GetTriangles();
         for (auto& tri : triangles)

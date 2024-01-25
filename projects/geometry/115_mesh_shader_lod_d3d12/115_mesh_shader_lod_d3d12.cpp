@@ -136,12 +136,10 @@ int main(int argc, char** argv)
     // *************************************************************************
     std::vector<TriMesh> meshLODs;
     {
-        TriMesh::Options options = {};
-
         // LOD 0
         {
             TriMesh mesh = {};
-            bool    res  = TriMesh::LoadOBJ(GetAssetPath("models/horse_statue_01_1k.obj").string(), "", options, &mesh);
+            bool    res  = TriMesh::LoadOBJ2(GetAssetPath("models/horse_statue_01_1k.obj").string(), &mesh);
             if (!res)
             {
                 assert(false && "failed to load model LOD 0");
@@ -153,7 +151,7 @@ int main(int argc, char** argv)
         // LOD 1
         {
             TriMesh mesh = {};
-            bool    res  = TriMesh::LoadOBJ(GetAssetPath("models/horse_statue_01_1k_LOD_1.obj").string(), "", options, &mesh);
+            bool    res  = TriMesh::LoadOBJ2(GetAssetPath("models/horse_statue_01_1k_LOD_1.obj").string(), &mesh);
             if (!res)
             {
                 assert(false && "failed to load model LOD 1");
@@ -165,7 +163,7 @@ int main(int argc, char** argv)
         // LOD 2
         {
             TriMesh mesh = {};
-            bool    res  = TriMesh::LoadOBJ(GetAssetPath("models/horse_statue_01_1k_LOD_2.obj").string(), "", options, &mesh);
+            bool    res  = TriMesh::LoadOBJ2(GetAssetPath("models/horse_statue_01_1k_LOD_2.obj").string(), &mesh);
             if (!res)
             {
                 assert(false && "failed to load model LOD 2");
@@ -177,7 +175,7 @@ int main(int argc, char** argv)
         // LOD 3
         {
             TriMesh mesh = {};
-            bool    res  = TriMesh::LoadOBJ(GetAssetPath("models/horse_statue_01_1k_LOD_3.obj").string(), "", options, &mesh);
+            bool    res  = TriMesh::LoadOBJ2(GetAssetPath("models/horse_statue_01_1k_LOD_3.obj").string(), &mesh);
             if (!res)
             {
                 assert(false && "failed to load model LOD 3");
@@ -189,7 +187,7 @@ int main(int argc, char** argv)
         // LOD 4
         {
             TriMesh mesh = {};
-            bool    res  = TriMesh::LoadOBJ(GetAssetPath("models/horse_statue_01_1k_LOD_4.obj").string(), "", options, &mesh);
+            bool    res  = TriMesh::LoadOBJ2(GetAssetPath("models/horse_statue_01_1k_LOD_4.obj").string(), &mesh);
             if (!res)
             {
                 assert(false && "failed to load model LOD 4");
