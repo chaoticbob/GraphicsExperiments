@@ -214,6 +214,21 @@ uint32_t TriMesh::AddTriangle(uint32_t vIdx0, uint32_t vIdx1, uint32_t vIdx2)
     return AddTriangle(tri);
 }
 
+void TriMesh::SetTriangles(const std::vector<uint32_t>& indices)
+{
+    assert((indices.size() % 3) == 0);
+    mTriangles.clear();
+
+    size_t n = indices.size() / 3;
+    for (size_t i = 0; i < n; ++i)
+    {
+        uint32_t vIdx0 = indices[3 * i + 0];
+        uint32_t vIdx1 = indices[3 * i + 1];
+        uint32_t vIdx2 = indices[3 * i + 2];
+        this->AddTriangle(vIdx0, vIdx1, vIdx2);
+    }
+}
+
 uint32_t TriMesh::GetGroupIndex(const std::string& groupName) const
 {
     auto it = std::find_if(
@@ -554,7 +569,7 @@ void TriMesh::WellVertices(float distanceThreshold)
     const float distanceThresholdSq = distanceThreshold * distanceThreshold;
 
     std::unordered_map<uint32_t, uint32_t> weldedIndexMap;
-    std::vector<glm::vec3>       weldedPositions;
+    std::vector<glm::vec3>                 weldedPositions;
 
     const uint32_t   vertexCount       = CountU32(mPositions);
     const glm::vec3* pPosition         = mPositions.data();
@@ -1694,6 +1709,7 @@ bool TriMesh::WriteOBJ(const std::string path, const TriMesh& mesh)
     }
 
     os << "# triangle faces\n";
+    os << "g" << " " << std::filesystem::path(path).filename().replace_extension("") << "\n";
     {
         auto& triangles = mesh.GetTriangles();
         for (auto& tri : triangles)

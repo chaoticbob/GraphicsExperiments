@@ -231,6 +231,7 @@ public:
     const std::vector<TriMesh::Triangle>& GetTriangles() const { return mTriangles; }
     uint32_t                              AddTriangle(const Triangle& tri);
     uint32_t                              AddTriangle(uint32_t vIdx0, uint32_t vIdx1, uint32_t vIdx2);
+    void                                  SetTriangles(const std::vector<uint32_t>& indices);
 
     uint32_t                              GetNumMaterials() const { return static_cast<uint32_t>(mMaterials.size()); }
     const TriMesh::Material&              GetMaterial(uint32_t materialIndex) const { return mMaterials[materialIndex]; }
@@ -276,10 +277,10 @@ public:
     // Only works if there's only positions, will return if any other attribute is present.
     //
     // Optional - triangles can be spatially sorted with meshopt after welding:
-    // 
+    //
     //     auto indices = mesh.GetIndices();
     //     positions    = mesh.GetPositions();
-    //     
+    //
     //     std::vector<uint32_t> sortedIndices(mesh.GetNumIndices());
     //     meshopt_spatialSortTriangles(
     //         sortedIndices.data(),
