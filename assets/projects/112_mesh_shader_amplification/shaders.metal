@@ -40,9 +40,7 @@ void objectMain(
 {
     outPayload.MeshletIndices[gtid] = dtid;
     // Assumes all meshlets are visible
-    if (gtid == 0) {
-        outGrid.set_threadgroups_per_grid(uint3(AS_GROUP_SIZE, 1, 1));
-    }
+    outGrid.set_threadgroups_per_grid(uint3(AS_GROUP_SIZE, 1, 1));
 }
 
 // -------------------------------------------------------------------------------------------------

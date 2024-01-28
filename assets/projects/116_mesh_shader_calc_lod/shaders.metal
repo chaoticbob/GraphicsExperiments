@@ -104,9 +104,7 @@ void objectMain(
 
     // Assumes all meshlets are visible
     uint visibleCount = simd_sum(visible);
-    if (gtid == 0) {
-        outGrid.set_threadgroups_per_grid(uint3(visibleCount, 1, 1));
-    }
+    outGrid.set_threadgroups_per_grid(uint3(visibleCount, 1, 1));
 }
 
 // -------------------------------------------------------------------------------------------------
