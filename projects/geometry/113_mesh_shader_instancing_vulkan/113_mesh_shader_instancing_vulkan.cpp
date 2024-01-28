@@ -570,7 +570,10 @@ int main(int argc, char** argv)
                 vkCmdBeginQuery(cmdBuf.CommandBuffer, queryPool, 0, 0);
 
                 // Task (amplification) shader uses 32 for thread group size
-                uint32_t threadGroupCountX = static_cast<uint32_t>((meshlets.size() / 32) + 1) * static_cast<uint32_t>(instances.size());
+                uint32_t meshletCount      = static_cast<uint32_t>(meshlets.size());
+                uint32_t instanceCount     = static_cast<uint32_t>(instances.size());
+                uint32_t threadGroupCountX = ((meshletCount * instanceCount) / 32) + 1;
+
                 fn_vkCmdDrawMeshTasksEXT(cmdBuf.CommandBuffer, threadGroupCountX, 1, 1);
 
                 vkCmdEndQuery(cmdBuf.CommandBuffer, queryPool, 0);

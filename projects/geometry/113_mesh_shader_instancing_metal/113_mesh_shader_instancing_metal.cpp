@@ -361,7 +361,10 @@ int main(int argc, char** argv)
         pRenderEncoder->setMeshBuffer(instancesBuffer.Buffer.get(), 0, 5);
 
         // Object function uses 32 for thread group size
-        uint32_t threadGroupCountX = static_cast<uint32_t>((meshlets.size() / 32) + 1) * static_cast<uint32_t>(instances.size());
+		uint32_t meshletCount      = static_cast<uint32_t>(meshlets.size());
+		uint32_t instanceCount     = static_cast<uint32_t>(instances.size());
+		uint32_t threadGroupCountX = ((meshletCount * instanceCount) / 32) + 1;
+
         pRenderEncoder->drawMeshThreadgroups(MTL::Size(threadGroupCountX, 1, 1), MTL::Size(32, 1, 1), MTL::Size(128, 1, 1));
 
 
