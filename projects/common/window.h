@@ -3,19 +3,21 @@
 #include "config.h"
 #include "bitmap.h"
 
-#if !defined(GLFW_INCLUDE_NONE)
-#    define GLFW_INCLUDE_NONE
+#if ! defined(GREX_IOS)
+#   if !defined(GLFW_INCLUDE_NONE)
+#       define GLFW_INCLUDE_NONE
+#   endif
+#   include <GLFW/glfw3.h>
+    
+#   if defined(__linux__)
+#       define GLFW_EXPOSE_NATIVE_X11
+#   elif defined(__APPLE__)
+#       define GLFW_EXPOSE_NATIVE_COCOA
+#   elif defined(WIN32)
+#       define GLFW_EXPOSE_NATIVE_WIN32
+#   endif
+#   include <GLFW/glfw3native.h>
 #endif
-#include <GLFW/glfw3.h>
-
-#if defined(__linux__)
-#    define GLFW_EXPOSE_NATIVE_X11
-#elif defined(__APPLE__)
-#    define GLFW_EXPOSE_NATIVE_COCOA
-#elif defined(WIN32)
-#    define GLFW_EXPOSE_NATIVE_WIN32
-#endif
-#include <GLFW/glfw3native.h>
 
 #include <filesystem>
 #include <functional>
@@ -39,6 +41,7 @@ namespace fs = std::filesystem;
 #    include "backends/imgui_impl_metal.h"
 #endif // defined(ENABLE_IMGUI_METAL)
 
+#if !defined(GREX_IOS)
 enum MouseButton
 {
     MOUSE_BUTTON_LEFT   = 0x1,
@@ -134,6 +137,7 @@ private:
     VkDescriptorPool mDescriptorPool = VK_NULL_HANDLE;
 #endif // defined(ENABLE_IMGUI_VULKAN)
 };
+#endif // ! defined(GREX_IOS)
 
 fs::path GetExecutablePath();
 uint32_t GetProcessId();

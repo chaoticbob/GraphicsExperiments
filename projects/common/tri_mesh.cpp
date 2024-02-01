@@ -1768,6 +1768,10 @@ bool TriMesh::LoadOBJ2(const std::string& path, TriMesh* pMesh)
     }
 
     pMesh->CalculateBounds();
+    
+    GREX_LOG_INFO("Loaded " << path);
+    GREX_LOG_INFO("  " << "num vertices: " << pMesh->GetNumVertices());
+    GREX_LOG_INFO("  " << "num indices : " << pMesh->GetNumIndices());
 
     return true;
 }

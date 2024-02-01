@@ -5,6 +5,11 @@
 
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
+#include <unistd.h>
+#endif
+
+#if defined(GREX_IOS)
+#include "file_compat.h"
 #endif
 
 // =============================================================================
@@ -15,6 +20,7 @@ static std::vector<fs::path> sAssetDirs;
 // =============================================================================
 // WindowEvents
 // =============================================================================
+#if ! defined(GREX_IOS)
 struct WindowEvents
 {
     static std::unordered_map<GLFWwindow*, Window*> sWindows;
@@ -700,6 +706,7 @@ bool Window::PollEvents()
 
     return true;
 }
+#endif // ! defined(GREX_IOS)
 
 fs::path GetExecutablePath()
 {
@@ -767,7 +774,12 @@ static void InitAssetDirs()
     if (!sAssetDirs.empty()) {
         return;
     }
-
+    
+#if defined(GREX_IOS)
+    char resDir[PATH_MAX];
+    fc_resdir(resDir, sizeof(resDir));
+    sAssetDirs.push_back(resDir);
+#else
     auto       dir  = GetExecutablePath().parent_path();
     const auto root = dir.root_path();
 
@@ -793,6 +805,7 @@ static void InitAssetDirs()
         }
         dir = dir.parent_path();
     }
+#endif
 }
 
 const std::vector<fs::path>& GetAssetDirs()

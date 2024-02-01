@@ -82,7 +82,11 @@ inline void Print(const char* c_str)
 #if defined(WIN32)
     OutputDebugStringA(c_str);
 #else
+#if defined(GREX_IOS)
+    printf("%s", c_str);
+#else
     std::cout << c_str;
+#endif
 #endif
 }
 

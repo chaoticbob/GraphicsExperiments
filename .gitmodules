@@ -46,3 +46,6 @@
 [submodule "third_party/imGuIZMO.quat"]
 	path = third_party/imGuIZMO.quat
 	url = https://github.com/BrutPitt/imGuIZMO.quat.git
+[submodule "third_party/glfm"]
+	path = third_party/glfm
+	url = https://github.com/brackeen/glfm.git

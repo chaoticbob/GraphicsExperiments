@@ -9,21 +9,25 @@ if (APPLE)
 	option(GREX_ENABLE_D3D12  "Build DirectX 12 projects" OFF)
 	option(GREX_ENABLE_METAL  "Build Metal projects" ON)
 	option(GREX_ENABLE_VULKAN "Build Vulkan projects" OFF)
+    option(GREX_IOS           "Target iOS" OFF)
 else()
 	option(GREX_ENABLE_D3D12  "Build DirectX 12 projects" ON)
 	option(GREX_ENABLE_METAL  "Build Metal projects" OFF)
 	option(GREX_ENABLE_VULKAN "Build Vulkan projects" ON)
 endif()
 
-
 option(GREX_ENABLE_MISC_PROJECTS  "Build misc projects" OFF)
 
 # ------------------------------------------------------------------------------
-# Detect Linux
+# Detect Linux, iOS, macOS 
 # ------------------------------------------------------------------------------
 if(UNIX AND APPLE)
     if (APPLE) 
-        set(MACOS TRUE)       
+        if (GREX_IOS)
+            set(IOS TRUE)
+        else()
+            set(MACOS TRUE)       
+        endif()
     else()
         set(LINUX TRUE)
     endif()
@@ -66,7 +70,7 @@ endif()
 
 if (GREX_LINUX)
     add_definitions(-DGREX_LINUX)
-elseif (GREX_MACOS)
+elseif (GREX_IOS OR GREX_MACOS)
     add_compile_options("$<$<CONFIG:Debug>:-g>")
     add_compile_options("$<$<CONFIG:RelWithDebInfo>:-g>")
 elseif (GREX_MSW)
@@ -76,8 +80,8 @@ endif()
 # ------------------------------------------------------------------------------
 # Configure output directories
 # ------------------------------------------------------------------------------
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
+#set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib)
+#set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 
 # ------------------------------------------------------------------------------
 # Configure directories
@@ -85,78 +89,100 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 set(GREX_DIR             "${CMAKE_CURRENT_SOURCE_DIR}")
 set(GREX_PROJECTS_DIR    "${GREX_DIR}/projects")
 set(GREX_INCLUDE_DIR     "${GREX_DIR}/include")
+set(GREX_ASSETS_DIR      "${GREX_DIR}/assets")
 set(GREX_THIRD_PARTY_DIR "${GREX_DIR}/third_party")
+
+# ------------------------------------------------------------------------------
+# iOS specific stuff
+# ------------------------------------------------------------------------------
+if (GREX_IOS)
+    add_compile_definitions("GREX_IOS")
+
+    list(APPEND CMAKE_MODULE_PATH "${GREX_DIR}/cmake")
+
+    set(GLFM_APP_ORGANIZATION_IDENTIFIER "com.grex")
+    set(GLFM_APP_VERSION                 "1.0")
+    set(GLFM_APP_VERSION_ITERATION       1)
+endif()
 
 # ------------------------------------------------------------------------------
 # Detect Vulkan
 # ------------------------------------------------------------------------------
-# Determine Vulkan's include directory
-if (NOT VULKAN_INCLUDE_DIR)
-    if (LINUX)
-        if (GGP)
-            set(VULKAN_INCLUDE_DIR "${GGP_SYSROOT_PATH}/usr/local/include")
-        else()
+if (GREX_ENABLE_VULKAN)
+    # Determine Vulkan's include directory
+    if (NOT VULKAN_INCLUDE_DIR)
+        if (LINUX)
+            if (GGP)
+                set(VULKAN_INCLUDE_DIR "${GGP_SYSROOT_PATH}/usr/local/include")
+            else()
+                if (DEFINED ENV{VULKAN_SDK})
+                    set(VULKAN_INCLUDE_DIR "$ENV{VULKAN_SDK}/include")
+                endif()
+            endif()
+        elseif (APPLE OR WIN32)
             if (DEFINED ENV{VULKAN_SDK})
-                set(VULKAN_INCLUDE_DIR "$ENV{VULKAN_SDK}/include")
+                set(VULKAN_INCLUDE_DIR "$ENV{VULKAN_SDK}/Include")
             endif()
         endif()
-    elseif (APPLE OR WIN32)
-        if (DEFINED ENV{VULKAN_SDK})
-            set(VULKAN_INCLUDE_DIR "$ENV{VULKAN_SDK}/Include")
+    endif()
+        
+    # Determine Vulkan's library directory
+    if (NOT VULKAN_LIBRARY_DIR)
+        if (LINUX)
+            if (DEFINED ENV{VULKAN_SDK})
+                set(VULKAN_LIBRARY_DIR "$ENV{VULKAN_SDK}/lib")
+            endif()
+        elseif (APPLE OR WIN32)
+            if (DEFINED ENV{VULKAN_SDK})
+                set(VULKAN_LIBRARY_DIR "$ENV{VULKAN_SDK}/Lib")
+            endif()
         endif()
     endif()
-endif()
-    
-# Determine Vulkan's library directory
-if (NOT VULKAN_LIBRARY_DIR)
-    if (LINUX)
-        if (DEFINED ENV{VULKAN_SDK})
-            set(VULKAN_LIBRARY_DIR "$ENV{VULKAN_SDK}/lib")
-        endif()
-    elseif (APPLE OR WIN32)
-        if (DEFINED ENV{VULKAN_SDK})
-            set(VULKAN_LIBRARY_DIR "$ENV{VULKAN_SDK}/Lib")
-        endif()
+        
+    # Bail if Vulkan's include directory is not set
+    if ((NOT VULKAN_INCLUDE_DIR) AND (NOT APPLE))
+        message(FATAL_ERROR "VULKAN_INCLUDE_DIR not specified and could not be determined using environment variable VULKAN_SDK")
     endif()
-endif()
-    
-# Bail if Vulkan's include directory is not set
-if ((NOT VULKAN_INCLUDE_DIR) AND (NOT APPLE))
-    message(FATAL_ERROR "VULKAN_INCLUDE_DIR not specified and could not be determined using environment variable VULKAN_SDK")
-endif()
-    
-if (VULKAN_INCLUDE_DIR)
-	# Convert paths to something CMake can use
-	file(TO_CMAKE_PATH "${VULKAN_INCLUDE_DIR}" VULKAN_INCLUDE_DIR)
-	file(TO_CMAKE_PATH "${VULKAN_LIBRARY_DIR}" VULKAN_LIBRARY_DIR)
+        
+    if (VULKAN_INCLUDE_DIR)
+        # Convert paths to something CMake can use
+        file(TO_CMAKE_PATH "${VULKAN_INCLUDE_DIR}" VULKAN_INCLUDE_DIR)
+        file(TO_CMAKE_PATH "${VULKAN_LIBRARY_DIR}" VULKAN_LIBRARY_DIR)
 
-	message("Found Vulkan:")
-	message("  Vulkan include directory: ${VULKAN_INCLUDE_DIR}")
-	message("  Vulkan library directory: ${VULKAN_LIBRARY_DIR}")
+        message("Found Vulkan:")
+        message("  Vulkan include directory: ${VULKAN_INCLUDE_DIR}")
+        message("  Vulkan library directory: ${VULKAN_LIBRARY_DIR}")
+    endif()
 endif()
 
 # ------------------------------------------------------------------------------
 # glslang
 # ------------------------------------------------------------------------------
-set(BUILD_SHARED_LIBS       OFF CACHE BOOL "" FORCE)
-set(BUILD_EXTERNAL          OFF CACHE BOOL "" FORCE)
-set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
-set(ENABLE_GLSLANG_JS       OFF CACHE BOOL "" FORCE)
-set(ENABLE_HLSL             OFF CACHE BOOL "" FORCE)
-set(ENABLE_PCH              OFF CACHE BOOL "" FORCE)
-set(ENABLE_CTEST            OFF CACHE BOOL "" FORCE)
-add_subdirectory(${GREX_THIRD_PARTY_DIR}/glslang)
-message("Enabled GLSL runtime shader compilation with glslang")
-
+if (GREX_ENABLE_VULKAN)
+    set(BUILD_SHARED_LIBS       OFF CACHE BOOL "" FORCE)
+    set(BUILD_EXTERNAL          OFF CACHE BOOL "" FORCE)
+    set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
+    set(ENABLE_GLSLANG_JS       OFF CACHE BOOL "" FORCE)
+    set(ENABLE_HLSL             OFF CACHE BOOL "" FORCE)
+    set(ENABLE_PCH              OFF CACHE BOOL "" FORCE)
+    set(ENABLE_CTEST            OFF CACHE BOOL "" FORCE)
+    add_subdirectory(${GREX_THIRD_PARTY_DIR}/glslang)
+    message("Enabled GLSL runtime shader compilation with glslang")
+endif()
 
 # ------------------------------------------------------------------------------
 # Configure GLFW
 # ------------------------------------------------------------------------------
-set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_DOCS     OFF CACHE BOOL "" FORCE)
-set(GLFW_VULKAN_STATIC  OFF CACHE BOOL "" FORCE)
-add_subdirectory(${GREX_THIRD_PARTY_DIR}/glfw)
+if (GREX_IOS)
+    set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    add_subdirectory(${GREX_THIRD_PARTY_DIR}/glfm)
+else()
+    set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_DOCS     OFF CACHE BOOL "" FORCE)
+    set(GLFW_VULKAN_STATIC  OFF CACHE BOOL "" FORCE)
+    add_subdirectory(${GREX_THIRD_PARTY_DIR}/glfw)
+endif()
 
 # ------------------------------------------------------------------------------
 # Configure KTX-Software

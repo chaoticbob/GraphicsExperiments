@@ -5,8 +5,12 @@
 #include <Metal/Metal.hpp>
 #include <QuartzCore/CAMetalLayer.hpp>
 
-#define GREX_DEFAULT_RTV_FORMAT MTL::PixelFormatBGRA8Unorm
-#define GREX_DEFAULT_DSV_FORMAT MTL::PixelFormatDepth32Float
+#if defined(GREX_IOS)
+#include <MetalKit/MTKView.hpp>
+#endif
+
+#define GREX_DEFAULT_RTV_FORMAT MTL::PixelFormatBGRA8Unorm      // GLFM's GLFMColorFormatRGBA8888 resolves to MTLPixelFormatBGRA8Unorm
+#define GREX_DEFAULT_DSV_FORMAT MTL::PixelFormatDepth32Float    // GLFM's GLFMDepthFormat24 resolves to MTLPixelFormatDepth32Float
 
 enum MtlPipelineFlags
 {
@@ -16,7 +20,11 @@ enum MtlPipelineFlags
 struct MetalRenderer
 {
     bool                                     DebugEnabled = false;
+#if defined(GREX_IOS)
+    MTL::Device*                             Device = nullptr;
+#else
     NS::SharedPtr<MTL::Device>               Device;
+#endif
     NS::SharedPtr<MTL::CommandQueue>         Queue;
     CA::MetalLayer*                          pSwapchain = nullptr;
     std::vector<NS::SharedPtr<MTL::Texture>> SwapchainDSVBuffers;
@@ -26,8 +34,15 @@ struct MetalRenderer
     ~MetalRenderer();
 };
 
+#if defined(GREX_IOS)
+bool InitMetal(MetalRenderer* pRenderer, bool enableDebug, void* pView);
+#else
 bool InitMetal(MetalRenderer* pRenderer, bool enableDebug);
+#endif
+
+#if ! defined(GREX_IOS)
 bool InitSwapchain(MetalRenderer* pRenderer, void* pCocoaWindow, uint32_t width, uint32_t height, uint32_t bufferCount = 2, MTL::PixelFormat dsvFormat = MTL::PixelFormatInvalid);
+#endif
 
 MTL::PixelFormat ToMTLFormat(GREXFormat format);
 MTL::IndexType ToMTLIndexType(GREXFormat format);

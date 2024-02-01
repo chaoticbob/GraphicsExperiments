@@ -5,6 +5,11 @@
 #include <Metal/Metal.hpp>
 #include <QuartzCore/QuartzCore.hpp>
 
+#if defined(GREX_IOS)
+#define MTK_PRIVATE_IMPLEMENTATION
+#include <MetalKit/MTKView.hpp>
+#endif
+
 #include "mtl_renderer.h"
 #include "mtl_renderer_utils.h"
 
@@ -29,6 +34,32 @@ MetalRenderer::~MetalRenderer()
     SwapchainBufferCount = 0;
 }
 
+#if defined(GREX_IOS)
+bool InitMetal(
+    MetalRenderer* pRenderer,
+    bool           enableDebug,
+    void*          pView)
+{
+    if (IsNull(pRenderer) || IsNull(pView)) {
+        return false;
+    }
+
+    pRenderer->DebugEnabled = enableDebug;
+        
+    pRenderer->Device = static_cast<MTK::View*>(pView)->device();
+    if (IsNull(pRenderer->Device)) {
+        return false;
+    }
+
+    pRenderer->Queue = NS::TransferPtr(pRenderer->Device->newCommandQueue());
+    if (pRenderer->Queue.get() == nullptr) {
+        assert(false && "MTL::Device::newCommandQueue() failed");
+        return false;
+    }
+
+    return true;
+}
+#else
 bool InitMetal(
     MetalRenderer* pRenderer,
     bool           enableDebug)
@@ -53,7 +84,9 @@ bool InitMetal(
 
     return true;
 }
+#endif
 
+#if ! defined(GREX_IOS)
 bool InitSwapchain(
     MetalRenderer*   pRenderer,
     void*            pCocoaWindow,
@@ -108,6 +141,7 @@ bool InitSwapchain(
 
     return true;
 }
+#endif
 
 MTL::PixelFormat ToMTLFormat(
     GREXFormat format)
@@ -194,12 +228,18 @@ NS::Error* CreateBuffer(
     const void*    pSrcData,
     MetalBuffer*   pBuffer)
 {
+#if defined(GREX_IOS)
+    pBuffer->Buffer = NS::TransferPtr(pRenderer->Device->newBuffer(srcSize, MTL::ResourceStorageModeShared));
+#else
     pBuffer->Buffer = NS::TransferPtr(pRenderer->Device->newBuffer(srcSize, MTL::ResourceStorageModeManaged));
+#endif
 
     if (pBuffer->Buffer.get() != nullptr) {
        if (pSrcData != nullptr) {
           memcpy(pBuffer->Buffer->contents(), pSrcData, srcSize);
+#if !defined(GREX_IOS)
           pBuffer->Buffer->didModifyRange(NS::Range::Make(0, pBuffer->Buffer->length()));
+#endif
        }
     }
     else {
@@ -217,14 +257,20 @@ NS::Error* CreateBuffer(
     MTL::Buffer* pSrcMtlBuffer = pSrcBuffer->Buffer.get();
     size_t       bufferSize    = pSrcMtlBuffer->length();
 
+#if defined(GREX_IOS)
+    pBuffer->Buffer = NS::TransferPtr(pRenderer->Device->newBuffer(bufferSize, MTL::ResourceStorageModeShared));
+#else
     pBuffer->Buffer = NS::TransferPtr(pRenderer->Device->newBuffer(bufferSize, MTL::ResourceStorageModeManaged));
+#endif
 
     if (pBuffer->Buffer.get() != nullptr)
     {
         if (pSrcBuffer != nullptr)
         {
             memcpy(pBuffer->Buffer->contents(), pSrcMtlBuffer->contents(), bufferSize);
+#if !defined(GREX_IOS)
             pBuffer->Buffer->didModifyRange(NS::Range::Make(0, bufferSize));
+#endif
         }
     }
     else
