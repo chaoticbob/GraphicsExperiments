@@ -18,6 +18,7 @@ if (GREX_ENABLE_D3D12)
 	add_subdirectory(115_mesh_shader_lod_d3d12)
 	add_subdirectory(116_mesh_shader_calc_lod_d3d12)
 	add_subdirectory(117_mesh_shader_cull_lod_d3d12)
+	add_subdirectory(118_mesh_shader_vertex_attrs_d3d12)
 endif()
 
 if (GREX_ENABLE_METAL)
