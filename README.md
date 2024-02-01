@@ -48,3 +48,7 @@ And obviously the ray tracing related extensions.
 If shader compilation on D3D12 fails because DXIL.DLL can't be found, copy it from
 the [DirectXShaderCompiler v1.7.2212 release](https://github.com/microsoft/DirectXShaderCompiler/releases).
 
+# Metal on iOS
+```
+cmake -B build-ios-xcode -GXcode -DGREX_IOS=1 -DCMAKE_OSX_SYSROOT=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/
+```

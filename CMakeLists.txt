@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.5)
 
+if (GREX_IOS)
+    message("CMAKE_OSX_SYSROOT: ${CMAKE_OSX_SYSROOT}")
+endif()
+
 project(GraphicsExperiments)
 
 # ------------------------------------------------------------------------------
