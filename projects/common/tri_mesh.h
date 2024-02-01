@@ -6,7 +6,9 @@
 #include <memory>
 #include <vector>
 
-#define DEFAULT_DISTANCE_TRESHOLD 1e-6
+#define DEFAULT_POSITION_DISTANCE_TRESHOLD  1e-6
+#define DEFAULT_TEX_COORD_DISTANCE_TRESHOLD 1e-6
+#define DEFAULT_NORMAL_ANGLE_THRESHOLD      0.5 * 3.14159265359 / 180
 
 // F0 values
 const glm::vec3 F0_Generic         = glm::vec3(0.04f);
@@ -294,7 +296,10 @@ public:
     //         CountU32(positions),
     //         sizeof(glm::vec3));
     //
-    void WeldVertices(float distanceThreshold = DEFAULT_DISTANCE_TRESHOLD);
+    void WeldVertices(
+        float positionDistanceThreshold = DEFAULT_POSITION_DISTANCE_TRESHOLD,
+        float texCoordDistanceThreshold = DEFAULT_TEX_COORD_DISTANCE_TRESHOLD,
+        float normalAngleThreshold      = DEFAULT_NORMAL_ANGLE_THRESHOLD);
 
     std::vector<glm::vec3> GetTBNLineSegments(uint32_t* pNumVertices, float length = 0.1f) const;
 

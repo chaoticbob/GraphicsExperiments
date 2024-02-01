@@ -480,7 +480,7 @@ void TriMesh::CalculateBounds()
         return;
     }
 
-    size_t i = 0;
+    size_t i    = 0;
     mBounds.min = mBounds.max = mPositions[i];
     ++i;
 
@@ -609,30 +609,50 @@ void TriMesh::AppendMesh(const TriMesh& srcMesh, const std::string& groupPrefix)
     }
 }
 
-void TriMesh::WeldVertices(float distanceThreshold)
+void TriMesh::WeldVertices(
+    float positionDistanceThreshold,
+    float texCoordDistanceThreshold,
+    float normalAngleThreshold)
 {
-    if (mOptions.enableVertexColors || mOptions.enableTexCoords || mOptions.enableNormals || mOptions.enableTangents)
+    // if (mOptions.enableVertexColors || mOptions.enableTexCoords || mOptions.enableNormals || mOptions.enableTangents)
+    if (mOptions.enableVertexColors || mOptions.enableTangents)
     {
         return;
     }
 
-    const float distanceThresholdSq = distanceThreshold * distanceThreshold;
+    const float positionDistanceThresholdSq = positionDistanceThreshold * positionDistanceThreshold;
+    const float texCoordDistanceThresholdSq = texCoordDistanceThreshold * texCoordDistanceThreshold;
 
     std::unordered_map<uint32_t, uint32_t> weldedIndexMap;
     std::vector<glm::vec3>                 weldedPositions;
+    std::vector<glm::vec2>                 weldedTexCoords;
+    std::vector<glm::vec3>                 weldedNormals;
 
     const uint32_t   vertexCount       = CountU32(mPositions);
     const glm::vec3* pPosition         = mPositions.data();
+    const glm::vec2* pTexCoord         = mTexCoords.data();
+    const glm::vec3* pNormal           = mNormals.data();
     uint32_t         weldedVertexCount = 0;
-    for (uint32_t oldIdx = 0; oldIdx < vertexCount; ++oldIdx, ++pPosition)
+    for (uint32_t oldIdx = 0; oldIdx < vertexCount; ++oldIdx, ++pPosition, ++pTexCoord, ++pNormal)
     {
         const glm::vec3* pPosition2 = weldedPositions.data();
+        const glm::vec2* pTexCoord2 = weldedTexCoords.data();
+        const glm::vec3* pNormal2   = weldedNormals.data();
         //
         uint32_t newIdx = UINT32_MAX;
-        for (uint32_t i = 0; i < weldedVertexCount; ++i, ++pPosition2)
+        for (uint32_t i = 0; i < weldedVertexCount; ++i, ++pPosition2, ++pTexCoord2, ++pNormal2)
         {
-            float distSq = glm::distance2(*pPosition, *pPosition2);
-            if (distSq <= distanceThresholdSq)
+            float posDistSq = glm::distance2(*pPosition, *pPosition2);
+            float tcDistSq  = glm::distance2(*pTexCoord, *pTexCoord2);
+
+            auto  N     = glm::normalize(*pNormal);
+            auto  N2    = glm::normalize(*pNormal2);
+            float theta = acos(glm::dot(N, N2) / (glm::length(N) * glm::length(N2)));
+
+            bool withinPositionThreshold = (posDistSq <= positionDistanceThresholdSq);
+            bool withinTexCoordThreshold = (tcDistSq <= texCoordDistanceThresholdSq);
+            bool withinNormalThreshold   = (theta <= normalAngleThreshold);
+            if (withinPositionThreshold && withinTexCoordThreshold && withinNormalThreshold)
             {
                 newIdx = i;
                 break;
@@ -642,6 +662,8 @@ void TriMesh::WeldVertices(float distanceThreshold)
         if (newIdx == UINT32_MAX)
         {
             weldedPositions.push_back(*pPosition);
+            weldedTexCoords.push_back(*pTexCoord);
+            weldedNormals.push_back(*pNormal);
             ++weldedVertexCount;
             newIdx = weldedVertexCount - 1;
         }
@@ -650,6 +672,8 @@ void TriMesh::WeldVertices(float distanceThreshold)
     }
 
     mPositions = weldedPositions;
+    mTexCoords = weldedTexCoords;
+    mNormals   = weldedNormals;
 
     for (auto& tri : mTriangles)
     {
