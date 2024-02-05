@@ -191,6 +191,18 @@ bool InitDx(DxRenderer* pRenderer, bool enableDebug)
     return true;
 }
 
+bool HasMeshShaderPipelineStats(DxRenderer* pRenderer)
+{
+    if (IsNull(pRenderer) || !pRenderer->Device)
+    {
+        return false;
+    }
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS9 featureData = {};
+    pRenderer->Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS8, &featureData, sizeof(featureData));
+    return featureData.MeshShaderPipelineStatsSupported;
+}
+
 bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t height, uint32_t bufferCount, DXGI_FORMAT dsvFormat)
 {
     if (IsNull(pRenderer)) {
@@ -497,11 +509,13 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t size, D3D12_HEAP_TYPE heapTyp
     D3D12_HEAP_PROPERTIES heapProperties = {};
     heapProperties.Type                  = heapType;
 
+    D3D12_RESOURCE_STATES initialResourceState = (heapType == D3D12_HEAP_TYPE_UPLOAD) ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_COMMON;
+
     HRESULT hr = pRenderer->Device->CreateCommittedResource(
         &heapProperties,             // pHeapProperties
         D3D12_HEAP_FLAG_NONE,        // HeapFlags
         &desc,                       // pDesc
-        D3D12_RESOURCE_STATE_COMMON, // InitialResourceState
+        initialResourceState,        // InitialResourceState
         nullptr,                     // pOptimizedClearValues
         IID_PPV_ARGS(ppResource));   // riidResource, ppvResouce
     if (FAILED(hr)) {

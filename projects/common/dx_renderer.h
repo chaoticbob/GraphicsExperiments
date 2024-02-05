@@ -49,6 +49,7 @@ struct DxRenderer
 };
 
 bool InitDx(DxRenderer* pRenderer, bool enableDebug);
+bool HasMeshShaderPipelineStats(DxRenderer* pRenderer);
 bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t height, uint32_t bufferCount = 2, DXGI_FORMAT dsvFormat = DXGI_FORMAT_UNKNOWN);
 bool WaitForGpu(DxRenderer* pRenderer);
 bool SwapchainPresent(DxRenderer* pRenderer);
