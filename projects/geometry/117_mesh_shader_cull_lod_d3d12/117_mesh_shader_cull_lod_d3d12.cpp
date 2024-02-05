@@ -16,19 +16,20 @@ using namespace glm;
 
 using float4x4 = glm::mat4;
 
-#define CHECK_CALL(FN)                               \
-    {                                                \
-        HRESULT hr = FN;                             \
-        if (FAILED(hr))                              \
-        {                                            \
-            std::stringstream ss;                    \
-            ss << "\n";                              \
-            ss << "*** FUNCTION CALL FAILED *** \n"; \
-            ss << "FUNCTION: " << #FN << "\n";       \
-            ss << "\n";                              \
-            GREX_LOG_ERROR(ss.str().c_str());        \
-            assert(false);                           \
-        }                                            \
+#define CHECK_CALL(FN)                                            \
+    {                                                             \
+        HRESULT hr = FN;                                          \
+        if (FAILED(hr))                                           \
+        {                                                         \
+            std::stringstream ss;                                 \
+            ss << "\n";                                           \
+            ss << "*** FUNCTION CALL FAILED *** \n";              \
+            ss << "FUNCTION: " << #FN << "\n";                    \
+            ss << "RESULT  : " << std::hex << "0x" << hr << "\n"; \
+            ss << "\n";                                           \
+            GREX_LOG_ERROR(ss.str().c_str());                     \
+            assert(false);                                        \
+        }                                                         \
     }
 
 // =============================================================================
@@ -95,7 +96,7 @@ struct SceneProperties
 // =============================================================================
 static uint32_t gWindowWidth  = 1920;
 static uint32_t gWindowHeight = 1080;
-static bool     gEnableDebug  = false;
+static bool     gEnableDebug  = true;
 
 static float gTargetAngle = 55.0f;
 static float gAngle       = gTargetAngle;
@@ -354,7 +355,8 @@ int main(int argc, char** argv)
             meshlet.triangle_offset += meshletTriangleOffset;
             combinedMeshlets.push_back(meshlet);
 
-            if (lodIdx == 0) {
+            if (lodIdx == 0)
+            {
                 LOD_0_vertexCount += meshlet.vertex_count;
                 LOD_0_triangleCount += meshlet.triangle_count;
             }
@@ -503,13 +505,15 @@ int main(int argc, char** argv)
     // Pipeline statistics
     // *************************************************************************
     ComPtr<ID3D12QueryHeap> queryHeap;
+    ComPtr<ID3D12Resource>  queryBuffer;
+
+    if (HasMeshShaderPipelineStats(renderer.get()))
     {
         D3D12_QUERY_HEAP_DESC desc = {D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS1, 1};
         CHECK_CALL(renderer->Device->CreateQueryHeap(&desc, IID_PPV_ARGS(&queryHeap)));
-    }
 
-    ComPtr<ID3D12Resource> queryBuffer;
-    CHECK_CALL(CreateBuffer(renderer.get(), sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS1), D3D12_HEAP_TYPE_READBACK, &queryBuffer));
+        CHECK_CALL(CreateBuffer(renderer.get(), sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS1), D3D12_HEAP_TYPE_READBACK, &queryBuffer));
+    }
     //
     bool hasPiplineStats = false;
 
@@ -763,7 +767,10 @@ int main(int argc, char** argv)
 
             // DispatchMesh with pipeline statistics
             {
-                commandList->BeginQuery(queryHeap.Get(), D3D12_QUERY_TYPE_PIPELINE_STATISTICS1, 0);
+                if (queryHeap)
+                {
+                    commandList->BeginQuery(queryHeap.Get(), D3D12_QUERY_TYPE_PIPELINE_STATISTICS1, 0);
+                }
 
                 // Amplification shader uses 32 for thread group size
                 UINT meshletCount      = static_cast<UINT>(meshlet_LOD_Counts[0]);
@@ -771,11 +778,17 @@ int main(int argc, char** argv)
                 UINT threadGroupCountX = ((meshletCount * instanceCount) / 32) + 1;
                 commandList->DispatchMesh(threadGroupCountX, 1, 1);
 
-                commandList->EndQuery(queryHeap.Get(), D3D12_QUERY_TYPE_PIPELINE_STATISTICS1, 0);
+                if (queryHeap)
+                {
+                    commandList->EndQuery(queryHeap.Get(), D3D12_QUERY_TYPE_PIPELINE_STATISTICS1, 0);
+                }
             }
 
             // Resolve query
-            commandList->ResolveQueryData(queryHeap.Get(), D3D12_QUERY_TYPE_PIPELINE_STATISTICS1, 0, 1, queryBuffer.Get(), 0);
+            if (queryHeap && queryBuffer)
+            {
+                commandList->ResolveQueryData(queryHeap.Get(), D3D12_QUERY_TYPE_PIPELINE_STATISTICS1, 0, 1, queryBuffer.Get(), 0);
+            }
 
             // ImGui
             window->ImGuiRenderDrawData(renderer.get(), commandList.Get());
@@ -795,7 +808,10 @@ int main(int argc, char** argv)
         }
 
         // Command list execution is done we can read the pipeline stats
-        hasPiplineStats = true;
+        if (queryBuffer)
+        {
+            hasPiplineStats = true;
+        }
 
         // Present
         if (!SwapchainPresent(renderer.get()))
