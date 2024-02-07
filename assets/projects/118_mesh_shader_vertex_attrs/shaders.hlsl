@@ -1,20 +1,13 @@
-
-#ifdef __spirv__
-#define DEFINE_AS_PUSH_CONSTANT [[vk::push_constant]]
-#else
-#define DEFINE_AS_PUSH_CONSTANT
-#endif
-
-struct CameraProperties {
-    float4x4 MVP;
+struct SceneProperties {
+    float4x4      M;
+    float4x4      VP;
+    float3        eyePosition;
+	float 	 	  _pad0;
+    float3        lightPosition;
+	float 	 	  _pad1;
 };
 
-DEFINE_AS_PUSH_CONSTANT
-ConstantBuffer<CameraProperties> Cam : register(b0);
-
-struct Vertex {
-    float3 Position;
-};
+ConstantBuffer<SceneProperties> Scene : register(b0);
 
 struct Meshlet {
 	uint VertexOffset;
@@ -23,14 +16,19 @@ struct Meshlet {
 	uint TriangleCount;
 };
 
-StructuredBuffer<Vertex>  Vertices        : register(t1);
-StructuredBuffer<Meshlet> Meshlets        : register(t2);
-StructuredBuffer<uint>    VertexIndices   : register(t3);
-StructuredBuffer<uint>    TriangleIndices : register(t4);
+StructuredBuffer<float3>  VertexPositions : register(t1);
+StructuredBuffer<float2>  VertexTexCoords : register(t2);
+StructuredBuffer<float3>  VertexNormals   : register(t3);
+StructuredBuffer<Meshlet> Meshlets        : register(t4);
+StructuredBuffer<uint>    VertexIndices   : register(t5);
+StructuredBuffer<uint>    TriangleIndices : register(t6);
 
 struct MeshOutput {
-    float4 Position : SV_POSITION;
-    float3 Color    : COLOR;
+    float4 PositionCS : SV_POSITION;
+    float3 PositionWS : POSITION_WS;
+    float2 TexCoord   : TEXCOORD;
+    float3 Normal     : NORMAL;	
+    float3 Color      : COLOR;
 };
 
 [outputtopology("triangle")]
@@ -63,9 +61,13 @@ void msmain(
     if (gtid < m.VertexCount) {
         uint vertexIndex = m.VertexOffset + gtid;        
         vertexIndex = VertexIndices[vertexIndex];
-
-        vertices[gtid].Position = mul(Cam.MVP, float4(Vertices[vertexIndex].Position, 1.0));
         
+        float4 PositionWS4 = mul(Scene.M, float4(VertexPositions[vertexIndex], 1.0));
+		
+		vertices[gtid].PositionCS = mul(Scene.VP, PositionWS4);
+        vertices[gtid].PositionWS = PositionWS4.xyz;
+        vertices[gtid].TexCoord = VertexTexCoords[vertexIndex];
+        vertices[gtid].Normal = mul(Scene.M, float4(VertexNormals[vertexIndex], 0.0)).xyz;	
         float3 color = float3(
             float(gid & 1),
             float(gid & 3) / 4,
@@ -76,5 +78,18 @@ void msmain(
 
 float4 psmain(MeshOutput input) : SV_TARGET
 {
-    return float4(input.Color, 1);
+    float3 V = normalize(Scene.eyePosition - input.PositionWS);
+    float3 L = normalize(Scene.lightPosition - input.PositionWS);
+    float3 H = normalize(V + L);
+    float3 N = normalize(input.Normal);
+    float  NoL = saturate(dot(N, L));
+    float  NoH = saturate(dot(N, H));
+
+    float d = NoL;
+    float s = pow(NoH, 50.0);
+    float a = 0.65;
+    
+    float3 color = float3(0.549, 0.556, 0.554) * (s + d + a);
+
+    return float4(color, 1.0);
 }

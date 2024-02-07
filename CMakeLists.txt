@@ -86,6 +86,7 @@ set(GREX_DIR             "${CMAKE_CURRENT_SOURCE_DIR}")
 set(GREX_PROJECTS_DIR    "${GREX_DIR}/projects")
 set(GREX_INCLUDE_DIR     "${GREX_DIR}/include")
 set(GREX_THIRD_PARTY_DIR "${GREX_DIR}/third_party")
+set(GREX_ASSETS_DIR      "${GREX_DIR}/assets")
 
 # ------------------------------------------------------------------------------
 # Detect Vulkan

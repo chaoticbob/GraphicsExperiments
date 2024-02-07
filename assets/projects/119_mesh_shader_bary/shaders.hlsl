@@ -1,20 +1,13 @@
-
-#ifdef __spirv__
-#define DEFINE_AS_PUSH_CONSTANT [[vk::push_constant]]
-#else
-#define DEFINE_AS_PUSH_CONSTANT
-#endif
-
-struct CameraProperties {
-    float4x4 MVP;
+struct SceneProperties {
+    float4x4      M;
+    float4x4      VP;
+    float3        eyePosition;
+	float 	 	  _pad0;
+    float3        lightPosition;
+	float 	 	  _pad1;
 };
 
-DEFINE_AS_PUSH_CONSTANT
-ConstantBuffer<CameraProperties> Cam : register(b0);
-
-struct Vertex {
-    float3 Position;
-};
+ConstantBuffer<SceneProperties> Scene : register(b0);
 
 struct Meshlet {
 	uint VertexOffset;
@@ -23,14 +16,16 @@ struct Meshlet {
 	uint TriangleCount;
 };
 
-StructuredBuffer<Vertex>  Vertices        : register(t1);
-StructuredBuffer<Meshlet> Meshlets        : register(t2);
-StructuredBuffer<uint>    VertexIndices   : register(t3);
-StructuredBuffer<uint>    TriangleIndices : register(t4);
+StructuredBuffer<float3>  VertexPositions : register(t1);
+StructuredBuffer<float2>  VertexTexCoords : register(t2);
+StructuredBuffer<float3>  VertexNormals   : register(t3);
+StructuredBuffer<Meshlet> Meshlets        : register(t4);
+StructuredBuffer<uint>    VertexIndices   : register(t5);
+StructuredBuffer<uint>    TriangleIndices : register(t6);
 
 struct MeshOutput {
-    float4 Position : SV_POSITION;
-    float3 Color    : COLOR;
+    float4               PositionCS  : SV_POSITION;
+    nointerpolation uint VertexIndex : VERTEX_INDEX;
 };
 
 [outputtopology("triangle")]
@@ -63,18 +58,51 @@ void msmain(
     if (gtid < m.VertexCount) {
         uint vertexIndex = m.VertexOffset + gtid;        
         vertexIndex = VertexIndices[vertexIndex];
-
-        vertices[gtid].Position = mul(Cam.MVP, float4(Vertices[vertexIndex].Position, 1.0));
         
-        float3 color = float3(
-            float(gid & 1),
-            float(gid & 3) / 4,
-            float(gid & 7) / 8);
-        vertices[gtid].Color = color;
+        float4 PositionWS4 = mul(Scene.M, float4(VertexPositions[vertexIndex], 1.0));
+		
+		vertices[gtid].PositionCS = mul(Scene.VP, PositionWS4);
+        vertices[gtid].VertexIndex = vertexIndex;
     }
 }
 
-float4 psmain(MeshOutput input) : SV_TARGET
+struct PSInput {
+    float4               PositionCS  : SV_POSITION;
+    float3               Bary        : SV_BARYCENTRICS;
+    nointerpolation uint VertexIndex : VERTEX_INDEX;
+};
+
+float4 psmain(PSInput input) : SV_TARGET
 {
-    return float4(input.Color, 1);
+    uint vIdx0 = GetAttributeAtVertex(input.VertexIndex, 0);
+    uint vIdx1 = GetAttributeAtVertex(input.VertexIndex, 1);
+    uint vIdx2 = GetAttributeAtVertex(input.VertexIndex, 2);
+    
+    float3 Position0 = VertexPositions[vIdx0];
+    float3 Position1 = VertexPositions[vIdx1];
+    float3 Position2 = VertexPositions[vIdx2];
+    float3 Position = Position0 * input.Bary.x + Position1 * input.Bary.y + Position2 * input.Bary.z;
+    Position = mul(Scene.M, float4(Position, 1.0)).xyz;
+    
+    float3 Normal0 = VertexNormals[vIdx0];
+    float3 Normal1 = VertexNormals[vIdx1];
+    float3 Normal2 = VertexNormals[vIdx2];
+    float3 Normal  = Normal0 * input.Bary.x + Normal1 * input.Bary.y + Normal2 * input.Bary.z;
+    Normal =  mul(Scene.M, float4(Normal, 0.0)).xyz;	
+    
+    float3 V = normalize(Scene.eyePosition - Position);
+    float3 L = normalize(Scene.lightPosition - Position);
+    float3 H = normalize(V + L);
+    float3 N = normalize(Normal);
+    float  NoL = saturate(dot(N, L));
+    float  NoH = saturate(dot(N, H));
+
+    float d = NoL;
+    float s = pow(NoH, 50.0);
+    float a = 0.65;
+    
+    float3 color = float3(0.549, 0.556, 0.554) * (s + d + a);
+    //color = Position;
+
+    return float4(color, 1.0);
 }

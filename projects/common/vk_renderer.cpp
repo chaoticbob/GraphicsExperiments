@@ -38,16 +38,19 @@ std::vector<std::string> EnumeratePhysicalDeviceExtensionNames(VkPhysicalDevice 
 {
     uint32_t count = 0;
     VkResult vkres = vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, nullptr);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         return {};
     }
     std::vector<VkExtensionProperties> propertiesList(count);
     vkres = vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, DataPtr(propertiesList));
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         return {};
     }
     std::vector<std::string> names;
-    for (auto& properties : propertiesList) {
+    for (auto& properties : propertiesList)
+    {
         names.push_back(properties.extensionName);
     }
     return names;
@@ -66,18 +69,21 @@ VulkanRenderer::~VulkanRenderer()
 
 CommandObjects::~CommandObjects()
 {
-    if (CommandBuffer != VK_NULL_HANDLE) {
+    if (CommandBuffer != VK_NULL_HANDLE)
+    {
         vkFreeCommandBuffers(this->pRenderer->Device, this->CommandPool, 1, &CommandBuffer);
     }
 
-    if (CommandPool != VK_NULL_HANDLE) {
+    if (CommandPool != VK_NULL_HANDLE)
+    {
         vkDestroyCommandPool(this->pRenderer->Device, this->CommandPool, nullptr);
     }
 }
 
 bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeatures& features, uint32_t apiVersion)
 {
-    if (IsNull(pRenderer)) {
+    if (IsNull(pRenderer))
+    {
         return false;
     }
 
@@ -95,7 +101,8 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
         appInfo.apiVersion         = apiVersion;
 
         std::vector<const char*> enabledLayers = {};
-        if (pRenderer->DebugEnabled) {
+        if (pRenderer->DebugEnabled)
+        {
             enabledLayers.push_back(VK_KHR_VALIDATION_LAYER_NAME);
         }
 
@@ -116,7 +123,8 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
         vkci.ppEnabledExtensionNames = DataPtr(enabledExtensions);
 
         VkResult vkres = vkCreateInstance(&vkci, nullptr, &pRenderer->Instance);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkCreateInstance failed");
             return false;
         }
@@ -145,29 +153,34 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
     {
         uint32_t count = 0;
         VkResult vkres = vkEnumeratePhysicalDevices(pRenderer->Instance, &count, nullptr);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkEnumeratePhysicalDevices failed");
             return false;
         }
 
         std::vector<VkPhysicalDevice> enumeratedPhysicalDevices(count);
         vkres = vkEnumeratePhysicalDevices(pRenderer->Instance, &count, DataPtr(enumeratedPhysicalDevices));
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkEnumeratePhysicalDevices failed");
             return false;
         }
 
         std::vector<VkPhysicalDevice> physicalDevices;
-        for (auto& physicalDevice : enumeratedPhysicalDevices) {
+        for (auto& physicalDevice : enumeratedPhysicalDevices)
+        {
             VkPhysicalDeviceProperties properties = {};
             vkGetPhysicalDeviceProperties(physicalDevice, &properties);
             if ((properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) ||
-                (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)) {
+                (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU))
+            {
                 physicalDevices.push_back(physicalDevice);
             }
         }
 
-        if (physicalDevices.empty()) {
+        if (physicalDevices.empty())
+        {
             assert(false && "No adapters found");
             return false;
         }
@@ -183,15 +196,18 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
         std::vector<VkQueueFamilyProperties> propertiesList(count);
         vkGetPhysicalDeviceQueueFamilyProperties(pRenderer->PhysicalDevice, &count, DataPtr(propertiesList));
 
-        for (uint32_t i = 0; i < count; ++i) {
+        for (uint32_t i = 0; i < count; ++i)
+        {
             auto& properties = propertiesList[i];
-            if ((properties.queueFlags & VK_QUEUE_MASK_ALL_TYPES) == VK_QUEUE_MASK_GRAPHICS) {
+            if ((properties.queueFlags & VK_QUEUE_MASK_ALL_TYPES) == VK_QUEUE_MASK_GRAPHICS)
+            {
                 pRenderer->GraphicsQueueFamilyIndex = i;
                 break;
             }
         }
 
-        if (pRenderer->GraphicsQueueFamilyIndex == VK_QUEUE_FAMILY_IGNORED) {
+        if (pRenderer->GraphicsQueueFamilyIndex == VK_QUEUE_FAMILY_IGNORED)
+        {
             assert(false && "Graphic queue family index not found");
             return false;
         }
@@ -213,7 +229,8 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
             VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
             VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME};
 
-        if (pRenderer->Features.EnableRayTracing) {
+        if (pRenderer->Features.EnableRayTracing)
+        {
             enabledExtensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
             enabledExtensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
             enabledExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
@@ -222,18 +239,23 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
             enabledExtensions.push_back(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
         }
 
-        if (pRenderer->Features.EnableMeshShader) {
+        if (pRenderer->Features.EnableMeshShader)
+        {
             enabledExtensions.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
+            enabledExtensions.push_back(VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME);
         }
 
-        if (pRenderer->Features.EnablePushDescriptor) {
+        if (pRenderer->Features.EnablePushDescriptor)
+        {
             enabledExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
         }
 
         // Make sure all the extenions are present
         auto enumeratedExtensions = EnumeratePhysicalDeviceExtensionNames(pRenderer->PhysicalDevice);
-        for (auto& elem : enabledExtensions) {
-            if (!Contains(std::string(elem), enumeratedExtensions)) {
+        for (auto& elem : enabledExtensions)
+        {
+            if (!Contains(std::string(elem), enumeratedExtensions))
+            {
                 GREX_LOG_ERROR("extension not found: " << elem);
                 assert(false);
                 return false;
@@ -246,25 +268,32 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
         accelerationStructureFeatures.accelerationStructure                                 = VK_TRUE;
         accelerationStructureFeatures.descriptorBindingAccelerationStructureUpdateAfterBind = VK_TRUE;
 
-        VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR, &accelerationStructureFeatures};
+        VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR};
+        rayQueryFeatures.pNext                               = &accelerationStructureFeatures;
         rayQueryFeatures.rayQuery                            = VK_TRUE;
 
-        VkPhysicalDeviceRayTracingMaintenance1FeaturesKHR rayTracingMaintenance1eFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MAINTENANCE_1_FEATURES_KHR, &rayQueryFeatures};
+        VkPhysicalDeviceRayTracingMaintenance1FeaturesKHR rayTracingMaintenance1eFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MAINTENANCE_1_FEATURES_KHR};
+        rayTracingMaintenance1eFeatures.pNext                                             = &rayQueryFeatures;
         rayTracingMaintenance1eFeatures.rayTracingMaintenance1                            = VK_TRUE;
 
-        VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR, &rayTracingMaintenance1eFeatures};
+        VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR};
+        rayTracingPipelineFeatures.pNext                                         = &rayTracingMaintenance1eFeatures;
         rayTracingPipelineFeatures.rayTracingPipeline                            = VK_TRUE;
 
         // ---------------------------------------------------------------------
 
+        VkPhysicalDeviceFragmentShaderBarycentricFeaturesKHR fragBaryFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_BARYCENTRIC_FEATURES_KHR};
+        fragBaryFeatures.fragmentShaderBarycentric                            = VK_TRUE;
+
         VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT};
+        meshShaderFeatures.pNext                                 = &fragBaryFeatures;
         meshShaderFeatures.taskShader                            = VK_TRUE;
         meshShaderFeatures.meshShader                            = VK_TRUE;
         meshShaderFeatures.meshShaderQueries                     = VK_TRUE;
 
-        VkPhysicalDeviceMeshShaderFeaturesNV meshShaderFeaturesNV = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV};
-        meshShaderFeaturesNV.meshShader                          = VK_TRUE;
-        meshShaderFeaturesNV.taskShader                          = VK_TRUE;
+        // VkPhysicalDeviceMeshShaderFeaturesNV meshShaderFeaturesNV = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV};
+        // meshShaderFeaturesNV.meshShader                          = VK_TRUE;
+        // meshShaderFeaturesNV.taskShader                          = VK_TRUE;
 
         // ---------------------------------------------------------------------
 
@@ -276,14 +305,17 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
         // Optional features
         //
         VkBaseInStructure* pStruct = reinterpret_cast<VkBaseInStructure*>(&bufferDeviceAddressFeatures);
-        if (pRenderer->Features.EnableRayTracing) {
+        if (pRenderer->Features.EnableRayTracing)
+        {
             pStruct->pNext = reinterpret_cast<VkBaseInStructure*>(&rayTracingPipelineFeatures);
             // accelerationStructure is the end of the ray tracing features chain
             pStruct = reinterpret_cast<VkBaseInStructure*>(&accelerationStructureFeatures);
         }
-        if (pRenderer->Features.EnableMeshShader) {
+        if (pRenderer->Features.EnableMeshShader)
+        {
             pStruct->pNext = reinterpret_cast<VkBaseInStructure*>(&meshShaderFeatures);
-            pStruct = reinterpret_cast<VkBaseInStructure*>(&meshShaderFeatures);
+            // fragBaryFeatures is the end of the mesh shadeing features chain
+            pStruct        = reinterpret_cast<VkBaseInStructure*>(&fragBaryFeatures);
         }
 
         VkPhysicalDeviceImagelessFramebufferFeatures imagelessFramebufferFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGELESS_FRAMEBUFFER_FEATURES, &bufferDeviceAddressFeatures};
@@ -326,11 +358,11 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
         VkPhysicalDeviceScalarBlockLayoutFeatures scalarBlockLayoutFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES, &descriptorBufferFeatures};
         scalarBlockLayoutFeatures.scalarBlockLayout                         = VK_TRUE;
 
-        VkPhysicalDeviceRobustness2FeaturesEXT robustness2Features          = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT, &scalarBlockLayoutFeatures};
-        robustness2Features.nullDescriptor                                  = VK_TRUE;
+        VkPhysicalDeviceRobustness2FeaturesEXT robustness2Features = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT, &scalarBlockLayoutFeatures};
+        robustness2Features.nullDescriptor                         = VK_TRUE;
 
         VkPhysicalDeviceFeatures enabledFeatures = {};
-        enabledFeatures.pipelineStatisticsQuery = VK_TRUE;
+        enabledFeatures.pipelineStatisticsQuery  = VK_TRUE;
 
         VkDeviceCreateInfo vkci      = {VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
         vkci.pNext                   = &robustness2Features;
@@ -344,7 +376,8 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
         vkci.pEnabledFeatures        = &enabledFeatures;
 
         VkResult vkres = vkCreateDevice(pRenderer->PhysicalDevice, &vkci, nullptr, &pRenderer->Device);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkCreateDevice failed");
             return false;
         }
@@ -368,7 +401,8 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
         vmaci.instance               = pRenderer->Instance;
 
         VkResult vkres = vmaCreateAllocator(&vmaci, &pRenderer->Allocator);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vmaCreateAllocator failed");
             return false;
         }
@@ -389,7 +423,8 @@ bool InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_
         vkci.hwnd      = hwnd;
 
         VkResult vkres = vkCreateWin32SurfaceKHR(pRenderer->Instance, &vkci, nullptr, &pRenderer->Surface);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkCreateWin32SurfaceKHR failed");
             return false;
         }
@@ -400,7 +435,8 @@ bool InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_
     VkSurfaceCapabilitiesKHR surfaceCaps = {};
     {
         VkResult vkres = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(pRenderer->PhysicalDevice, pRenderer->Surface, &surfaceCaps);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkGetPhysicalDeviceSurfaceCapabilitiesKHR failed");
             return false;
         }
@@ -409,7 +445,8 @@ bool InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_
     // Swapchain
     {
         imageCount = std::max<uint32_t>(imageCount, surfaceCaps.minImageCount);
-        if (surfaceCaps.maxImageCount > 0) {
+        if (surfaceCaps.maxImageCount > 0)
+        {
             imageCount = std::min<uint32_t>(imageCount, surfaceCaps.maxImageCount);
         }
 
@@ -434,7 +471,8 @@ bool InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_
         vkci.oldSwapchain          = VK_NULL_HANDLE;
 
         VkResult vkres = vkCreateSwapchainKHR(pRenderer->Device, &vkci, nullptr, &pRenderer->Swapchain);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkCreateSwapchainKHR failed");
             return false;
         }
@@ -447,14 +485,17 @@ bool InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_
     {
         std::vector<VkImage> images;
         VkResult             vkres = GetSwapchainImages(pRenderer, images);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "GetSwapchainImages failed");
             return false;
         }
 
-        for (auto& image : images) {
+        for (auto& image : images)
+        {
             vkres = TransitionImageLayout(pRenderer, image, GREX_ALL_SUBRESOURCES, VK_IMAGE_ASPECT_COLOR_BIT, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_PRESENT);
-            if (vkres != VK_SUCCESS) {
+            if (vkres != VK_SUCCESS)
+            {
                 assert(false && "TransitionImageLayout failed");
                 return false;
             }
@@ -468,13 +509,15 @@ bool InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_
         vkci.flags                 = 0;
 
         VkResult vkres = vkCreateSemaphore(pRenderer->Device, &vkci, nullptr, &pRenderer->ImageReadySemaphore);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkCreateSemaphore failed");
             return false;
         }
 
         vkres = vkCreateSemaphore(pRenderer->Device, &vkci, nullptr, &pRenderer->PresentReadySemaphore);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkCreateSemaphore failed");
             return false;
         }
@@ -487,7 +530,8 @@ bool InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_
         vkci.flags             = 0;
 
         VkResult vkres = vkCreateFence(pRenderer->Device, &vkci, nullptr, &pRenderer->ImageReadyFence);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkCreateFence failed");
             return false;
         }
@@ -499,7 +543,8 @@ bool InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_
 bool WaitForGpu(VulkanRenderer* pRenderer)
 {
     VkResult vkres = vkQueueWaitIdle(pRenderer->Queue);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "vkQueueWaitIdle failed");
         return false;
     }
@@ -510,13 +555,15 @@ bool WaitForGpu(VulkanRenderer* pRenderer)
 bool WaitForFence(VulkanRenderer* pRenderer, VkFence fence)
 {
     VkResult vkres = vkWaitForFences(pRenderer->Device, 1, &fence, VK_TRUE, UINT64_MAX);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "vkWaitForFences failed");
         return false;
     }
 
     vkres = vkResetFences(pRenderer->Device, 1, &fence);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "vkWaitForFences failed");
         return false;
     }
@@ -528,13 +575,15 @@ VkResult GetSwapchainImages(VulkanRenderer* pRenderer, std::vector<VkImage>& ima
 {
     uint32_t count = 0;
     VkResult vkres = vkGetSwapchainImagesKHR(pRenderer->Device, pRenderer->Swapchain, &count, nullptr);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "vkGetSwapchainImagesKHR failed");
         return vkres;
     }
     images.resize(count);
     vkres = vkGetSwapchainImagesKHR(pRenderer->Device, pRenderer->Swapchain, &count, DataPtr(images));
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "vkGetSwapchainImagesKHR failed");
         return vkres;
     }
@@ -544,19 +593,22 @@ VkResult GetSwapchainImages(VulkanRenderer* pRenderer, std::vector<VkImage>& ima
 VkResult AcquireNextImage(VulkanRenderer* pRenderer, uint32_t* pImageIndex)
 {
     VkResult vkres = vkAcquireNextImageKHR(pRenderer->Device, pRenderer->Swapchain, UINT64_MAX, VK_NULL_HANDLE, pRenderer->ImageReadyFence, pImageIndex);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "vkAcquireNextImageKHR failed");
         return vkres;
     }
 
     vkres = vkWaitForFences(pRenderer->Device, 1, &pRenderer->ImageReadyFence, VK_TRUE, UINT64_MAX);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "vkWaitForFences failed");
         return vkres;
     }
 
     vkres = vkResetFences(pRenderer->Device, 1, &pRenderer->ImageReadyFence);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "vkResetFences failed");
         return vkres;
     }
@@ -576,7 +628,8 @@ bool SwapchainPresent(VulkanRenderer* pRenderer, uint32_t imageIndex)
     presentInfo.pResults           = nullptr;
 
     VkResult vkres = vkQueuePresentKHR(pRenderer->Queue, &presentInfo);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "vkQueuePresentKHR failed");
         return false;
     }
@@ -625,7 +678,8 @@ VkIndexType ToVkIndexType(GREXFormat format)
 
 VkResult CreateCommandBuffer(VulkanRenderer* pRenderer, VkCommandPoolCreateFlags poolCreateFlags, CommandObjects* pCmdBuf)
 {
-    if (IsNull(pCmdBuf)) {
+    if (IsNull(pCmdBuf))
+    {
         return VK_ERROR_INITIALIZATION_FAILED;
     }
 
@@ -636,7 +690,8 @@ VkResult CreateCommandBuffer(VulkanRenderer* pRenderer, VkCommandPoolCreateFlags
     vkci.queueFamilyIndex        = pRenderer->GraphicsQueueFamilyIndex;
 
     VkResult vkres = vkCreateCommandPool(pRenderer->Device, &vkci, nullptr, &pCmdBuf->CommandPool);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "vkCreateCommandPool failed");
         return VK_ERROR_INITIALIZATION_FAILED;
     }
@@ -647,7 +702,8 @@ VkResult CreateCommandBuffer(VulkanRenderer* pRenderer, VkCommandPoolCreateFlags
     vkai.commandBufferCount          = 1;
 
     vkres = vkAllocateCommandBuffers(pRenderer->Device, &vkai, &pCmdBuf->CommandBuffer);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "vkAllocateCommandBuffers failed");
         return VK_ERROR_INITIALIZATION_FAILED;
     }
@@ -673,7 +729,8 @@ void DestroyCommandBuffer(VulkanRenderer* pRenderer, CommandObjects* pCmdBuf)
 
 VkResult ExecuteCommandBuffer(VulkanRenderer* pRenderer, const CommandObjects* pCmdBuf, VkFence fence)
 {
-    if (IsNull(pCmdBuf)) {
+    if (IsNull(pCmdBuf))
+    {
         return VK_ERROR_INITIALIZATION_FAILED;
     }
 
@@ -697,7 +754,8 @@ VkResult ExecuteCommandBuffer(VulkanRenderer* pRenderer, const CommandObjects* p
         1,
         &submitInfo,
         fence);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "vkEndCommandBuffer failed");
         return vkres;
     }
@@ -716,183 +774,215 @@ bool ResourceStateToBarrierInfo(
     VkAccessFlags2        access_mask = static_cast<VkAccessFlags2>(~0);
     VkImageLayout         layout      = static_cast<VkImageLayout>(~0);
 
-    switch (state) {
+    switch (state)
+    {
         default: {
             return false;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_UNKNOWN: {
             stage_mask  = 0;
             access_mask = 0;
             layout      = VK_IMAGE_LAYOUT_UNDEFINED;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_COMMON: {
             stage_mask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
             access_mask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
             layout      = VK_IMAGE_LAYOUT_GENERAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_VERTEX_AND_UNIFORM_BUFFER: {
             stage_mask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
             access_mask = VK_ACCESS_2_UNIFORM_READ_BIT | VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT;
             layout      = VK_IMAGE_LAYOUT_UNDEFINED;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_INDEX_BUFFER: {
             stage_mask  = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT;
             access_mask = VK_ACCESS_2_INDEX_READ_BIT;
             layout      = VK_IMAGE_LAYOUT_UNDEFINED;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_RENDER_TARGET: {
             stage_mask  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
             access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
             layout      = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_DEPTH_STENCIL: {
             stage_mask  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
             access_mask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
             layout      = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_DEPTH_READ: {
             stage_mask  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
             access_mask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
             layout      = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_STENCIL_READ: {
             stage_mask  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
             access_mask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
             layout      = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_DEPTH_AND_STENCIL_READ: {
             stage_mask  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
             access_mask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
             layout      = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_VERTEX_SHADER_RESOURCE: {
             stage_mask  = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
             access_mask = VK_ACCESS_2_SHADER_READ_BIT;
             layout      = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_HULL_SHADER_RESOURCE: {
             stage_mask  = VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT;
             access_mask = VK_ACCESS_2_SHADER_READ_BIT;
             layout      = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_DOMAIN_SHADER_RESOURCE: {
             stage_mask  = VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT;
             access_mask = VK_ACCESS_2_SHADER_READ_BIT;
             layout      = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_GEOMETRY_SHADER_RESOURCE: {
             stage_mask  = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;
             access_mask = VK_ACCESS_2_SHADER_READ_BIT;
             layout      = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_PIXEL_SHADER_RESOURCE: {
             stage_mask  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
             access_mask = VK_ACCESS_2_SHADER_READ_BIT;
             layout      = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_COMPUTE_SHADER_RESOURCE: {
             stage_mask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
             access_mask = VK_ACCESS_2_SHADER_READ_BIT;
             layout      = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_VERTEX_UNORDERED_ACCESS: {
             stage_mask  = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
             access_mask = VK_ACCESS_2_SHADER_WRITE_BIT;
             layout      = VK_IMAGE_LAYOUT_GENERAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_HULL_UNORDERED_ACCESS: {
             stage_mask  = VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT;
             access_mask = VK_ACCESS_2_SHADER_WRITE_BIT;
             layout      = VK_IMAGE_LAYOUT_GENERAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_DOMAIN_UNORDERED_ACCESS: {
             stage_mask  = VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT;
             access_mask = VK_ACCESS_2_SHADER_WRITE_BIT;
             layout      = VK_IMAGE_LAYOUT_GENERAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_GEOMETRY_UNORDERED_ACCESS: {
             stage_mask  = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;
             access_mask = VK_ACCESS_2_SHADER_WRITE_BIT;
             layout      = VK_IMAGE_LAYOUT_GENERAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_PIXEL_UNORDERED_ACCESS: {
             stage_mask  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
             access_mask = VK_ACCESS_2_SHADER_WRITE_BIT;
             layout      = VK_IMAGE_LAYOUT_GENERAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_COMPUTE_UNORDERED_ACCESS: {
             stage_mask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
             access_mask = VK_ACCESS_2_SHADER_WRITE_BIT;
             layout      = VK_IMAGE_LAYOUT_GENERAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_TRANSFER_DST: {
             stage_mask  = VK_PIPELINE_STAGE_2_COPY_BIT;
             access_mask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
             layout      = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_TRANSFER_SRC: {
             stage_mask  = VK_PIPELINE_STAGE_2_COPY_BIT;
             access_mask = VK_ACCESS_2_TRANSFER_READ_BIT;
             layout      = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_RESOLVE_DST: {
             stage_mask  = VK_PIPELINE_STAGE_2_RESOLVE_BIT;
             access_mask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
             layout      = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_RESOLVE_SRC: {
             stage_mask  = VK_PIPELINE_STAGE_2_RESOLVE_BIT;
             access_mask = VK_ACCESS_2_TRANSFER_READ_BIT;
             layout      = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE: {
             stage_mask  = 0;
             access_mask = 0;
             layout      = VK_IMAGE_LAYOUT_UNDEFINED;
-        } break;
+        }
+        break;
 
         case RESOURCE_STATE_PRESENT: {
             stage_mask  = 0;
             access_mask = 0;
             layout      = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        } break;
+        }
+        break;
     }
 
-    if (!IsNull(pStageMask)) {
+    if (!IsNull(pStageMask))
+    {
         *pStageMask = stage_mask;
     }
 
-    if (!IsNull(pAccessMask)) {
+    if (!IsNull(pAccessMask))
+    {
         *pAccessMask = access_mask;
     }
 
-    if (!IsNull(pLayout)) {
+    if (!IsNull(pLayout))
+    {
         *pLayout = layout;
     }
 
@@ -956,7 +1046,8 @@ VkResult TransitionImageLayout(
 {
     CommandObjects cmdBuf = {};
     VkResult       vkres  = CreateCommandBuffer(pRenderer, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, &cmdBuf);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "CreateCommandBuffer failed");
         return vkres;
     }
@@ -965,7 +1056,8 @@ VkResult TransitionImageLayout(
     vkbi.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     vkres = vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "vkBeginCommandBuffer failed");
         return vkres;
     }
@@ -982,19 +1074,22 @@ VkResult TransitionImageLayout(
         stateAfter);
 
     vkres = vkEndCommandBuffer(cmdBuf.CommandBuffer);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "vkEndCommandBuffer failed");
         return vkres;
     }
 
     vkres = ExecuteCommandBuffer(pRenderer, &cmdBuf);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "ExecuteCommandBuffer failed");
         return vkres;
     }
 
     vkres = vkQueueWaitIdle(pRenderer->Queue);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "vkQueueWaitIdle failed");
         return vkres;
     }
@@ -1022,7 +1117,8 @@ VkResult CreateBuffer(
         0,
         pBuffer);
 
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         return vkres;
     }
 
@@ -1031,7 +1127,7 @@ VkResult CreateBuffer(
 
     CommandObjects cmdBuf = {};
 
-    vkres  = CreateCommandBuffer(pRenderer, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, &cmdBuf);
+    vkres = CreateCommandBuffer(pRenderer, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, &cmdBuf);
     if (vkres != VK_SUCCESS)
     {
         assert(false && "CreateCommandBuffer failed");
@@ -1091,7 +1187,8 @@ VkResult CreateBuffer(
     VkDeviceSize       minAlignment,
     VulkanBuffer*      pBuffer)
 {
-    if (IsNull(pBuffer)) {
+    if (IsNull(pBuffer))
+    {
         return VK_ERROR_INITIALIZATION_FAILED;
     }
 
@@ -1103,7 +1200,8 @@ VkResult CreateBuffer(
     VmaAllocationCreateInfo allocCreateInfo = {};
     allocCreateInfo.usage                   = memoryUsage;
 
-    if (minAlignment > 0) {
+    if (minAlignment > 0)
+    {
         VkResult vkres = vmaCreateBufferWithAlignment(
             pRenderer->Allocator,
             &vkci,
@@ -1112,11 +1210,13 @@ VkResult CreateBuffer(
             &pBuffer->Buffer,
             &pBuffer->Allocation,
             &pBuffer->AllocationInfo);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             return vkres;
         }
     }
-    else {
+    else
+    {
         VkResult vkres = vmaCreateBuffer(
             pRenderer->Allocator,
             &vkci,
@@ -1124,13 +1224,14 @@ VkResult CreateBuffer(
             &pBuffer->Buffer,
             &pBuffer->Allocation,
             &pBuffer->AllocationInfo);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             return vkres;
         }
     }
 
     pBuffer->Allocator = pRenderer->Allocator;
-    pBuffer->Size = size;
+    pBuffer->Size      = size;
 
     return VK_SUCCESS;
 }
@@ -1150,14 +1251,17 @@ VkResult CreateBuffer(
         VMA_MEMORY_USAGE_CPU_TO_GPU,
         minAlignment,
         pBuffer);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         return vkres;
     }
 
-    if (!IsNull(pSrcData)) {
+    if (!IsNull(pSrcData))
+    {
         char*    pData = nullptr;
         VkResult vkres = vmaMapMemory(pRenderer->Allocator, pBuffer->Allocation, reinterpret_cast<void**>(&pData));
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             return vkres;
         }
 
@@ -1167,7 +1271,7 @@ VkResult CreateBuffer(
     }
 
     pBuffer->Allocator = pRenderer->Allocator;
-    pBuffer->Size = srcSize;
+    pBuffer->Size      = srcSize;
 
     return VK_SUCCESS;
 }
@@ -1188,11 +1292,13 @@ VkResult CreateBuffer(
         memoryUsage,
         minAlignment,
         pBuffer);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         return vkres;
     }
 
-    if ((srcSize > 0) && !IsNull(pSrcData)) {
+    if ((srcSize > 0) && !IsNull(pSrcData))
+    {
         VulkanBuffer stagingBuffer = {};
         //
         vkres = CreateBuffer(
@@ -1202,14 +1308,16 @@ VkResult CreateBuffer(
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
             0,
             &stagingBuffer);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "create staging buffer failed");
             return vkres;
         }
 
         CommandObjects cmdBuf = {};
         VkResult       vkres  = CreateCommandBuffer(pRenderer, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, &cmdBuf);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "CreateCommandBuffer failed");
             return vkres;
         }
@@ -1218,7 +1326,8 @@ VkResult CreateBuffer(
         vkbi.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
         vkres = vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkBeginCommandBuffer failed");
             return vkres;
         }
@@ -1236,19 +1345,22 @@ VkResult CreateBuffer(
             &region);
 
         vkres = vkEndCommandBuffer(cmdBuf.CommandBuffer);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkEndCommandBuffer failed");
             return vkres;
         }
 
         vkres = ExecuteCommandBuffer(pRenderer, &cmdBuf);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "ExecuteCommandBuffer failed");
             return vkres;
         }
 
         vkres = vkQueueWaitIdle(pRenderer->Queue);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkQueueWaitIdle failed");
             return vkres;
         }
@@ -1274,7 +1386,8 @@ VkResult CreateImage(
     VmaMemoryUsage    memoryUsage,
     VulkanImage*      pImage)
 {
-    if (IsNull(pImage)) {
+    if (IsNull(pImage))
+    {
         return VK_ERROR_INITIALIZATION_FAILED;
     }
 
@@ -1314,16 +1427,20 @@ VkResult CreateTexture(
     const void*                   pSrcData,
     VulkanImage*                  pImage)
 {
-    if (IsNull(pRenderer)) {
+    if (IsNull(pRenderer))
+    {
         return VK_ERROR_UNKNOWN;
     }
-    if (IsNull(pImage)) {
+    if (IsNull(pImage))
+    {
         return VK_ERROR_UNKNOWN;
     }
-    if (format == VK_FORMAT_UNDEFINED) {
+    if (format == VK_FORMAT_UNDEFINED)
+    {
         return VK_ERROR_UNKNOWN;
     }
-    if (mipOffsets.empty()) {
+    if (mipOffsets.empty())
+    {
         return VK_ERROR_UNKNOWN;
     }
 
@@ -1342,7 +1459,8 @@ VkResult CreateTexture(
         VK_IMAGE_LAYOUT_UNDEFINED,
         VMA_MEMORY_USAGE_GPU_ONLY,
         pImage);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "create image failed");
         return vkres;
     }
@@ -1354,12 +1472,14 @@ VkResult CreateTexture(
         VK_IMAGE_ASPECT_COLOR_BIT,
         RESOURCE_STATE_UNKNOWN,
         RESOURCE_STATE_TRANSFER_DST);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "transition image layout failed");
         return vkres;
     }
 
-    if ((srcSizeBytes > 0) && !IsNull(pSrcData)) {
+    if ((srcSizeBytes > 0) && !IsNull(pSrcData))
+    {
         VulkanBuffer stagingBuffer = {};
         if (IsCompressed(format))
         {
@@ -1373,12 +1493,13 @@ VkResult CreateTexture(
         }
         else
         {
-        const uint32_t rowStride = width * BytesPerPixel(format);
+            const uint32_t rowStride = width * BytesPerPixel(format);
             // Calculate the total number of rows for all mip maps
             uint32_t numRows = 0;
             {
                 uint32_t mipHeight = height;
-                for (UINT level = 0; level < mipLevels; ++level) {
+                for (UINT level = 0; level < mipLevels; ++level)
+                {
                     numRows += mipHeight;
                     mipHeight >>= 1;
                 }
@@ -1393,14 +1514,16 @@ VkResult CreateTexture(
                 DEFAULT_MIN_ALIGNMENT_SIZE,
                 &stagingBuffer);
         }
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "create staging buffer failed");
             return vkres;
         }
 
         CommandObjects cmdBuf = {};
         VkResult       vkres  = CreateCommandBuffer(pRenderer, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, &cmdBuf);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "CreateCommandBuffer failed");
             return vkres;
         }
@@ -1409,20 +1532,22 @@ VkResult CreateTexture(
         vkbi.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
         vkres = vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkBeginCommandBuffer failed");
             return vkres;
         }
 
         // Build command buffer
         {
-            uint32_t levelWidth  = width;
-            uint32_t levelHeight = height;
+            uint32_t levelWidth        = width;
+            uint32_t levelHeight       = height;
             uint32_t formatSizeInBytes = BytesPerPixel(format);
-            for (UINT level = 0; level < mipLevels; ++level) {
-                const auto& mipOffset    = mipOffsets[level];
+            for (UINT level = 0; level < mipLevels; ++level)
+            {
+                const auto& mipOffset            = mipOffsets[level];
                 uint32_t    mipRowStrideInPixels = mipOffset.RowStride / formatSizeInBytes;
-                uint32_t    mipLevelHeight = levelHeight;
+                uint32_t    mipLevelHeight       = levelHeight;
 
                 if (IsCompressed(format))
                 {
@@ -1459,19 +1584,22 @@ VkResult CreateTexture(
         }
 
         vkres = vkEndCommandBuffer(cmdBuf.CommandBuffer);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkEndCommandBuffer failed");
             return vkres;
         }
 
         vkres = ExecuteCommandBuffer(pRenderer, &cmdBuf);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "ExecuteCommandBuffer failed");
             return vkres;
         }
 
         vkres = vkQueueWaitIdle(pRenderer->Queue);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkQueueWaitIdle failed");
             return vkres;
         }
@@ -1487,7 +1615,8 @@ VkResult CreateTexture(
         VK_IMAGE_ASPECT_COLOR_BIT,
         RESOURCE_STATE_TRANSFER_DST,
         RESOURCE_STATE_COMPUTE_SHADER_RESOURCE);
-    if (vkres != VK_SUCCESS) {
+    if (vkres != VK_SUCCESS)
+    {
         assert(false && "transition image layout failed");
         return vkres;
     }
@@ -1504,9 +1633,9 @@ VkResult CreateTexture(
     const void*     pSrcData,
     VulkanImage*    pImage)
 {
-    MipOffset mipOffset   = {};
-    mipOffset.Offset      = 0;
-    mipOffset.RowStride   = width * BytesPerPixel(format);
+    MipOffset mipOffset = {};
+    mipOffset.Offset    = 0;
+    mipOffset.RowStride = width * BytesPerPixel(format);
 
     return CreateTexture(
         pRenderer,
@@ -1589,7 +1718,8 @@ VkResult CreateRenderPass(
     {
         std::vector<VkAttachmentDescription> attachmentDescs;
         std::vector<VkAttachmentReference>   colorAttachmentRefs;
-        for (uint32_t i = 0; i < CountU32(colorInfos); ++i) {
+        for (uint32_t i = 0; i < CountU32(colorInfos); ++i)
+        {
             VkAttachmentDescription desc = {};
             desc.flags                   = 0;
             desc.format                  = colorInfos[i].Format;
@@ -1609,7 +1739,8 @@ VkResult CreateRenderPass(
         }
 
         VkAttachmentReference depthStencilAttachmentRef = {};
-        if (hasDepthStencil) {
+        if (hasDepthStencil)
+        {
             VkAttachmentDescription desc = {};
             desc.flags                   = 0;
             desc.format                  = depthStencilInfo.Format;
@@ -1656,7 +1787,8 @@ VkResult CreateRenderPass(
             &createInfo,
             nullptr,
             &pRenderPass->RenderPass);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             return vkres;
         }
     }
@@ -1664,15 +1796,18 @@ VkResult CreateRenderPass(
     // Framebuffer
     {
         std::vector<VkFormat> formats;
-        for (uint32_t i = 0; i < CountU32(colorInfos); ++i) {
+        for (uint32_t i = 0; i < CountU32(colorInfos); ++i)
+        {
             formats.push_back(colorInfos[i].Format);
         }
-        if (hasDepthStencil) {
+        if (hasDepthStencil)
+        {
             formats.push_back(depthStencilInfo.Format);
         }
 
         std::vector<VkFramebufferAttachmentImageInfo> attachmentImageInfos;
-        for (uint32_t i = 0; i < CountU32(colorInfos); ++i) {
+        for (uint32_t i = 0; i < CountU32(colorInfos); ++i)
+        {
             VkFramebufferAttachmentImageInfo attachmentImageInfo = {VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO};
             attachmentImageInfo.pNext                            = nullptr;
             attachmentImageInfo.flags                            = 0;
@@ -1684,7 +1819,8 @@ VkResult CreateRenderPass(
             attachmentImageInfo.pViewFormats                     = &formats[i];
             attachmentImageInfos.push_back(attachmentImageInfo);
         }
-        if (hasDepthStencil) {
+        if (hasDepthStencil)
+        {
             VkFramebufferAttachmentImageInfo attachmentImageInfo = {VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO};
             attachmentImageInfo.pNext                            = nullptr;
             attachmentImageInfo.flags                            = 0;
@@ -1715,7 +1851,8 @@ VkResult CreateRenderPass(
             &createInfo,
             nullptr,
             &pRenderPass->Framebuffer);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             return vkres;
         }
     }
@@ -1764,16 +1901,16 @@ VkDeviceAddress GetDeviceAddress(VulkanRenderer* pRenderer, const VulkanAccelStr
 }
 
 VkResult CreateDrawVertexColorPipeline(
-    VulkanRenderer*      pRenderer,
-    VkPipelineLayout     pipeline_layout,
-    VkShaderModule       vsShaderModule,
-    VkShaderModule       fsShaderModule,
-    VkFormat             rtvFormat,
-    VkFormat             dsvFormat,
-    VkPipeline*          pPipeline,
-    VkCullModeFlags      cullMode,
-    VkPrimitiveTopology  topologyType,
-    uint32_t             pipelineFlags)
+    VulkanRenderer*     pRenderer,
+    VkPipelineLayout    pipeline_layout,
+    VkShaderModule      vsShaderModule,
+    VkShaderModule      fsShaderModule,
+    VkFormat            rtvFormat,
+    VkFormat            dsvFormat,
+    VkPipeline*         pPipeline,
+    VkCullModeFlags     cullMode,
+    VkPrimitiveTopology topologyType,
+    uint32_t            pipelineFlags)
 {
     bool                          isInterleavedAttrs             = pipelineFlags & VK_PIPELINE_FLAGS_INTERLEAVED_ATTRS;
     VkFormat                      rtv_format                     = GREX_DEFAULT_RTV_FORMAT;
@@ -1908,17 +2045,17 @@ VkResult CreateDrawVertexColorPipeline(
 }
 
 HRESULT CreateDrawNormalPipeline(
-   VulkanRenderer*      pRenderer,
-   VkPipelineLayout     pipelineLayout,
-   VkShaderModule       vsShaderModule,
-   VkShaderModule       fsShaderModule,
-   VkFormat             rtvFormat,
-   VkFormat             dsvFormat,
-   VkPipeline*          pPipeline,
-   bool                 enableTangents,
-   VkCullModeFlagBits   cullMode,
-   const char*          vsEntryPoint,
-   const char*          fsEntryPoint)
+    VulkanRenderer*    pRenderer,
+    VkPipelineLayout   pipelineLayout,
+    VkShaderModule     vsShaderModule,
+    VkShaderModule     fsShaderModule,
+    VkFormat           rtvFormat,
+    VkFormat           dsvFormat,
+    VkPipeline*        pPipeline,
+    bool               enableTangents,
+    VkCullModeFlagBits cullMode,
+    const char*        vsEntryPoint,
+    const char*        fsEntryPoint)
 {
     VkFormat                      rtv_format                     = GREX_DEFAULT_RTV_FORMAT;
     VkPipelineRenderingCreateInfo pipeline_rendering_create_info = {VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
@@ -1944,7 +2081,8 @@ HRESULT CreateDrawNormalPipeline(
     vertex_binding_desc[1].stride    = 12;
     vertex_binding_desc[1].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-    if (enableTangents) {
+    if (enableTangents)
+    {
         vertex_binding_desc[2].binding   = 2;
         vertex_binding_desc[2].stride    = 12;
         vertex_binding_desc[2].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
@@ -1965,7 +2103,8 @@ HRESULT CreateDrawNormalPipeline(
     vertex_attribute_desc[1].format   = VK_FORMAT_R32G32B32_SFLOAT;
     vertex_attribute_desc[1].offset   = 0;
 
-    if (enableTangents) {
+    if (enableTangents)
+    {
         vertex_attribute_desc[2].location = 2;
         vertex_attribute_desc[2].binding  = 2;
         vertex_attribute_desc[2].format   = VK_FORMAT_R32G32B32_SFLOAT;
@@ -2366,14 +2505,14 @@ HRESULT CreateDrawBasicPipeline(
 }
 
 HRESULT CreateGraphicsPipeline1(
-   VulkanRenderer*      pRenderer,
-   VkPipelineLayout     pipelineLayout,
-   VkShaderModule       vsShaderModule,
-   VkShaderModule       fsShaderModule,
-   VkFormat             rtvFormat,
-   VkFormat             dsvFormat,
-   VkPipeline*          pPipeline,
-   VkCullModeFlagBits   cullMode)
+    VulkanRenderer*    pRenderer,
+    VkPipelineLayout   pipelineLayout,
+    VkShaderModule     vsShaderModule,
+    VkShaderModule     fsShaderModule,
+    VkFormat           rtvFormat,
+    VkFormat           dsvFormat,
+    VkPipeline*        pPipeline,
+    VkCullModeFlagBits cullMode)
 {
     VkPipelineRenderingCreateInfo pipeline_rendering_create_info = {VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
     pipeline_rendering_create_info.colorAttachmentCount          = 1;
@@ -2538,14 +2677,14 @@ HRESULT CreateGraphicsPipeline1(
 }
 
 HRESULT CreateGraphicsPipeline2(
-   VulkanRenderer* pRenderer,
-   VkPipelineLayout     pipelineLayout,
-   VkShaderModule       vsShaderModule,
-   VkShaderModule       fsShaderModule,
-   VkFormat             rtvFormat,
-   VkFormat             dsvFormat,
-   VkPipeline* pPipeline,
-   VkCullModeFlagBits   cullMode)
+    VulkanRenderer*    pRenderer,
+    VkPipelineLayout   pipelineLayout,
+    VkShaderModule     vsShaderModule,
+    VkShaderModule     fsShaderModule,
+    VkFormat           rtvFormat,
+    VkFormat           dsvFormat,
+    VkPipeline*        pPipeline,
+    VkCullModeFlagBits cullMode)
 {
     VkPipelineRenderingCreateInfo pipeline_rendering_create_info = {VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
     pipeline_rendering_create_info.colorAttachmentCount          = 1;
@@ -2703,17 +2842,17 @@ HRESULT CreateGraphicsPipeline2(
 }
 
 VkResult CreateMeshShaderPipeline(
-    VulkanRenderer*      pRenderer,
-    VkPipelineLayout     pipelineLayout,
-    VkShaderModule       asShaderModule,
-    VkShaderModule       msShaderModule,
-    VkShaderModule       fsShaderModule,
-    VkFormat             rtvFormat,
-    VkFormat             dsvFormat,
-    VkPipeline*          pPipeline,
-    VkCullModeFlags      cullMode,
-    VkPrimitiveTopology  topologyType,
-    uint32_t             pipelineFlags)
+    VulkanRenderer*     pRenderer,
+    VkPipelineLayout    pipelineLayout,
+    VkShaderModule      asShaderModule,
+    VkShaderModule      msShaderModule,
+    VkShaderModule      fsShaderModule,
+    VkFormat            rtvFormat,
+    VkFormat            dsvFormat,
+    VkPipeline*         pPipeline,
+    VkCullModeFlags     cullMode,
+    VkPrimitiveTopology topologyType,
+    uint32_t            pipelineFlags)
 {
     bool                          isInterleavedAttrs             = pipelineFlags & VK_PIPELINE_FLAGS_INTERLEAVED_ATTRS;
     VkFormat                      rtv_format                     = GREX_DEFAULT_RTV_FORMAT;
@@ -2724,7 +2863,8 @@ VkResult CreateMeshShaderPipeline(
 
     std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
     // Task (amplification) shader
-    if (asShaderModule != VK_NULL_HANDLE) {
+    if (asShaderModule != VK_NULL_HANDLE)
+    {
         VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
         shaderStageCreateInfo.stage                           = VK_SHADER_STAGE_TASK_BIT_EXT;
         shaderStageCreateInfo.module                          = asShaderModule;
@@ -2832,16 +2972,16 @@ VkResult CreateMeshShaderPipeline(
 }
 
 VkResult CreateMeshShaderPipeline(
-    VulkanRenderer*      pRenderer,
-    VkPipelineLayout     pipelineLayout,
-    VkShaderModule       msShaderModule,
-    VkShaderModule       fsShaderModule,
-    VkFormat             rtvFormat,
-    VkFormat             dsvFormat,
-    VkPipeline*          pPipeline,
-    VkCullModeFlags      cullMode,
-    VkPrimitiveTopology  topologyType,
-    uint32_t             pipelineFlags)
+    VulkanRenderer*     pRenderer,
+    VkPipelineLayout    pipelineLayout,
+    VkShaderModule      msShaderModule,
+    VkShaderModule      fsShaderModule,
+    VkFormat            rtvFormat,
+    VkFormat            dsvFormat,
+    VkPipeline*         pPipeline,
+    VkCullModeFlags     cullMode,
+    VkPrimitiveTopology topologyType,
+    uint32_t            pipelineFlags)
 {
     return CreateMeshShaderPipeline(
         pRenderer,      // pRenderer
@@ -2887,7 +3027,8 @@ CompileResult CompileGLSL(
         case VK_SHADER_STAGE_MESH_BIT_EXT                : glslang_stage = GLSLANG_STAGE_TASK_NV; break;
     }
     // clang-format on
-    if (glslang_stage == k_invalid_stage) {
+    if (glslang_stage == k_invalid_stage)
+    {
         return COMPILE_ERROR_INVALID_SHADER_STAGE;
     }
 
@@ -2907,7 +3048,8 @@ CompileResult CompileGLSL(
     input.resource                          = glslang_default_resource();
 
     int res = glslang_initialize_process();
-    if (res == 0) {
+    if (res == 0)
+    {
         return COMPILE_ERROR_INTERNAL_COMPILER_ERROR;
     }
 
@@ -2922,7 +3064,8 @@ CompileResult CompileGLSL(
 
         ~ScopedShader()
         {
-            if (!IsNull(pObject)) {
+            if (!IsNull(pObject))
+            {
                 glslang_shader_delete(pObject);
                 pObject = nullptr;
             }
@@ -2940,7 +3083,8 @@ CompileResult CompileGLSL(
 
         ~ScopedProgram()
         {
-            if (!IsNull(pObject)) {
+            if (!IsNull(pObject))
+            {
                 glslang_program_delete(pObject);
                 pObject = nullptr;
             }
@@ -2951,7 +3095,8 @@ CompileResult CompileGLSL(
     {
         glslang_shader_t* p_shader = glslang_shader_create(&input);
 
-        if (IsNull(p_shader)) {
+        if (IsNull(p_shader))
+        {
             return COMPILE_ERROR_INTERNAL_COMPILER_ERROR;
         }
         shader.pObject = p_shader;
@@ -2978,20 +3123,24 @@ CompileResult CompileGLSL(
     //
     // Preprocess
     //
-    if (!glslang_shader_preprocess(shader, &input)) {
+    if (!glslang_shader_preprocess(shader, &input))
+    {
         std::stringstream ss;
 
         const char* infoLog = glslang_shader_get_info_log(shader);
-        if (infoLog != nullptr) {
+        if (infoLog != nullptr)
+        {
             ss << "GLSL preprocess failed (info): " << infoLog;
         }
 
         const char* debugLog = glslang_shader_get_info_debug_log(shader);
-        if (debugLog != nullptr) {
+        if (debugLog != nullptr)
+        {
             ss << "GLSL preprocess failed (debug): " << debugLog;
         }
 
-        if (!IsNull(pErrorMsg)) {
+        if (!IsNull(pErrorMsg))
+        {
             *pErrorMsg = ss.str();
         }
 
@@ -3001,20 +3150,24 @@ CompileResult CompileGLSL(
     //
     // Compile
     //
-    if (!glslang_shader_parse(shader, &input)) {
+    if (!glslang_shader_parse(shader, &input))
+    {
         std::stringstream ss;
 
         const char* info_log = glslang_shader_get_info_log(shader);
-        if (info_log != nullptr) {
+        if (info_log != nullptr)
+        {
             ss << "GLSL compile failed (info): " << info_log;
         }
 
         const char* debug_log = glslang_shader_get_info_debug_log(shader);
-        if (debug_log != nullptr) {
+        if (debug_log != nullptr)
+        {
             ss << "GLSL compile failed (debug): " << debug_log;
         }
 
-        if (!IsNull(pErrorMsg)) {
+        if (!IsNull(pErrorMsg))
+        {
             *pErrorMsg = ss.str();
         }
 
@@ -3027,27 +3180,32 @@ CompileResult CompileGLSL(
     ScopedProgram program = {};
     {
         glslang_program_t* p_program = glslang_program_create();
-        if (IsNull(p_program)) {
+        if (IsNull(p_program))
+        {
             return COMPILE_ERROR_INTERNAL_COMPILER_ERROR;
         }
         program.pObject = p_program;
     }
     glslang_program_add_shader(program, shader);
 
-    if (!glslang_program_link(program, GLSLANG_MSG_SPV_RULES_BIT | GLSLANG_MSG_VULKAN_RULES_BIT)) {
+    if (!glslang_program_link(program, GLSLANG_MSG_SPV_RULES_BIT | GLSLANG_MSG_VULKAN_RULES_BIT))
+    {
         std::stringstream ss;
 
         const char* info_log = glslang_program_get_info_log(program);
-        if (info_log != nullptr) {
+        if (info_log != nullptr)
+        {
             ss << "GLSL link failed (info): " << info_log;
         }
 
         const char* debug_log = glslang_program_get_info_debug_log(program);
-        if (debug_log != nullptr) {
+        if (debug_log != nullptr)
+        {
             ss << "GLSL link failed (debug): " << debug_log;
         }
 
-        if (!IsNull(pErrorMsg)) {
+        if (!IsNull(pErrorMsg))
+        {
             *pErrorMsg = ss.str();
         }
 
@@ -3057,12 +3215,14 @@ CompileResult CompileGLSL(
     //
     // Map IO
     //
-    if (!glslang_program_map_io(program)) {
+    if (!glslang_program_map_io(program))
+    {
         std::stringstream ss;
 
         ss << "GLSL program map IO failed";
 
-        if (!IsNull(pErrorMsg)) {
+        if (!IsNull(pErrorMsg))
+        {
             *pErrorMsg = ss.str();
         }
 
@@ -3072,14 +3232,17 @@ CompileResult CompileGLSL(
     //
     // Get SPIR-V
     //
-    if (!IsNull(pSPIRV)) {
+    if (!IsNull(pSPIRV))
+    {
         glslang_program_SPIRV_generate(program, input.stage);
         const char* spirv_msg = glslang_program_SPIRV_get_messages(program);
-        if (!IsNull(spirv_msg)) {
+        if (!IsNull(spirv_msg))
+        {
             std::stringstream ss;
             ss << "SPIR-V generation error: " << spirv_msg;
 
-            if (!IsNull(pErrorMsg)) {
+            if (!IsNull(pErrorMsg))
+            {
                 *pErrorMsg = ss.str();
             }
 
@@ -3103,7 +3266,8 @@ CompileResult CompileGLSL(
 static std::wstring AsciiToUTF16(const std::string& ascii)
 {
     std::wstring utf16;
-    for (auto& c : ascii) {
+    for (auto& c : ascii)
+    {
         utf16.push_back(static_cast<std::wstring::value_type>(c));
     }
     return utf16;
@@ -3117,22 +3281,26 @@ HRESULT CompileHLSL(
     std::string*           pErrorMsg)
 {
     // Check source
-    if (shaderSource.empty()) {
+    if (shaderSource.empty())
+    {
         assert(false && "no shader source");
         return E_INVALIDARG;
     }
     // Check entry point
-    if (entryPoint.empty() && (!profile.starts_with("lib_6_"))) {
+    if (entryPoint.empty() && (!profile.starts_with("lib_6_")))
+    {
         assert(false && "no entrypoint");
         return E_INVALIDARG;
     }
     // Check profile
-    if (profile.empty()) {
+    if (profile.empty())
+    {
         assert(false && "no profile");
         return E_INVALIDARG;
     }
     // Check output
-    if (IsNull(pSPIRV)) {
+    if (IsNull(pSPIRV))
+    {
         assert(false && "DXIL output arg is null");
         return E_INVALIDARG;
     }
@@ -3167,18 +3335,21 @@ HRESULT CompileHLSL(
         static_cast<UINT>(args.size()),
         nullptr,
         IID_PPV_ARGS(&result));
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         assert(false && "compile failed");
         return hr;
     }
 
     ComPtr<IDxcBlob> errors;
     hr = result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errors), nullptr);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         assert(false && "Get error output failed");
         return hr;
     }
-    if (errors && (errors->GetBufferSize() > 0) && !IsNull(pErrorMsg)) {
+    if (errors && (errors->GetBufferSize() > 0) && !IsNull(pErrorMsg))
+    {
         const char* pBuffer    = static_cast<const char*>(errors->GetBufferPointer());
         size_t      bufferSize = static_cast<size_t>(errors->GetBufferSize());
         *pErrorMsg             = std::string(pBuffer, pBuffer + bufferSize);
@@ -3187,7 +3358,8 @@ HRESULT CompileHLSL(
 
     ComPtr<IDxcBlob> shaderBinary;
     hr = result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shaderBinary), nullptr);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         assert(false && "Get compile output failed");
         return hr;
     }
@@ -3228,18 +3400,21 @@ void WriteDescriptor(
 
     // Set address info and figure out descriptor size
     VkDeviceSize descriptorSize = 0;
-    switch (descriptorType) {
+    switch (descriptorType)
+    {
         default: break;
 
         case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: {
             descriptorInfo.data.pUniformBuffer = &addressInfo;
             descriptorSize                     = static_cast<VkDeviceSize>(descriptorBufferProperties.uniformBufferDescriptorSize);
-        } break;
+        }
+        break;
 
         case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: {
             descriptorInfo.data.pStorageBuffer = &addressInfo;
             descriptorSize                     = static_cast<VkDeviceSize>(descriptorBufferProperties.storageBufferDescriptorSize);
-        } break;
+        }
+        break;
     }
 
     // Get the offset for the binding
@@ -3337,18 +3512,21 @@ void WriteDescriptor(
 
     // Set address info and Figure out descriptor size
     VkDeviceSize descriptorSize = 0;
-    switch (descriptorType) {
+    switch (descriptorType)
+    {
         default: break;
 
         case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE: {
             descriptorInfo.data.pSampledImage = &imageInfo;
             descriptorSize                    = static_cast<VkDeviceSize>(descriptorBufferProperties.sampledImageDescriptorSize);
-        } break;
+        }
+        break;
 
         case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE: {
             descriptorInfo.data.pSampledImage = &imageInfo;
             descriptorSize                    = static_cast<VkDeviceSize>(descriptorBufferProperties.storageImageDescriptorSize);
-        } break;
+        }
+        break;
     }
 
     // Get the offset for the binding
@@ -3477,14 +3655,15 @@ bool IsCompressed(VkFormat fmt)
         case VK_FORMAT_BC7_SRGB_BLOCK:
             return true;
 
-         default: 
+        default:
             return false;
     }
 }
 
 uint32_t BitsPerPixel(VkFormat fmt)
 {
-    switch (fmt) {
+    switch (fmt)
+    {
         case VK_FORMAT_R4G4_UNORM_PACK8:
             return 8;
 

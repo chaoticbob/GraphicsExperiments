@@ -80,7 +80,7 @@ int main(int argc, char** argv)
     std::vector<char> dxilMS;
     std::vector<char> dxilPS;
     {
-        auto source = LoadString("projects/118_mesh_shader_vertex_attrs/shaders.hlsl");
+        auto source = LoadString("projects/119_mesh_shader_bary/shaders.hlsl");
         assert((!source.empty()) && "no shader source!");
 
         std::string errorMsg;
@@ -440,7 +440,7 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
         rootParameter.ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
         rootParameter.Descriptor.ShaderRegister = 1;
         rootParameter.Descriptor.RegisterSpace  = 0;
-        rootParameter.ShaderVisibility          = D3D12_SHADER_VISIBILITY_MESH;
+        rootParameter.ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
         rootParameters.push_back(rootParameter);
     }
 
@@ -450,7 +450,7 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
         rootParameter.ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
         rootParameter.Descriptor.ShaderRegister = 2;
         rootParameter.Descriptor.RegisterSpace  = 0;
-        rootParameter.ShaderVisibility          = D3D12_SHADER_VISIBILITY_MESH;
+        rootParameter.ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
         rootParameters.push_back(rootParameter);
     }
 
@@ -460,7 +460,7 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
         rootParameter.ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
         rootParameter.Descriptor.ShaderRegister = 3;
         rootParameter.Descriptor.RegisterSpace  = 0;
-        rootParameter.ShaderVisibility          = D3D12_SHADER_VISIBILITY_MESH;
+        rootParameter.ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
         rootParameters.push_back(rootParameter);
     }
 
