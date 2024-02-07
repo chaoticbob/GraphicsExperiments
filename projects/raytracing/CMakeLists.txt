@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.5)
 
 # ------------------------------------------------------------------------------
 # Configure directories
@@ -38,4 +38,9 @@ if (GREX_ENABLE_VULKAN)
     add_subdirectory(030_raytracing_path_trace_vulkan)  
     add_subdirectory(030_raytracing_path_trace_vulkan_bof)  
     add_subdirectory(031_raytracing_path_trace_pbr_vulkan)
+endif()
+
+if (GREX_ENABLE_METAL)
+    add_subdirectory(000_raygen_uv_metal)
+    add_subdirectory(001_raytracing_basic_metal)
 endif()

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.5)
 
 # ------------------------------------------------------------------------------
 # Configure directories
@@ -26,4 +26,15 @@ if (GREX_ENABLE_VULKAN)
     add_subdirectory(306_parallax_occlusion_map_vulkan)
     add_subdirectory(307_parallax_occlusion_map_explorer_vulkan)
     add_subdirectory(308_normal_map_vs_pom_vulkan)
+endif()
+
+if (GREX_ENABLE_METAL)
+    add_subdirectory(301_textured_cube_metal)
+    add_subdirectory(302_lambert_textured_cube_metal)
+    add_subdirectory(303_phong_textured_cube_metal)
+    add_subdirectory(304_normal_map_metal)
+    add_subdirectory(305_normal_map_explorer_metal)
+    add_subdirectory(306_parallax_occlusion_map_metal)
+    add_subdirectory(307_parallax_occlusion_map_explorer_metal)
+    add_subdirectory(308_normal_map_vs_pom_metal)
 endif()

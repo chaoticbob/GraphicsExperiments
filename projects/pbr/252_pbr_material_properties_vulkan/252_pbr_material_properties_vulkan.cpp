@@ -13,7 +13,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -80,10 +81,9 @@ struct PBRImplementationInfo
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth      = 3470;
-static uint32_t gWindowHeight     = 1920;
-static bool     gEnableDebug      = true;
-static bool     gEnableRayTracing = false;
+static uint32_t gWindowWidth  = 3470;
+static uint32_t gWindowHeight = 1920;
+static bool     gEnableDebug  = true;
 
 static uint32_t gGridStartX       = 485;
 static uint32_t gGridStartY       = 15;
@@ -141,7 +141,8 @@ void MouseMove(int x, int y, int buttons)
     static int prevX = x;
     static int prevY = y;
 
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         int dx = x - prevX;
         int dy = y - prevY;
 
@@ -159,7 +160,9 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRayTracing)) {
+    VulkanFeatures features = {};
+    if (!InitVulkan(renderer.get(), gEnableDebug, features))
+    {
         return EXIT_FAILURE;
     }
 
@@ -174,7 +177,8 @@ int main(int argc, char** argv)
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &spirvVS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
@@ -184,7 +188,8 @@ int main(int argc, char** argv)
         }
 
         hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &spirvFS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (PS): " << errorMsg << "\n";
@@ -320,7 +325,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = Window::Create(gWindowWidth, gWindowHeight, "252_pbr_material_properties_vulkan");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
     }
@@ -329,7 +335,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight())) {
+    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight()))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -344,11 +351,11 @@ int main(int argc, char** argv)
     VulkanRenderPass renderPass = {};
     CHECK_CALL(CreateRenderPass(renderer.get(), colorAttachmentInfos, {}, gWindowWidth, gWindowHeight, &renderPass));
 
-
     // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForVulkan(renderer.get(), renderPass.RenderPass)) {
+    if (!window->InitImGuiForVulkan(renderer.get(), renderPass.RenderPass))
+    {
         assert(false && "Window::InitImGuiForVulkan failed");
         return EXIT_FAILURE;
     }
@@ -361,51 +368,53 @@ int main(int argc, char** argv)
     std::vector<VkImageView> imageViews;
     std::vector<VkImageView> depthViews;
     {
-       CHECK_CALL(GetSwapchainImages(renderer.get(), images));
+        CHECK_CALL(GetSwapchainImages(renderer.get(), images));
 
-       for (auto& image : images) {
-          // Create swap chain images
-          VkImageViewCreateInfo createInfo           = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
-          createInfo.image                           = image;
-          createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
-          createInfo.format                          = GREX_DEFAULT_RTV_FORMAT;
-          createInfo.components                      = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
-          createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-          createInfo.subresourceRange.baseMipLevel   = 0;
-          createInfo.subresourceRange.levelCount     = 1;
-          createInfo.subresourceRange.baseArrayLayer = 0;
-          createInfo.subresourceRange.layerCount     = 1;
+        for (auto& image : images)
+        {
+            // Create swap chain images
+            VkImageViewCreateInfo createInfo           = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+            createInfo.image                           = image;
+            createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+            createInfo.format                          = GREX_DEFAULT_RTV_FORMAT;
+            createInfo.components                      = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A};
+            createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+            createInfo.subresourceRange.baseMipLevel   = 0;
+            createInfo.subresourceRange.levelCount     = 1;
+            createInfo.subresourceRange.baseArrayLayer = 0;
+            createInfo.subresourceRange.layerCount     = 1;
 
-          VkImageView imageView = VK_NULL_HANDLE;
-          CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &imageView));
+            VkImageView imageView = VK_NULL_HANDLE;
+            CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &imageView));
 
-          imageViews.push_back(imageView);
-       }
+            imageViews.push_back(imageView);
+        }
 
-       size_t imageCount = images.size();
+        size_t imageCount = images.size();
 
-       depthImages.resize(images.size());
+        depthImages.resize(images.size());
 
-       for (int depthIndex = 0; depthIndex < imageCount; depthIndex++) {
-          // Create depth images
-          CHECK_CALL(CreateDSV(renderer.get(), window->GetWidth(), window->GetHeight(), &depthImages[depthIndex]));
+        for (int depthIndex = 0; depthIndex < imageCount; depthIndex++)
+        {
+            // Create depth images
+            CHECK_CALL(CreateDSV(renderer.get(), window->GetWidth(), window->GetHeight(), &depthImages[depthIndex]));
 
-          VkImageViewCreateInfo createInfo           = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
-          createInfo.image                           = depthImages[depthIndex].Image;
-          createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
-          createInfo.format                          = GREX_DEFAULT_DSV_FORMAT;
-          createInfo.components                      = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY };
-          createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
-          createInfo.subresourceRange.baseMipLevel   = 0;
-          createInfo.subresourceRange.levelCount     = 1;
-          createInfo.subresourceRange.baseArrayLayer = 0;
-          createInfo.subresourceRange.layerCount     = 1;
+            VkImageViewCreateInfo createInfo           = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+            createInfo.image                           = depthImages[depthIndex].Image;
+            createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+            createInfo.format                          = GREX_DEFAULT_DSV_FORMAT;
+            createInfo.components                      = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY};
+            createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
+            createInfo.subresourceRange.baseMipLevel   = 0;
+            createInfo.subresourceRange.levelCount     = 1;
+            createInfo.subresourceRange.baseArrayLayer = 0;
+            createInfo.subresourceRange.layerCount     = 1;
 
-          VkImageView depthView = VK_NULL_HANDLE;
-          CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &depthView));
+            VkImageView depthView = VK_NULL_HANDLE;
+            CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &depthView));
 
-          depthViews.push_back(depthView);
-       }
+            depthViews.push_back(depthView);
+        }
     }
 
     // *************************************************************************
@@ -413,7 +422,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     CommandObjects cmdBuf = {};
     {
-       CHECK_CALL(CreateCommandBuffer(renderer.get(), 0, &cmdBuf));
+        CHECK_CALL(CreateCommandBuffer(renderer.get(), 0, &cmdBuf));
     }
 
     // *************************************************************************
@@ -450,13 +459,17 @@ int main(int argc, char** argv)
     // Main loop
     // *************************************************************************
     VkClearValue clearValues[2];
-    clearValues[0].color = { {0.0f, 0.0f, 0.2f, 1.0f } };
-    clearValues[1].depthStencil = { 1.0f, 0 };
+    clearValues[0].color = {
+        {0.0f, 0.0f, 0.2f, 1.0f}
+    };
+    clearValues[1].depthStencil = {1.0f, 0};
 
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         window->ImGuiNewFrameVulkan();
 
-        if (ImGui::Begin("Scene")) {
+        if (ImGui::Begin("Scene"))
+        {
             ImGui::Checkbox("Mutilscatter", reinterpret_cast<bool*>(&pPBRSceneParams->multiscatter));
             ImGui::Checkbox("Furnace", reinterpret_cast<bool*>(&pPBRSceneParams->furnace));
         }
@@ -475,12 +488,13 @@ int main(int argc, char** argv)
             desiredImageView,
             VK_IMAGE_LAYOUT_GENERAL);
 
-         pPBRSceneParams->iblEnvironmentNumLevels = (pPBRSceneParams->furnace) ? 1 : envNumLevels;
+        pPBRSceneParams->iblEnvironmentNumLevels = (pPBRSceneParams->furnace) ? 1 : envNumLevels;
 
         // ---------------------------------------------------------------------
 
         UINT bufferIndex = 0;
-        if (AcquireNextImage(renderer.get(), &bufferIndex)) {
+        if (AcquireNextImage(renderer.get(), &bufferIndex))
+        {
             assert(false && "AcquireNextImage failed");
             break;
         }
@@ -575,13 +589,13 @@ int main(int argc, char** argv)
             depthAttachment.storeOp                   = VK_ATTACHMENT_STORE_OP_DONT_CARE;
             depthAttachment.clearValue                = clearValues[1];
 
-            VkRenderingInfo vkri                      = {VK_STRUCTURE_TYPE_RENDERING_INFO};
-            vkri.layerCount                           = 1;
-            vkri.colorAttachmentCount                 = 1;
-            vkri.pColorAttachments                    = &colorAttachment;
-            vkri.pDepthAttachment                     = &depthAttachment;
-            vkri.renderArea.extent.width              = gWindowWidth;
-            vkri.renderArea.extent.height             = gWindowHeight;
+            VkRenderingInfo vkri          = {VK_STRUCTURE_TYPE_RENDERING_INFO};
+            vkri.layerCount               = 1;
+            vkri.colorAttachmentCount     = 1;
+            vkri.pColorAttachments        = &colorAttachment;
+            vkri.pDepthAttachment         = &depthAttachment;
+            vkri.renderArea.extent.width  = gWindowWidth;
+            vkri.renderArea.extent.height = gWindowHeight;
 
             vkCmdBeginRendering(cmdBuf.CommandBuffer, &vkri);
 
@@ -647,10 +661,9 @@ int main(int argc, char** argv)
                     materialSpherePositionBuffer.Buffer,
                     materialSphereNormalBuffer.Buffer,
                     materialSphereTangentBuffer.Buffer,
-                    materialSphereBitangentBuffer.Buffer
-                };
+                    materialSphereBitangentBuffer.Buffer};
 
-            VkDeviceSize offsets[]       = {0, 0, 0, 0};
+            VkDeviceSize offsets[] = {0, 0, 0, 0};
             vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 4, vertexBuffers, offsets);
 
             // -----------------------------------------------------------------
@@ -659,17 +672,20 @@ int main(int argc, char** argv)
             const float clearColor[4] = {1, 1, 1, 1};
             uint32_t    cellY         = gCellRenderStartY;
             float       dt            = 1.0f / 10;
-            for (uint32_t yi = 0; yi < 7; ++yi) {
+            for (uint32_t yi = 0; yi < 7; ++yi)
+            {
                 uint32_t cellX = gCellRenderStartX;
                 float    t     = 0;
-                for (uint32_t xi = 0; xi < 11; ++xi) {
+                for (uint32_t xi = 0; xi < 11; ++xi)
+                {
                     VkRect2D cellRect      = {};
                     cellRect.offset.x      = cellX;
                     cellRect.offset.y      = cellY;
                     cellRect.extent.width  = gCellRenderResX;
                     cellRect.extent.height = gCellRenderResY;
 
-                    if (pPBRSceneParams->furnace) {
+                    if (pPBRSceneParams->furnace)
+                    {
                         VkClearAttachment clearColorAttachment = {};
                         clearColorAttachment.aspectMask        = VK_IMAGE_ASPECT_COLOR_BIT;
                         clearColorAttachment.clearValue.color  = {1, 1, 1, 1};
@@ -700,9 +716,9 @@ int main(int argc, char** argv)
                     // Set viewport and scissor
                     // ---------------------------------------------------------
                     VkViewport viewport = {
-                         static_cast<float>(cellRect.offset.x),
-                         static_cast<float>(cellRect.offset.y + cellRect.extent.height),
-                         static_cast<float>(cellRect.extent.width),
+                        static_cast<float>(cellRect.offset.x),
+                        static_cast<float>(cellRect.offset.y + cellRect.extent.height),
+                        static_cast<float>(cellRect.extent.width),
                         -static_cast<float>(cellRect.extent.height),
                         0,
                         1};
@@ -720,38 +736,44 @@ int main(int argc, char** argv)
                     materialParams.clearCoat          = 0;
                     materialParams.clearCoatRoughness = 0;
 
-                    switch (yi) {
+                    switch (yi)
+                    {
                         default: break;
                         case ROW_METALLIC: {
                             materialParams.baseColor = F0_MetalChromium;
                             materialParams.metallic  = t;
                             materialParams.roughness = 0;
-                        } break;
+                        }
+                        break;
 
                         case ROW_ROUGHNESS_NON_METALLIC: {
                             materialParams.baseColor = vec3(0, 0, 0.75f);
                             materialParams.roughness = std::max(0.045f, t);
-                        } break;
+                        }
+                        break;
 
                         case ROW_ROUGHNESS_METALLIC: {
                             materialParams.baseColor = pPBRSceneParams->furnace ? vec3(1) : F0_MetalGold;
                             materialParams.roughness = std::max(0.045f, t);
                             materialParams.metallic  = 1.0;
-                        } break;
+                        }
+                        break;
 
                         case ROW_REFLECTANCE: {
                             materialParams.baseColor   = vec3(0.75f, 0, 0);
                             materialParams.roughness   = 0.2f;
                             materialParams.metallic    = 0;
                             materialParams.reflectance = t;
-                        } break;
+                        }
+                        break;
 
                         case ROW_CLEAR_COAT: {
                             materialParams.baseColor = vec3(0.75f, 0, 0);
                             materialParams.roughness = 0.8f;
                             materialParams.metallic  = 1.0f;
                             materialParams.clearCoat = t;
-                        } break;
+                        }
+                        break;
 
                         case ROW_CLEAR_COAT_ROUGHNESS: {
                             materialParams.baseColor          = vec3(0.75f, 0, 0);
@@ -759,14 +781,16 @@ int main(int argc, char** argv)
                             materialParams.metallic           = 1.0f;
                             materialParams.clearCoat          = 1;
                             materialParams.clearCoatRoughness = std::max(0.045f, t);
-                        } break;
+                        }
+                        break;
 
                         case ROW_ANISOTROPY: {
                             materialParams.baseColor  = F0_MetalZinc;
                             materialParams.roughness  = 0.45f;
                             materialParams.metallic   = 1.0f;
                             materialParams.anisotropy = t;
-                        } break;
+                        }
+                        break;
                     }
 
                     glm::mat4 modelMat = glm::mat4(1);
@@ -825,13 +849,15 @@ int main(int argc, char** argv)
         CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
 
         // Wait for the GPU to finish the work
-        if (!WaitForGpu(renderer.get())) {
+        if (!WaitForGpu(renderer.get()))
+        {
             assert(false && "WaitForGpu failed");
             break;
         }
 
         // Present
-        if (!SwapchainPresent(renderer.get(), bufferIndex)) {
+        if (!SwapchainPresent(renderer.get(), bufferIndex))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -1010,7 +1036,8 @@ void CreateIBLTextures(
     // BRDF LUT
     {
         auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut.hdr"));
-        if (bitmap.Empty()) {
+        if (bitmap.Empty())
+        {
             assert(false && "Load image failed");
             return;
         }
@@ -1028,7 +1055,8 @@ void CreateIBLTextures(
     // Multiscatter BRDF LUT
     {
         auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut_ms.hdr"));
-        if (bitmap.Empty()) {
+        if (bitmap.Empty())
+        {
             assert(false && "Load image failed");
             return;
         }
@@ -1047,7 +1075,8 @@ void CreateIBLTextures(
     auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
 
     IBLMaps ibl = {};
-    if (!LoadIBLMaps32f(iblFile, &ibl)) {
+    if (!LoadIBLMaps32f(iblFile, &ibl))
+    {
         GREX_LOG_ERROR("failed to load: " << iblFile);
         return;
     }
@@ -1075,7 +1104,8 @@ void CreateIBLTextures(
         uint32_t               levelOffset = 0;
         uint32_t               levelWidth  = ibl.baseWidth;
         uint32_t               levelHeight = ibl.baseHeight;
-        for (uint32_t i = 0; i < ibl.numLevels; ++i) {
+        for (uint32_t i = 0; i < ibl.numLevels; ++i)
+        {
             MipOffset mipOffset = {};
             mipOffset.Offset    = levelOffset;
             mipOffset.RowStride = rowStride;
@@ -1329,4 +1359,3 @@ void WritePBRDescriptors(
 
     vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
 }
-

@@ -123,7 +123,6 @@ void main()
 static uint32_t gWindowWidth  = 1280;
 static uint32_t gWindowHeight = 720;
 static bool     gEnableDebug  = true;
-static bool     gEnableRayTracing = false;
 
 void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout);
 void CreateShaderModules(
@@ -158,8 +157,9 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRayTracing)) {
-        return EXIT_FAILURE;
+    VulkanFeatures features = {};
+    if (!InitVulkan(renderer.get(), gEnableDebug, features)) {
+       return EXIT_FAILURE;
     }
 
     // *************************************************************************

@@ -13,7 +13,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -48,7 +49,6 @@ using namespace glm;
 static uint32_t gWindowWidth      = 1280;
 static uint32_t gWindowHeight     = 720;
 static bool     gEnableDebug      = true;
-static bool     gEnableRayTracing = false;
 
 static std::vector<std::string> gIBLNames = {};
 
@@ -62,8 +62,8 @@ void CreateShaderModules(
     VkShaderModule*              pModuleVS,
     VkShaderModule*              pModuleFS);
 void CreatePipelineLayout(
-    VulkanRenderer*           pRenderer,
-    VulkanPipelineLayout*     pLayout);
+    VulkanRenderer*       pRenderer,
+    VulkanPipelineLayout* pLayout);
 
 void MouseMove(int x, int y, int buttons)
 {
@@ -89,7 +89,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRayTracing))
+    VulkanFeatures features = {};
+    if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
         return EXIT_FAILURE;
     }
@@ -180,7 +181,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     {
         void*         pDescriptorBufferStartAddress = nullptr;
-        VulkanBuffer* descriptorBuffer = &static_cast<VkFauxRender::SceneGraph*>(&graph)->DescriptorBuffer;
+        VulkanBuffer* descriptorBuffer              = &static_cast<VkFauxRender::SceneGraph*>(&graph)->DescriptorBuffer;
 
         vmaMapMemory(renderer->Allocator, descriptorBuffer->Allocation, &pDescriptorBufferStartAddress);
 
@@ -214,7 +215,7 @@ int main(int argc, char** argv)
 
         // Material Samplers
         {
-           // Clamped
+            // Clamped
             {
                 VkSamplerCreateInfo clampedSamplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
                 clampedSamplerInfo.flags                   = 0;
@@ -250,8 +251,8 @@ int main(int argc, char** argv)
                     clampedSampler);
             }
 
-           // Repeat
-           {
+            // Repeat
+            {
                 VkSamplerCreateInfo repeatSamplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
                 repeatSamplerInfo.flags                   = 0;
                 repeatSamplerInfo.magFilter               = VK_FILTER_LINEAR;
@@ -284,7 +285,7 @@ int main(int argc, char** argv)
                     MATERIAL_SAMPLER_START_REGISTER + 1, // binding
                     0,                                   // arrayElement
                     repeatSampler);
-           }
+            }
         }
 
         vmaUnmapMemory(renderer->Allocator, descriptorBuffer->Allocation);
@@ -319,7 +320,8 @@ int main(int argc, char** argv)
     {
         CHECK_CALL(GetSwapchainImages(renderer.get(), images));
 
-        for (auto& image : images) {
+        for (auto& image : images)
+        {
             // Create swap chain images
             VkImageViewCreateInfo createInfo           = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
             createInfo.image                           = image;
@@ -343,7 +345,8 @@ int main(int argc, char** argv)
         std::vector<VulkanImage> depthImages;
         depthImages.resize(images.size());
 
-        for (int depthIndex = 0; depthIndex < imageCount; depthIndex++) {
+        for (int depthIndex = 0; depthIndex < imageCount; depthIndex++)
+        {
             // Create depth images
             CHECK_CALL(CreateDSV(renderer.get(), window->GetWidth(), window->GetHeight(), &depthImages[depthIndex]));
 
@@ -385,7 +388,8 @@ int main(int argc, char** argv)
     while (window->PollEvents())
     {
         UINT bufferIndex = 0;
-        if (AcquireNextImage(renderer.get(), &bufferIndex)) {
+        if (AcquireNextImage(renderer.get(), &bufferIndex))
+        {
             assert(false && "AcquireNextImage failed");
             break;
         }
@@ -442,13 +446,15 @@ int main(int argc, char** argv)
         CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
 
         // Wait for the GPU to finish the work
-        if (!WaitForGpu(renderer.get())) {
+        if (!WaitForGpu(renderer.get()))
+        {
             assert(false && "WaitForGpu failed");
             break;
         }
 
         // Present
-        if (!SwapchainPresent(renderer.get(), bufferIndex)) {
+        if (!SwapchainPresent(renderer.get(), bufferIndex))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -484,8 +490,8 @@ void CreateShaderModules(
 }
 
 void CreatePipelineLayout(
-    VulkanRenderer*           pRenderer,
-    VulkanPipelineLayout*     pLayout)
+    VulkanRenderer*       pRenderer,
+    VulkanPipelineLayout* pLayout)
 {
     // Descriptor set layout
     {
