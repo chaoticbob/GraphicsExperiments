@@ -12,7 +12,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -65,10 +66,9 @@ void main()
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth      = 1280;
-static uint32_t gWindowHeight     = 720;
-static bool     gEnableDebug      = true;
-static bool     gEnableRayTracing = false;
+static uint32_t gWindowWidth  = 1280;
+static uint32_t gWindowHeight = 720;
+static bool     gEnableDebug  = true;
 
 void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout);
 void CreateTexture(VulkanRenderer* pRenderer, VulkanImage* pTexture);
@@ -100,7 +100,9 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRayTracing)) {
+    VulkanFeatures features = {};
+    if (!InitVulkan(renderer.get(), gEnableDebug, features))
+    {
         return EXIT_FAILURE;
     }
 
@@ -112,7 +114,8 @@ int main(int argc, char** argv)
     {
         std::string errorMsg;
         HRESULT     hr = CompileGLSL(gShaderVS, VK_SHADER_STAGE_VERTEX_BIT, {}, &spirvVS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
@@ -122,7 +125,8 @@ int main(int argc, char** argv)
         }
 
         hr = CompileGLSL(gShaderFS, VK_SHADER_STAGE_FRAGMENT_BIT, {}, &spirvFS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (PS): " << errorMsg << "\n";
@@ -196,7 +200,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = Window::Create(gWindowWidth, gWindowHeight, "301_textured_cube_vulkan");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
     }
@@ -204,7 +209,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight())) {
+    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight()))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -218,7 +224,8 @@ int main(int argc, char** argv)
     {
         CHECK_CALL(GetSwapchainImages(renderer.get(), images));
 
-        for (auto& image : images) {
+        for (auto& image : images)
+        {
             // Create swap chain images
             VkImageViewCreateInfo createInfo           = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
             createInfo.image                           = image;
@@ -242,7 +249,8 @@ int main(int argc, char** argv)
         std::vector<VulkanImage> depthImages;
         depthImages.resize(images.size());
 
-        for (int depthIndex = 0; depthIndex < imageCount; depthIndex++) {
+        for (int depthIndex = 0; depthIndex < imageCount; depthIndex++)
+        {
             // Create depth images
             CHECK_CALL(CreateDSV(renderer.get(), window->GetWidth(), window->GetHeight(), &depthImages[depthIndex]));
 
@@ -281,9 +289,11 @@ int main(int argc, char** argv)
     };
     clearValues[1].depthStencil = {1.0f, 0};
 
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         UINT bufferIndex = 0;
-        if (AcquireNextImage(renderer.get(), &bufferIndex)) {
+        if (AcquireNextImage(renderer.get(), &bufferIndex))
+        {
             assert(false && "AcquireNextImage failed");
             break;
         }
@@ -370,19 +380,21 @@ int main(int argc, char** argv)
         CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
 
         // Wait for the GPU to finish the work
-        if (!WaitForGpu(renderer.get())) {
+        if (!WaitForGpu(renderer.get()))
+        {
             assert(false && "WaitForGpu failed");
             break;
         }
 
         // Present
-        if (!SwapchainPresent(renderer.get(), bufferIndex)) {
+        if (!SwapchainPresent(renderer.get(), bufferIndex))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
     }
 
-        return 0;
+    return 0;
 }
 
 void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)

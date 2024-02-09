@@ -44,6 +44,9 @@ using Microsoft::WRL::ComPtr;
 
 #define GREX_MAX_VERTEX_ATTRIBUTES 6
 
+#define GREX_BASE_FILE_NAME() \
+    std::filesystem::path(__FILE__).filename().replace_extension("").string().c_str()
+
 enum GREXFormat
 {
     GREX_FORMAT_UNKNOWN            = 0,

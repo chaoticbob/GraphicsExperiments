@@ -6,6 +6,10 @@
 #include <memory>
 #include <vector>
 
+#define DEFAULT_POSITION_DISTANCE_TRESHOLD  1e-6
+#define DEFAULT_TEX_COORD_DISTANCE_TRESHOLD 1e-6
+#define DEFAULT_NORMAL_ANGLE_THRESHOLD      0.5 * 3.14159265359 / 180
+
 // F0 values
 const glm::vec3 F0_Generic         = glm::vec3(0.04f);
 const glm::vec3 F0_MetalTitanium   = glm::vec3(0.542f, 0.497f, 0.449f);
@@ -135,6 +139,10 @@ public:
         glm::vec3 max;
 
         glm::vec3 Center() const { return (this->min + this->max) / 2.0f; }
+
+        float Width() const { return fabs(this->max.x - this->min.x); }
+        float Height() const { return fabs(this->max.y - this->min.y); }
+        float Depth() const { return fabs(this->max.z - this->min.z); }
     };
 
     // -------------------------------------------------------------------------
@@ -150,7 +158,8 @@ public:
         Group(const std::string& name, uint32_t firstIndex, uint32_t indexCount, int32_t materialIndex = -1)
             : mName(name)
         {
-            for (uint32_t i = 0; i < indexCount; ++i) {
+            for (uint32_t i = 0; i < indexCount; ++i)
+            {
                 this->AddTriangleIndex(firstIndex + i, materialIndex);
             }
         }
@@ -218,11 +227,15 @@ public:
     const TriMesh::Options& GetOptions() const { return mOptions; }
 
     uint32_t                              GetNumIndices() const { return 3 * GetNumTriangles(); }
+    std::vector<uint32_t>                 GetIndices() const;
     uint32_t                              GetNumTriangles() const { return static_cast<uint32_t>(mTriangles.size()); }
     const TriMesh::Triangle&              GetTriangle(uint32_t triIdx) const { return mTriangles[triIdx]; }
     const std::vector<TriMesh::Triangle>& GetTriangles() const { return mTriangles; }
     uint32_t                              AddTriangle(const Triangle& tri);
     uint32_t                              AddTriangle(uint32_t vIdx0, uint32_t vIdx1, uint32_t vIdx2);
+    void                                  AddTriangles(size_t count, const uint32_t* pIndices);
+    void                                  SetTriangles(size_t count, const uint32_t* pIndices);
+    void                                  SetTriangles(const std::vector<uint32_t>& indices);
 
     uint32_t                              GetNumMaterials() const { return static_cast<uint32_t>(mMaterials.size()); }
     const TriMesh::Material&              GetMaterial(uint32_t materialIndex) const { return mMaterials[materialIndex]; }
@@ -238,6 +251,8 @@ public:
     std::vector<TriMesh::Triangle>     GetGroupTriangles(uint32_t groupIndex) const;
 
     const std::vector<glm::vec3>& GetPositions() const { return mPositions; }
+    void                          SetPositions(size_t count, const glm::vec3* pPositions);
+
     const std::vector<glm::vec3>& GetVertexColors() const { return mVertexColors; }
     const std::vector<glm::vec2>& GetTexCoords() const { return mTexCoords; }
     const std::vector<glm::vec3>& GetNormals() const { return mNormals; }
@@ -265,6 +280,27 @@ public:
 
     void AppendMesh(const TriMesh& srcMesh, const std::string& groupPrefix = "");
 
+    // Only works if there's only positions, will return if any other attribute is present.
+    //
+    // Optional - triangles can be spatially sorted with meshopt after welding:
+    //
+    //     auto indices = mesh.GetIndices();
+    //     positions    = mesh.GetPositions();
+    //
+    //     std::vector<uint32_t> sortedIndices(mesh.GetNumIndices());
+    //     meshopt_spatialSortTriangles(
+    //         sortedIndices.data(),
+    //         indices.data(),
+    //         CountU32(indices),
+    //         reinterpret_cast<const float*>(positions.data()),
+    //         CountU32(positions),
+    //         sizeof(glm::vec3));
+    //
+    void WeldVertices(
+        float positionDistanceThreshold = DEFAULT_POSITION_DISTANCE_TRESHOLD,
+        float texCoordDistanceThreshold = DEFAULT_TEX_COORD_DISTANCE_TRESHOLD,
+        float normalAngleThreshold      = DEFAULT_NORMAL_ANGLE_THRESHOLD);
+
     std::vector<glm::vec3> GetTBNLineSegments(uint32_t* pNumVertices, float length = 0.1f) const;
 
     static TriMesh Box(
@@ -279,11 +315,11 @@ public:
         const Options&   options          = {});
 
     static TriMesh Plane(
-        const glm::vec2& size            = glm::vec2(1),
-        uint32_t         usegs           = 1,
-        uint32_t         vsegs           = 1,
-        glm::vec3        normalToPlane   = glm::vec3(0, 1, 0),
-        const Options&   options         = {});
+        const glm::vec2& size          = glm::vec2(1),
+        uint32_t         usegs         = 1,
+        uint32_t         vsegs         = 1,
+        glm::vec3        normalToPlane = glm::vec3(0, 1, 0),
+        const Options&   options       = {});
 
     static TriMesh Sphere(
         float          radius,
@@ -300,6 +336,7 @@ public:
     static TriMesh CornellBox(const TriMesh::Options& options = {});
 
     static bool LoadOBJ(const std::string& path, const std::string& mtlBaseDir, const TriMesh::Options& options, TriMesh* pMesh);
+    static bool LoadOBJ2(const std::string& path, TriMesh* pMesh);
     static bool WriteOBJ(const std::string path, const TriMesh& mesh);
 
 private:
@@ -318,4 +355,5 @@ private:
 private:
     friend struct CalculateTangents;
     void SetTangents(uint32_t vIdx, const glm::vec3& tangent, const glm::vec3& bitangent);
+    void CalculateBounds();
 };
