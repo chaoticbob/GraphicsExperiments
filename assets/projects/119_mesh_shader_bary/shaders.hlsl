@@ -66,6 +66,12 @@ void msmain(
     }
 }
 
+enum VertexID { 
+    FIRST = 0,
+    SECOND = 1,
+    THIRD = 2
+};
+
 struct PSInput {
     float4               PositionCS  : SV_POSITION;
     float3               Bary        : SV_BARYCENTRICS;
@@ -74,10 +80,34 @@ struct PSInput {
 
 float4 psmain(PSInput input) : SV_TARGET
 {
-    uint vIdx0 = GetAttributeAtVertex(input.VertexIndex, 0);
-    uint vIdx1 = GetAttributeAtVertex(input.VertexIndex, 1);
-    uint vIdx2 = GetAttributeAtVertex(input.VertexIndex, 2);
+    //uint vIdx0 = GetAttributeAtVertex(input.VertexIndex, 0);
+    //uint vIdx1 = GetAttributeAtVertex(input.VertexIndex, 1);
+    //uint vIdx2 = GetAttributeAtVertex(input.VertexIndex, 2);
     
+    int quadId = (int)(WaveGetLaneIndex() % 4);
+    //VertexID i = (VertexID)quadId;
+    
+    uint vIdx = GetAttributeAtVertex(input.VertexIndex, quadId);
+    
+    //if (quadId == 0) vIdx = GetAttributeAtVertex(input.VertexIndex, 0);
+    //if (quadId == 1) vIdx = GetAttributeAtVertex(input.VertexIndex, 1);
+    //if (quadId == 2) vIdx = GetAttributeAtVertex(input.VertexIndex, 2);
+        
+    float3 Position = VertexPositions[vIdx];
+    float3 Position0 = QuadReadLaneAt(Position, 0);
+    float3 Position1 = QuadReadLaneAt(Position, 1);
+    float3 Position2 = QuadReadLaneAt(Position, 2);
+    Position = Position0 * input.Bary.x + Position1 * input.Bary.y + Position2 * input.Bary.z;
+    Position = mul(Scene.M, float4(Position, 1.0)).xyz;
+    
+    float3 Normal = VertexNormals[vIdx];
+    float3 Normal0 = QuadReadLaneAt(Normal, 0);
+    float3 Normal1 = QuadReadLaneAt(Normal, 1);
+    float3 Normal2 = QuadReadLaneAt(Normal, 2);
+    Normal = Normal0 * input.Bary.x + Normal1 * input.Bary.y + Normal2 * input.Bary.z;
+    Normal = mul(Scene.M, float4(Normal, 0.0)).xyz;
+    
+    /*
     float3 Position0 = VertexPositions[vIdx0];
     float3 Position1 = VertexPositions[vIdx1];
     float3 Position2 = VertexPositions[vIdx2];
@@ -89,6 +119,7 @@ float4 psmain(PSInput input) : SV_TARGET
     float3 Normal2 = VertexNormals[vIdx2];
     float3 Normal  = Normal0 * input.Bary.x + Normal1 * input.Bary.y + Normal2 * input.Bary.z;
     Normal =  mul(Scene.M, float4(Normal, 0.0)).xyz;	
+    */
     
     float3 V = normalize(Scene.eyePosition - Position);
     float3 L = normalize(Scene.lightPosition - Position);
