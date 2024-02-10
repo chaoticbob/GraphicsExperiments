@@ -191,6 +191,18 @@ bool InitDx(DxRenderer* pRenderer, bool enableDebug)
     return true;
 }
 
+bool HasMeshShaderPipelineStats(DxRenderer* pRenderer)
+{
+    if (IsNull(pRenderer) || !pRenderer->Device)
+    {
+        return false;
+    }
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS9 featureData = {};
+    pRenderer->Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS8, &featureData, sizeof(featureData));
+    return featureData.MeshShaderPipelineStatsSupported;
+}
+
 bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t height, uint32_t bufferCount, DXGI_FORMAT dsvFormat)
 {
     if (IsNull(pRenderer)) {
@@ -497,11 +509,13 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t size, D3D12_HEAP_TYPE heapTyp
     D3D12_HEAP_PROPERTIES heapProperties = {};
     heapProperties.Type                  = heapType;
 
+    D3D12_RESOURCE_STATES initialResourceState = (heapType == D3D12_HEAP_TYPE_UPLOAD) ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_COMMON;
+
     HRESULT hr = pRenderer->Device->CreateCommittedResource(
         &heapProperties,             // pHeapProperties
         D3D12_HEAP_FLAG_NONE,        // HeapFlags
         &desc,                       // pDesc
-        D3D12_RESOURCE_STATE_COMMON, // InitialResourceState
+        initialResourceState,        // InitialResourceState
         nullptr,                     // pOptimizedClearValues
         IID_PPV_ARGS(ppResource));   // riidResource, ppvResouce
     if (FAILED(hr)) {
@@ -1727,6 +1741,103 @@ HRESULT CreateGraphicsPipeline2(
 
     return S_OK;
 }
+
+#if defined(GREX_USE_D3DX12)
+HRESULT CreateMeshShaderPipeline(
+    DxRenderer*                   pRenderer,
+    ID3D12RootSignature*          pRootSig,
+    const std::vector<char>&      asShaderBytecode,
+    const std::vector<char>&      msShaderBytecode,
+    const std::vector<char>&      psShaderBytecode,
+    DXGI_FORMAT                   rtvFormat,
+    DXGI_FORMAT                   dsvFormat,
+    ID3D12PipelineState**         ppPipeline,
+    D3D12_CULL_MODE               cullMode)
+{
+    D3DX12_MESH_SHADER_PIPELINE_STATE_DESC psoDesc           = {};
+    psoDesc.pRootSignature                                   = pRootSig;
+    psoDesc.AS                                               = {asShaderBytecode.data(), asShaderBytecode.size()};
+    psoDesc.MS                                               = {msShaderBytecode.data(), msShaderBytecode.size()};
+    psoDesc.PS                                               = {psShaderBytecode.data(), psShaderBytecode.size()};
+    psoDesc.BlendState.AlphaToCoverageEnable                 = FALSE;
+    psoDesc.BlendState.IndependentBlendEnable                = FALSE;
+    psoDesc.BlendState.RenderTarget[0].BlendEnable           = FALSE;
+    psoDesc.BlendState.RenderTarget[0].LogicOpEnable         = FALSE;
+    psoDesc.BlendState.RenderTarget[0].SrcBlend              = D3D12_BLEND_SRC_COLOR;
+    psoDesc.BlendState.RenderTarget[0].DestBlend             = D3D12_BLEND_ZERO;
+    psoDesc.BlendState.RenderTarget[0].BlendOp               = D3D12_BLEND_OP_ADD;
+    psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha         = D3D12_BLEND_SRC_ALPHA;
+    psoDesc.BlendState.RenderTarget[0].DestBlendAlpha        = D3D12_BLEND_ZERO;
+    psoDesc.BlendState.RenderTarget[0].BlendOpAlpha          = D3D12_BLEND_OP_ADD;
+    psoDesc.BlendState.RenderTarget[0].LogicOp               = D3D12_LOGIC_OP_NOOP;
+    psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    psoDesc.SampleMask                                       = D3D12_DEFAULT_SAMPLE_MASK;
+    psoDesc.RasterizerState.FillMode                         = D3D12_FILL_MODE_SOLID;
+    psoDesc.RasterizerState.CullMode                         = cullMode;
+    psoDesc.RasterizerState.FrontCounterClockwise            = TRUE;
+    psoDesc.RasterizerState.DepthBias                        = D3D12_DEFAULT_DEPTH_BIAS;
+    psoDesc.RasterizerState.DepthBiasClamp                   = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
+    psoDesc.RasterizerState.SlopeScaledDepthBias             = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+    psoDesc.RasterizerState.DepthClipEnable                  = FALSE;
+    psoDesc.RasterizerState.MultisampleEnable                = FALSE;
+    psoDesc.RasterizerState.AntialiasedLineEnable            = FALSE;
+    psoDesc.RasterizerState.ForcedSampleCount                = 0;
+    psoDesc.DepthStencilState.DepthEnable                    = TRUE;
+    psoDesc.DepthStencilState.DepthWriteMask                 = D3D12_DEPTH_WRITE_MASK_ALL;
+    psoDesc.DepthStencilState.DepthFunc                      = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    psoDesc.DepthStencilState.StencilEnable                  = FALSE;
+    psoDesc.DepthStencilState.StencilReadMask                = D3D12_DEFAULT_STENCIL_READ_MASK;
+    psoDesc.DepthStencilState.StencilWriteMask               = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+    psoDesc.DepthStencilState.FrontFace.StencilFailOp        = D3D12_STENCIL_OP_KEEP;
+    psoDesc.DepthStencilState.FrontFace.StencilDepthFailOp   = D3D12_STENCIL_OP_KEEP;
+    psoDesc.DepthStencilState.FrontFace.StencilPassOp        = D3D12_STENCIL_OP_KEEP;
+    psoDesc.DepthStencilState.FrontFace.StencilFunc          = D3D12_COMPARISON_FUNC_NEVER;
+    psoDesc.DepthStencilState.BackFace                       = psoDesc.DepthStencilState.FrontFace;
+    psoDesc.NumRenderTargets                                 = 1;
+    psoDesc.RTVFormats[0]                                    = rtvFormat;
+    psoDesc.DSVFormat                                        = dsvFormat;
+    psoDesc.SampleDesc.Count                                 = 1;
+
+    // This required unless you want to come up with own struct that handles
+    // the stream requirements:
+    //    https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#createpipelinestate
+    //
+    CD3DX12_PIPELINE_MESH_STATE_STREAM psoStream = CD3DX12_PIPELINE_MESH_STATE_STREAM(psoDesc);
+
+    D3D12_PIPELINE_STATE_STREAM_DESC steamDesc = {};
+    steamDesc.SizeInBytes                      = sizeof(psoStream);
+    steamDesc.pPipelineStateSubobjectStream    = &psoStream;
+
+    HRESULT hr = pRenderer->Device->CreatePipelineState(&steamDesc, IID_PPV_ARGS(ppPipeline));
+    if (FAILED(hr)) {
+        return hr;
+    }
+
+    return S_OK; 
+}
+
+HRESULT CreateMeshShaderPipeline(
+    DxRenderer*                   pRenderer,
+    ID3D12RootSignature*          pRootSig,
+    const std::vector<char>&      msShaderBytecode,
+    const std::vector<char>&      psShaderBytecode,
+    DXGI_FORMAT                   rtvFormat,
+    DXGI_FORMAT                   dsvFormat,
+    ID3D12PipelineState**         ppPipeline,
+    D3D12_CULL_MODE               cullMode)
+{
+    return CreateMeshShaderPipeline(
+        pRenderer,
+        pRootSig,
+        {},
+        msShaderBytecode,
+        psShaderBytecode,
+        rtvFormat,
+        dsvFormat,
+        ppPipeline,
+        cullMode);
+}
+#endif // defined(GREX_USE_D3DX12)
 
 static std::wstring AsciiToUTF16(const std::string& ascii)
 {

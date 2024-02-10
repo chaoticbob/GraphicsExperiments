@@ -27,6 +27,9 @@ PFN_vkGetDescriptorSetLayoutBindingOffsetEXT   fn_vkGetDescriptorSetLayoutBindin
 PFN_vkGetDescriptorEXT                         fn_vkGetDescriptorEXT                         = nullptr;
 PFN_vkCmdBindDescriptorBuffersEXT              fn_vkCmdBindDescriptorBuffersEXT              = nullptr;
 PFN_vkCmdSetDescriptorBufferOffsetsEXT         fn_vkCmdSetDescriptorBufferOffsetsEXT         = nullptr;
+PFN_vkCmdDrawMeshTasksEXT                      fn_vkCmdDrawMeshTasksEXT                      = nullptr;
+PFN_vkCmdPushDescriptorSetKHR                  fn_vkCmdPushDescriptorSetKHR                  = nullptr;
+PFN_vkCmdDrawMeshTasksNV                       fn_vkCmdDrawMeshTasksNV                       = nullptr;
 
 bool     IsCompressed(VkFormat fmt);
 uint32_t BitsPerPixel(VkFormat fmt);
@@ -72,14 +75,14 @@ CommandObjects::~CommandObjects()
     }
 }
 
-bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTracing, uint32_t apiVersion)
+bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeatures& features, uint32_t apiVersion)
 {
     if (IsNull(pRenderer)) {
         return false;
     }
 
-    pRenderer->DebugEnabled      = enableDebug;
-    pRenderer->RayTracingEnabled = enableRayTracing;
+    pRenderer->DebugEnabled = enableDebug;
+    pRenderer->Features     = features;
 
     // Instance
     {
@@ -133,6 +136,9 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
         fn_vkGetDescriptorEXT                         = (PFN_vkGetDescriptorEXT)vkGetInstanceProcAddr(pRenderer->Instance, "vkGetDescriptorEXT");
         fn_vkCmdBindDescriptorBuffersEXT              = (PFN_vkCmdBindDescriptorBuffersEXT)vkGetInstanceProcAddr(pRenderer->Instance, "vkCmdBindDescriptorBuffersEXT");
         fn_vkCmdSetDescriptorBufferOffsetsEXT         = (PFN_vkCmdSetDescriptorBufferOffsetsEXT)vkGetInstanceProcAddr(pRenderer->Instance, "vkCmdSetDescriptorBufferOffsetsEXT");
+        fn_vkCmdDrawMeshTasksEXT                      = (PFN_vkCmdDrawMeshTasksEXT)vkGetInstanceProcAddr(pRenderer->Instance, "vkCmdDrawMeshTasksEXT");
+        fn_vkCmdPushDescriptorSetKHR                  = (PFN_vkCmdPushDescriptorSetKHR)vkGetInstanceProcAddr(pRenderer->Instance, "vkCmdPushDescriptorSetKHR");
+        fn_vkCmdDrawMeshTasksNV                       = (PFN_vkCmdDrawMeshTasksNV)vkGetInstanceProcAddr(pRenderer->Instance, "vkCmdDrawMeshTasksNV");
     }
 
     // Physical device
@@ -207,13 +213,21 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
             VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
             VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME};
 
-        if (pRenderer->RayTracingEnabled) {
+        if (pRenderer->Features.EnableRayTracing) {
             enabledExtensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
             enabledExtensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
             enabledExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
             enabledExtensions.push_back(VK_KHR_RAY_TRACING_MAINTENANCE_1_EXTENSION_NAME);
             enabledExtensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
             enabledExtensions.push_back(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
+        }
+
+        if (pRenderer->Features.EnableMeshShader) {
+            enabledExtensions.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
+        }
+
+        if (pRenderer->Features.EnablePushDescriptor) {
+            enabledExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
         }
 
         // Make sure all the extenions are present
@@ -243,9 +257,34 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
 
         // ---------------------------------------------------------------------
 
+        VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT};
+        meshShaderFeatures.taskShader                            = VK_TRUE;
+        meshShaderFeatures.meshShader                            = VK_TRUE;
+        meshShaderFeatures.meshShaderQueries                     = VK_TRUE;
+
+        VkPhysicalDeviceMeshShaderFeaturesNV meshShaderFeaturesNV = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV};
+        meshShaderFeaturesNV.meshShader                          = VK_TRUE;
+        meshShaderFeaturesNV.taskShader                          = VK_TRUE;
+
+        // ---------------------------------------------------------------------
+
         VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES};
-        bufferDeviceAddressFeatures.pNext                                       = pRenderer->RayTracingEnabled ? &rayTracingPipelineFeatures : nullptr;
+        bufferDeviceAddressFeatures.pNext                                       = nullptr;
         bufferDeviceAddressFeatures.bufferDeviceAddress                         = VK_TRUE;
+
+        //
+        // Optional features
+        //
+        VkBaseInStructure* pStruct = reinterpret_cast<VkBaseInStructure*>(&bufferDeviceAddressFeatures);
+        if (pRenderer->Features.EnableRayTracing) {
+            pStruct->pNext = reinterpret_cast<VkBaseInStructure*>(&rayTracingPipelineFeatures);
+            // accelerationStructure is the end of the ray tracing features chain
+            pStruct = reinterpret_cast<VkBaseInStructure*>(&accelerationStructureFeatures);
+        }
+        if (pRenderer->Features.EnableMeshShader) {
+            pStruct->pNext = reinterpret_cast<VkBaseInStructure*>(&meshShaderFeatures);
+            pStruct = reinterpret_cast<VkBaseInStructure*>(&meshShaderFeatures);
+        }
 
         VkPhysicalDeviceImagelessFramebufferFeatures imagelessFramebufferFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGELESS_FRAMEBUFFER_FEATURES, &bufferDeviceAddressFeatures};
         imagelessFramebufferFeatures.imagelessFramebuffer                         = VK_TRUE;
@@ -291,6 +330,7 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, bool enableRayTraci
         robustness2Features.nullDescriptor                                  = VK_TRUE;
 
         VkPhysicalDeviceFeatures enabledFeatures = {};
+        enabledFeatures.pipelineStatisticsQuery = VK_TRUE;
 
         VkDeviceCreateInfo vkci      = {VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
         vkci.pNext                   = &robustness2Features;
@@ -2662,6 +2702,161 @@ HRESULT CreateGraphicsPipeline2(
     return vkres;
 }
 
+VkResult CreateMeshShaderPipeline(
+    VulkanRenderer*      pRenderer,
+    VkPipelineLayout     pipelineLayout,
+    VkShaderModule       asShaderModule,
+    VkShaderModule       msShaderModule,
+    VkShaderModule       fsShaderModule,
+    VkFormat             rtvFormat,
+    VkFormat             dsvFormat,
+    VkPipeline*          pPipeline,
+    VkCullModeFlags      cullMode,
+    VkPrimitiveTopology  topologyType,
+    uint32_t             pipelineFlags)
+{
+    bool                          isInterleavedAttrs             = pipelineFlags & VK_PIPELINE_FLAGS_INTERLEAVED_ATTRS;
+    VkFormat                      rtv_format                     = GREX_DEFAULT_RTV_FORMAT;
+    VkPipelineRenderingCreateInfo pipeline_rendering_create_info = {VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
+    pipeline_rendering_create_info.colorAttachmentCount          = 1;
+    pipeline_rendering_create_info.pColorAttachmentFormats       = &rtv_format;
+    pipeline_rendering_create_info.depthAttachmentFormat         = GREX_DEFAULT_DSV_FORMAT;
+
+    std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
+    // Task (amplification) shader
+    if (asShaderModule != VK_NULL_HANDLE) {
+        VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        shaderStageCreateInfo.stage                           = VK_SHADER_STAGE_TASK_BIT_EXT;
+        shaderStageCreateInfo.module                          = asShaderModule;
+        shaderStageCreateInfo.pName                           = "asmain";
+        shaderStages.push_back(shaderStageCreateInfo);
+    }
+    // Mesh shader
+    VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+    shaderStageCreateInfo.stage                           = VK_SHADER_STAGE_MESH_BIT_EXT;
+    shaderStageCreateInfo.module                          = msShaderModule;
+    shaderStageCreateInfo.pName                           = "msmain";
+    shaderStages.push_back(shaderStageCreateInfo);
+    // Fragment shader
+    shaderStageCreateInfo        = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+    shaderStageCreateInfo.stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+    shaderStageCreateInfo.module = fsShaderModule;
+    shaderStageCreateInfo.pName  = "psmain";
+    shaderStages.push_back(shaderStageCreateInfo);
+
+    VkPipelineViewportStateCreateInfo viewport_state = {VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
+    viewport_state.viewportCount                     = 1;
+    viewport_state.scissorCount                      = 1;
+
+    VkPipelineRasterizationStateCreateInfo rasterization_state = {VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+    rasterization_state.depthClampEnable                       = VK_FALSE;
+    rasterization_state.rasterizerDiscardEnable                = VK_FALSE;
+    rasterization_state.polygonMode                            = VK_POLYGON_MODE_FILL;
+    rasterization_state.cullMode                               = cullMode;
+    rasterization_state.frontFace                              = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterization_state.depthBiasEnable                        = VK_TRUE;
+    rasterization_state.depthBiasConstantFactor                = 0.0f;
+    rasterization_state.depthBiasClamp                         = 0.0f;
+    rasterization_state.depthBiasSlopeFactor                   = 0.0f;
+    rasterization_state.lineWidth                              = 1.0f;
+
+    VkPipelineDepthStencilStateCreateInfo depth_stencil_state = {VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+    depth_stencil_state.depthTestEnable                       = (dsvFormat != VK_FORMAT_UNDEFINED);
+    depth_stencil_state.depthWriteEnable                      = (dsvFormat != VK_FORMAT_UNDEFINED);
+    depth_stencil_state.depthCompareOp                        = VK_COMPARE_OP_LESS_OR_EQUAL;
+    depth_stencil_state.depthBoundsTestEnable                 = VK_FALSE;
+    depth_stencil_state.stencilTestEnable                     = VK_FALSE;
+    depth_stencil_state.front.failOp                          = VK_STENCIL_OP_KEEP;
+    depth_stencil_state.front.depthFailOp                     = VK_STENCIL_OP_KEEP;
+    depth_stencil_state.front.compareOp                       = VK_COMPARE_OP_NEVER;
+    depth_stencil_state.back                                  = depth_stencil_state.front;
+
+    VkPipelineColorBlendAttachmentState color_blend_attachment_state = {};
+    color_blend_attachment_state.blendEnable                         = VK_FALSE;
+    color_blend_attachment_state.srcColorBlendFactor                 = VK_BLEND_FACTOR_SRC_COLOR;
+    color_blend_attachment_state.dstColorBlendFactor                 = VK_BLEND_FACTOR_ZERO;
+    color_blend_attachment_state.colorBlendOp                        = VK_BLEND_OP_ADD;
+    color_blend_attachment_state.srcAlphaBlendFactor                 = VK_BLEND_FACTOR_SRC_ALPHA;
+    color_blend_attachment_state.dstAlphaBlendFactor                 = VK_BLEND_FACTOR_ZERO;
+    color_blend_attachment_state.alphaBlendOp                        = VK_BLEND_OP_ADD;
+    color_blend_attachment_state.colorWriteMask                      = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+    VkPipelineColorBlendStateCreateInfo color_blend_state = {VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+    color_blend_state.logicOpEnable                       = VK_FALSE;
+    color_blend_state.logicOp                             = VK_LOGIC_OP_NO_OP;
+    color_blend_state.attachmentCount                     = 1;
+    color_blend_state.pAttachments                        = &color_blend_attachment_state;
+    color_blend_state.blendConstants[0]                   = 0.0f;
+    color_blend_state.blendConstants[1]                   = 0.0f;
+    color_blend_state.blendConstants[2]                   = 0.0f;
+    color_blend_state.blendConstants[3]                   = 0.0f;
+
+    VkDynamicState dynamic_states[2] = {};
+    dynamic_states[0]                = VK_DYNAMIC_STATE_VIEWPORT;
+    dynamic_states[1]                = VK_DYNAMIC_STATE_SCISSOR;
+
+    VkPipelineDynamicStateCreateInfo dynamic_state = {VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
+    dynamic_state.dynamicStateCount                = 2;
+    dynamic_state.pDynamicStates                   = dynamic_states;
+
+    VkPipelineMultisampleStateCreateInfo pipelineMultiStateCreateInfo = {VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+    pipelineMultiStateCreateInfo.rasterizationSamples                 = VK_SAMPLE_COUNT_1_BIT;
+
+    VkGraphicsPipelineCreateInfo pipeline_info = {VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
+    pipeline_info.pNext                        = &pipeline_rendering_create_info;
+    pipeline_info.stageCount                   = CountU32(shaderStages);
+    pipeline_info.pStages                      = DataPtr(shaderStages);
+    pipeline_info.pVertexInputState            = nullptr;
+    pipeline_info.pInputAssemblyState          = nullptr;
+    pipeline_info.pViewportState               = &viewport_state;
+    pipeline_info.pRasterizationState          = &rasterization_state;
+    pipeline_info.pMultisampleState            = &pipelineMultiStateCreateInfo;
+    pipeline_info.pDepthStencilState           = &depth_stencil_state;
+    pipeline_info.pColorBlendState             = &color_blend_state;
+    pipeline_info.pDynamicState                = &dynamic_state;
+    pipeline_info.layout                       = pipelineLayout;
+    pipeline_info.renderPass                   = VK_NULL_HANDLE;
+    pipeline_info.subpass                      = 0;
+    pipeline_info.basePipelineHandle           = VK_NULL_HANDLE;
+    pipeline_info.basePipelineIndex            = -1;
+
+    VkResult vkres = vkCreateGraphicsPipelines(
+        pRenderer->Device,
+        VK_NULL_HANDLE, // Not using a pipeline cache
+        1,
+        &pipeline_info,
+        nullptr,
+        pPipeline);
+
+    return vkres;
+}
+
+VkResult CreateMeshShaderPipeline(
+    VulkanRenderer*      pRenderer,
+    VkPipelineLayout     pipelineLayout,
+    VkShaderModule       msShaderModule,
+    VkShaderModule       fsShaderModule,
+    VkFormat             rtvFormat,
+    VkFormat             dsvFormat,
+    VkPipeline*          pPipeline,
+    VkCullModeFlags      cullMode,
+    VkPrimitiveTopology  topologyType,
+    uint32_t             pipelineFlags)
+{
+    return CreateMeshShaderPipeline(
+        pRenderer,      // pRenderer
+        pipelineLayout, // pipelineLayout
+        VK_NULL_HANDLE, // asShaderModul,
+        msShaderModule, // msShaderModule
+        fsShaderModule, // fsShaderModule
+        rtvFormat,      // rtvFormat
+        dsvFormat,      // dsvFormat
+        pPipeline,      // pPipeline
+        cullMode,       // cullMode
+        topologyType,   // topologyType
+        pipelineFlags); // pipelineFlags
+}
+
 CompileResult CompileGLSL(
     const std::string&     shaderSource,
     VkShaderStageFlagBits  shaderStage,
@@ -3222,6 +3417,36 @@ void WriteDescriptor(
         &descriptorInfo,   // pDescriptorInfo
         descriptorSize,    // dataSize
         pDescriptor);      // pDescriptor
+}
+
+void PushGraphicsDescriptor(
+    VkCommandBuffer     commandBuffer,
+    VkPipelineLayout    pipelineLayout,
+    uint32_t            set,
+    uint32_t            binding,
+    VkDescriptorType    descriptorType,
+    const VulkanBuffer* pBuffer)
+{
+    VkDescriptorBufferInfo bufferInfo = {};
+    bufferInfo.buffer                 = pBuffer->Buffer;
+    bufferInfo.offset                 = 0;
+    bufferInfo.range                  = VK_WHOLE_SIZE;
+
+    VkWriteDescriptorSet write = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    write.dstSet               = VK_NULL_HANDLE;
+    write.dstBinding           = binding;
+    write.dstArrayElement      = 0;
+    write.descriptorCount      = 1;
+    write.descriptorType       = descriptorType;
+    write.pBufferInfo          = &bufferInfo;
+
+    fn_vkCmdPushDescriptorSetKHR(
+        commandBuffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        pipelineLayout,
+        set,
+        1,
+        &write);
 }
 
 uint32_t BytesPerPixel(VkFormat fmt)

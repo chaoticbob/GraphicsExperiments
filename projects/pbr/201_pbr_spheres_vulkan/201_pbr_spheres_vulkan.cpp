@@ -69,7 +69,6 @@ struct PBRImplementationInfo
 static uint32_t gWindowWidth  = 1280;
 static uint32_t gWindowHeight = 1024;
 static bool     gEnableDebug  = true;
-static bool     gEnableRayTracing = false;
 
 static float gTargetAngle = 0.0f;
 static float gAngle       = 0.0f;
@@ -141,9 +140,10 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRayTracing)) {
-        return EXIT_FAILURE;
-    }
+   VulkanFeatures features = {};
+   if (!InitVulkan(renderer.get(), gEnableDebug, features)) {
+      return EXIT_FAILURE;
+   }
 
     // *************************************************************************
     // Compile shaders
