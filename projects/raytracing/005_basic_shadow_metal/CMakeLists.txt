@@ -1,10 +1,10 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.5)
 
 project(005_basic_shadow_metal)
 
 add_executable(
-    005_basic_shadow_metal
-    005_basic_shadow_metal.cpp
+    ${PROJECT_NAME}
+    ${PROJECT_NAME}.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer.cpp
@@ -16,10 +16,10 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/window.cpp
 )
 
-set_target_properties(005_basic_shadow_metal PROPERTIES FOLDER "raytracing")
+set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER "raytracing")
 
 target_include_directories(
-    005_basic_shadow_metal
+    ${PROJECT_NAME}
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
            ${GREX_THIRD_PARTY_DIR}/glm
            ${GREX_THIRD_PARTY_DIR}/metal-cpp
@@ -30,7 +30,7 @@ FIND_LIBRARY(METAL_LIBRARY Metal)
 FIND_LIBRARY(METALKIT_LIBRARY MetalKit)
 
 target_link_libraries(
-    005_basic_shadow_metal
+    ${PROJECT_NAME}
     PUBLIC glfw
     ${FOUNDATION_LIBRARY}
     ${METAL_LIBRARY}
