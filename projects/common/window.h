@@ -59,6 +59,7 @@ public:
     uint32_t    GetWidth() const { return mWidth; }
     uint32_t    GetHeight() const { return mHeight; }
     GLFWwindow* GetWindow() const { return mWindow; }
+    float       GetAspectRatio() const { return static_cast<float>(mWidth) / static_cast<float>(mHeight); }
 
 #if defined(WIN32)
     HWND GetHWND() const;
@@ -95,8 +96,8 @@ public:
 
 #if defined(ENABLE_IMGUI_METAL)
     bool InitImGuiForMetal(MetalRenderer* pRenderer);
-	void ImGuiNewFrameMetal(MTL::RenderPassDescriptor* pRenderPassDescriptor);
-	void ImGuiRenderDrawData(MetalRenderer* pRenderer, MTL::CommandBuffer* pCommandBuffer, MTL::RenderCommandEncoder* pRenderEncoder);
+    void ImGuiNewFrameMetal(MTL::RenderPassDescriptor* pRenderPassDescriptor);
+    void ImGuiRenderDrawData(MetalRenderer* pRenderer, MTL::CommandBuffer* pCommandBuffer, MTL::RenderCommandEncoder* pRenderEncoder);
 #endif // defined(ENABLE_IMGUI_METAL)
 
 private:

@@ -24,6 +24,7 @@
 #include <iomanip>
 #include <map>
 #include <sstream>
+#include <unordered_map>
 
 #include "config.h"
 
@@ -188,6 +189,18 @@ struct CalculateTangents
 };
 #endif // defined(TRIMESH_USE_MIKKTSPACE)
 
+std::vector<uint32_t> TriMesh::GetIndices() const
+{
+    std::vector<uint32_t> indices;
+    for (auto& tri : mTriangles)
+    {
+        indices.push_back(tri.vIdx0);
+        indices.push_back(tri.vIdx1);
+        indices.push_back(tri.vIdx2);
+    }
+    return indices;
+}
+
 uint32_t TriMesh::AddTriangle(const TriMesh::Triangle& tri)
 {
     mTriangles.push_back(tri);
@@ -201,6 +214,42 @@ uint32_t TriMesh::AddTriangle(uint32_t vIdx0, uint32_t vIdx1, uint32_t vIdx2)
     return AddTriangle(tri);
 }
 
+void TriMesh::AddTriangles(size_t count, const uint32_t* pIndices)
+{
+    assert((count % 3) == 0);
+    size_t n = count / 3;
+    for (size_t i = 0; i < n; ++i)
+    {
+        uint32_t vIdx0 = pIndices[3 * i + 0];
+        uint32_t vIdx1 = pIndices[3 * i + 1];
+        uint32_t vIdx2 = pIndices[3 * i + 2];
+        this->AddTriangle(vIdx0, vIdx1, vIdx2);
+    }
+}
+
+void TriMesh::SetTriangles(size_t count, const uint32_t* pIndices)
+{
+    assert((count % 3) == 0);
+    mTriangles.clear();
+
+    this->AddTriangles(count, pIndices);
+}
+
+void TriMesh::SetTriangles(const std::vector<uint32_t>& indices)
+{
+    assert((indices.size() % 3) == 0);
+    mTriangles.clear();
+
+    size_t n = indices.size() / 3;
+    for (size_t i = 0; i < n; ++i)
+    {
+        uint32_t vIdx0 = indices[3 * i + 0];
+        uint32_t vIdx1 = indices[3 * i + 1];
+        uint32_t vIdx2 = indices[3 * i + 2];
+        this->AddTriangle(vIdx0, vIdx1, vIdx2);
+    }
+}
+
 uint32_t TriMesh::GetGroupIndex(const std::string& groupName) const
 {
     auto it = std::find_if(
@@ -210,7 +259,8 @@ uint32_t TriMesh::GetGroupIndex(const std::string& groupName) const
             bool match = (elem.GetName() == groupName);
             return match;
         });
-    if (it == mGroups.end()) {
+    if (it == mGroups.end())
+    {
         return UINT32_MAX;
     }
 
@@ -219,7 +269,8 @@ uint32_t TriMesh::GetGroupIndex(const std::string& groupName) const
 
 uint32_t TriMesh::AddGroup(const TriMesh::Group& newGroup)
 {
-    if (newGroup.GetName().empty()) {
+    if (newGroup.GetName().empty())
+    {
         assert(false && "group name cannot be empty");
         return UINT32_MAX;
     }
@@ -231,7 +282,8 @@ uint32_t TriMesh::AddGroup(const TriMesh::Group& newGroup)
             bool match = (elem.GetName() == newGroup.GetName());
             return match;
         });
-    if (it != mGroups.end()) {
+    if (it != mGroups.end())
+    {
         assert(false && "group name already exists");
         return UINT32_MAX;
     }
@@ -241,7 +293,8 @@ uint32_t TriMesh::AddGroup(const TriMesh::Group& newGroup)
 
     // Calculate the AABB
     auto& addedGroup = mGroups.back();
-    if (addedGroup.GetNumTriangleIndices() > 0) {
+    if (addedGroup.GetNumTriangleIndices() > 0)
+    {
         TriMesh::Aabb bounds = {};
         // Set the min/max to the first vertex of the first tirangle
         uint32_t    triIdx = addedGroup.GetTriangleIndices()[0];
@@ -249,7 +302,8 @@ uint32_t TriMesh::AddGroup(const TriMesh::Group& newGroup)
         bounds.min         = mPositions[tri.vIdx0];
         bounds.max         = mPositions[tri.vIdx0];
         // Iterate through triangles and min/max on each vertex index
-        for (const auto& triIdx : addedGroup.GetTriangleIndices()) {
+        for (const auto& triIdx : addedGroup.GetTriangleIndices())
+        {
             const auto& tri = mTriangles[triIdx];
             // vIdx0
             bounds.min = glm::min(bounds.min, mPositions[tri.vIdx0]);
@@ -271,8 +325,10 @@ uint32_t TriMesh::AddGroup(const TriMesh::Group& newGroup)
 std::vector<TriMesh::Triangle> TriMesh::GetGroupTriangles(uint32_t groupIndex) const
 {
     std::vector<TriMesh::Triangle> triangles;
-    if (groupIndex < GetNumGroups()) {
-        for (auto& triangleIndex : mGroups[groupIndex].GetTriangleIndices()) {
+    if (groupIndex < GetNumGroups())
+    {
+        for (auto& triangleIndex : mGroups[groupIndex].GetTriangleIndices())
+        {
             const TriMesh::Triangle& tri = mTriangles[triangleIndex];
             triangles.push_back(tri);
         }
@@ -292,14 +348,17 @@ std::vector<TriMesh::Triangle> TriMesh::GetTrianglesForMaterial(const int32_t ma
     std::vector<TriMesh::Triangle> triangles;
     // Iterate groups...
     const uint32_t numGroups = GetNumGroups();
-    for (uint32_t groupIndex = 0; groupIndex < numGroups; ++groupIndex) {
+    for (uint32_t groupIndex = 0; groupIndex < numGroups; ++groupIndex)
+    {
         auto& group = GetGroup(groupIndex);
         // Iterate triangles in group....
         const uint32_t numTriangleIndices = group.GetNumTriangleIndices();
-        for (uint32_t i = 0; i < numTriangleIndices; ++i) {
+        for (uint32_t i = 0; i < numTriangleIndices; ++i)
+        {
             // Look for material indices that match \b materialIndex...
             const int32_t itMaterialIndex = group.GetMaterialIndices()[i];
-            if (materialIndex == itMaterialIndex) {
+            if (materialIndex == itMaterialIndex)
+            {
                 // ...add corresponding triangle if there's a match
                 const uint32_t itTriangleIndex = group.GetTriangleIndices()[i];
                 const auto&    tri             = GetTriangle(itTriangleIndex);
@@ -311,28 +370,42 @@ std::vector<TriMesh::Triangle> TriMesh::GetTrianglesForMaterial(const int32_t ma
     return triangles;
 }
 
+void TriMesh::SetPositions(size_t count, const glm::vec3* pPositions)
+{
+    assert((count > 0) && (pPositions != nullptr));
+
+    mPositions.clear();
+    std::copy(pPositions, pPositions + count, std::back_inserter(mPositions));
+}
+
 void TriMesh::AddVertex(const TriMesh::Vertex& vtx)
 {
     mPositions.push_back(vtx.position);
-    if (mPositions.size() > 1) {
+    if (mPositions.size() > 1)
+    {
         mBounds.min = glm::min(mBounds.min, vtx.position);
         mBounds.max = glm::max(mBounds.max, vtx.position);
     }
-    else {
+    else
+    {
         mBounds.min = vtx.position;
         mBounds.max = vtx.position;
     }
 
-    if (mOptions.enableVertexColors) {
+    if (mOptions.enableVertexColors)
+    {
         mVertexColors.push_back(vtx.vertexColor);
     }
-    if (mOptions.enableTexCoords) {
+    if (mOptions.enableTexCoords)
+    {
         mTexCoords.push_back(vtx.texCoord);
     }
-    if (mOptions.enableNormals) {
+    if (mOptions.enableNormals)
+    {
         mNormals.push_back(vtx.normal);
     }
-    if (mOptions.enableTangents) {
+    if (mOptions.enableTangents)
+    {
         mTangents.push_back(vtx.tangent);
         mBitangents.push_back(vtx.bitangent);
     }
@@ -355,7 +428,8 @@ void TriMesh::Recenter(const glm::vec3& newCenter)
     glm::vec3 currentCenter = mBounds.Center();
     glm::vec3 adjustment    = newCenter - currentCenter;
 
-    for (auto& position : mPositions) {
+    for (auto& position : mPositions)
+    {
         position += adjustment;
     }
 }
@@ -368,7 +442,8 @@ void TriMesh::ScaleToFit(float targetAxisSpan)
     // for (auto& position : mPositions) {
     //     position *= scale;
     // }
-    for (size_t i = 0; i < mPositions.size(); ++i) {
+    for (size_t i = 0; i < mPositions.size(); ++i)
+    {
         mPositions[i] *= scale;
         // mNormals[i] *= scale;
     }
@@ -376,14 +451,16 @@ void TriMesh::ScaleToFit(float targetAxisSpan)
 
 void TriMesh::SetVertexColors(const glm::vec3& vertexColor)
 {
-    for (auto& elem : mVertexColors) {
+    for (auto& elem : mVertexColors)
+    {
         elem = vertexColor;
     }
 }
 
 void TriMesh::SetTangents(uint32_t vIdx, const glm::vec3& tangent, const glm::vec3& bitangent)
 {
-    if (!mOptions.enableTangents) {
+    if (!mOptions.enableTangents)
+    {
         return;
     }
 
@@ -392,6 +469,27 @@ void TriMesh::SetTangents(uint32_t vIdx, const glm::vec3& tangent, const glm::ve
 
     mTangents[vIdx]   = tangent;
     mBitangents[vIdx] = bitangent;
+}
+
+void TriMesh::CalculateBounds()
+{
+    mBounds = {};
+
+    if (mPositions.empty())
+    {
+        return;
+    }
+
+    size_t i    = 0;
+    mBounds.min = mBounds.max = mPositions[i];
+    ++i;
+
+    const size_t n = mPositions.size();
+    for (; i < n; ++i)
+    {
+        mBounds.min = glm::min(mBounds.min, mPositions[i]);
+        mBounds.max = glm::max(mBounds.max, mPositions[i]);
+    }
 }
 
 void TriMesh::AppendMesh(const TriMesh& srcMesh, const std::string& groupPrefix)
@@ -405,20 +503,25 @@ void TriMesh::AppendMesh(const TriMesh& srcMesh, const std::string& groupPrefix)
 
     // Copy vertex data
     const uint32_t srcNumVertices = srcMesh.GetNumVertices();
-    for (uint32_t i = 0; i < srcNumVertices; ++i) {
+    for (uint32_t i = 0; i < srcNumVertices; ++i)
+    {
         TriMesh::Vertex vtx = {};
         vtx.position        = srcMesh.GetPositions()[i];
 
-        if (srcMesh.GetOptions().enableVertexColors) {
+        if (srcMesh.GetOptions().enableVertexColors)
+        {
             vtx.vertexColor = srcMesh.GetVertexColors()[i];
         }
-        if (srcMesh.GetOptions().enableTexCoords) {
+        if (srcMesh.GetOptions().enableTexCoords)
+        {
             vtx.texCoord = srcMesh.GetTexCoords()[i];
         }
-        if (srcMesh.GetOptions().enableNormals) {
+        if (srcMesh.GetOptions().enableNormals)
+        {
             vtx.normal = srcMesh.GetNormals()[i];
         }
-        if (srcMesh.GetOptions().enableTangents) {
+        if (srcMesh.GetOptions().enableTangents)
+        {
             vtx.tangent   = srcMesh.GetTangents()[i];
             vtx.bitangent = srcMesh.GetBitangents()[i];
         }
@@ -428,7 +531,8 @@ void TriMesh::AppendMesh(const TriMesh& srcMesh, const std::string& groupPrefix)
 
     // Copy triangles
     const uint32_t srcNumTriangles = srcMesh.GetNumTriangles();
-    for (uint32_t i = 0; i < srcNumTriangles; ++i) {
+    for (uint32_t i = 0; i < srcNumTriangles; ++i)
+    {
         TriMesh::Triangle tri = srcMesh.GetTriangles()[i];
 
         // Offset new indices
@@ -441,7 +545,8 @@ void TriMesh::AppendMesh(const TriMesh& srcMesh, const std::string& groupPrefix)
 
     // Copy materials
     const uint32_t srcNumMaterials = srcMesh.GetNumMaterials();
-    for (uint32_t i = 0; i < srcNumMaterials; ++i) {
+    for (uint32_t i = 0; i < srcNumMaterials; ++i)
+    {
         auto& material = srcMesh.GetMaterials()[i];
         this->AddMaterial(material);
     }
@@ -450,12 +555,15 @@ void TriMesh::AppendMesh(const TriMesh& srcMesh, const std::string& groupPrefix)
     //
     // If there are groups, then copy them...
     const uint32_t srcNumGroups = srcMesh.GetNumGroups();
-    if (srcNumGroups > 0) {
-        for (uint32_t i = 0; i < srcNumGroups; ++i) {
+    if (srcNumGroups > 0)
+    {
+        for (uint32_t i = 0; i < srcNumGroups; ++i)
+        {
             auto&       srcGroup     = srcMesh.GetGroups()[i];
             std::string newGroupName = srcGroup.GetName();
             // Prefix the name with \b groupPrefix if supplied
-            if (!groupPrefix.empty()) {
+            if (!groupPrefix.empty())
+            {
                 newGroupName = groupPrefix + ":" + newGroupName;
             }
 
@@ -464,11 +572,13 @@ void TriMesh::AppendMesh(const TriMesh& srcMesh, const std::string& groupPrefix)
 
             // Add triangle and material indices
             const uint32_t numSrcTriangleIndices = srcGroup.GetNumTriangleIndices();
-            for (uint32_t j = 0; j < numSrcTriangleIndices; ++j) {
+            for (uint32_t j = 0; j < numSrcTriangleIndices; ++j)
+            {
                 uint32_t triangleIndex = srcGroup.GetTriangleIndices()[j];
                 int32_t  materialIndex = srcGroup.GetMaterialIndices()[j];
                 triangleIndex += triangleIndexOffset;
-                if (materialIndex >= 0) {
+                if (materialIndex >= 0)
+                {
                     materialIndex += materialIndexOffset;
                 }
                 newGroup.AddTriangleIndex(triangleIndex, materialIndex);
@@ -480,8 +590,10 @@ void TriMesh::AppendMesh(const TriMesh& srcMesh, const std::string& groupPrefix)
         }
     }
     // ...otherwise create a group using \b groupPrefix for name
-    else {
-        if (!groupPrefix.empty()) {
+    else
+    {
+        if (!groupPrefix.empty())
+        {
             // Group name
             const std::string& newGroupName = groupPrefix;
 
@@ -497,9 +609,84 @@ void TriMesh::AppendMesh(const TriMesh& srcMesh, const std::string& groupPrefix)
     }
 }
 
+void TriMesh::WeldVertices(
+    float positionDistanceThreshold,
+    float texCoordDistanceThreshold,
+    float normalAngleThreshold)
+{
+    // if (mOptions.enableVertexColors || mOptions.enableTexCoords || mOptions.enableNormals || mOptions.enableTangents)
+    if (mOptions.enableVertexColors || mOptions.enableTangents)
+    {
+        return;
+    }
+
+    const float positionDistanceThresholdSq = positionDistanceThreshold * positionDistanceThreshold;
+    const float texCoordDistanceThresholdSq = texCoordDistanceThreshold * texCoordDistanceThreshold;
+
+    std::unordered_map<uint32_t, uint32_t> weldedIndexMap;
+    std::vector<glm::vec3>                 weldedPositions;
+    std::vector<glm::vec2>                 weldedTexCoords;
+    std::vector<glm::vec3>                 weldedNormals;
+
+    const uint32_t   vertexCount       = CountU32(mPositions);
+    const glm::vec3* pPosition         = mPositions.data();
+    const glm::vec2* pTexCoord         = mTexCoords.data();
+    const glm::vec3* pNormal           = mNormals.data();
+    uint32_t         weldedVertexCount = 0;
+    for (uint32_t oldIdx = 0; oldIdx < vertexCount; ++oldIdx, ++pPosition, ++pTexCoord, ++pNormal)
+    {
+        const glm::vec3* pPosition2 = weldedPositions.data();
+        const glm::vec2* pTexCoord2 = weldedTexCoords.data();
+        const glm::vec3* pNormal2   = weldedNormals.data();
+        //
+        uint32_t newIdx = UINT32_MAX;
+        for (uint32_t i = 0; i < weldedVertexCount; ++i, ++pPosition2, ++pTexCoord2, ++pNormal2)
+        {
+            float posDistSq = glm::distance2(*pPosition, *pPosition2);
+            float tcDistSq  = glm::distance2(*pTexCoord, *pTexCoord2);
+
+            auto  N     = glm::normalize(*pNormal);
+            auto  N2    = glm::normalize(*pNormal2);
+            float theta = acos(glm::dot(N, N2) / (glm::length(N) * glm::length(N2)));
+
+            bool withinPositionThreshold = (posDistSq <= positionDistanceThresholdSq);
+            bool withinTexCoordThreshold = (tcDistSq <= texCoordDistanceThresholdSq);
+            bool withinNormalThreshold   = (theta <= normalAngleThreshold);
+            if (withinPositionThreshold && withinTexCoordThreshold && withinNormalThreshold)
+            {
+                newIdx = i;
+                break;
+            }
+        }
+
+        if (newIdx == UINT32_MAX)
+        {
+            weldedPositions.push_back(*pPosition);
+            weldedTexCoords.push_back(*pTexCoord);
+            weldedNormals.push_back(*pNormal);
+            ++weldedVertexCount;
+            newIdx = weldedVertexCount - 1;
+        }
+
+        weldedIndexMap[oldIdx] = newIdx;
+    }
+
+    mPositions = weldedPositions;
+    mTexCoords = weldedTexCoords;
+    mNormals   = weldedNormals;
+
+    for (auto& tri : mTriangles)
+    {
+        tri.vIdx0 = weldedIndexMap[tri.vIdx0];
+        tri.vIdx1 = weldedIndexMap[tri.vIdx1];
+        tri.vIdx2 = weldedIndexMap[tri.vIdx2];
+    }
+}
+
 std::vector<glm::vec3> TriMesh::GetTBNLineSegments(uint32_t* pNumVertices, float length) const
 {
-    if (pNumVertices == nullptr) {
+    if (pNumVertices == nullptr)
+    {
         return {};
     }
 
@@ -508,18 +695,22 @@ std::vector<glm::vec3> TriMesh::GetTBNLineSegments(uint32_t* pNumVertices, float
     uint32_t numTs = CountU32(mTangents);
     uint32_t numBs = CountU32(mBitangents);
     uint32_t numNs = CountU32(mNormals);
-    if (!((numPs == numTs) && (numTs == numBs) && (numBs == numNs))) {
+    if (!((numPs == numTs) && (numTs == numBs) && (numBs == numNs)))
+    {
         return {};
     }
 
     // Get unique indices
     std::vector<uint32_t> uniqueIndices;
-    for (auto& tri : mTriangles) {
+    for (auto& tri : mTriangles)
+    {
         auto pTriIndices = reinterpret_cast<const uint32_t*>(&tri);
-        for (uint32_t i = 0; i < 3; ++i) {
+        for (uint32_t i = 0; i < 3; ++i)
+        {
             uint32_t vIdx = pTriIndices[i];
             auto     it   = std::find(uniqueIndices.begin(), uniqueIndices.end(), vIdx);
-            if (it != uniqueIndices.end()) {
+            if (it != uniqueIndices.end())
+            {
                 continue;
             }
             uniqueIndices.push_back(vIdx);
@@ -537,7 +728,8 @@ std::vector<glm::vec3> TriMesh::GetTBNLineSegments(uint32_t* pNumVertices, float
     //
     std::vector<glm::vec3> vertexData;
     uint32_t               numVertices = 0;
-    for (auto& vIdx : uniqueIndices) {
+    for (auto& vIdx : uniqueIndices)
+    {
         auto& P = mPositions[vIdx];
         auto& T = mTangents[vIdx];
         auto& B = mBitangents[vIdx];
@@ -679,7 +871,8 @@ TriMesh TriMesh::Box(
 
     glm::mat4 transformMat = glm::mat4(1);
     glm::mat4 rotationMat  = glm::mat4(1);
-    if (options.applyTransform) {
+    if (options.applyTransform)
+    {
         glm::mat4 T  = glm::translate(options.transformTranslate);
         glm::mat4 Rx = glm::rotate(options.transformRotate.x, glm::vec3(1, 0, 0));
         glm::mat4 Ry = glm::rotate(options.transformRotate.y, glm::vec3(0, 1, 0));
@@ -691,21 +884,25 @@ TriMesh TriMesh::Box(
 
     const TriMesh::Vertex* pVertices         = reinterpret_cast<const TriMesh::Vertex*>(vertexData.data());
     const glm::vec2*       pPerfaceTexCoords = reinterpret_cast<const glm::vec2*>(perTexCoordsData.data());
-    for (size_t i = 0; i < 24; ++i) {
+    for (size_t i = 0; i < 24; ++i)
+    {
         TriMesh::Vertex vtx = pVertices[i];
 
-        if (options.applyTransform) {
+        if (options.applyTransform)
+        {
             vtx.position = glm::vec3(transformMat * glm::vec4(vtx.position, 1));
             vtx.normal   = glm::vec3(rotationMat * glm::vec4(vtx.normal, 0));
         }
 
         vtx.position += options.center;
 
-        if (options.faceInside) {
+        if (options.faceInside)
+        {
             vtx.normal = -vtx.normal;
         }
 
-        if (perTexCoords) {
+        if (perTexCoords)
+        {
             vtx.texCoord = pPerfaceTexCoords[i];
         }
 
@@ -713,60 +910,72 @@ TriMesh TriMesh::Box(
     }
 
     const Triangle* pTriangles = reinterpret_cast<const Triangle*>(indexData.data());
-    if (actives & AXIS_POS_X) {
+    if (actives & AXIS_POS_X)
+    {
         Triangle tri0 = pTriangles[6];
         Triangle tri1 = pTriangles[7];
-        if (options.faceInside) {
+        if (options.faceInside)
+        {
             std::swap(tri0.vIdx1, tri0.vIdx2);
             std::swap(tri1.vIdx1, tri1.vIdx2);
         }
         mesh.AddTriangle(tri0);
         mesh.AddTriangle(tri1);
     }
-    if (actives & AXIS_NEG_X) {
+    if (actives & AXIS_NEG_X)
+    {
         Triangle tri0 = pTriangles[4];
         Triangle tri1 = pTriangles[5];
-        if (options.faceInside) {
+        if (options.faceInside)
+        {
             std::swap(tri0.vIdx1, tri0.vIdx2);
             std::swap(tri1.vIdx1, tri1.vIdx2);
         }
         mesh.AddTriangle(tri0);
         mesh.AddTriangle(tri1);
     }
-    if (actives & AXIS_POS_Y) {
+    if (actives & AXIS_POS_Y)
+    {
         Triangle tri0 = pTriangles[10];
         Triangle tri1 = pTriangles[11];
-        if (options.faceInside) {
+        if (options.faceInside)
+        {
             std::swap(tri0.vIdx1, tri0.vIdx2);
             std::swap(tri1.vIdx1, tri1.vIdx2);
         }
         mesh.AddTriangle(tri0);
         mesh.AddTriangle(tri1);
     }
-    if (actives & AXIS_NEG_Y) {
+    if (actives & AXIS_NEG_Y)
+    {
         Triangle tri0 = pTriangles[8];
         Triangle tri1 = pTriangles[9];
-        if (options.faceInside) {
+        if (options.faceInside)
+        {
             std::swap(tri0.vIdx1, tri0.vIdx2);
             std::swap(tri1.vIdx1, tri1.vIdx2);
         }
         mesh.AddTriangle(tri0);
         mesh.AddTriangle(tri1);
     }
-    if (actives & AXIS_POS_Z) {
+    if (actives & AXIS_POS_Z)
+    {
         Triangle tri0 = pTriangles[2];
         Triangle tri1 = pTriangles[3];
-        if (options.faceInside) {
+        if (options.faceInside)
+        {
             std::swap(tri0.vIdx1, tri0.vIdx2);
             std::swap(tri1.vIdx1, tri1.vIdx2);
         }
         mesh.AddTriangle(tri0);
         mesh.AddTriangle(tri1);
     }
-    if (actives & AXIS_NEG_Z) {
+    if (actives & AXIS_NEG_Z)
+    {
         Triangle tri0 = pTriangles[0];
         Triangle tri1 = pTriangles[1];
-        if (options.faceInside) {
+        if (options.faceInside)
+        {
             std::swap(tri0.vIdx1, tri0.vIdx2);
             std::swap(tri1.vIdx1, tri1.vIdx2);
         }
@@ -818,8 +1027,10 @@ TriMesh TriMesh::Plane(
 
     TriMesh mesh = TriMesh(options);
 
-    for (uint32_t j = 0; j < vverts; ++j) {
-        for (uint32_t i = 0; i < uverts; ++i) {
+    for (uint32_t j = 0; j < vverts; ++j)
+    {
+        for (uint32_t i = 0; i < uverts; ++i)
+        {
             float     u = i * du;
             float     v = j * dv;
             glm::vec3 P = (1.0f - u) * (1.0f - v) * P0 +
@@ -845,8 +1056,10 @@ TriMesh TriMesh::Plane(
         }
     }
 
-    for (uint32_t j = 1; j < vverts; ++j) {
-        for (uint32_t i = 1; i < uverts; i++) {
+    for (uint32_t j = 1; j < vverts; ++j)
+    {
+        for (uint32_t i = 1; i < uverts; i++)
+        {
             uint32_t i0 = i - 1;
             uint32_t j0 = j - 1;
             uint32_t i1 = i;
@@ -882,8 +1095,10 @@ TriMesh TriMesh::Sphere(
 
     TriMesh mesh = TriMesh(options);
 
-    for (uint32_t i = 0; i < uverts; ++i) {
-        for (uint32_t j = 0; j < vverts; ++j) {
+    for (uint32_t i = 0; i < uverts; ++i)
+    {
+        for (uint32_t j = 0; j < vverts; ++j)
+        {
             //
             // NOTE: tangent and bitangent needs to flow the same direction
             //       as u and v. Meaning that tangent must point towards u=1
@@ -901,7 +1116,8 @@ TriMesh TriMesh::Sphere(
             glm::vec3 tangent   = glm::normalize(-SphericalTangent(theta, phi));
             glm::vec3 bitangent = glm::normalize(glm::cross(normal, tangent));
 
-            if (options.invertTexCoordsV) {
+            if (options.invertTexCoordsV)
+            {
                 v         = options.texCoordScale.y * (1.0f - phi / kPi);
                 tangent   = glm::normalize(SphericalTangent(theta, phi));
                 bitangent = glm::normalize(glm::cross(normal, tangent));
@@ -922,8 +1138,10 @@ TriMesh TriMesh::Sphere(
     auto& positions = mesh.GetPositions();
 
     std::vector<uint32_t> indexData;
-    for (uint32_t i = 1; i < uverts; ++i) {
-        for (uint32_t j = 1; j < vverts; ++j) {
+    for (uint32_t i = 1; i < uverts; ++i)
+    {
+        for (uint32_t j = 1; j < vverts; ++j)
+        {
             uint32_t i0 = i - 1;
             uint32_t i1 = i;
             uint32_t j0 = j - 1;
@@ -982,7 +1200,8 @@ TriMesh TriMesh::Cone(
     float     baseMinU = -radius;
     float     baseMinV = -radius;
     glm::vec3 baseP0   = {};
-    for (uint32_t i = 0; i < segs; ++i) {
+    for (uint32_t i = 0; i < segs; ++i)
+    {
         uint32_t i0 = i;
         uint32_t i1 = i + 1;
         float    t0 = -(i0 * dt);
@@ -1027,7 +1246,8 @@ TriMesh TriMesh::Cone(
         //
         // # of base triangles = segs - 2
         //
-        if ((i > 0) && (i < (segs - 1))) {
+        if ((i > 0) && (i < (segs - 1)))
+        {
             P0 = baseP0;
 
             // Swap P1 and P2 since we're upside down
@@ -1050,7 +1270,8 @@ TriMesh TriMesh::Cone(
             uint32_t vIdx2 = n - 1;
             mesh.AddTriangle(vIdx0, vIdx1, vIdx2);
         }
-        else {
+        else
+        {
             baseP0 = P1;
         }
     }
@@ -1280,7 +1501,8 @@ TriMesh TriMesh::CornellBox(const TriMesh::Options& options)
 
 bool TriMesh::LoadOBJ(const std::string& path, const std::string& mtlBaseDir, const TriMesh::Options& options, TriMesh* pMesh)
 {
-    if (pMesh == nullptr) {
+    if (pMesh == nullptr)
+    {
         return false;
     }
 
@@ -1302,12 +1524,14 @@ bool TriMesh::LoadOBJ(const std::string& path, const std::string& mtlBaseDir, co
     std::string err;
     bool        loaded = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.c_str(), mtlBaseDir.c_str(), true);
 
-    if (!loaded || !err.empty()) {
+    if (!loaded || !err.empty())
+    {
         return false;
     }
 
     size_t numShapes = shapes.size();
-    if (numShapes == 0) {
+    if (numShapes == 0)
+    {
         return false;
     }
 
@@ -1325,7 +1549,8 @@ bool TriMesh::LoadOBJ(const std::string& path, const std::string& mtlBaseDir, co
     // Transform options
     glm::mat4 transformMat = glm::mat4(1);
     glm::mat4 rotationMat  = glm::mat4(1);
-    if (options.applyTransform) {
+    if (options.applyTransform)
+    {
         glm::mat4 T  = glm::translate(options.transformTranslate);
         glm::mat4 Rx = glm::rotate(options.transformRotate.x, glm::vec3(1, 0, 0));
         glm::mat4 Ry = glm::rotate(options.transformRotate.y, glm::vec3(0, 1, 0));
@@ -1336,14 +1561,16 @@ bool TriMesh::LoadOBJ(const std::string& path, const std::string& mtlBaseDir, co
     }
 
     // Build geometry
-    for (size_t shapeIdx = 0; shapeIdx < numShapes; ++shapeIdx) {
+    for (size_t shapeIdx = 0; shapeIdx < numShapes; ++shapeIdx)
+    {
         const tinyobj::shape_t& shape     = shapes[shapeIdx];
         const tinyobj::mesh_t&  shapeMesh = shape.mesh;
 
         TriMesh::Group newGroup(shape.name);
 
         size_t numTriangles = shapeMesh.indices.size() / 3;
-        for (size_t triIdx = 0; triIdx < numTriangles; ++triIdx) {
+        for (size_t triIdx = 0; triIdx < numTriangles; ++triIdx)
+        {
             size_t triVtxIdx0 = triIdx * 3 + 0;
             size_t triVtxIdx1 = triIdx * 3 + 1;
             size_t triVtxIdx2 = triIdx * 3 + 2;
@@ -1383,7 +1610,8 @@ bool TriMesh::LoadOBJ(const std::string& path, const std::string& mtlBaseDir, co
             }
 
             // TexCoords
-            if ((dataIdx0.texcoord_index != -1) && (dataIdx1.texcoord_index != -1) && (dataIdx2.texcoord_index != -1)) {
+            if ((dataIdx0.texcoord_index != -1) && (dataIdx1.texcoord_index != -1) && (dataIdx2.texcoord_index != -1))
+            {
                 int i0        = 2 * dataIdx0.texcoord_index + 0;
                 int i1        = 2 * dataIdx0.texcoord_index + 1;
                 vtx0.texCoord = glm::vec2(attrib.texcoords[i0], attrib.texcoords[i1]);
@@ -1401,7 +1629,8 @@ bool TriMesh::LoadOBJ(const std::string& path, const std::string& mtlBaseDir, co
                 vtx1.texCoord *= options.texCoordScale;
                 vtx2.texCoord *= options.texCoordScale;
 
-                if (options.invertTexCoordsV) {
+                if (options.invertTexCoordsV)
+                {
                     vtx0.texCoord.y = 1.0f - vtx0.texCoord.y;
                     vtx1.texCoord.y = 1.0f - vtx1.texCoord.y;
                     vtx2.texCoord.y = 1.0f - vtx2.texCoord.y;
@@ -1409,7 +1638,8 @@ bool TriMesh::LoadOBJ(const std::string& path, const std::string& mtlBaseDir, co
             }
 
             // Normals
-            if ((dataIdx0.normal_index != -1) && (dataIdx1.normal_index != -1) && (dataIdx2.normal_index != -1)) {
+            if ((dataIdx0.normal_index != -1) && (dataIdx1.normal_index != -1) && (dataIdx2.normal_index != -1))
+            {
                 int i0      = 3 * dataIdx0.normal_index + 0;
                 int i1      = 3 * dataIdx0.normal_index + 1;
                 int i2      = 3 * dataIdx0.normal_index + 2;
@@ -1426,7 +1656,8 @@ bool TriMesh::LoadOBJ(const std::string& path, const std::string& mtlBaseDir, co
                 vtx2.normal = glm::vec3(attrib.normals[i0], attrib.normals[i1], attrib.normals[i2]);
             }
 
-            if (options.applyTransform) {
+            if (options.applyTransform)
+            {
                 vtx0.position = transformMat * glm::vec4(vtx0.position, 1);
                 vtx1.position = transformMat * glm::vec4(vtx1.position, 1);
                 vtx2.position = transformMat * glm::vec4(vtx2.position, 1);
@@ -1450,13 +1681,16 @@ bool TriMesh::LoadOBJ(const std::string& path, const std::string& mtlBaseDir, co
             int32_t  materialIndex = -1;
 
             const int shapeMaterialId = shapeMesh.material_ids[triIdx];
-            if (shapeMaterialId != -1) {
+            if (shapeMaterialId != -1)
+            {
                 auto it = std::find(activeMaterialIds.begin(), activeMaterialIds.end(), shapeMaterialId);
-                if (it == activeMaterialIds.end()) {
+                if (it == activeMaterialIds.end())
+                {
                     activeMaterialIds.push_back(shapeMaterialId);
                     materialIndex = static_cast<int32_t>(activeMaterialIds.size() - 1);
                 }
-                else {
+                else
+                {
                     materialIndex = static_cast<int32_t>(std::distance(activeMaterialIds.begin(), it));
                 }
             }
@@ -1477,7 +1711,8 @@ bool TriMesh::LoadOBJ(const std::string& path, const std::string& mtlBaseDir, co
     // Only copy the materials in \b activeMaterialIds.
     //
     const uint32_t numActiveMaterials = static_cast<uint32_t>(activeMaterialIds.size());
-    for (uint32_t i = 0; i < numActiveMaterials; ++i) {
+    for (uint32_t i = 0; i < numActiveMaterials; ++i)
+    {
         const size_t materialId = activeMaterialIds[i];
         auto&        material   = materials[materialId];
 
@@ -1500,10 +1735,72 @@ bool TriMesh::LoadOBJ(const std::string& path, const std::string& mtlBaseDir, co
     return true;
 }
 
+bool TriMesh::LoadOBJ2(const std::string& path, TriMesh* pMesh)
+{
+    if (pMesh == nullptr)
+    {
+        return false;
+    }
+
+    tinyobj::attrib_t                attrib;
+    std::vector<tinyobj::shape_t>    shapes;
+    std::vector<tinyobj::material_t> materials;
+
+    std::string warn;
+    std::string err;
+    bool        loaded = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.c_str(), nullptr, false);
+
+    if (!loaded || !err.empty())
+    {
+        return false;
+    }
+
+    size_t numShapes = shapes.size();
+    if (numShapes == 0)
+    {
+        return false;
+    }
+
+    // Make sure all vertex positions are 3 components wide
+    if ((attrib.vertices.size() % 3) != 0)
+    {
+        return false;
+    }
+
+    // Create mesh
+    *pMesh = TriMesh();
+
+    // Set positions
+    pMesh->SetPositions(attrib.vertices.size() / 3, reinterpret_cast<const glm::vec3*>(attrib.vertices.data()));
+
+    for (size_t shapeIdx = 0; shapeIdx < numShapes; ++shapeIdx)
+    {
+        auto& shape = shapes[shapeIdx];
+        if ((shape.mesh.indices.size() % 3) != 0)
+        {
+            return false;
+        }
+
+        size_t numTriangles = shape.mesh.indices.size() / 3;
+        for (size_t triIdx = 0; triIdx < numTriangles; ++triIdx)
+        {
+            uint32_t vIdx0 = static_cast<uint32_t>(shape.mesh.indices[3 * triIdx + 0].vertex_index);
+            uint32_t vIdx1 = static_cast<uint32_t>(shape.mesh.indices[3 * triIdx + 1].vertex_index);
+            uint32_t vIdx2 = static_cast<uint32_t>(shape.mesh.indices[3 * triIdx + 2].vertex_index);
+            pMesh->AddTriangle(vIdx0, vIdx1, vIdx2);
+        }
+    }
+
+    pMesh->CalculateBounds();
+
+    return true;
+}
+
 bool TriMesh::WriteOBJ(const std::string path, const TriMesh& mesh)
 {
     std::ofstream os = std::ofstream(path.c_str());
-    if (!os.is_open()) {
+    if (!os.is_open())
+    {
         return false;
     }
 
@@ -1516,35 +1813,43 @@ bool TriMesh::WriteOBJ(const std::string path, const TriMesh& mesh)
     os << "# vertices\n";
     {
         auto& positions = mesh.GetPositions();
-        for (auto& v : positions) {
+        for (auto& v : positions)
+        {
             os << "v " << v.x << " " << v.y << " " << v.z << "\n";
         }
     }
 
-    if (writeTexCoords) {
+    if (writeTexCoords)
+    {
         os << "# texture coordinates\n";
         {
             auto& texCoords = mesh.GetTexCoords();
-            for (auto& vt : texCoords) {
+            for (auto& vt : texCoords)
+            {
                 os << "vt " << vt.x << " " << vt.y << "\n";
             }
         }
     }
 
-    if (writeNormals) {
+    if (writeNormals)
+    {
         os << "# normals\n";
         {
             auto& normals = mesh.GetNormals();
-            for (auto& vn : normals) {
+            for (auto& vn : normals)
+            {
                 os << "vn " << vn.x << " " << vn.y << " " << vn.z << "\n";
             }
         }
     }
 
     os << "# triangle faces\n";
+    os << "g"
+       << " " << std::filesystem::path(path).filename().replace_extension("") << "\n";
     {
         auto& triangles = mesh.GetTriangles();
-        for (auto& tri : triangles) {
+        for (auto& tri : triangles)
+        {
             // OBJ indices are 1 based
             uint32_t vIdx0 = tri.vIdx0 + 1;
             uint32_t vIdx1 = tri.vIdx1 + 1;
@@ -1555,33 +1860,39 @@ bool TriMesh::WriteOBJ(const std::string path, const TriMesh& mesh)
 
             os << vIdx0;
             os << "/";
-            if (writeTexCoords) {
+            if (writeTexCoords)
+            {
                 os << vIdx0;
             }
             os << "/";
-            if (writeNormals) {
+            if (writeNormals)
+            {
                 os << vIdx0;
             }
             os << " ";
 
             os << vIdx1;
             os << "/";
-            if (writeTexCoords) {
+            if (writeTexCoords)
+            {
                 os << vIdx1;
             }
             os << "/";
-            if (writeNormals) {
+            if (writeNormals)
+            {
                 os << vIdx1;
             }
             os << " ";
 
             os << vIdx2;
             os << "/";
-            if (writeTexCoords) {
+            if (writeTexCoords)
+            {
                 os << vIdx2;
             }
             os << "/";
-            if (writeNormals) {
+            if (writeNormals)
+            {
                 os << vIdx2;
             }
             os << "\n";

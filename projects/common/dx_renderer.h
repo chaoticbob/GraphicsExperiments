@@ -2,7 +2,12 @@
 
 #include "config.h"
 
-#include <d3d12.h>
+#if defined(GREX_USE_D3DX12)
+#    include "directx/d3dx12.h"
+#else
+#    include <d3d12.h>
+#endif
+
 #include <dxgidebug.h>
 #include <dxgi1_6.h>
 #include <dxcapi.h>
@@ -44,6 +49,7 @@ struct DxRenderer
 };
 
 bool InitDx(DxRenderer* pRenderer, bool enableDebug);
+bool HasMeshShaderPipelineStats(DxRenderer* pRenderer);
 bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t height, uint32_t bufferCount = 2, DXGI_FORMAT dsvFormat = DXGI_FORMAT_UNKNOWN);
 bool WaitForGpu(DxRenderer* pRenderer);
 bool SwapchainPresent(DxRenderer* pRenderer);
@@ -184,6 +190,29 @@ HRESULT CreateGraphicsPipeline2(
     DXGI_FORMAT              dsvFormat,
     ID3D12PipelineState**    ppPipeline,
     D3D12_CULL_MODE          cullMode = D3D12_CULL_MODE_BACK);
+
+#if defined(GREX_USE_D3DX12)
+HRESULT CreateMeshShaderPipeline(
+    DxRenderer*              pRenderer,
+    ID3D12RootSignature*     pRootSig,
+    const std::vector<char>& asShaderBytecode,
+    const std::vector<char>& msShaderBytecode,
+    const std::vector<char>& psShaderBytecode,
+    DXGI_FORMAT              rtvFormat,
+    DXGI_FORMAT              dsvFormat,
+    ID3D12PipelineState**    ppPipeline,
+    D3D12_CULL_MODE          cullMode = D3D12_CULL_MODE_BACK);
+
+HRESULT CreateMeshShaderPipeline(
+    DxRenderer*              pRenderer,
+    ID3D12RootSignature*     pRootSig,
+    const std::vector<char>& msShaderBytecode,
+    const std::vector<char>& psShaderBytecode,
+    DXGI_FORMAT              rtvFormat,
+    DXGI_FORMAT              dsvFormat,
+    ID3D12PipelineState**    ppPipeline,
+    D3D12_CULL_MODE          cullMode = D3D12_CULL_MODE_BACK);
+#endif // defined(GREX_USE_D3DX12)
 
 HRESULT CompileHLSL(
     const std::string& shaderSource,

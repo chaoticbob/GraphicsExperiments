@@ -12,7 +12,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -29,7 +30,6 @@ using namespace glm;
 static uint32_t gWindowWidth      = 1920;
 static uint32_t gWindowHeight     = 1080;
 static bool     gEnableDebug      = true;
-static bool     gEnableRayTracing = false;
 
 static float gTargetAngleX = 0.0f;
 static float gAngleX       = 0.0f;
@@ -84,16 +84,18 @@ void MouseMove(int x, int y, int buttons)
     int dx = x - prevX;
     int dy = y - prevY;
 
-    if (buttons & MOUSE_BUTTON_RIGHT) {
+    if (buttons & MOUSE_BUTTON_RIGHT)
+    {
         gTargetAngleX += 0.25f * dy;
     }
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         gTargetAngleY += 0.25f * dx;
     }
 
     prevX = x;
     prevY = y;
-} 
+}
 
 // =============================================================================
 // main()
@@ -102,7 +104,10 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRayTracing)) {
+    VulkanFeatures features   = {};
+    features.EnableRayTracing = true;
+    if (!InitVulkan(renderer.get(), gEnableDebug, features))
+    {
         return EXIT_FAILURE;
     }
 
@@ -115,7 +120,8 @@ int main(int argc, char** argv)
         std::string shaderSource = LoadString("projects/306_parallax_occlusion_map/shaders.hlsl");
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &spirvVS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
@@ -125,7 +131,8 @@ int main(int argc, char** argv)
         }
 
         hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &spirvFS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (PS): " << errorMsg << "\n";
@@ -173,7 +180,7 @@ int main(int argc, char** argv)
     // Texture
     // *************************************************************************
     VulkanImage diffuseTexture = {};
-    VulkanImage dispTexture = {};
+    VulkanImage dispTexture    = {};
     VulkanImage normalTexture  = {};
     CreateTextures(renderer.get(), &diffuseTexture, &dispTexture, &normalTexture);
 
@@ -215,7 +222,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = Window::Create(gWindowWidth, gWindowHeight, "306_parallax_occlusion_map_vulkan");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
     }
@@ -224,7 +232,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight())) {
+    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight()))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -238,7 +247,8 @@ int main(int argc, char** argv)
     {
         CHECK_CALL(GetSwapchainImages(renderer.get(), images));
 
-        for (auto& image : images) {
+        for (auto& image : images)
+        {
             // Create swap chain images
             VkImageViewCreateInfo createInfo           = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
             createInfo.image                           = image;
@@ -262,7 +272,8 @@ int main(int argc, char** argv)
         std::vector<VulkanImage> depthImages;
         depthImages.resize(images.size());
 
-        for (int depthIndex = 0; depthIndex < imageCount; depthIndex++) {
+        for (int depthIndex = 0; depthIndex < imageCount; depthIndex++)
+        {
             // Create depth images
             CHECK_CALL(CreateDSV(renderer.get(), window->GetWidth(), window->GetHeight(), &depthImages[depthIndex]));
 
@@ -301,9 +312,11 @@ int main(int argc, char** argv)
     };
     clearValues[1].depthStencil = {1.0f, 0};
 
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         UINT bufferIndex = 0;
-        if (AcquireNextImage(renderer.get(), &bufferIndex)) {
+        if (AcquireNextImage(renderer.get(), &bufferIndex))
+        {
             assert(false && "AcquireNextImage failed");
             break;
         }
@@ -385,13 +398,12 @@ int main(int argc, char** argv)
 
             // Bind the Vertex Buffer
             VkBuffer vertexBuffers[] = {
-                    positionBuffer.Buffer,
-                    texCoordBuffer.Buffer,
-                    normalBuffer.Buffer,
-                    tangentBuffer.Buffer,
-                    bitangentBuffer.Buffer
-            };
-            VkDeviceSize offsets[]       = {0, 0, 0, 0, 0};
+                positionBuffer.Buffer,
+                texCoordBuffer.Buffer,
+                normalBuffer.Buffer,
+                tangentBuffer.Buffer,
+                bitangentBuffer.Buffer};
+            VkDeviceSize offsets[] = {0, 0, 0, 0, 0};
             vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 5, vertexBuffers, offsets);
 
             vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineState);
@@ -407,19 +419,21 @@ int main(int argc, char** argv)
         CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
 
         // Wait for the GPU to finish the work
-        if (!WaitForGpu(renderer.get())) {
+        if (!WaitForGpu(renderer.get()))
+        {
             assert(false && "WaitForGpu failed");
             break;
         }
 
         // Present
-        if (!SwapchainPresent(renderer.get(), bufferIndex)) {
+        if (!SwapchainPresent(renderer.get(), bufferIndex))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
     }
 
-        return 0;
+    return 0;
 }
 
 void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
@@ -449,7 +463,7 @@ void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayo
             binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
             bindings.push_back(binding);
         }
-         // Texture2D                        DisplacementTexture : register(t3); // Texture
+        // Texture2D                        DisplacementTexture : register(t3); // Texture
         {
             VkDescriptorSetLayoutBinding binding = {};
             binding.binding                      = 3;
@@ -500,7 +514,7 @@ void CreateTextures(
     VulkanImage*    pDisplacement,
     VulkanImage*    pNormal)
 {
-    auto dir = GetAssetPath("textures/red_brick_03"); 
+    auto dir = GetAssetPath("textures/red_brick_03");
 
     // Diffuse
     {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "dx_renderer.h"
+#include "tri_mesh.h"
 
 #include <glm/glm.hpp>
 using float2   = glm::vec2;
@@ -63,6 +64,10 @@ public:
     void SetBlendAlpha();
     void SetBlendAdditive();
 
+    void SetCullModeNone();
+    void SetCullModeBack();
+    void SetCullModeFront();
+
     void SetMatrix(const float4x4& matrix);
 
     void SetBatchMatrix(uint32_t batchId, const float4x4& matrix);
@@ -83,7 +88,21 @@ public:
 
     void FlushToCommandList(ID3D12GraphicsCommandList* pCmdList);
 
-    void DrawGridXZ(const float2& size, uint32_t xSegs, uint32_t zSegs);
+    void DrawGridXZ(const float2& size, uint32_t xSegs, uint32_t zSegs, float alpha = 1.0f);
+    void DrawMesh(const float3& position, const float3& scale, const TriMesh& mesh, bool enableVertexColor = false, float alpha = 1.0f, bool enableTexCoord = false);
+
+    // angle - radians
+    void DrawWireCone(const float3& tip, const float3& dir, float height, float angle, uint32_t segs);
+
+    void DrawWireBox(
+        const float3& P0,
+        const float3& P1,
+        const float3& P2,
+        const float3& P3,
+        const float3& P4,
+        const float3& P5,
+        const float3& P6,
+        const float3& P7);
 
 private:
     enum PrimitiveMode

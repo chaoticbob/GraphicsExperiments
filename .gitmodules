@@ -37,3 +37,12 @@
 [submodule "third_party/KTX-Software"]
 	path = third_party/KTX-Software
 	url = https://github.com/KhronosGroup/KTX-Software.git
+[submodule "third_party/DirectX-Headers"]
+	path = third_party/DirectX-Headers
+	url = https://github.com/microsoft/DirectX-Headers.git
+[submodule "third_party/meshoptimizer"]
+	path = third_party/meshoptimizer
+	url = https://github.com/zeux/meshoptimizer.git
+[submodule "third_party/imGuIZMO.quat"]
+	path = third_party/imGuIZMO.quat
+	url = https://github.com/BrutPitt/imGuIZMO.quat.git

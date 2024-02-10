@@ -10,6 +10,8 @@ lib/
 build-vs2022/
 build/
 *.swp
+*.swo
+*.swl
 
 **/CMakeFiles
 **/*.sln
