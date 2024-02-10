@@ -16,6 +16,8 @@ else()
 endif()
 
 
+option(GREX_ENABLE_MISC_PROJECTS  "Build misc projects" OFF)
+
 # ------------------------------------------------------------------------------
 # Detect Linux
 # ------------------------------------------------------------------------------
@@ -208,6 +210,11 @@ list(APPEND IMGUI_METAL_FILES
 )
 
 set(IMGUI_INC_DIR ${GREX_THIRD_PARTY_DIR}/imgui)
+
+# ------------------------------------------------------------------------------
+# meshoptimizer
+# ------------------------------------------------------------------------------
+add_subdirectory(${GREX_THIRD_PARTY_DIR}/meshoptimizer)
 
 # ------------------------------------------------------------------------------
 # Graphics experiments

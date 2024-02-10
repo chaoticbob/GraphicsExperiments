@@ -15,7 +15,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -27,7 +28,7 @@ using namespace glm;
     }
 
 #define MATERIAL_TEXTURE_STRIDE 4
-#define NUM_MATERIALS           16 
+#define NUM_MATERIALS           16
 #define TOTAL_MATERIAL_TEXTURES (NUM_MATERIALS * MATERIAL_TEXTURE_STRIDE)
 
 #define IBL_INTEGRATION_LUT_DESCRIPTOR_OFFSET    3
@@ -108,10 +109,9 @@ const std::vector<std::string> gModelNames = {
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth      = 1920;
-static uint32_t gWindowHeight     = 1080;
-static bool     gEnableDebug      = true;
-static bool     gEnableRayTracing = false;
+static uint32_t gWindowWidth  = 1920;
+static uint32_t gWindowHeight = 1080;
+static bool     gEnableDebug  = true;
 
 static float gTargetAngle = 0.0f;
 static float gAngle       = 0.0f;
@@ -170,7 +170,8 @@ void MouseMove(int x, int y, int buttons)
     static int prevX = x;
     static int prevY = y;
 
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         int dx = x - prevX;
         int dy = y - prevY;
 
@@ -188,7 +189,9 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRayTracing)) {
+    VulkanFeatures features = {};
+    if (!InitVulkan(renderer.get(), gEnableDebug, features))
+    {
         return EXIT_FAILURE;
     }
 
@@ -200,14 +203,16 @@ int main(int argc, char** argv)
     std::vector<uint32_t> spirvFS;
     {
         std::string shaderSource = LoadString("projects/253_pbr_material_textures/shaders.hlsl");
-        if (shaderSource.empty()) {
+        if (shaderSource.empty())
+        {
             assert(false && "no shader source");
             return EXIT_FAILURE;
         }
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &spirvVS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
@@ -217,7 +222,8 @@ int main(int argc, char** argv)
         }
 
         hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &spirvFS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (PS): " << errorMsg << "\n";
@@ -250,14 +256,16 @@ int main(int argc, char** argv)
     std::vector<uint32_t> drawTextureSpirvFS;
     {
         std::string shaderSource = LoadString("projects/253_pbr_material_textures/drawtexture.hlsl");
-        if (shaderSource.empty()) {
+        if (shaderSource.empty())
+        {
             assert(false && "no shader source");
             return EXIT_FAILURE;
         }
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &drawTextureSpirvVS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
@@ -267,7 +275,8 @@ int main(int argc, char** argv)
         }
 
         hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &drawTextureSpirvFS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (PS): " << errorMsg << "\n";
@@ -438,7 +447,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = Window::Create(gWindowWidth, gWindowHeight, "253_pbr_material_textures_vulkan");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
     }
@@ -447,7 +457,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight())) {
+    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight()))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -465,7 +476,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForVulkan(renderer.get(), renderPass.RenderPass)) {
+    if (!window->InitImGuiForVulkan(renderer.get(), renderPass.RenderPass))
+    {
         assert(false && "Window::InitImGuiForVulkan failed");
         return EXIT_FAILURE;
     }
@@ -479,7 +491,8 @@ int main(int argc, char** argv)
     {
         CHECK_CALL(GetSwapchainImages(renderer.get(), images));
 
-        for (auto& image : images) {
+        for (auto& image : images)
+        {
             // Create swap chain images
             VkImageViewCreateInfo createInfo           = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
             createInfo.image                           = image;
@@ -503,7 +516,8 @@ int main(int argc, char** argv)
         std::vector<VulkanImage> depthImages;
         depthImages.resize(images.size());
 
-        for (int depthIndex = 0; depthIndex < imageCount; depthIndex++) {
+        for (int depthIndex = 0; depthIndex < imageCount; depthIndex++)
+        {
             // Create depth images
             CHECK_CALL(CreateDSV(renderer.get(), window->GetWidth(), window->GetHeight(), &depthImages[depthIndex]));
 
@@ -570,22 +584,30 @@ int main(int argc, char** argv)
     // Main loop
     // *************************************************************************
     VkClearValue clearValues[2];
-    clearValues[0].color        = { {0.0f, 0.0f, 0.2f, 1.0f} };
+    clearValues[0].color = {
+        {0.0f, 0.0f, 0.2f, 1.0f}
+    };
     clearValues[1].depthStencil = {1.0f, 0};
 
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         window->ImGuiNewFrameVulkan();
 
-        if (ImGui::Begin("Scene")) {
+        if (ImGui::Begin("Scene"))
+        {
             static const char* currentModelName = gModelNames[0].c_str();
-            if (ImGui::BeginCombo("Model", currentModelName)) {
-                for (size_t i = 0; i < gModelNames.size(); ++i) {
+            if (ImGui::BeginCombo("Model", currentModelName))
+            {
+                for (size_t i = 0; i < gModelNames.size(); ++i)
+                {
                     bool isSelected = (currentModelName == gModelNames[i]);
-                    if (ImGui::Selectable(gModelNames[i].c_str(), isSelected)) {
+                    if (ImGui::Selectable(gModelNames[i].c_str(), isSelected))
+                    {
                         currentModelName = gModelNames[i].c_str();
                         gModelIndex      = static_cast<uint32_t>(i);
                     }
-                    if (isSelected) {
+                    if (isSelected)
+                    {
                         ImGui::SetItemDefaultFocus();
                     }
                 }
@@ -595,14 +617,18 @@ int main(int argc, char** argv)
             ImGui::Separator();
 
             static const char* currentIBLName = gIBLNames[0].c_str();
-            if (ImGui::BeginCombo("IBL", currentIBLName)) {
-                for (size_t i = 0; i < gIBLNames.size(); ++i) {
+            if (ImGui::BeginCombo("IBL", currentIBLName))
+            {
+                for (size_t i = 0; i < gIBLNames.size(); ++i)
+                {
                     bool isSelected = (currentIBLName == gIBLNames[i]);
-                    if (ImGui::Selectable(gIBLNames[i].c_str(), isSelected)) {
-                        currentIBLName         = gIBLNames[i].c_str();
+                    if (ImGui::Selectable(gIBLNames[i].c_str(), isSelected))
+                    {
+                        currentIBLName            = gIBLNames[i].c_str();
                         pPBRSceneParams->iblIndex = static_cast<uint32_t>(i);
                     }
-                    if (isSelected) {
+                    if (isSelected)
+                    {
                         ImGui::SetItemDefaultFocus();
                     }
                 }
@@ -619,10 +645,12 @@ int main(int argc, char** argv)
 
             ImGui::Separator();
 
-            for (uint32_t lightIdx = 0; lightIdx < 4; ++lightIdx) {
+            for (uint32_t lightIdx = 0; lightIdx < 4; ++lightIdx)
+            {
                 std::stringstream lightName;
                 lightName << "Light " << lightIdx;
-                if (ImGui::TreeNodeEx(lightName.str().c_str(), ImGuiTreeNodeFlags_None)) {
+                if (ImGui::TreeNodeEx(lightName.str().c_str(), ImGuiTreeNodeFlags_None))
+                {
                     ImGui::Checkbox("Active", reinterpret_cast<bool*>(&pPBRSceneParams->lights[lightIdx].active));
                     ImGui::SliderFloat("Intensity", &pPBRSceneParams->lights[lightIdx].intensity, 0.0f, 10.0f);
                     ImGui::ColorPicker3("Albedo", reinterpret_cast<float*>(&(pPBRSceneParams->lights[lightIdx].color)), ImGuiColorEditFlags_NoInputs);
@@ -633,9 +661,12 @@ int main(int argc, char** argv)
         }
         ImGui::End();
 
-        if (ImGui::Begin("Material Parameters")) {
-            for (uint32_t matIdx = 0; matIdx < gMaterialNames.size(); ++matIdx) {
-                if (ImGui::TreeNodeEx(gMaterialNames[matIdx].c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::Begin("Material Parameters"))
+        {
+            for (uint32_t matIdx = 0; matIdx < gMaterialNames.size(); ++matIdx)
+            {
+                if (ImGui::TreeNodeEx(gMaterialNames[matIdx].c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+                {
                     ImGui::SliderFloat("Specular", &(pMaterialParams[matIdx].specular), 0.0f, 1.0f);
 
                     ImGui::TreePop();
@@ -649,7 +680,8 @@ int main(int argc, char** argv)
         // ---------------------------------------------------------------------
 
         UINT bufferIndex = 0;
-        if (AcquireNextImage(renderer.get(), &bufferIndex)) {
+        if (AcquireNextImage(renderer.get(), &bufferIndex))
+        {
             assert(false && "AcquireNextImage failed");
             break;
         }
@@ -805,7 +837,8 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
                     vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -819,7 +852,8 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
                     vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -833,7 +867,8 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
                     vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -847,7 +882,8 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
                     vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -861,7 +897,8 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
                     vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -875,7 +912,8 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
                     vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -889,7 +927,8 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
                     vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -903,7 +942,8 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
                     vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -917,7 +957,8 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
                     vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -931,7 +972,8 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
                     vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -945,7 +987,8 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
                     vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -959,7 +1002,8 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
                     vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -973,7 +1017,8 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
                     vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -987,7 +1032,8 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
                     vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -1001,7 +1047,8 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
                     vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -1015,7 +1062,8 @@ int main(int argc, char** argv)
                     vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(glm::mat4) + sizeof(uint32_t), sizeof(uint32_t), &invertNormalMapY);
                     vkCmdDrawIndexed(cmdBuf.CommandBuffer, geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -1059,13 +1107,15 @@ int main(int argc, char** argv)
         CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
 
         // Wait for the GPU to finish the work
-        if (!WaitForGpu(renderer.get())) {
+        if (!WaitForGpu(renderer.get()))
+        {
             assert(false && "WaitForGpu failed");
             break;
         }
 
         // Present
-        if (!SwapchainPresent(renderer.get(), bufferIndex)) {
+        if (!SwapchainPresent(renderer.get(), bufferIndex))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -1384,7 +1434,8 @@ void CreateMaterialModels(
         options.transformRotate  = glm::vec3(0, glm::radians(180.0f), 0);
 
         TriMesh mesh;
-        if (!TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh)) {
+        if (!TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh))
+        {
             return;
         }
         mesh.ScaleToFit(1.0f);
@@ -1460,7 +1511,8 @@ void CreateMaterialModels(
         options.transformRotate  = glm::vec3(0, glm::radians(180.0f), 0);
 
         TriMesh mesh;
-        if (!TriMesh::LoadOBJ(GetAssetPath("models/monkey.obj").string(), "", options, &mesh)) {
+        if (!TriMesh::LoadOBJ(GetAssetPath("models/monkey.obj").string(), "", options, &mesh))
+        {
             return;
         }
         // mesh.ScaleToUnit();
@@ -1603,7 +1655,8 @@ void CreateIBLTextures(
     // BRDF LUT
     {
         auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut.hdr"));
-        if (bitmap.Empty()) {
+        if (bitmap.Empty())
+        {
             assert(false && "Load image failed");
             return;
         }
@@ -1621,7 +1674,8 @@ void CreateIBLTextures(
     // Multiscatter BRDF LUT
     {
         auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut_ms.hdr"));
-        if (bitmap.Empty()) {
+        if (bitmap.Empty())
+        {
             assert(false && "Load image failed");
             return;
         }
@@ -1638,24 +1692,29 @@ void CreateIBLTextures(
 
     auto                               iblDir = GetAssetPath("IBL");
     std::vector<std::filesystem::path> iblFiles;
-    for (auto& entry : std::filesystem::directory_iterator(iblDir)) {
-        if (!entry.is_regular_file()) {
+    for (auto& entry : std::filesystem::directory_iterator(iblDir))
+    {
+        if (!entry.is_regular_file())
+        {
             continue;
         }
         auto path = entry.path();
         auto ext  = path.extension();
-        if (ext == ".ibl") {
+        if (ext == ".ibl")
+        {
             path = std::filesystem::relative(path, iblDir.parent_path());
             iblFiles.push_back(path);
         }
     }
 
     size_t maxEntries = std::min<size_t>(gMaxIBLs, iblFiles.size());
-    for (size_t i = 0; i < maxEntries; ++i) {
+    for (size_t i = 0; i < maxEntries; ++i)
+    {
         std::filesystem::path iblFile = iblFiles[i];
 
         IBLMaps ibl = {};
-        if (!LoadIBLMaps32f(iblFile, &ibl)) {
+        if (!LoadIBLMaps32f(iblFile, &ibl))
+        {
             GREX_LOG_ERROR("failed to load: " << iblFile);
             assert(false && "IBL maps load failed failed");
             return;
@@ -1686,7 +1745,8 @@ void CreateIBLTextures(
             uint32_t               levelOffset = 0;
             uint32_t               levelWidth  = ibl.baseWidth;
             uint32_t               levelHeight = ibl.baseHeight;
-            for (uint32_t i = 0; i < ibl.numLevels; ++i) {
+            for (uint32_t i = 0; i < ibl.numLevels; ++i)
+            {
                 MipOffset mipOffset = {};
                 mipOffset.Offset    = levelOffset;
                 mipOffset.RowStride = rowStride;
@@ -1759,44 +1819,53 @@ void CreateMaterials(
     };
 
     size_t maxEntries = materialFiles.size();
-    for (size_t i = 0; i < maxEntries; ++i) {
+    for (size_t i = 0; i < maxEntries; ++i)
+    {
         auto materialFile = materialFiles[i];
 
         std::ifstream is = std::ifstream(materialFile.string().c_str());
-        if (!is.is_open()) {
+        if (!is.is_open())
+        {
             assert(false && "faild to open material file");
         }
 
         MaterialTextures   materialTextures = outDefaultMaterialTextures;
         MaterialParameters materialParams   = {};
 
-        while (!is.eof()) {
+        while (!is.eof())
+        {
             VulkanImage*          pTargetTexture = {};
-            std::filesystem::path textureFile   = "";
+            std::filesystem::path textureFile    = "";
 
             std::string key;
             is >> key;
-            if (key == "basecolor") {
+            if (key == "basecolor")
+            {
                 is >> textureFile;
                 pTargetTexture = &materialTextures.baseColorTexture;
             }
-            else if (key == "normal") {
+            else if (key == "normal")
+            {
                 is >> textureFile;
                 pTargetTexture = &materialTextures.normalTexture;
             }
-            else if (key == "roughness") {
+            else if (key == "roughness")
+            {
                 is >> textureFile;
                 pTargetTexture = &materialTextures.roughnessTexture;
             }
-            else if (key == "metallic") {
+            else if (key == "metallic")
+            {
                 is >> textureFile;
                 pTargetTexture = &materialTextures.metallicTexture;
             }
-            else if (key == "specular") {
+            else if (key == "specular")
+            {
                 is >> materialParams.specular;
             }
 
-            if (textureFile.empty()) {
+            if (textureFile.empty())
+            {
                 continue;
             }
 
@@ -1804,7 +1873,8 @@ void CreateMaterials(
             textureFile = "textures" / cwd / textureFile;
 
             auto bitmap = LoadImage8u(textureFile);
-            if (!bitmap.Empty()) {
+            if (!bitmap.Empty())
+            {
                 MipmapRGBA8u mipmap = MipmapRGBA8u(
                     bitmap,
                     BITMAP_SAMPLE_MODE_WRAP,
@@ -1812,7 +1882,8 @@ void CreateMaterials(
                     BITMAP_FILTER_MODE_NEAREST);
 
                 std::vector<MipOffset> mipOffsets;
-                for (auto& srcOffset : mipmap.GetOffsets()) {
+                for (auto& srcOffset : mipmap.GetOffsets())
+                {
                     MipOffset dstOffset = {};
                     dstOffset.Offset    = srcOffset;
                     dstOffset.RowStride = mipmap.GetRowStride();
@@ -1831,7 +1902,8 @@ void CreateMaterials(
 
                 GREX_LOG_INFO("Created texture from " << textureFile);
             }
-            else {
+            else
+            {
                 GREX_LOG_ERROR("Failed to load: " << textureFile);
                 assert(false && "Failed to load texture!");
             }
@@ -1884,7 +1956,7 @@ void WritePBRDescriptors(
         pDescriptorBuffer->Allocation,
         reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
 
-   // ConstantBuffer<SceneParameters>      SceneParams                                : register(b0);
+    // ConstantBuffer<SceneParameters>      SceneParams                                : register(b0);
     WriteDescriptor(
         pRenderer,
         pDescriptorBufferStartAddress,
@@ -1954,7 +2026,8 @@ void WritePBRDescriptors(
     // Texture2D                            IBLIrradianceMaps[32]                      : register(t16);
     {
         uint32_t arrayIndex = 0;
-        for (auto& image : irrTextures) {
+        for (auto& image : irrTextures)
+        {
             VkImageView imageView = VK_NULL_HANDLE;
             CHECK_CALL(CreateImageView(
                 pRenderer,
@@ -1981,7 +2054,8 @@ void WritePBRDescriptors(
     // Texture2D                            IBLEnvironmentMaps[32]                     : register(t48);
     {
         uint32_t arrayIndex = 0;
-        for (auto& image : envTextures) {
+        for (auto& image : envTextures)
+        {
             VkImageView imageView = VK_NULL_HANDLE;
             CHECK_CALL(CreateImageView(
                 pRenderer,
@@ -2080,14 +2154,16 @@ void WritePBRDescriptors(
     // Texture2D                            MaterialTextures[TOTAL_MATERIAL_TEXTURES]  : register(t100);
     {
         uint32_t arrayIndex = 0;
-        for (auto& materialTextures : materialTextureSets) {
+        for (auto& materialTextures : materialTextureSets)
+        {
             VulkanImage* textureImages[] = {
                 &materialTextures.baseColorTexture,
                 &materialTextures.normalTexture,
                 &materialTextures.roughnessTexture,
                 &materialTextures.metallicTexture};
 
-            for (auto& image : textureImages) {
+            for (auto& image : textureImages)
+            {
                 VkImageView imageView = VK_NULL_HANDLE;
                 CHECK_CALL(CreateImageView(
                     pRenderer,
@@ -2180,7 +2256,7 @@ void WritePBRDescriptors(
             pDescriptorBufferStartAddress,
             descriptorSetLayout,
             35, // binding
-            0, // arrayElement
+            0,  // arrayElement
             materialNormalSampler);
     }
 
@@ -2241,7 +2317,8 @@ void WriteEnvDescriptors(
     // Texture2D                       Textures[16] : register(t32);
     {
         uint32_t arrayIndex = 0;
-        for (auto& image : envTextures) {
+        for (auto& image : envTextures)
+        {
             VkImageView imageView = VK_NULL_HANDLE;
             CHECK_CALL(CreateImageView(
                 pRenderer,
