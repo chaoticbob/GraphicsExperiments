@@ -2,6 +2,8 @@
 
 #include "mtl_renderer.h"
 
+#include "sphereflake.h"
+
 #include <glm/glm.hpp>
 #include <glm/matrix.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -38,28 +40,108 @@ struct CameraProperties {
 	float4x4 ProjInverse;
 };
 
+struct Sphere {
+	float minX;
+	float minY;
+	float minZ;
+	float maxX;
+	float maxY;
+	float maxZ;
+};
+
+struct RayPayload
+{
+    float4 color;
+};
+
 // Return the type for a bounding box intersection function.
 struct BoundingBoxIntersection {
 	bool  accept   [[accept_intersection]];	// Whether to accept or reject the intersection
 	float distance [[distance]]; 			// Distance from the ray origin to eh intersection point
 };
 
-float4 MyMissShader(intersector<instancing>::result_type intersection)
+// -----------------------------------------------------------------------------
+// Function Prototypes
+
+void TraceRay(
+             instance_acceleration_structure         Scene,
+             intersection_function_table<instancing> intersectionFunctionTable,
+             ray                                     ray,
+    thread   RayPayload&                             payload);
+
+// -----------------------------------------------------------------------------
+
+// [shader("raygeneration")]
+kernel void MyRayGen(
+             uint2                                   DispatchRaysIndex         [[thread_position_in_grid]],
+             uint2                                   DispatchRaysDimensions    [[threads_per_grid]],
+	         instance_acceleration_structure         Scene                     [[buffer(0)]],
+	constant CameraProperties&                       Cam                       [[buffer(1)]],
+	         intersection_function_table<instancing> intersectionFunctionTable [[buffer(2)]],
+             texture2d<float, access::write>         RenderTarget              [[texture(0)]])
 {
-	return float4(0, 0, 0, 1);
+	const float2 pixelCenter = (float2)DispatchRaysIndex + float2(0.5, 0.5);
+	const float2 inUV = pixelCenter/(float2)DispatchRaysDimensions;
+	float2 d = inUV * 2.0 - 1.0;
+    d.y = -d.y;
+
+	float4 origin = (Cam.ViewInverse * float4(0,0,0,1));
+	float4 target = (Cam.ProjInverse * float4(d.x, d.y, 1, 1));
+	float4 direction = (Cam.ViewInverse * float4(normalize(target.xyz), 0));
+
+	ray ray;
+	ray.origin = origin.xyz;
+	ray.direction = direction.xyz;
+	ray.min_distance = 0.001;
+	ray.max_distance = 10000.0;
+
+    RayPayload payload = {float4(0, 0, 0, 0)};
+
+    TraceRay(
+        Scene,                 		// AccelerationStructure
+        intersectionFunctionTable,	// Intersection Functions
+        ray,						// Ray
+        payload);					// Payload
+
+	RenderTarget.write(payload.color, DispatchRaysIndex);
 }
 
-float4 MyClosestHitShader(intersector<instancing>::result_type intersection, float3 positionWS)
+// [shader("miss")]
+void MyMissShader(
+            ray         WorldRay,
+    thread  RayPayload& payload)
 {
+    payload.color = float4(1, 0, 0, 1);
+}
+
+// -----------------------------------------------------------------------------
+
+// [shader("closesthit")]
+void MyClosestHitShader(
+             intersector<instancing>::result_type    intersection,
+             ray                                     WorldRay,
+    thread   RayPayload&                             payload)
+{
+	Sphere sphere = *(const device Sphere*)intersection.primitive_data;
+
+	float3 sphereMin = float3(sphere.minX, sphere.minY, sphere.minZ);
+	float3 sphereMax = float3(sphere.maxX, sphere.maxY, sphere.maxZ);
+	float3 sphereCenter = 0.5 * (sphereMax - sphereMin) + sphereMin;
+
+    float3 hitPosition = WorldRay.origin + intersection.distance * WorldRay.direction;
+	float3 normal = normalize(hitPosition - sphereCenter);
+
     // Lambert shading
     float3 lightPos = float3(2, 5, 5);
-    float3 lightDir = normalize(lightPos - positionWS);
-    float d = 0.8 * saturate(dot(lightDir, normalize(positionWS)));
+    float3 lightDir = normalize(lightPos - hitPosition);
+    float d = 0.8 * saturate(dot(lightDir, normalize(normal)));
     float a = 0.2;
     
     float3 color = (float3)saturate(a + d);
-    return float4(color, 1);
+    payload.color = float4(color, 1);
 }
+
+// -----------------------------------------------------------------------------
 
 //
 // Based on:
@@ -85,75 +167,66 @@ float2 gems_intersections(float3 orig, float3 dir, float3 center, float radius)
 	return t;
 }
 
+// [shader("intersection")]
 [[intersection(bounding_box, instancing)]]
 BoundingBoxIntersection  MyIntersectionShader(
-	float3 orig       [[origin]],
-	float3 dir        [[direction]],
-	float minDistance [[min_distance]],
-	float maxDistance [[max_distance]])
+	             float3 orig             [[origin]],
+	             float3 dir              [[direction]],
+	             float  minDistance      [[min_distance]],
+	             float  maxDistance      [[max_distance]],
+	const device void*  perPrimitiveData [[primitive_data]])
 {
-	float3 aabb_min = float3(-1, -1, -1);
-	float3 aabb_max = float3(1, 1, 1);
+	Sphere sphere = *(const device Sphere*)perPrimitiveData;
+    
+	float3 aabb_min = float3(sphere.minX, sphere.minY, sphere.minZ);
+	float3 aabb_max = float3(sphere.maxX, sphere.maxY, sphere.maxZ);
+
 	float3 center = (aabb_max + aabb_min) / (float3)2.0;
 	float radius = (aabb_max.x - aabb_min.x) / 2.0;
 
     // Might be some wonky behavior if inside sphere
 	float2 t = gems_intersections(orig, dir, center, radius);
-    float thit = min(t.x, t.y);    
 
-	BoundingBoxIntersection ret;
+    // Keep the smallest non-negative value
+    float minT = any( t < 0 ) ? max(t.x, t.y) : min(t.x, t.y);
 
-	if (thit == -1) {
-		ret.accept = false;
-	}
-	else {
-		ret.distance = thit;
-		ret.accept = ret.distance >= minDistance  && ret.distance <= maxDistance;
-	}
+    BoundingBoxIntersection ret;
 
-   return ret;
+    if (minT < 0) {
+        ret.accept = false;
+    } else {
+        ret.distance = minT;
+        ret.accept = ret.distance >= minDistance  && ret.distance <= maxDistance;
+    }
+
+    return ret;
 }
 
-kernel void MyRayGen(
-             uint2                                   dispatchRaysIndex         [[thread_position_in_grid]],
-             uint2                                   dispatchRaysDimensions    [[threads_per_grid]],
-	         instance_acceleration_structure         Scene                     [[buffer(0)]],
-	constant CameraProperties&                       Cam                       [[buffer(1)]],
-	         intersection_function_table<instancing> intersectionFunctionTable [[buffer(2)]],
-             texture2d<float, access::write>         RenderTarget              [[texture(0)]])
+// -----------------------------------------------------------------------------
+
+void TraceRay(
+             instance_acceleration_structure         Scene,
+             intersection_function_table<instancing> intersectionFunctionTable,
+             ray                                     ray,
+    thread   RayPayload&                             payload)
 {
-	const float2 pixelCenter = (float2)(dispatchRaysIndex) + float2(0.5, 0.5);
-	const float2 inUV = pixelCenter/(float2)(dispatchRaysDimensions);
-	float2 d = inUV * 2.0 - 1.0;
-	d.y = -d.y;
+    intersector<instancing>                intersector;
+    ::intersector<instancing>::result_type intersection;
 
-	float4 origin = (Cam.ViewInverse * float4(0,0,0,1));
-	float4 target = (Cam.ProjInverse * float4(d.x, d.y, 1, 1));
-	float4 direction = (Cam.ViewInverse * float4(normalize(target.xyz), 0));
+    intersection = intersector.intersect(ray, Scene, 1, intersectionFunctionTable);
 
-	ray ray;
-	ray.origin = origin.xyz;
-	ray.direction = direction.xyz;
-	ray.min_distance = 0.001;
-	ray.max_distance = 10000.0;
+    if (intersection.type == intersection_type::none) {
+        MyMissShader(ray, payload);
 
-	intersector<instancing>                intersector;
-	::intersector<instancing>::result_type intersection;
+    } else if (intersection.type == intersection_type::bounding_box) {
 
-	intersection = intersector.intersect(ray, Scene, 1, intersectionFunctionTable);
-
-	float4 color = float4(1, 0, 1, 1);
-
-	if (intersection.type == intersection_type::none) {
-		color = MyMissShader(intersection);
-	}
-	else if (intersection.type == intersection_type::bounding_box) {
-		float3 positionWS = ray.origin + (ray.direction * intersection.distance);
-		color = MyClosestHitShader(intersection, positionWS);
-	}
-
-	RenderTarget.write(color, dispatchRaysIndex);
+        MyClosestHitShader(
+            intersection,
+            ray,
+            payload);
+    }
 }
+
 
 struct VSOutput {
     float4 Position [[position]];
@@ -192,12 +265,27 @@ static uint32_t gWindowWidth  = 1280;
 static uint32_t gWindowHeight = 720;
 static bool     gEnableDebug  = true;
 
-void                                          CreateBLAS(MetalRenderer* pRenderer, std::vector<MetalAS>& BLAS);
-void                                          CreateTLAS(MetalRenderer* pRenderer, std::vector<MetalAS>& BLAS, MetalAS* pTLAS);
+void CreateSphereBuffer(
+    MetalRenderer* pRenderer,
+    uint32_t*      pNumSpheres,
+    MetalBuffer*   pBuffer);
+
+void CreateBLAS(
+    MetalRenderer*        pRenderer,
+    uint32_t              numSpheres,
+    MetalBuffer*          pSphereBuffer,
+    std::vector<MetalAS>& BLAS);
+
+void CreateTLAS(
+    MetalRenderer*        pRenderer,
+    std::vector<MetalAS>& BLAS,
+    MetalAS*              pTLAS);
+
 NS::SharedPtr<MTL::IntersectionFunctionTable> CreateIntersectionFunctionTable(
     MetalRenderer*             pRenderer,
     MTL::Library*              pLibrary,
-    MTL::ComputePipelineState* pRaytracingPipeline);
+    MTL::ComputePipelineState* pRaytracingPipeline,
+    MetalBuffer*               pSphereBuffer);
 
 // =============================================================================
 // main()
@@ -263,6 +351,13 @@ int main(int argc, char** argv)
     }
 
     // *************************************************************************
+    // Sphere buffer
+    // *************************************************************************
+    uint32_t    numSpheres = 0;
+    MetalBuffer sphereBuffer;
+    CreateSphereBuffer(renderer.get(), &numSpheres, &sphereBuffer);
+
+    // *************************************************************************
     // Ray trace pipeline
     // *************************************************************************
     NS::SharedPtr<MTL::ComputePipelineState> rayTracePipeline;
@@ -306,7 +401,7 @@ int main(int argc, char** argv)
     // Bottom level acceleration structure
     // *************************************************************************
     std::vector<MetalAS> blasBuffer;
-    CreateBLAS(renderer.get(), blasBuffer);
+    CreateBLAS(renderer.get(), numSpheres, &sphereBuffer, blasBuffer);
 
     // *************************************************************************
     // Top level acceleration structure
@@ -321,7 +416,8 @@ int main(int argc, char** argv)
         CreateIntersectionFunctionTable(
             renderer.get(),
             library.get(),
-            rayTracePipeline.get());
+            rayTracePipeline.get(),
+            &sphereBuffer);
 
     // *************************************************************************
     // Ray trace ouput texture
@@ -344,7 +440,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "002_basic_procedural_metal");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
     if (!window)
     {
         assert(false && "Window::Create failed");
@@ -378,6 +474,13 @@ int main(int argc, char** argv)
         pComputeEncoder->setAccelerationStructure(tlasBuffer.AS.get(), 0);
         pComputeEncoder->setIntersectionFunctionTable(intersectionFunctionTable.get(), 2);
         pComputeEncoder->setTexture(outputTex.Texture.get(), 0);
+        
+        // Add a useResource() call for every BLAS used by the TLAS
+        for (int blasIndex = 0; blasIndex < blasBuffer.size(); blasIndex++)
+        {
+            pComputeEncoder->useResource(blasBuffer[blasIndex].AS.get(), MTL::ResourceUsageRead);
+        }
+        
         struct Camera
         {
             glm::mat4 viewInverse;
@@ -386,7 +489,8 @@ int main(int argc, char** argv)
 
         Camera camera      = {};
         camera.projInverse = glm::inverse(glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 512.0f));
-        camera.viewInverse = glm::inverse(glm::translate(glm::mat4(1), glm::vec3(0.0f, 0.0f, -2.5f)));
+        auto mat           = glm::lookAt(vec3(0, 4, 3), vec3(0, 1, 0), vec3(0, 1, 0));
+        camera.viewInverse = glm::inverse(mat);
 
         pComputeEncoder->setBytes(&camera, sizeof(Camera), 1);
 
@@ -421,23 +525,56 @@ int main(int argc, char** argv)
     return 0;
 }
 
+void CreateSphereBuffer(
+    MetalRenderer* pRenderer,
+    uint32_t*      pNumSpheres,
+    MetalBuffer*   pBuffer)
+{
+    std::vector<SphereFlake> spheres;
+
+    SphereFlake sphere = {};
+
+    // Ground plane sphere
+    float groundSize = 1000.0f;
+    sphere.aabbMin   = (groundSize * vec3(-1, -1, -1)) - vec3(0, groundSize, 0);
+    sphere.aabbMax   = (groundSize * vec3(1, 1, 1)) - vec3(0, groundSize, 0);
+    spheres.push_back(sphere);
+
+    // Initial sphere
+    float radius   = 1;
+    sphere.aabbMin = (radius * vec3(-1, -1, -1)) + vec3(0, radius, 0);
+    sphere.aabbMax = (radius * vec3(1, 1, 1)) + vec3(0, radius, 0);
+    spheres.push_back(sphere);
+
+    GenerateSphereFlake(0, 4, radius / 3.0f, radius, vec3(0, radius, 0), vec3(0, 1, 0), spheres);
+
+    *pNumSpheres = CountU32(spheres);
+
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(spheres),
+        DataPtr(spheres),
+        pBuffer));
+}
+
 void CreateBLAS(
     MetalRenderer*        pRenderer,
+    uint32_t              numSpheres,
+    MetalBuffer*          pSphereBuffer,
     std::vector<MetalAS>& BLAS)
 {
     NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
 
-    MTL::AxisAlignedBoundingBox aabbs(MTL::PackedFloat3(-1, -1, -1), MTL::PackedFloat3(1, 1, 1));
-
-    MetalBuffer aabbBuffer;
-    CHECK_CALL(CreateBuffer(pRenderer, sizeof(aabbs), &aabbs, &aabbBuffer));
-
     MTL::AccelerationStructureBoundingBoxGeometryDescriptor* aabbGeoDesc = MTL::AccelerationStructureBoundingBoxGeometryDescriptor::alloc()->init();
 
-    aabbGeoDesc->setBoundingBoxBuffer(aabbBuffer.Buffer.get());
-    aabbGeoDesc->setBoundingBoxCount(1);
-    aabbGeoDesc->setBoundingBoxStride(sizeof(MTL::AxisAlignedBoundingBox));
+    aabbGeoDesc->setBoundingBoxBuffer(pSphereBuffer->Buffer.get());
+    aabbGeoDesc->setBoundingBoxCount(numSpheres);
+    aabbGeoDesc->setBoundingBoxStride(sizeof(SphereFlake));
     aabbGeoDesc->setIntersectionFunctionTableOffset(0);
+
+    aabbGeoDesc->setPrimitiveDataBuffer(pSphereBuffer->Buffer.get());
+    aabbGeoDesc->setPrimitiveDataStride(sizeof(SphereFlake));
+    aabbGeoDesc->setPrimitiveDataElementSize(sizeof(SphereFlake));
 
     MTL::PrimitiveAccelerationStructureDescriptor* asDesc           = MTL::PrimitiveAccelerationStructureDescriptor::alloc()->init();
     NS::Array*                                     aabbGeoDescArray = (NS::Array*)CFArrayCreate(kCFAllocatorDefault, (const void**)&aabbGeoDesc, 1, &kCFTypeArrayCallBacks);
@@ -529,7 +666,8 @@ void CreateTLAS(
 NS::SharedPtr<MTL::IntersectionFunctionTable> CreateIntersectionFunctionTable(
     MetalRenderer*             pRenderer,
     MTL::Library*              pLibrary,
-    MTL::ComputePipelineState* pRaytracingPipeline)
+    MTL::ComputePipelineState* pRaytracingPipeline,
+    MetalBuffer*               pSphereBuffer)
 {
     NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
 
@@ -551,6 +689,9 @@ NS::SharedPtr<MTL::IntersectionFunctionTable> CreateIntersectionFunctionTable(
 
     // Put the newly created function handle into the table
     intersectionFunctionTable->setFunction(intersectionFunctionHandle, 0);
+
+    // Add the sphere flake buffer into the per-primitive data
+    intersectionFunctionTable->setBuffer(pSphereBuffer->Buffer.get(), 0, 0);
 
     return NS::TransferPtr(intersectionFunctionTable);
 }
