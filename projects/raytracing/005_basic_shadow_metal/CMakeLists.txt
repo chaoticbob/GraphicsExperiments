@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(004_basic_reflection_metal)
+project(005_basic_shadow_metal)
 
 add_executable(
     ${PROJECT_NAME}
