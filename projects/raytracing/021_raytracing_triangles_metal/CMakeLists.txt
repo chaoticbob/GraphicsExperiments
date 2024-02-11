@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 3.0)
 project(021_raytracing_triangles_metal)
 
 add_executable(
-    021_raytracing_triangles_metal
-    021_raytracing_triangles_metal.cpp
+    ${PROJECT_NAME}
+    ${PROJECT_NAME}.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer.cpp
@@ -16,10 +16,10 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/window.cpp
 )
 
-set_target_properties(021_raytracing_triangles_metal PROPERTIES FOLDER "raytracing")
+set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER "raytracing")
 
 target_include_directories(
-    021_raytracing_triangles_metal
+    ${PROJECT_NAME}
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
            ${GREX_THIRD_PARTY_DIR}/glm
            ${GREX_THIRD_PARTY_DIR}/tinyobjloader
@@ -31,7 +31,7 @@ FIND_LIBRARY(METAL_LIBRARY Metal)
 FIND_LIBRARY(METALKIT_LIBRARY MetalKit)
 
 target_link_libraries(
-    021_raytracing_triangles_metal
+    ${PROJECT_NAME}
     PUBLIC glfw
     ${FOUNDATION_LIBRARY}
     ${METAL_LIBRARY}

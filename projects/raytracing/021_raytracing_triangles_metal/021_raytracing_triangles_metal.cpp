@@ -193,7 +193,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "021_raytracing_triangles_metal");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
     if (!window)
     {
         assert(false && "Window::Create failed");
@@ -225,7 +225,8 @@ int main(int argc, char** argv)
         MTL::ComputeCommandEncoder* pComputeEncoder = pCommandBuffer->computeCommandEncoder();
         pComputeEncoder->setComputePipelineState(rayTracePipeline.get());
         pComputeEncoder->setAccelerationStructure(tlasBuffer.AS.get(), 0);
-        pComputeEncoder->setBuffer(normalBuffer.Buffer.get(), 0, 2);
+        pComputeEncoder->setBuffer(indexBuffer.Buffer.get(), 0, 2);
+        pComputeEncoder->setBuffer(normalBuffer.Buffer.get(), 0, 3);
         pComputeEncoder->setTexture(outputTex.Texture.get(), 0);
         
         // Add a useResource() call for every BLAS used by the TLAS
