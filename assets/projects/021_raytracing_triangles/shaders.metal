@@ -30,7 +30,7 @@ kernel void MyRayGen(
     uint2                           DispatchRaysIndex      [[thread_position_in_grid]],
     uint2                           DispatchRaysDimensions [[threads_per_grid]],
     instance_acceleration_structure Scene                  [[buffer(0)]],
-    constant CameraProperties&		Cam                    [[buffer(1)]],
+    constant CameraProperties&      Cam                    [[buffer(1)]],
     device const Triangle*          Triangles              [[buffer(2)]],
     device const packed_float3*     Normals                [[buffer(3)]],
     texture2d<float, access::write> RenderTarget           [[texture(0)]])
