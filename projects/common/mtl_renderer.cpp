@@ -8,7 +8,9 @@
 #include "mtl_renderer.h"
 #include "mtl_renderer_utils.h"
 
+bool     IsCompressed(MTL::PixelFormat fmt);
 uint32_t BitsPerPixel(MTL::PixelFormat fmt);
+uint32_t BitsPerElement(MTL::VertexFormat fmt);
 
 uint32_t PixelStride(MTL::PixelFormat fmt)
 {
@@ -33,20 +35,23 @@ bool InitMetal(
     MetalRenderer* pRenderer,
     bool           enableDebug)
 {
-    if (IsNull(pRenderer)) {
+    if (IsNull(pRenderer))
+    {
         return false;
     }
 
     pRenderer->DebugEnabled = enableDebug;
 
     pRenderer->Device = NS::TransferPtr(MTL::CreateSystemDefaultDevice());
-    if (pRenderer->Device.get() == nullptr) {
+    if (pRenderer->Device.get() == nullptr)
+    {
         assert(false && "MTL::CreateSystemDefaultDevice() failed");
         return false;
     }
 
     pRenderer->Queue = NS::TransferPtr(pRenderer->Device->newCommandQueue());
-    if (pRenderer->Queue.get() == nullptr) {
+    if (pRenderer->Queue.get() == nullptr)
+    {
         assert(false && "MTL::Device::newCommandQueue() failed");
         return false;
     }
@@ -68,18 +73,21 @@ bool InitSwapchain(
     // naming template given in the metal-cpp README.md
     CA::MetalLayer* layer = CA::MetalLayer::layer();
 
-    if (layer != nullptr) {
+    if (layer != nullptr)
+    {
         layer->setDevice(pRenderer->Device.get());
         layer->setPixelFormat(GREX_DEFAULT_RTV_FORMAT);
         layer->setDrawableSize(layerSize);
 
         MetalSetNSWindowSwapchain(pCocoaWindow, layer);
 
-        pRenderer->pSwapchain            = layer;
+        pRenderer->pSwapchain           = layer;
         pRenderer->SwapchainBufferCount = bufferCount;
 
-        if (dsvFormat != MTL::PixelFormatInvalid) {
-            for (int dsvIndex = 0; (dsvIndex < bufferCount); dsvIndex++) {
+        if (dsvFormat != MTL::PixelFormatInvalid)
+        {
+            for (int dsvIndex = 0; (dsvIndex < bufferCount); dsvIndex++)
+            {
                 auto depthBufferDesc = NS::TransferPtr(MTL::TextureDescriptor::alloc()->init());
 
                 depthBufferDesc->setPixelFormat(dsvFormat);
@@ -91,17 +99,20 @@ bool InitSwapchain(
 
                 auto localTexture = NS::TransferPtr(pRenderer->Device->newTexture(depthBufferDesc.get()));
 
-                if (localTexture.get() != nullptr) {
+                if (localTexture.get() != nullptr)
+                {
                     pRenderer->SwapchainDSVBuffers.push_back(localTexture);
                 }
-                else {
+                else
+                {
                     assert(false && "Depth Buffer MTL::Device::newTexture() failed");
                     return false;
                 }
             }
         }
     }
-    else {
+    else
+    {
         assert(false && "pSwapchain creation CA::MetalLayer::layer() failed");
         return false;
     }
@@ -196,13 +207,16 @@ NS::Error* CreateBuffer(
 {
     pBuffer->Buffer = NS::TransferPtr(pRenderer->Device->newBuffer(srcSize, MTL::ResourceStorageModeManaged));
 
-    if (pBuffer->Buffer.get() != nullptr) {
-       if (pSrcData != nullptr) {
-          memcpy(pBuffer->Buffer->contents(), pSrcData, srcSize);
-          pBuffer->Buffer->didModifyRange(NS::Range::Make(0, pBuffer->Buffer->length()));
-       }
+    if (pBuffer->Buffer.get() != nullptr)
+    {
+        if (pSrcData != nullptr)
+        {
+            memcpy(pBuffer->Buffer->contents(), pSrcData, srcSize);
+            pBuffer->Buffer->didModifyRange(NS::Range::Make(0, pBuffer->Buffer->length()));
+        }
     }
-    else {
+    else
+    {
         assert(false && "CreateBuffer() - MTL::Device::newBuffer() failed");
     }
 
@@ -259,11 +273,19 @@ NS::Error* CreateTexture(
     uint32_t mipIndex  = 0;
     uint32_t mipWidth  = width;
     uint32_t mipHeight = height;
-    for (const auto& mipOffset : mipOffsets) {
+    for (const auto& mipOffset : mipOffsets)
+    {
         auto        region  = MTL::Region::Make2D(0, 0, mipWidth, mipHeight);
         const void* mipData = reinterpret_cast<const char*>(pSrcData) + mipOffset.Offset;
 
-        pResource->Texture->replaceRegion(region, mipIndex, mipData, mipOffset.RowStride);
+        uint32_t mipRowStride = mipOffset.RowStride;
+        if (IsCompressed(format))
+        {
+            mipRowStride = mipWidth * 4;
+            mipRowStride = (mipRowStride > 16) ? mipRowStride : 16;
+        }
+
+        pResource->Texture->replaceRegion(region, mipIndex, mipData, mipRowStride);
 
         mipWidth >>= 1;
         mipHeight >>= 1;
@@ -298,11 +320,11 @@ NS::Error* CreateTexture(
 }
 
 NS::Error* CreateRWTexture(
-    MetalRenderer*                pRenderer,
-    uint32_t                      width,
-    uint32_t                      height,
-    MTL::PixelFormat              format,
-    MetalTexture*                 pResource)
+    MetalRenderer*   pRenderer,
+    uint32_t         width,
+    uint32_t         height,
+    MTL::PixelFormat format,
+    MetalTexture*    pResource)
 {
     auto pTextureDesc = NS::TransferPtr(MTL::TextureDescriptor::alloc()->init());
     pTextureDesc->setWidth(width);
@@ -325,76 +347,76 @@ NS::Error* CreateAccelerationStructure(
     MetalAS*                              pAccelStructure)
 {
     NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
-   
-   // Query for the sizes needed to store and build the acceleration structure
-   MTL::AccelerationStructureSizes accelSizes = pRenderer->Device->accelerationStructureSizes(pAccelDesc);
-   
-   // Allocate an acceleration structure large enough for this descriptor. This method
-   // doesn't actually build the acceleration strcutre, but rather allocates memory
-   MTL::AccelerationStructure* accelerationStructure =
-      pRenderer->Device->newAccelerationStructure(accelSizes.accelerationStructureSize);
-   
-   // Allocate scratch space Metal uses to build the acceleration structure.
-   // Use MTLResourceStorageModePrivate for the best performance because the sample
-   // doesn't need access to buffer's contents.
-   MTL::Buffer* scratchBuffer= pRenderer->Device->newBuffer(
-      accelSizes.buildScratchBufferSize,
-      MTL::ResourceStorageModePrivate);
-   
-   // Create a command buffer that performs the acceleration structure build
-   MTL::CommandBuffer* pCommandBuffer = pRenderer->Queue->commandBuffer();
-   
-   // Create an acceleration structure command encoder
-   MTL::AccelerationStructureCommandEncoder* pASEncoder = pCommandBuffer->accelerationStructureCommandEncoder();
-   
-   // Allocate a buffer for Metal to write the compacted accelerated structure's size into
-   MTL::Buffer* compactedSizeBuffer = pRenderer->Device->newBuffer(
-      sizeof(uint32_t),
-      MTL::ResourceStorageModeShared);
-   
-   // Schedule the actual acceleration structure build
-   pASEncoder->buildAccelerationStructure(accelerationStructure, pAccelDesc, scratchBuffer, 0);
-   
-   // Compute and write the compacted acceleration structure size into the buffer. You
-   // must already have a built acceleration structure because Metal determines the compacted
-   // size based on the final size of the acceleration structure. Compacting an acclerations
-   // structure can potentially reclaim significant amounts of memory because Metal must
-   // create the initial structur eusing a conservative approach
-   pASEncoder->writeCompactedAccelerationStructureSize(accelerationStructure, compactedSizeBuffer, 0);
-   
-   // End encoding, and commit the command buffer so the GPU can start building the
-   // acceleration structure
-   pASEncoder->endEncoding();
-   pCommandBuffer->commit();
-   
-   // This code waits for Metal to finish executing the command buffer so it can
-   // read back the compacted size
-   pCommandBuffer->waitUntilCompleted();
-   
-   uint32_t compactedSize = *(uint32_t*)compactedSizeBuffer->contents();
-   
-   // Allocate a smaller acceleration structure based on the returned size
-   MTL::AccelerationStructure* compactedAS = pRenderer->Device->newAccelerationStructure(compactedSize);
-   
-   // Create anotehr command buffer and encoder
-   pCommandBuffer = pRenderer->Queue->commandBuffer();
-   pASEncoder = pCommandBuffer->accelerationStructureCommandEncoder();
-   
-   // Encode the command to copy and compact the acceleration structure into the
-   // smaller acceleartion structure
-   pASEncoder->copyAndCompactAccelerationStructure(accelerationStructure, compactedAS);
-   
-   // End encoding and commit the command buffer. You don't need to wait for Metal to finish
-   // executing this command buffer as long as you synchronize any ray-intersection work
-   // to run after this command buffer completes. The sample relies on Metal's default
-   // dependency trackign on resourcers to automatically synchronize access to the new
-   // compacted acceleration structure
-   pASEncoder->endEncoding();
-   pCommandBuffer->commit();
-   
-   pAccelStructure->AS = NS::TransferPtr(compactedAS);
-   
-   return nullptr;
+
+    // Query for the sizes needed to store and build the acceleration structure
+    MTL::AccelerationStructureSizes accelSizes = pRenderer->Device->accelerationStructureSizes(pAccelDesc);
+
+    // Allocate an acceleration structure large enough for this descriptor. This method
+    // doesn't actually build the acceleration strcutre, but rather allocates memory
+    MTL::AccelerationStructure* accelerationStructure =
+        pRenderer->Device->newAccelerationStructure(accelSizes.accelerationStructureSize);
+
+    // Allocate scratch space Metal uses to build the acceleration structure.
+    // Use MTLResourceStorageModePrivate for the best performance because the sample
+    // doesn't need access to buffer's contents.
+    MTL::Buffer* scratchBuffer = pRenderer->Device->newBuffer(
+        accelSizes.buildScratchBufferSize,
+        MTL::ResourceStorageModePrivate);
+
+    // Create a command buffer that performs the acceleration structure build
+    MTL::CommandBuffer* pCommandBuffer = pRenderer->Queue->commandBuffer();
+
+    // Create an acceleration structure command encoder
+    MTL::AccelerationStructureCommandEncoder* pASEncoder = pCommandBuffer->accelerationStructureCommandEncoder();
+
+    // Allocate a buffer for Metal to write the compacted accelerated structure's size into
+    MTL::Buffer* compactedSizeBuffer = pRenderer->Device->newBuffer(
+        sizeof(uint32_t),
+        MTL::ResourceStorageModeShared);
+
+    // Schedule the actual acceleration structure build
+    pASEncoder->buildAccelerationStructure(accelerationStructure, pAccelDesc, scratchBuffer, 0);
+
+    // Compute and write the compacted acceleration structure size into the buffer. You
+    // must already have a built acceleration structure because Metal determines the compacted
+    // size based on the final size of the acceleration structure. Compacting an acclerations
+    // structure can potentially reclaim significant amounts of memory because Metal must
+    // create the initial structur eusing a conservative approach
+    pASEncoder->writeCompactedAccelerationStructureSize(accelerationStructure, compactedSizeBuffer, 0);
+
+    // End encoding, and commit the command buffer so the GPU can start building the
+    // acceleration structure
+    pASEncoder->endEncoding();
+    pCommandBuffer->commit();
+
+    // This code waits for Metal to finish executing the command buffer so it can
+    // read back the compacted size
+    pCommandBuffer->waitUntilCompleted();
+
+    uint32_t compactedSize = *(uint32_t*)compactedSizeBuffer->contents();
+
+    // Allocate a smaller acceleration structure based on the returned size
+    MTL::AccelerationStructure* compactedAS = pRenderer->Device->newAccelerationStructure(compactedSize);
+
+    // Create anotehr command buffer and encoder
+    pCommandBuffer = pRenderer->Queue->commandBuffer();
+    pASEncoder     = pCommandBuffer->accelerationStructureCommandEncoder();
+
+    // Encode the command to copy and compact the acceleration structure into the
+    // smaller acceleartion structure
+    pASEncoder->copyAndCompactAccelerationStructure(accelerationStructure, compactedAS);
+
+    // End encoding and commit the command buffer. You don't need to wait for Metal to finish
+    // executing this command buffer as long as you synchronize any ray-intersection work
+    // to run after this command buffer completes. The sample relies on Metal's default
+    // dependency trackign on resourcers to automatically synchronize access to the new
+    // compacted acceleration structure
+    pASEncoder->endEncoding();
+    pCommandBuffer->commit();
+
+    pAccelStructure->AS = NS::TransferPtr(compactedAS);
+
+    return nullptr;
 }
 
 NS::Error* CreateDrawVertexColorPipeline(
@@ -409,8 +431,10 @@ NS::Error* CreateDrawVertexColorPipeline(
     uint32_t                    pipelineFlags)
 {
     auto vertexDescriptor = NS::TransferPtr(MTL::VertexDescriptor::alloc()->init());
-    if (vertexDescriptor.get() != nullptr) {
-        if (pipelineFlags & METAL_PIPELINE_FLAGS_INTERLEAVED_ATTRS) {
+    if (vertexDescriptor.get() != nullptr)
+    {
+        if (pipelineFlags & METAL_PIPELINE_FLAGS_INTERLEAVED_ATTRS)
+        {
             {
                 // Position Buffer
                 MTL::VertexAttributeDescriptor* vertexAttribute0 = vertexDescriptor->attributes()->object(0);
@@ -430,7 +454,8 @@ NS::Error* CreateDrawVertexColorPipeline(
             vertexBufferLayout->setStepRate(1);
             vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
         }
-        else {
+        else
+        {
             // Position Buffer
             {
                 MTL::VertexAttributeDescriptor* vertexAttribute = vertexDescriptor->attributes()->object(0);
@@ -457,14 +482,16 @@ NS::Error* CreateDrawVertexColorPipeline(
             }
         }
     }
-    else {
+    else
+    {
         assert(false && "CreateDrawVertexColorPipeline() - MTL::VertexDescriptor::alloc::init() failed");
         return nullptr;
     }
 
     auto desc = NS::TransferPtr(MTL::RenderPipelineDescriptor::alloc()->init());
 
-    if (desc.get() != nullptr) {
+    if (desc.get() != nullptr)
+    {
         desc->setVertexFunction(vsShaderModule->Function.get());
         desc->setFragmentFunction(fsShaderModule->Function.get());
         desc->setVertexDescriptor(vertexDescriptor.get());
@@ -474,24 +501,28 @@ NS::Error* CreateDrawVertexColorPipeline(
 
         NS::Error* pError           = nullptr;
         pPipelineRenderState->State = NS::TransferPtr(pRenderer->Device->newRenderPipelineState(desc.get(), &pError));
-        if (pPipelineRenderState->State.get() == nullptr) {
+        if (pPipelineRenderState->State.get() == nullptr)
+        {
             assert(false && "CreateDrawVertexColorPipeline() - MTL::Device::newRenderPipelineState() failed");
             return pError;
         }
     }
-    else {
+    else
+    {
         assert(false && "CreateDrawVertexColorPipeline() - MTL::RenderPipelineDescriptor::alloc()->init() failed");
         return nullptr;
     }
 
     auto depthStateDesc = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
 
-    if (depthStateDesc.get() != nullptr) {
+    if (depthStateDesc.get() != nullptr)
+    {
         depthStateDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
         depthStateDesc->setDepthWriteEnabled(true);
 
         pDepthStencilState->State = NS::TransferPtr(pRenderer->Device->newDepthStencilState(depthStateDesc.get()));
-        if (pDepthStencilState->State.get() == nullptr) {
+        if (pDepthStencilState->State.get() == nullptr)
+        {
             assert(false && "CreateDrawVertexColorPipeline() - MTL::Device::newDepthStencilState() failed");
             return nullptr;
         }
@@ -508,12 +539,13 @@ NS::Error* CreateDrawNormalPipeline(
     MTL::PixelFormat          dsvFormat,
     MetalPipelineRenderState* pPipelineRenderState,
     MetalDepthStencilState*   pDepthStencilState,
-	bool                      enableTangents)
+    bool                      enableTangents)
 {
     NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
 
     MTL::VertexDescriptor* pVertexDescriptor = MTL::VertexDescriptor::alloc()->init();
-    if (pVertexDescriptor != nullptr) {
+    if (pVertexDescriptor != nullptr)
+    {
         // Position Buffer
         {
             MTL::VertexAttributeDescriptor* vertexAttribute = pVertexDescriptor->attributes()->object(0);
@@ -538,7 +570,8 @@ NS::Error* CreateDrawNormalPipeline(
             vertexBufferLayout->setStepRate(1);
             vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
         }
-		if (enableTangents) {
+        if (enableTangents)
+        {
             // Vertex Tangent Buffer
             {
                 MTL::VertexAttributeDescriptor* vertexAttribute = pVertexDescriptor->attributes()->object(2);
@@ -565,7 +598,8 @@ NS::Error* CreateDrawNormalPipeline(
             }
         }
     }
-    else {
+    else
+    {
         assert(false && "CreateDrawNormalPipeline() - MTL::VertexDescriptor::alloc::init() failed");
     }
 
@@ -573,7 +607,8 @@ NS::Error* CreateDrawNormalPipeline(
     {
         MTL::RenderPipelineDescriptor* pDesc = MTL::RenderPipelineDescriptor::alloc()->init();
 
-        if (pDesc != nullptr) {
+        if (pDesc != nullptr)
+        {
             pDesc->setVertexFunction(pVsShaderModule->Function.get());
             pDesc->setFragmentFunction(pFsShaderModule->Function.get());
             pDesc->setVertexDescriptor(pVertexDescriptor);
@@ -581,32 +616,39 @@ NS::Error* CreateDrawNormalPipeline(
             pDesc->setDepthAttachmentPixelFormat(dsvFormat);
 
             MTL::RenderPipelineState* pLocalPipelineState = pRenderer->Device->newRenderPipelineState(pDesc, &pError);
-            if (pLocalPipelineState != nullptr) {
+            if (pLocalPipelineState != nullptr)
+            {
                 pPipelineRenderState->State = NS::TransferPtr(pLocalPipelineState);
             }
-            else {
+            else
+            {
                 assert(false && "CreateDrawNormalPipeline() - MTL::Device::newRenderPipelineState() failed");
             }
 
             pDesc->release();
         }
-        else {
+        else
+        {
             assert(false && "CreateDrawNormalPipeline() - MTL::RenderPipelineDescriptor::alloc()->init() failed");
         }
     }
 
-    if (pError == nullptr) {
+    if (pError == nullptr)
+    {
         MTL::DepthStencilDescriptor* pDepthStateDesc = MTL::DepthStencilDescriptor::alloc()->init();
 
-        if (pDepthStateDesc != nullptr) {
+        if (pDepthStateDesc != nullptr)
+        {
             pDepthStateDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
             pDepthStateDesc->setDepthWriteEnabled(true);
 
             MTL::DepthStencilState* pLocalDepthState = pRenderer->Device->newDepthStencilState(pDepthStateDesc);
-            if (pLocalDepthState != nullptr) {
+            if (pLocalDepthState != nullptr)
+            {
                 pDepthStencilState->State = NS::TransferPtr(pLocalDepthState);
             }
-            else {
+            else
+            {
                 assert(false && "CreateDrawNormalPipeline() - MTL::Device::newDepthStencilState() failed");
             }
 
@@ -632,7 +674,8 @@ NS::Error* CreateDrawTexturePipeline(
     NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
 
     MTL::VertexDescriptor* pVertexDescriptor = MTL::VertexDescriptor::alloc()->init();
-    if (pVertexDescriptor != nullptr) {
+    if (pVertexDescriptor != nullptr)
+    {
         // Position Buffer
         {
             MTL::VertexAttributeDescriptor* vertexAttribute = pVertexDescriptor->attributes()->object(0);
@@ -658,7 +701,8 @@ NS::Error* CreateDrawTexturePipeline(
             vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
         }
     }
-    else {
+    else
+    {
         assert(false && "CreateDrawTexturePipeline() - MTL::VertexDescriptor::alloc::init() failed");
     }
 
@@ -666,7 +710,8 @@ NS::Error* CreateDrawTexturePipeline(
     {
         MTL::RenderPipelineDescriptor* pDesc = MTL::RenderPipelineDescriptor::alloc()->init();
 
-        if (pDesc != nullptr) {
+        if (pDesc != nullptr)
+        {
             pDesc->setVertexFunction(pVsShaderModule->Function.get());
             pDesc->setFragmentFunction(pFsShaderModule->Function.get());
             pDesc->setVertexDescriptor(pVertexDescriptor);
@@ -674,32 +719,39 @@ NS::Error* CreateDrawTexturePipeline(
             pDesc->setDepthAttachmentPixelFormat(dsvFormat);
 
             MTL::RenderPipelineState* pLocalPipelineState = pRenderer->Device->newRenderPipelineState(pDesc, &pError);
-            if (pLocalPipelineState != nullptr) {
+            if (pLocalPipelineState != nullptr)
+            {
                 pPipelineRenderState->State = NS::TransferPtr(pLocalPipelineState);
             }
-            else {
+            else
+            {
                 assert(false && "CreateDrawTexturePipeline() - MTL::Device::newRenderPipelineState() failed");
             }
 
             pDesc->release();
         }
-        else {
+        else
+        {
             assert(false && "CreateDrawTexturePipeline() - MTL::RenderPipelineDescriptor::alloc()->init() failed");
         }
     }
 
-    if (pError == nullptr) {
+    if (pError == nullptr)
+    {
         MTL::DepthStencilDescriptor* pDepthStateDesc = MTL::DepthStencilDescriptor::alloc()->init();
 
-        if (pDepthStateDesc != nullptr) {
+        if (pDepthStateDesc != nullptr)
+        {
             pDepthStateDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
             pDepthStateDesc->setDepthWriteEnabled(true);
 
             MTL::DepthStencilState* pLocalDepthState = pRenderer->Device->newDepthStencilState(pDepthStateDesc);
-            if (pLocalDepthState != nullptr) {
+            if (pLocalDepthState != nullptr)
+            {
                 pDepthStencilState->State = NS::TransferPtr(pLocalDepthState);
             }
-            else {
+            else
+            {
                 assert(false && "CreateDrawTexturePipeline() - MTL::Device::newDepthStencilState() failed");
             }
 
@@ -725,7 +777,8 @@ NS::Error* CreateDrawBasicPipeline(
     NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
 
     MTL::VertexDescriptor* pVertexDescriptor = MTL::VertexDescriptor::alloc()->init();
-    if (pVertexDescriptor != nullptr) {
+    if (pVertexDescriptor != nullptr)
+    {
         // Position Buffer
         {
             MTL::VertexAttributeDescriptor* vertexAttribute = pVertexDescriptor->attributes()->object(0);
@@ -763,7 +816,8 @@ NS::Error* CreateDrawBasicPipeline(
             vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
         }
     }
-    else {
+    else
+    {
         assert(false && "CreateDrawTexturePipeline() - MTL::VertexDescriptor::alloc::init() failed");
     }
 
@@ -771,7 +825,8 @@ NS::Error* CreateDrawBasicPipeline(
     {
         MTL::RenderPipelineDescriptor* pDesc = MTL::RenderPipelineDescriptor::alloc()->init();
 
-        if (pDesc != nullptr) {
+        if (pDesc != nullptr)
+        {
             pDesc->setVertexFunction(pVsShaderModule->Function.get());
             pDesc->setFragmentFunction(pFsShaderModule->Function.get());
             pDesc->setVertexDescriptor(pVertexDescriptor);
@@ -790,12 +845,14 @@ NS::Error* CreateDrawBasicPipeline(
 
             pDesc->release();
         }
-        else {
+        else
+        {
             assert(false && "CreateDrawBasicPipeline() - MTL::RenderPipelineDescriptor::alloc()->init() failed");
         }
     }
 
-    if (pError == nullptr) {
+    if (pError == nullptr)
+    {
         MTL::DepthStencilDescriptor* pDepthStateDesc = MTL::DepthStencilDescriptor::alloc()->init();
 
         if (pDepthStateDesc != nullptr)
@@ -808,7 +865,8 @@ NS::Error* CreateDrawBasicPipeline(
             {
                 pDepthStencilState->State = NS::TransferPtr(pLocalDepthState);
             }
-            else {
+            else
+            {
                 assert(false && "CreateDrawBasicPipeline() - MTL::Device::newDepthStencilState() failed");
             }
 
@@ -832,8 +890,9 @@ NS::Error* CreateGraphicsPipeline1(
     MetalDepthStencilState*   pDepthStencilState)
 {
     MTL::VertexDescriptor* pVertexDescriptor = MTL::VertexDescriptor::alloc()->init();
-    if (pVertexDescriptor != nullptr) {
-        const uint32_t    inputCount          = 5;
+    if (pVertexDescriptor != nullptr)
+    {
+        const uint32_t inputCount = 5;
 
         MTL::VertexFormat formats[inputCount] = {
             MTL::VertexFormatFloat3,  // Position
@@ -842,10 +901,16 @@ NS::Error* CreateGraphicsPipeline1(
             MTL::VertexFormatFloat3,  // Tangent
             MTL::VertexFormatFloat3}; // Bitangent
 
-        uint32_t strides[inputCount] = {12, 8, 12, 12, 12};
-        uint32_t offsets[inputCount] = { 0, 0,  0,  0,  0};
+        uint32_t offsets[inputCount] = {0, 0, 0, 0, 0};
+        uint32_t strides[inputCount];
 
-        for (int inputIndex = 0; inputIndex < inputCount; inputIndex++) {
+        for (int inputIndex = 0; inputIndex < inputCount; inputIndex++)
+        {
+            strides[inputIndex] = BitsPerElement(formats[inputIndex]) / 8;
+        }
+
+        for (int inputIndex = 0; inputIndex < inputCount; inputIndex++)
+        {
             MTL::VertexAttributeDescriptor* vertexAttribute = pVertexDescriptor->attributes()->object(inputIndex);
             vertexAttribute->setOffset(offsets[inputIndex]);
             vertexAttribute->setFormat(formats[inputIndex]);
@@ -857,7 +922,8 @@ NS::Error* CreateGraphicsPipeline1(
             vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
         }
     }
-    else {
+    else
+    {
         assert(false && "CreateGraphicsPipeline1() - MTL::VertexDescriptor::alloc::init() failed");
     }
 
@@ -865,7 +931,8 @@ NS::Error* CreateGraphicsPipeline1(
     {
         MTL::RenderPipelineDescriptor* pDesc = MTL::RenderPipelineDescriptor::alloc()->init();
 
-        if (pDesc != nullptr) {
+        if (pDesc != nullptr)
+        {
             pDesc->setVertexFunction(pVsShaderModule->Function.get());
             pDesc->setFragmentFunction(pFsShaderModule->Function.get());
             pDesc->setVertexDescriptor(pVertexDescriptor);
@@ -873,32 +940,39 @@ NS::Error* CreateGraphicsPipeline1(
             pDesc->setDepthAttachmentPixelFormat(dsvFormat);
 
             MTL::RenderPipelineState* pLocalPipelineState = pRenderer->Device->newRenderPipelineState(pDesc, &pError);
-            if (pLocalPipelineState != nullptr) {
+            if (pLocalPipelineState != nullptr)
+            {
                 pPipelineRenderState->State = NS::TransferPtr(pLocalPipelineState);
             }
-            else {
+            else
+            {
                 assert(false && "CreateGraphicsPipeline1() - MTL::Device::newRenderPipelineState() failed");
             }
 
             pDesc->release();
         }
-        else {
+        else
+        {
             assert(false && "CreateGraphicsPipeline1() - MTL::RenderPipelineDescriptor::alloc()->init() failed");
         }
     }
 
-    if (pError == nullptr) {
+    if (pError == nullptr)
+    {
         MTL::DepthStencilDescriptor* pDepthStateDesc = MTL::DepthStencilDescriptor::alloc()->init();
 
-        if (pDepthStateDesc != nullptr) {
+        if (pDepthStateDesc != nullptr)
+        {
             pDepthStateDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
             pDepthStateDesc->setDepthWriteEnabled(true);
 
             MTL::DepthStencilState* pLocalDepthState = pRenderer->Device->newDepthStencilState(pDepthStateDesc);
-            if (pLocalDepthState != nullptr) {
+            if (pLocalDepthState != nullptr)
+            {
                 pDepthStencilState->State = NS::TransferPtr(pLocalDepthState);
             }
-            else {
+            else
+            {
                 assert(false && "CreateGraphicsPipeline1() - MTL::Device::newDepthStencilState() failed");
             }
 
@@ -911,9 +985,205 @@ NS::Error* CreateGraphicsPipeline1(
     return pError;
 }
 
+NS::Error* CreateGraphicsPipeline2(
+    MetalRenderer*            pRenderer,
+    MetalShader*              pVsShaderModule,
+    MetalShader*              pFsShaderModule,
+    MTL::PixelFormat          rtvFormat,
+    MTL::PixelFormat          dsvFormat,
+    MetalPipelineRenderState* pPipelineRenderState,
+    MetalDepthStencilState*   pDepthStencilState,
+    uint32_t*                 pOptionalVertexStrides)
+{
+    MTL::VertexDescriptor* pVertexDescriptor = MTL::VertexDescriptor::alloc()->init();
+    if (pVertexDescriptor != nullptr)
+    {
+        const uint32_t inputCount = 4;
+
+        MTL::VertexFormat formats[inputCount] = {
+            MTL::VertexFormatFloat3,  // Position
+            MTL::VertexFormatFloat2,  // TexCoord
+            MTL::VertexFormatFloat3,  // Normal
+            MTL::VertexFormatFloat3}; // Tangent
+
+        uint32_t offsets[inputCount] = {0, 0, 0, 0};
+        uint32_t strides[inputCount];
+
+        for (int inputIndex = 0; inputIndex < inputCount; inputIndex++)
+        {
+            strides[inputIndex] = BitsPerElement(formats[inputIndex]) / 8;
+        }
+
+        if (pOptionalVertexStrides)
+        {
+            memcpy(strides, pOptionalVertexStrides, inputCount * sizeof(uint32_t));
+        }
+
+        for (int inputIndex = 0; inputIndex < inputCount; inputIndex++)
+        {
+            MTL::VertexAttributeDescriptor* vertexAttribute = pVertexDescriptor->attributes()->object(inputIndex);
+            vertexAttribute->setOffset(offsets[inputIndex]);
+            vertexAttribute->setFormat(formats[inputIndex]);
+            vertexAttribute->setBufferIndex(inputIndex);
+
+            MTL::VertexBufferLayoutDescriptor* vertexBufferLayout = pVertexDescriptor->layouts()->object(inputIndex);
+            vertexBufferLayout->setStride(strides[inputIndex]);
+            vertexBufferLayout->setStepRate(1);
+            vertexBufferLayout->setStepFunction(MTL::VertexStepFunctionPerVertex);
+        }
+    }
+    else
+    {
+        assert(false && "CreateGraphicsPipeline2() - MTL::VertexDescriptor::alloc::init() failed");
+    }
+
+    NS::Error* pError = nullptr;
+    {
+        MTL::RenderPipelineDescriptor* pDesc = MTL::RenderPipelineDescriptor::alloc()->init();
+
+        if (pDesc != nullptr)
+        {
+            pDesc->setVertexFunction(pVsShaderModule->Function.get());
+            pDesc->setFragmentFunction(pFsShaderModule->Function.get());
+            pDesc->setVertexDescriptor(pVertexDescriptor);
+            pDesc->colorAttachments()->object(0)->setPixelFormat(rtvFormat);
+            pDesc->setDepthAttachmentPixelFormat(dsvFormat);
+
+            MTL::RenderPipelineState* pLocalPipelineState = pRenderer->Device->newRenderPipelineState(pDesc, &pError);
+            if (pLocalPipelineState != nullptr)
+            {
+                pPipelineRenderState->State = NS::TransferPtr(pLocalPipelineState);
+            }
+            else
+            {
+                assert(false && "CreateGraphicsPipeline2() - MTL::Device::newRenderPipelineState() failed");
+            }
+
+            pDesc->release();
+        }
+        else
+        {
+            assert(false && "CreateGraphicsPipeline2() - MTL::RenderPipelineDescriptor::alloc()->init() failed");
+        }
+    }
+
+    if (pError == nullptr)
+    {
+        MTL::DepthStencilDescriptor* pDepthStateDesc = MTL::DepthStencilDescriptor::alloc()->init();
+
+        if (pDepthStateDesc != nullptr)
+        {
+            pDepthStateDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
+            pDepthStateDesc->setDepthWriteEnabled(true);
+
+            MTL::DepthStencilState* pLocalDepthState = pRenderer->Device->newDepthStencilState(pDepthStateDesc);
+            if (pLocalDepthState != nullptr)
+            {
+                pDepthStencilState->State = NS::TransferPtr(pLocalDepthState);
+            }
+            else
+            {
+                assert(false && "CreateGraphicsPipeline2() - MTL::Device::newDepthStencilState() failed");
+            }
+
+            pDepthStateDesc->release();
+        }
+    }
+
+    pVertexDescriptor->release();
+
+    return pError;
+}
+
+bool IsCompressed(MTL::PixelFormat fmt)
+{
+    switch (fmt)
+    {
+        case MTL::PixelFormatBC1_RGBA:
+        case MTL::PixelFormatBC1_RGBA_sRGB:
+        case MTL::PixelFormatPVRTC_RGB_2BPP:
+        case MTL::PixelFormatPVRTC_RGB_2BPP_sRGB:
+        case MTL::PixelFormatBC2_RGBA:
+        case MTL::PixelFormatBC2_RGBA_sRGB:
+        case MTL::PixelFormatBC3_RGBA:
+        case MTL::PixelFormatBC3_RGBA_sRGB:
+        case MTL::PixelFormatBC4_RUnorm:
+        case MTL::PixelFormatBC4_RSnorm:
+        case MTL::PixelFormatBC5_RGUnorm:
+        case MTL::PixelFormatBC5_RGSnorm:
+        case MTL::PixelFormatBC6H_RGBFloat:
+        case MTL::PixelFormatBC6H_RGBUfloat:
+        case MTL::PixelFormatBC7_RGBAUnorm:
+        case MTL::PixelFormatBC7_RGBAUnorm_sRGB:
+        case MTL::PixelFormatPVRTC_RGBA_2BPP:
+        case MTL::PixelFormatPVRTC_RGBA_2BPP_sRGB:
+        case MTL::PixelFormatEAC_R11Unorm:
+        case MTL::PixelFormatEAC_R11Snorm:
+        case MTL::PixelFormatPVRTC_RGB_4BPP:
+        case MTL::PixelFormatPVRTC_RGB_4BPP_sRGB:
+        case MTL::PixelFormatPVRTC_RGBA_4BPP:
+        case MTL::PixelFormatPVRTC_RGBA_4BPP_sRGB:
+        case MTL::PixelFormatEAC_RG11Unorm:
+        case MTL::PixelFormatEAC_RG11Snorm:
+        case MTL::PixelFormatETC2_RGB8:
+        case MTL::PixelFormatETC2_RGB8_sRGB:
+        case MTL::PixelFormatEAC_RGBA8:
+        case MTL::PixelFormatEAC_RGBA8_sRGB:
+        case MTL::PixelFormatETC2_RGB8A1:
+        case MTL::PixelFormatETC2_RGB8A1_sRGB:
+        case MTL::PixelFormatASTC_4x4_sRGB:
+        case MTL::PixelFormatASTC_5x4_sRGB:
+        case MTL::PixelFormatASTC_5x5_sRGB:
+        case MTL::PixelFormatASTC_6x5_sRGB:
+        case MTL::PixelFormatASTC_6x6_sRGB:
+        case MTL::PixelFormatASTC_8x5_sRGB:
+        case MTL::PixelFormatASTC_8x6_sRGB:
+        case MTL::PixelFormatASTC_8x8_sRGB:
+        case MTL::PixelFormatASTC_10x5_sRGB:
+        case MTL::PixelFormatASTC_10x6_sRGB:
+        case MTL::PixelFormatASTC_10x8_sRGB:
+        case MTL::PixelFormatASTC_10x10_sRGB:
+        case MTL::PixelFormatASTC_12x10_sRGB:
+        case MTL::PixelFormatASTC_12x12_sRGB:
+        case MTL::PixelFormatASTC_4x4_LDR:
+        case MTL::PixelFormatASTC_5x4_LDR:
+        case MTL::PixelFormatASTC_5x5_LDR:
+        case MTL::PixelFormatASTC_6x5_LDR:
+        case MTL::PixelFormatASTC_6x6_LDR:
+        case MTL::PixelFormatASTC_8x5_LDR:
+        case MTL::PixelFormatASTC_8x6_LDR:
+        case MTL::PixelFormatASTC_8x8_LDR:
+        case MTL::PixelFormatASTC_10x5_LDR:
+        case MTL::PixelFormatASTC_10x6_LDR:
+        case MTL::PixelFormatASTC_10x8_LDR:
+        case MTL::PixelFormatASTC_10x10_LDR:
+        case MTL::PixelFormatASTC_12x10_LDR:
+        case MTL::PixelFormatASTC_12x12_LDR:
+        case MTL::PixelFormatASTC_4x4_HDR:
+        case MTL::PixelFormatASTC_5x4_HDR:
+        case MTL::PixelFormatASTC_5x5_HDR:
+        case MTL::PixelFormatASTC_6x5_HDR:
+        case MTL::PixelFormatASTC_6x6_HDR:
+        case MTL::PixelFormatASTC_8x5_HDR:
+        case MTL::PixelFormatASTC_8x6_HDR:
+        case MTL::PixelFormatASTC_8x8_HDR:
+        case MTL::PixelFormatASTC_10x5_HDR:
+        case MTL::PixelFormatASTC_10x6_HDR:
+        case MTL::PixelFormatASTC_10x8_HDR:
+        case MTL::PixelFormatASTC_10x10_HDR:
+        case MTL::PixelFormatASTC_12x10_HDR:
+        case MTL::PixelFormatASTC_12x12_HDR:
+            return true;
+
+        default:
+            return false;
+    }
+}
+
 uint32_t BitsPerPixel(MTL::PixelFormat fmt)
 {
-    switch (static_cast<int>(fmt)) {
+    switch (static_cast<int>(fmt))
+    {
         case MTL::PixelFormatInvalid:
             return 0xFFFF;
 
@@ -1074,5 +1344,86 @@ uint32_t BitsPerPixel(MTL::PixelFormat fmt)
         case MTL::PixelFormatASTC_12x10_HDR:
         case MTL::PixelFormatASTC_12x12_HDR:
             return 128;
+    }
+}
+
+uint32_t BitsPerElement(MTL::VertexFormat fmt)
+{
+    switch (fmt)
+    {
+        case MTL::VertexFormatInvalid:
+            return 0;
+
+        case MTL::VertexFormatUChar:
+        case MTL::VertexFormatChar:
+        case MTL::VertexFormatUCharNormalized:
+        case MTL::VertexFormatCharNormalized:
+            return 8;
+
+        case MTL::VertexFormatUChar2:
+        case MTL::VertexFormatChar2:
+        case MTL::VertexFormatUChar2Normalized:
+        case MTL::VertexFormatChar2Normalized:
+        case MTL::VertexFormatUShort:
+        case MTL::VertexFormatShort:
+        case MTL::VertexFormatUShortNormalized:
+        case MTL::VertexFormatShortNormalized:
+        case MTL::VertexFormatHalf:
+            return 16;
+
+        case MTL::VertexFormatUChar3:
+        case MTL::VertexFormatChar3:
+        case MTL::VertexFormatUChar3Normalized:
+        case MTL::VertexFormatChar3Normalized:
+            return 24;
+
+        case MTL::VertexFormatUChar4:
+        case MTL::VertexFormatChar4:
+        case MTL::VertexFormatUChar4Normalized:
+        case MTL::VertexFormatChar4Normalized:
+        case MTL::VertexFormatUShort2:
+        case MTL::VertexFormatShort2:
+        case MTL::VertexFormatUShort2Normalized:
+        case MTL::VertexFormatShort2Normalized:
+        case MTL::VertexFormatHalf2:
+        case MTL::VertexFormatFloat:
+        case MTL::VertexFormatInt:
+        case MTL::VertexFormatUInt:
+        case MTL::VertexFormatInt1010102Normalized:
+        case MTL::VertexFormatUInt1010102Normalized:
+        case MTL::VertexFormatFloatRG11B10:
+        case MTL::VertexFormatFloatRGB9E5:
+            return 32;
+
+        case MTL::VertexFormatShort3:
+        case MTL::VertexFormatUShort3:
+        case MTL::VertexFormatUShort3Normalized:
+        case MTL::VertexFormatShort3Normalized:
+        case MTL::VertexFormatHalf3:
+            return 48;
+
+        case MTL::VertexFormatUShort4:
+        case MTL::VertexFormatShort4:
+        case MTL::VertexFormatUShort4Normalized:
+        case MTL::VertexFormatShort4Normalized:
+        case MTL::VertexFormatFloat2:
+        case MTL::VertexFormatHalf4:
+        case MTL::VertexFormatInt2:
+        case MTL::VertexFormatUInt2:
+            return 64;
+
+        case MTL::VertexFormatFloat3:
+        case MTL::VertexFormatInt3:
+        case MTL::VertexFormatUInt3:
+            return 96;
+
+        case MTL::VertexFormatFloat4:
+        case MTL::VertexFormatInt4:
+        case MTL::VertexFormatUInt4:
+        case MTL::VertexFormatUChar4Normalized_BGRA:
+            return 128;
+
+        default:
+            return 0;
     }
 }
