@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.5)
 
 project(GraphicsExperiments)
 
@@ -15,6 +15,8 @@ else()
 	option(GREX_ENABLE_VULKAN "Build Vulkan projects" ON)
 endif()
 
+
+option(GREX_ENABLE_MISC_PROJECTS  "Build misc projects" OFF)
 
 # ------------------------------------------------------------------------------
 # Detect Linux
@@ -208,6 +210,11 @@ list(APPEND IMGUI_METAL_FILES
 )
 
 set(IMGUI_INC_DIR ${GREX_THIRD_PARTY_DIR}/imgui)
+
+# ------------------------------------------------------------------------------
+# meshoptimizer
+# ------------------------------------------------------------------------------
+add_subdirectory(${GREX_THIRD_PARTY_DIR}/meshoptimizer)
 
 # ------------------------------------------------------------------------------
 # Graphics experiments

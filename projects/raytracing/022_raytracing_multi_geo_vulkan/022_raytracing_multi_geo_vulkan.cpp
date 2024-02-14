@@ -10,7 +10,8 @@
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -24,10 +25,9 @@
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth      = 1280;
-static uint32_t gWindowHeight     = 720;
-static bool     gEnableDebug      = true;
-static bool     gEnableRayTracing = true;
+static uint32_t gWindowWidth  = 1280;
+static uint32_t gWindowHeight = 720;
+static bool     gEnableDebug  = true;
 
 static const char* gRayGenShaderName     = "MyRaygenShader";
 static const char* gMissShaderName       = "MyMissShader";
@@ -78,7 +78,10 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRayTracing)) {
+    VulkanFeatures features   = {};
+    features.EnableRayTracing = true;
+    if (!InitVulkan(renderer.get(), gEnableDebug, features))
+    {
         return EXIT_FAILURE;
     }
 
@@ -102,7 +105,8 @@ int main(int argc, char** argv)
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(source, "", "lib_6_3", &rayTraceSpv, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (raytracing): " << errorMsg << "\n";
@@ -262,7 +266,8 @@ int main(int argc, char** argv)
             VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             &materialBuffer);
 
-        for (uint32_t i = 0; i < geometries.size(); ++i) {
+        for (uint32_t i = 0; i < geometries.size(); ++i)
+        {
             // Index buffer (t4)
             WriteDescriptor(
                 renderer.get(),
@@ -289,7 +294,7 @@ int main(int argc, char** argv)
                 pRayTraceDescriptorBuffeStartAddress,
                 rayTracePipelineLayout.DescriptorSetLayout,
                 10, // binding
-                i, // arrayElement
+                i,  // arrayElement
                 VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                 &geometries[i].normalBuffer);
         }
@@ -299,7 +304,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = Window::Create(gWindowWidth, gWindowHeight, "022_raytracing_multi_geo_vulkan");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
     }
@@ -307,7 +313,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight())) {
+    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight()))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -320,7 +327,8 @@ int main(int argc, char** argv)
     {
         CHECK_CALL(GetSwapchainImages(renderer.get(), swapchainImages));
 
-        for (auto& image : swapchainImages) {
+        for (auto& image : swapchainImages)
+        {
             VkImageViewCreateInfo createInfo           = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
             createInfo.image                           = image;
             createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
@@ -348,12 +356,14 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         // ---------------------------------------------------------------------
         // Acquire swapchain image index
         // ---------------------------------------------------------------------
         uint32_t swapchainImageIndex = 0;
-        if (AcquireNextImage(renderer.get(), &swapchainImageIndex)) {
+        if (AcquireNextImage(renderer.get(), &swapchainImageIndex))
+        {
             assert(false && "AcquireNextImage failed");
             break;
         }
@@ -456,11 +466,13 @@ int main(int argc, char** argv)
         CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
 
         // Wait for the GPU to finish the work
-        if (!WaitForGpu(renderer.get())) {
+        if (!WaitForGpu(renderer.get()))
+        {
             assert(false && "WaitForGpu failed");
         }
 
-        if (!SwapchainPresent(renderer.get(), swapchainImageIndex)) {
+        if (!SwapchainPresent(renderer.get(), swapchainImageIndex))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -905,7 +917,8 @@ void CreateBLAS(
 
     std::vector<VkAccelerationStructureGeometryKHR> geometryDescs;
     std::vector<uint32_t>                           numTriangles;
-    for (uint32_t i = 0; i < geometries.size(); ++i) {
+    for (uint32_t i = 0; i < geometries.size(); ++i)
+    {
         VkAccelerationStructureGeometryKHR geometryDesc = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
         //
         geometryDesc.flags                                          = VK_GEOMETRY_OPAQUE_BIT_KHR;
@@ -1000,7 +1013,8 @@ void CreateBLAS(
 
         // Build range infos
         std::vector<VkAccelerationStructureBuildRangeInfoKHR> buildRangeInfos;
-        for (uint32_t i = 0; i < numTriangles.size(); ++i) {
+        for (uint32_t i = 0; i < numTriangles.size(); ++i)
+        {
             VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
             //
             rangeInfo.primitiveCount = numTriangles[i];
@@ -1023,7 +1037,8 @@ void CreateBLAS(
 
         CHECK_CALL(ExecuteCommandBuffer(pRenderer, &cmdBuf));
 
-        if (!WaitForGpu(pRenderer)) {
+        if (!WaitForGpu(pRenderer))
+        {
             assert(false && "WaitForGpu failed");
         }
     }
@@ -1157,7 +1172,8 @@ void CreateTLAS(VulkanRenderer* pRenderer, const VulkanAccelStruct& BLAS, Vulkan
 
         CHECK_CALL(ExecuteCommandBuffer(pRenderer, &cmdBuf));
 
-        if (!WaitForGpu(pRenderer)) {
+        if (!WaitForGpu(pRenderer))
+        {
             assert(false && "WaitForGpu failed");
         }
     }

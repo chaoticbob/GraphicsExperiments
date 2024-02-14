@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.5)
 
 # ------------------------------------------------------------------------------
 # Configure directories
@@ -21,10 +21,7 @@ if (GREX_ENABLE_VULKAN)
     #add_subdirectory(misc/imgui_vulkan)
 endif()
 
-add_subdirectory(misc/gen_sphereflake_coords)
-add_subdirectory(misc/window_events)
-add_subdirectory(misc/ibl_brdf_lut)
-add_subdirectory(misc/ibl_furnace)
-add_subdirectory(misc/ibl_prefilter_env)
-add_subdirectory(misc/normal_map_convert)
-add_subdirectory(misc/sampling_vis)
+if (GREX_ENABLE_MISC_PROJECTS)
+    add_subdirectory(misc)
+endif()
+

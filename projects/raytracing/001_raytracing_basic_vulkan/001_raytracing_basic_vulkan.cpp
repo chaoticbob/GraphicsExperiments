@@ -9,7 +9,8 @@
 #define CHECK_CALL(FN)                               \
     {                                                \
         VkResult vkres = FN;                         \
-        if (vkres != VK_SUCCESS) {                   \
+        if (vkres != VK_SUCCESS)                     \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -105,7 +106,6 @@ void main()
 static uint32_t gWindowWidth        = 1280;
 static uint32_t gWindowHeight       = 720;
 static bool     gEnableDebug        = true;
-static bool     gEnableRayTracing   = true;
 static uint32_t gUniformmBufferSize = 256;
 
 void CreateDescriptorSetLayout(VulkanRenderer* pRenderer, VkDescriptorSetLayout* pLayout);
@@ -147,7 +147,10 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    if (!InitVulkan(renderer.get(), gEnableDebug, gEnableRayTracing)) {
+    VulkanFeatures features   = {};
+    features.EnableRayTracing = true;
+    if (!InitVulkan(renderer.get(), gEnableDebug, features))
+    {
         return EXIT_FAILURE;
     }
 
@@ -163,7 +166,8 @@ int main(int argc, char** argv)
     {
         std::string   errorMsg;
         CompileResult res = CompileGLSL(gShaderRGEN, VK_SHADER_STAGE_RAYGEN_BIT_KHR, {}, &spirvRGEN, &errorMsg);
-        if (res != COMPILE_SUCCESS) {
+        if (res != COMPILE_SUCCESS)
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (RGEN): " << errorMsg << "\n";
@@ -172,7 +176,8 @@ int main(int argc, char** argv)
         }
 
         res = CompileGLSL(gShaderMISS, VK_SHADER_STAGE_MISS_BIT_KHR, {}, &spirvMISS, &errorMsg);
-        if (res != COMPILE_SUCCESS) {
+        if (res != COMPILE_SUCCESS)
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (MISS): " << errorMsg << "\n";
@@ -181,7 +186,8 @@ int main(int argc, char** argv)
         }
 
         res = CompileGLSL(gShaderCHIT, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, {}, &spirvCHIT, &errorMsg);
-        if (res != COMPILE_SUCCESS) {
+        if (res != COMPILE_SUCCESS)
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (CHIT): " << errorMsg << "\n";
@@ -365,7 +371,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = Window::Create(gWindowWidth, gWindowHeight, "001_raytracing_basic_vulkan");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
     }
@@ -373,7 +380,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight())) {
+    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight()))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -386,7 +394,8 @@ int main(int argc, char** argv)
         std::vector<VkImage> images;
         CHECK_CALL(GetSwapchainImages(renderer.get(), images));
 
-        for (auto& image : images) {
+        for (auto& image : images)
+        {
             VkImageViewCreateInfo createInfo           = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
             createInfo.image                           = image;
             createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
@@ -416,9 +425,11 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         uint32_t imageIndex = 0;
-        if (AcquireNextImage(renderer.get(), &imageIndex)) {
+        if (AcquireNextImage(renderer.get(), &imageIndex))
+        {
             assert(false && "AcquireNextImage failed");
             break;
         }
@@ -515,11 +526,13 @@ int main(int argc, char** argv)
         CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
 
         // Wait for the GPU to finish the work
-        if (!WaitForGpu(renderer.get())) {
+        if (!WaitForGpu(renderer.get()))
+        {
             assert(false && "WaitForGpu failed");
         }
 
-        if (!SwapchainPresent(renderer.get(), imageIndex)) {
+        if (!SwapchainPresent(renderer.get(), imageIndex))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -985,7 +998,8 @@ void CreateBLAS(VulkanRenderer* pRenderer, VulkanBuffer* pBLASBuffer, VkAccelera
 
         CHECK_CALL(ExecuteCommandBuffer(pRenderer, &cmdBuf));
 
-        if (!WaitForGpu(pRenderer)) {
+        if (!WaitForGpu(pRenderer))
+        {
             assert(false && "WaitForGpu failed");
         }
     }
@@ -1145,7 +1159,8 @@ void CreateTLAS(VulkanRenderer* pRenderer, VkAccelerationStructureKHR blas, Vulk
 
         CHECK_CALL(ExecuteCommandBuffer(pRenderer, &cmdBuf));
 
-        if (!WaitForGpu(pRenderer)) {
+        if (!WaitForGpu(pRenderer))
+        {
             assert(false && "WaitForGpu failed");
         }
     }

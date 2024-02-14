@@ -1,5 +1,7 @@
 #include "dx_draw_context.h"
 
+#include <glm/gtx/quaternion.hpp>
+
 static const char* gDrawVertexColorShaders = R"(
 
 struct CameraProperties {
@@ -10,10 +12,10 @@ ConstantBuffer<CameraProperties> Cam : register(b0); // Constant buffer
 
 struct VSOutput {
     float4 PositionCS : SV_POSITION;
-    float3 Color      : COLOR;
+    float4 Color      : COLOR;
 };
 
-VSOutput vsmain(float3 PositionOS : POSITION, float3 Color : COLOR0)
+VSOutput vsmain(float3 PositionOS : POSITION, float4 Color : COLOR0)
 {
     VSOutput output = (VSOutput)0;
     output.PositionCS = mul(Cam.MVP, float4(PositionOS, 1));
@@ -23,7 +25,7 @@ VSOutput vsmain(float3 PositionOS : POSITION, float3 Color : COLOR0)
 
 float4 psmain(VSOutput input) : SV_TARGET
 {
-    return float4(input.Color, 1);   
+    return float4(input.Color);   
 }
 )";
 
@@ -121,7 +123,8 @@ static HRESULT CreatePipeline(
     desc.Flags                                            = D3D12_PIPELINE_STATE_FLAG_NONE;
 
     HRESULT hr = pRenderer->Device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(ppPipeline));
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         return hr;
     }
 
@@ -135,7 +138,8 @@ DxDrawContext::DxDrawContext(DxRenderer* pRenderer, DXGI_FORMAT rtvFormat, DXGI_
       mRTVFormat(rtvFormat),
       mDSVFormat(dsvFormat)
 {
-    if (sStockProgramDrawVertexColors == -1) {
+    if (sStockProgramDrawVertexColors == -1)
+    {
         sStockProgramDrawVertexColors = CreateProgram(gDrawVertexColorShaders, "vsmain", "psmain");
         assert((sStockProgramDrawVertexColors >= 0) && "create program failed: draw vertex color");
     }
@@ -175,9 +179,11 @@ int32_t DxDrawContext::CreateProgram(
         ComPtr<ID3DBlob> blob;
         ComPtr<ID3DBlob> error;
         HRESULT          hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::string errorMsg;
-            if (error && (error->GetBufferSize() > 0)) {
+            if (error && (error->GetBufferSize() > 0))
+            {
                 const char* pBuffer    = static_cast<const char*>(error->GetBufferPointer());
                 size_t      bufferSize = static_cast<size_t>(error->GetBufferSize());
                 errorMsg               = std::string(pBuffer, pBuffer + bufferSize);
@@ -198,7 +204,8 @@ int32_t DxDrawContext::CreateProgram(
             blob->GetBufferSize(),    // blobLengthInBytes
             IID_PPV_ARGS(&rootSig));  // riid, ppvRootSignature
 
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             return DxDrawContext::ERROR_ROOT_SIG_CREATE_FAILED;
         }
     }
@@ -206,13 +213,16 @@ int32_t DxDrawContext::CreateProgram(
     // -------------------------------------------------------------------------
     // Compile Shader
     // -------------------------------------------------------------------------
-    if (shaderCode.empty()) {
+    if (shaderCode.empty())
+    {
         return DxDrawContext::ERROR_NO_SHADER_CODE;
     }
-    if (vsEntryPoint.empty()) {
+    if (vsEntryPoint.empty())
+    {
         return DxDrawContext::ERROR_NO_VS_ENTRY_POINT;
     }
-    if (psEntryPoint.empty()) {
+    if (psEntryPoint.empty())
+    {
         return DxDrawContext::ERROR_NO_PS_ENTRY_POINT;
     }
 
@@ -221,7 +231,8 @@ int32_t DxDrawContext::CreateProgram(
     {
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderCode, vsEntryPoint.c_str(), "vs_6_0", &dxilVS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
@@ -232,7 +243,8 @@ int32_t DxDrawContext::CreateProgram(
         }
 
         hr = CompileHLSL(shaderCode, psEntryPoint.c_str(), "ps_6_0", &dxilPS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (PS): " << errorMsg << "\n";
@@ -255,10 +267,14 @@ int32_t DxDrawContext::CreateProgram(
     program.id      = ++mProgramIdCounter;
     program.rootSig = rootSig;
 
-    for (auto primitiveMode : primitiveModes) {
-        for (auto depthEnable : depthStates) {
-            for (auto blendMode : blendModes) {
-                for (auto cullMode : cullModes) {
+    for (auto primitiveMode : primitiveModes)
+    {
+        for (auto depthEnable : depthStates)
+        {
+            for (auto blendMode : blendModes)
+            {
+                for (auto cullMode : cullModes)
+                {
                     GraphicsPipelineConfig pipelineConfig = {};
                     pipelineConfig.bits.primitiveMode     = primitiveMode;
                     pipelineConfig.bits.depthEnable       = depthEnable;
@@ -267,7 +283,8 @@ int32_t DxDrawContext::CreateProgram(
 
                     // Primitive mode
                     D3D12_PRIMITIVE_TOPOLOGY_TYPE topologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED;
-                    switch (primitiveMode) {
+                    switch (primitiveMode)
+                    {
                         default: break;
                         case PRIMITIVE_MODE_LINES: topologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE; break;
                         case PRIMITIVE_MODE_TRIS: topologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; break;
@@ -282,20 +299,26 @@ int32_t DxDrawContext::CreateProgram(
                     D3D12_BLEND    destBlendAlpha = D3D12_BLEND_ZERO;
                     D3D12_BLEND_OP blendOpAlpha   = D3D12_BLEND_OP_ADD;
                     //
-                    if (blendMode == DxDrawContext::BLEND_MODE_ALPHA) {
-                        blendEnable    = true;
-                        srcBlend       = D3D12_BLEND_SRC_ALPHA;
-                        destBlend      = D3D12_BLEND_INV_SRC_ALPHA;
-                        blendOp        = D3D12_BLEND_OP_ADD;
-                        srcBlendAlpha  = D3D12_BLEND_SRC_ALPHA;
-                        destBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+                    if (blendMode == DxDrawContext::BLEND_MODE_ALPHA)
+                    {
+                        blendEnable = true;
+                        // Color
+                        srcBlend  = D3D12_BLEND_SRC_ALPHA;
+                        destBlend = D3D12_BLEND_INV_SRC_ALPHA;
+                        blendOp   = D3D12_BLEND_OP_ADD;
+                        // Alpha
+                        srcBlendAlpha  = D3D12_BLEND_ZERO; // D3D12_BLEND_SRC_ALPHA;
+                        destBlendAlpha = D3D12_BLEND_ZERO; // D3D12_BLEND_INV_SRC_ALPHA;
                         blendOpAlpha   = D3D12_BLEND_OP_ADD;
                     }
-                    else if (blendMode == DxDrawContext::BLEND_MODE_ADDITIVE) {
-                        blendEnable    = true;
-                        srcBlend       = D3D12_BLEND_SRC_ALPHA;
-                        destBlend      = D3D12_BLEND_ONE;
-                        blendOp        = D3D12_BLEND_OP_ADD;
+                    else if (blendMode == DxDrawContext::BLEND_MODE_ADDITIVE)
+                    {
+                        blendEnable = true;
+                        // Color
+                        srcBlend  = D3D12_BLEND_SRC_ALPHA;
+                        destBlend = D3D12_BLEND_ONE;
+                        blendOp   = D3D12_BLEND_OP_ADD;
+                        // Alpha
                         srcBlendAlpha  = D3D12_BLEND_SRC_ALPHA;
                         destBlendAlpha = D3D12_BLEND_ONE;
                         blendOpAlpha   = D3D12_BLEND_OP_ADD;
@@ -303,7 +326,8 @@ int32_t DxDrawContext::CreateProgram(
 
                     // Cull mode
                     D3D12_CULL_MODE pipelineCullMode = D3D12_CULL_MODE_NONE;
-                    switch (cullMode) {
+                    switch (cullMode)
+                    {
                         default: break;
                         case CULL_MODE_BACK: pipelineCullMode = D3D12_CULL_MODE_BACK; break;
                         case CULL_MODE_FRONT: pipelineCullMode = D3D12_CULL_MODE_FRONT; break;
@@ -328,7 +352,8 @@ int32_t DxDrawContext::CreateProgram(
                         /* destBlendAlpha   */ destBlendAlpha,
                         /* blendOpAlpha     */ blendOpAlpha,
                         /* ppPipeline       */ &pipeline);
-                    if (FAILED(hr)) {
+                    if (FAILED(hr))
+                    {
                         return DxDrawContext::ERROR_PIPELINE_CREATE_FAILED;
                     }
 
@@ -356,10 +381,12 @@ void DxDrawContext::SetProgram(int32_t program)
 
 void DxDrawContext::SetDepthRead(bool enable)
 {
-    if (enable) {
+    if (enable)
+    {
         mGraphicsState.depthFlags |= DEPTH_FLAG_READ_ONLY;
     }
-    else {
+    else
+    {
         mGraphicsState.depthFlags &= ~DEPTH_FLAG_READ_ONLY;
     }
 
@@ -368,10 +395,12 @@ void DxDrawContext::SetDepthRead(bool enable)
 
 void DxDrawContext::SetDepthWrite(bool enable)
 {
-    if (enable) {
+    if (enable)
+    {
         mGraphicsState.depthFlags |= DEPTH_FLAG_WRITE_ONLY;
     }
-    else {
+    else
+    {
         mGraphicsState.depthFlags &= ~DEPTH_FLAG_WRITE_ONLY;
     }
 
@@ -393,6 +422,21 @@ void DxDrawContext::SetBlendAdditive()
     mGraphicsState.pipelineConfig.bits.blendMode = BLEND_MODE_ADDITIVE;
 }
 
+void DxDrawContext::SetCullModeNone()
+{
+    mGraphicsState.pipelineConfig.bits.cullMode = CULL_MODE_NONE;
+}
+
+void DxDrawContext::SetCullModeBack()
+{
+    mGraphicsState.pipelineConfig.bits.cullMode = CULL_MODE_BACK;
+}
+
+void DxDrawContext::SetCullModeFront()
+{
+    mGraphicsState.pipelineConfig.bits.cullMode = CULL_MODE_FRONT;
+}
+
 void DxDrawContext::SetMatrix(const float4x4& matrix)
 {
     mGraphicsState.mvpMatrix = matrix;
@@ -406,10 +450,11 @@ void DxDrawContext::SetBatchMatrix(uint32_t batchId, const float4x4& matrix)
         [batchId](const Batch& elem) -> bool {
             bool match = (elem.batchId == batchId);
             return match; });
-    if (it == mBatches.end()) {
+    if (it == mBatches.end())
+    {
         return;
     }
-    
+
     it->mvpMatrix = matrix;
 }
 
@@ -485,7 +530,8 @@ void DxDrawContext::TexCoord(const float2& texCoord)
 
 void DxDrawContext::FlushToCommandList(ID3D12GraphicsCommandList* pCmdList)
 {
-    if ((pCmdList == nullptr) || mVertices.empty()) {
+    if ((pCmdList == nullptr) || mVertices.empty())
+    {
         return;
     }
 
@@ -493,16 +539,19 @@ void DxDrawContext::FlushToCommandList(ID3D12GraphicsCommandList* pCmdList)
     {
         size_t dataSize   = SizeInBytes(mVertices);
         size_t bufferSize = vertexBuffer ? vertexBuffer->GetDesc().Width : 0;
-        if (dataSize > bufferSize) {
+        if (dataSize > bufferSize)
+        {
             HRESULT hr = CreateBuffer(mRenderer, dataSize, nullptr, &vertexBuffer);
-            if (FAILED(hr)) {
+            if (FAILED(hr))
+            {
                 assert(false && "create vertex buffer failed");
                 return;
             }
         }
 
         HRESULT hr = CopyDataToBuffer(SizeInBytes(mVertices), DataPtr(mVertices), vertexBuffer.Get());
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             assert(false && "copy to vertex buffer failed");
             return;
         }
@@ -516,19 +565,23 @@ void DxDrawContext::FlushToCommandList(ID3D12GraphicsCommandList* pCmdList)
     pCmdList->IASetVertexBuffers(0, 1, vbvs);
 
     uint32_t currentPipelineMask = 0;
-    for (auto& batch : mBatches) {
+    for (auto& batch : mBatches)
+    {
         const uint32_t vertexCount = (batch.end - batch.start);
-        if (vertexCount == 0) {
+        if (vertexCount == 0)
+        {
             continue;
         }
 
-        if (currentPipelineMask != batch.pipelineConfig.mask) {
+        if (currentPipelineMask != batch.pipelineConfig.mask)
+        {
             // Update current pipeline mask
             currentPipelineMask = batch.pipelineConfig.mask;
 
             // Find program
             auto itProgram = mPrograms.find(batch.programId);
-            if (itProgram == mPrograms.end()) {
+            if (itProgram == mPrograms.end())
+            {
                 assert(false && "program lookup failed");
                 return;
             }
@@ -536,7 +589,8 @@ void DxDrawContext::FlushToCommandList(ID3D12GraphicsCommandList* pCmdList)
 
             // Find pipeline
             auto itPipeline = program.pipelines.find(currentPipelineMask);
-            if (itPipeline == program.pipelines.end()) {
+            if (itPipeline == program.pipelines.end())
+            {
                 assert(false && "pipeline lookup failed");
                 return;
             }
@@ -548,19 +602,23 @@ void DxDrawContext::FlushToCommandList(ID3D12GraphicsCommandList* pCmdList)
             pCmdList->SetPipelineState(pipeline.Get());
         }
 
-        switch (batch.pipelineConfig.bits.primitiveMode) {
+        switch (batch.pipelineConfig.bits.primitiveMode)
+        {
             default: {
                 assert(false && "unknown primitive mode");
                 return;
-            } break;
+            }
+            break;
 
             case PRIMITIVE_MODE_LINES: {
                 pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
-            } break;
+            }
+            break;
 
             case PRIMITIVE_MODE_TRIS: {
                 pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-            } break;
+            }
+            break;
         }
 
         // Set MVP root constnats
@@ -571,7 +629,7 @@ void DxDrawContext::FlushToCommandList(ID3D12GraphicsCommandList* pCmdList)
     }
 }
 
-void DxDrawContext::DrawGridXZ(const float2& size, uint32_t xSegs, uint32_t zSegs)
+void DxDrawContext::DrawGridXZ(const float2& size, uint32_t xSegs, uint32_t zSegs, float alpha)
 {
     this->BeginLines();
     {
@@ -586,18 +644,21 @@ void DxDrawContext::DrawGridXZ(const float2& size, uint32_t xSegs, uint32_t zSeg
         float dz = (z1 - z0) / (zLines - 1);
 
         // X lines
-        for (uint32_t i = 0; i < xLines; ++i) {
-            if (i == (zSegs / 2)) {
+        for (uint32_t i = 0; i < xLines; ++i)
+        {
+            if (i == (zSegs / 2))
+            {
                 continue;
             }
 
             float  x     = x0 + i * dx;
             float3 P0    = float3(x, 0, z0);
             float3 P1    = float3(x, 0, z1);
-            float3 color = float3(0.5f);
+            float4 color = float4(float3(0.5f), alpha);
 
-            if ((i == 0) || (i == (xLines - 1))) {
-                color = float3(0.6f);
+            if ((i == 0) || (i == (xLines - 1)))
+            {
+                color = float4(float3(0.6f), color.a);
             }
 
             this->Color(color);
@@ -606,18 +667,21 @@ void DxDrawContext::DrawGridXZ(const float2& size, uint32_t xSegs, uint32_t zSeg
         }
 
         // Z lines
-        for (uint32_t i = 0; i < zLines; ++i) {
-            if (i == (zSegs / 2)) {
+        for (uint32_t i = 0; i < zLines; ++i)
+        {
+            if (i == (zSegs / 2))
+            {
                 continue;
             }
 
             float  z     = z0 + i * dz;
             float3 P0    = float3(x0, 0, z);
             float3 P1    = float3(x1, 0, z);
-            float3 color = float3(0.5f);
+            float4 color = float4(float3(0.5f), alpha);
 
-            if ((i == 0) || (i == (zLines - 1))) {
-                color = float3(0.6f);
+            if ((i == 0) || (i == (zLines - 1)))
+            {
+                color = float4(float3(0.6f), color.a);
             }
 
             this->Color(color);
@@ -630,7 +694,7 @@ void DxDrawContext::DrawGridXZ(const float2& size, uint32_t xSegs, uint32_t zSeg
             float  z     = z0 + (xSegs / 2) * dz;
             float3 P0    = float3(1.25f * x0, 0, z);
             float3 P1    = float3(1.25f * x1, 0, z);
-            float3 color = float3(0.9f, 0, 0);
+            float4 color = float4(float3(0.9f, 0, 0), alpha);
 
             this->Color(color);
             this->Vertex(P0);
@@ -648,9 +712,10 @@ void DxDrawContext::DrawGridXZ(const float2& size, uint32_t xSegs, uint32_t zSeg
         // Y Axis
         {
             float  x     = x0 + (zSegs / 2) * dx;
-            float3 P0    = float3(0, 1.25f * x0, 0);
-            float3 P1    = float3(0, 1.25f * x1, 0);
-            float3 color = float3(0, 0.9f, 0);
+            float  z     = z0 + (xSegs / 2) * dz;
+            float3 P0    = float3(x, 1.25f * x0, z);
+            float3 P1    = float3(x, 1.25f * x1, z);
+            float4 color = float4(float3(0, 0.9f, 0), alpha);
 
             this->Color(color);
             this->Vertex(P0);
@@ -668,9 +733,9 @@ void DxDrawContext::DrawGridXZ(const float2& size, uint32_t xSegs, uint32_t zSeg
         // Z Axis
         {
             float  x     = x0 + (zSegs / 2) * dx;
-            float3 P0    = float3(0, 0, 1.25f * x0);
-            float3 P1    = float3(0, 0, 1.25f * x1);
-            float3 color = float3(0.2f, 0.2f, 0.99f);
+            float3 P0    = float3(x, 0, 1.25f * x0);
+            float3 P1    = float3(x, 0, 1.25f * x1);
+            float4 color = float4(float3(0.2f, 0.2f, 0.99f), alpha);
 
             this->Color(color);
             this->Vertex(P0);
@@ -684,6 +749,127 @@ void DxDrawContext::DrawGridXZ(const float2& size, uint32_t xSegs, uint32_t zSeg
             this->Vertex(P0);
             this->Vertex(P1);
         }
+    }
+    this->EndLines();
+}
+
+void DxDrawContext::DrawMesh(const float3& position, const float3& scale, const TriMesh& mesh, bool enableVertexColor, float alpha, bool enableTexCoord)
+{
+    this->BeginTriangles();
+    {
+        auto& triangles    = mesh.GetTriangles();
+        auto& positions    = mesh.GetPositions();
+        auto& vertexColors = mesh.GetVertexColors();
+        auto& texCoords    = mesh.GetTexCoords();
+
+        for (auto& tri : triangles)
+        {
+            const uint32_t* indices = reinterpret_cast<const uint32_t*>(&tri);
+
+            for (uint32_t i = 0; i < 3; ++i)
+            {
+                uint32_t index = indices[i];
+                if (enableVertexColor)
+                {
+                    this->Color(float4(vertexColors[index], alpha));
+                }
+
+                if (enableTexCoord)
+                {
+                    this->TexCoord(texCoords[index]);
+                }
+
+                this->Vertex((positions[index] * scale) + position);
+            }
+        }
+    }
+    this->EndTriangles();
+}
+
+void DxDrawContext::DrawWireCone(const float3& tip, const float3& dir, float height, float angle, uint32_t segs)
+{
+    this->BeginLines();
+    {
+        glm::quat rotQuat = glm::rotation(float3(0, 0, 1), glm::normalize(dir));
+        glm::mat4 rotMat  = glm::toMat4(rotQuat);
+
+        float r  = height * tan(angle / 2.0f);
+        float dt = 2.0f * 3.14159265359f / static_cast<float>(segs);
+        for (uint32_t i = 0; i < segs; ++i)
+        {
+            float  t0 = static_cast<float>(i + 0) * dt;
+            float  t1 = static_cast<float>(i + 1) * dt;
+            float3 P0 = (r * float3(cos(t0), sin(t0), 0));
+            float3 P1 = (r * float3(cos(t1), sin(t1), 0));
+            P0        = rotMat * float4(P0, 1);
+            P1        = rotMat * float4(P1, 1);
+            P0 += tip;
+            P1 += tip;
+            P0 += height * dir;
+            P1 += height * dir;
+            this->Vertex(P0);
+            this->Vertex(P1);
+            //
+            this->Vertex(tip);
+            this->Vertex(P0);
+            //
+            this->Vertex(tip);
+            this->Vertex(P1);
+        }
+    }
+    this->EndLines();
+}
+
+void DxDrawContext::DrawWireBox(
+    const float3& P0, // -X, +Y, +Z
+    const float3& P1, // -X, -Y, +Z
+    const float3& P2, // +X, -Y, +Z
+    const float3& P3, // +X, +Y, +Z
+    const float3& P4, // -X, +Y, -Z
+    const float3& P5, // -X, +Y, -Z
+    const float3& P6, // -X, +Y, -Z
+    const float3& P7) // -X, +Y, -Z
+{
+    this->BeginLines();
+    {
+        // Front rect
+        this->Vertex(float3(P0));
+        this->Vertex(float3(P1));
+        //
+        this->Vertex(float3(P1));
+        this->Vertex(float3(P2));
+        //
+        this->Vertex(float3(P2));
+        this->Vertex(float3(P3));
+        //
+        this->Vertex(float3(P3));
+        this->Vertex(float3(P0));
+        
+        // Back rect
+        this->Vertex(float3(P4));
+        this->Vertex(float3(P5));
+        //
+        this->Vertex(float3(P5));
+        this->Vertex(float3(P6));
+        //
+        this->Vertex(float3(P6));
+        this->Vertex(float3(P7));
+        //
+        this->Vertex(float3(P7));
+        this->Vertex(float3(P4));
+        
+        // Front to back lines
+        this->Vertex(float3(P0));
+        this->Vertex(float3(P4));
+        //
+        this->Vertex(float3(P1));
+        this->Vertex(float3(P5));
+        //
+        this->Vertex(float3(P2));
+        this->Vertex(float3(P6));
+        //
+        this->Vertex(float3(P3));
+        this->Vertex(float3(P7));
     }
     this->EndLines();
 }

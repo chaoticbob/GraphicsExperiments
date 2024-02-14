@@ -862,5 +862,7 @@ std::string LoadString(const fs::path& subPath)
     std::string str(size, 0);
     is.read(str.data(), size);
 
+    GREX_LOG_INFO("Loaded string from file (LoadString): " << absPath);
+
     return str;
 }
