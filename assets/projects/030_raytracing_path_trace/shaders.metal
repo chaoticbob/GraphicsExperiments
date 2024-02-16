@@ -265,6 +265,14 @@ HitInfo GetHitInfo(
     thread intersector_result_type                      intersection,
     ray                                                 worldRay);     
 
+//
+// The Metal version of 030_raytracing_path_trace is different from the D3D12
+// and Vulkan versions. Metal doesn't support recursive ray tracing so the 
+// an iterative approach is used instead. This approach produces results
+// similar to but not exactly like the D3D12 and Vulkan versions. Thankfully
+// the samples are just to demonstrate a technique of path tracing on the 
+// GPU without a high degree of emphasis on correctness.
+//
 kernel void MyRayGen(
     uint2                                                DispatchRaysIndex      [[thread_position_in_grid]],
     uint2                                                DispatchRaysDimensions [[threads_per_grid]],
