@@ -388,9 +388,6 @@ int main(int argc, char** argv)
     // *************************************************************************
     uint32_t frameIndex = 0;
 
-    auto event = NS::TransferPtr(renderer->Device->newEvent());
-    uint64_t eventValue = 0;
-
     while (window->PollEvents())
     {
         window->ImGuiNewFrameMetal(pRenderPassDescriptor);
@@ -482,10 +479,6 @@ int main(int argc, char** argv)
             
             gResetRayGenSamples = false;
         }
-        
-        ++eventValue;
-        pCommandBuffer->encodeSignalEvent(event.get(), eventValue);
-        pCommandBuffer->encodeWait(event.get(), eventValue);
 
         // Ray trace
         {
@@ -528,10 +521,6 @@ int main(int argc, char** argv)
             pComputeEncoder->endEncoding();
         }
         
-        ++eventValue;
-        pCommandBuffer->encodeSignalEvent(event.get(), eventValue);
-        pCommandBuffer->encodeWait(event.get(), eventValue);
-
         // Copy to swapchain image
         {
             auto colorTargetDesc = NS::TransferPtr(MTL::RenderPassColorAttachmentDescriptor::alloc()->init());
