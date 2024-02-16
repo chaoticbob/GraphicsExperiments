@@ -62,8 +62,23 @@ struct MetalAS
    NS::SharedPtr<MTL::AccelerationStructure> AS;
 };
 
-NS::Error* CreateBuffer(MetalRenderer* pRenderer, size_t srcSize, const void* pSrcData, MetalBuffer* pBuffer);
-NS::Error* CreateBuffer(MetalRenderer* pRenderer, MetalBuffer* pSrcBuffer, MetalBuffer* pBuffer);
+NS::Error* CreateBuffer(
+    MetalRenderer*       pRenderer,
+    size_t               srcSize,
+    const void*          pSrcData,
+    MTL::ResourceOptions storageMode,
+    MetalBuffer*         pBuffer);
+
+NS::Error* CreateBuffer(
+    MetalRenderer* pRenderer,
+    size_t         srcSize,
+    const void*    pSrcData,
+    MetalBuffer*   pBuffer);
+
+NS::Error* CreateBuffer(
+    MetalRenderer* pRenderer,
+    MetalBuffer*   pSrcBuffer,
+    MetalBuffer*   pBuffer);
 
 NS::Error* CreateTexture(
     MetalRenderer*                pRenderer,

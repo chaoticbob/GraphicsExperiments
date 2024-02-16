@@ -299,12 +299,12 @@ void CreateBLAS(
     triGeoDesc->setVertexStride(12);
     triGeoDesc->setTriangleCount(indexCount/3);
 
-    MTL::PrimitiveAccelerationStructureDescriptor* asDesc          = MTL::PrimitiveAccelerationStructureDescriptor::alloc()->init();
-    NS::Array*                                     triGeoDescArray = (NS::Array*)CFArrayCreate(kCFAllocatorDefault, (const void**)&triGeoDesc, 1, &kCFTypeArrayCallBacks);
-    asDesc->setGeometryDescriptors(triGeoDescArray);
+    auto asDesc = NS::TransferPtr(MTL::PrimitiveAccelerationStructureDescriptor::alloc()->init());
+    auto triGeoDescArray = NS::TransferPtr(NS::Array::array((NS::Object**)&triGeoDesc, 1));
+    asDesc->setGeometryDescriptors(triGeoDescArray.get());
 
     MetalAS accelStructure;
-    CHECK_CALL(CreateAccelerationStructure(pRenderer, asDesc, &accelStructure));
+    CHECK_CALL(CreateAccelerationStructure(pRenderer, asDesc.get(), &accelStructure));
 
     BLAS.push_back(accelStructure);
 }

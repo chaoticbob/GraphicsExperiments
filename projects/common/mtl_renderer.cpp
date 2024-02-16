@@ -200,11 +200,38 @@ MTL::IndexType ToMTLIndexType(
 }
 
 NS::Error* CreateBuffer(
+    MetalRenderer*       pRenderer,
+    size_t               srcSize,
+    const void*          pSrcData,
+    MTL::ResourceOptions storageMode,
+    MetalBuffer*         pBuffer)
+{
+    pBuffer->Buffer = NS::TransferPtr(pRenderer->Device->newBuffer(srcSize, storageMode));
+
+    if (pBuffer->Buffer.get() != nullptr) {
+       if (pSrcData != nullptr) {
+          memcpy(pBuffer->Buffer->contents(), pSrcData, srcSize);
+          if (storageMode == MTL::ResourceStorageModeManaged) {
+            pBuffer->Buffer->didModifyRange(NS::Range::Make(0, pBuffer->Buffer->length()));
+          }
+       }
+    }
+    else {
+        assert(false && "CreateBuffer() - MTL::Device::newBuffer() failed");
+    }
+
+    return nullptr;
+}
+
+NS::Error* CreateBuffer(
     MetalRenderer* pRenderer,
     size_t         srcSize,
     const void*    pSrcData,
     MetalBuffer*   pBuffer)
 {
+    return CreateBuffer(pRenderer, srcSize, pSrcData, MTL::ResourceStorageModeShared, pBuffer);
+
+/*
     pBuffer->Buffer = NS::TransferPtr(pRenderer->Device->newBuffer(srcSize, MTL::ResourceStorageModeManaged));
 
     if (pBuffer->Buffer.get() != nullptr)
@@ -221,6 +248,7 @@ NS::Error* CreateBuffer(
     }
 
     return nullptr;
+*/
 }
 
 NS::Error* CreateBuffer(
@@ -264,7 +292,8 @@ NS::Error* CreateTexture(
     pTextureDesc->setHeight(height);
     pTextureDesc->setPixelFormat(format);
     pTextureDesc->setTextureType(MTL::TextureType2D);
-    pTextureDesc->setStorageMode(MTL::StorageModeManaged);
+    //pTextureDesc->setStorageMode(MTL::StorageModeManaged);
+    pTextureDesc->setStorageMode(MTL::StorageModeShared);
     pTextureDesc->setUsage(MTL::ResourceUsageSample | MTL::ResourceUsageRead);
     pTextureDesc->setMipmapLevelCount(CountU32(mipOffsets));
 
