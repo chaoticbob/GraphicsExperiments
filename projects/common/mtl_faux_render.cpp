@@ -9,6 +9,11 @@ using namespace glm;
 namespace MtlFauxRender
 {
 
+const int32_t kPositionIndex  = 0;
+const int32_t kTexCoordIndex  = 1;
+const int32_t kNormalIndex    = 2;
+const int32_t kTangentIndex   = 3;
+
 bool Buffer::Map(void** ppData)
 {
     if (!this->Mappable)
@@ -323,6 +328,78 @@ MtlFauxRender::Image* Cast(FauxRender::Image* pImage)
     return static_cast<MtlFauxRender::Image*>(pImage);
 }
 
+bool CalculateVertexStrides(FauxRender::Scene* pScene, std::vector<uint32>& vertexStrides)
+{
+    assert((pScene != nullptr) && "pScene is NULL");
+
+    bool          meshPartStrideMismatch = false;
+
+    vertexStrides.resize(4);
+
+    for (auto pGeometryNode : pScene->GeometryNodes)
+    {
+        assert((pGeometryNode != nullptr) && "pGeometryNode is NULL");
+        assert((pGeometryNode->Type == FauxRender::SCENE_NODE_TYPE_GEOMETRY) && "node is not of drawable type");
+
+        const FauxRender::Mesh* pMesh           = pGeometryNode->pMesh;
+
+        for (auto& batch : pMesh->DrawBatches)
+        {
+            // Position
+            {
+                assert((batch.PositionBufferView.Format != GREX_FORMAT_UNKNOWN) && "Mesh does not contain positions!");
+                uint32_t vertexStride = batch.PositionBufferView.Stride;
+
+                meshPartStrideMismatch = meshPartStrideMismatch ||
+                   (vertexStrides[kPositionIndex] != vertexStride && vertexStrides[kPositionIndex] != 0);
+
+                vertexStrides[kPositionIndex] = vertexStride;
+            }
+
+            // Tex Coord
+            {
+                uint32_t texCoordStride = batch.NormalBufferView.Format != GREX_FORMAT_UNKNOWN
+                   ? batch.TexCoordBufferView.Stride
+                   : batch.PositionBufferView.Stride; // Can't have zero stride
+
+                meshPartStrideMismatch = meshPartStrideMismatch ||
+                   (vertexStrides[kTexCoordIndex] != texCoordStride && vertexStrides[kTexCoordIndex] != 0);
+
+                vertexStrides[kTexCoordIndex] = texCoordStride;
+            }
+
+            // Normal
+            {
+                uint32_t normalStride = batch.NormalBufferView.Format != GREX_FORMAT_UNKNOWN
+                   ? batch.NormalBufferView.Stride
+                   : batch.PositionBufferView.Stride; // Can't have zero stride
+
+                meshPartStrideMismatch = meshPartStrideMismatch ||
+                   (vertexStrides[kNormalIndex] != normalStride && vertexStrides[kNormalIndex] != 0);
+
+                vertexStrides[kNormalIndex] = normalStride;
+            }
+
+            // Tangent
+            {
+                uint32_t tangentStride = batch.TangentBufferView.Format != GREX_FORMAT_UNKNOWN
+                   ? batch.TangentBufferView.Stride
+                   : batch.PositionBufferView.Stride; // Can't have zero stride
+
+                meshPartStrideMismatch = meshPartStrideMismatch ||
+                   (vertexStrides[kTangentIndex] != tangentStride && vertexStrides[kTangentIndex] != 0);
+
+                vertexStrides[kTangentIndex] = tangentStride;
+            }
+        }
+    }
+
+    if (meshPartStrideMismatch)
+    {
+        assert(false && "Not all mesh parts use the same vertex strides, which is not supported on Metal");
+    }
+}
+
 void Draw(const FauxRender::SceneGraph* pGraph, uint32_t instanceIndex, const FauxRender::Mesh* pMesh, MTL::RenderCommandEncoder* pRenderEncoder)
 {
     assert((pMesh != nullptr) && "pMesh is NULL");
@@ -345,38 +422,41 @@ void Draw(const FauxRender::SceneGraph* pGraph, uint32_t instanceIndex, const Fa
         {
             MTL::Buffer* bufferViews[GREX_MAX_VERTEX_ATTRIBUTES]   = {};
             NS::UInteger bufferOffsets[GREX_MAX_VERTEX_ATTRIBUTES] = {};
-            uint32_t     numBufferViews                            = 0;
 
             // Position
-            if (batch.PositionBufferView.Format != GREX_FORMAT_UNKNOWN)
             {
-                bufferViews[numBufferViews]   = pBuffer->Resource.Buffer.get();
-                bufferOffsets[numBufferViews] = batch.PositionBufferView.Offset;
-                ++numBufferViews;
-            }
-            // Tex Coord
-            if (batch.TexCoordBufferView.Format != GREX_FORMAT_UNKNOWN)
-            {
-                bufferViews[numBufferViews]   = pBuffer->Resource.Buffer.get();
-                bufferOffsets[numBufferViews] = batch.TexCoordBufferView.Offset;
-                ++numBufferViews;
-            }
-            //  Normal
-            if (batch.NormalBufferView.Format != GREX_FORMAT_UNKNOWN)
-            {
-                bufferViews[numBufferViews]   = pBuffer->Resource.Buffer.get();
-                bufferOffsets[numBufferViews] = batch.NormalBufferView.Offset;
-                ++numBufferViews;
-            }
-            //  Tangent
-            if (batch.TangentBufferView.Format != GREX_FORMAT_UNKNOWN)
-            {
-                bufferViews[numBufferViews]   = pBuffer->Resource.Buffer.get();
-                bufferOffsets[numBufferViews] = batch.TangentBufferView.Offset;
-                ++numBufferViews;
+               assert(batch.PositionBufferView.Format != GREX_FORMAT_UNKNOWN);
+               bufferViews[kPositionIndex]   = pBuffer->Resource.Buffer.get();
+               bufferOffsets[kPositionIndex] = batch.PositionBufferView.Offset;
             }
 
-            pRenderEncoder->setVertexBuffers(bufferViews, bufferOffsets, NS::Range::Make(0, numBufferViews));
+            // Tex Coord
+            {
+                bufferViews[kTexCoordIndex]   = pBuffer->Resource.Buffer.get();
+
+                bufferOffsets[kTexCoordIndex] = batch.TexCoordBufferView.Format != GREX_FORMAT_UNKNOWN
+                  ? batch.TexCoordBufferView.Offset
+                  : batch.PositionBufferView.Offset;
+            }
+
+            //  Normal
+            {
+                bufferViews[kNormalIndex]   = pBuffer->Resource.Buffer.get();
+
+                bufferOffsets[kNormalIndex] = batch.NormalBufferView.Format != GREX_FORMAT_UNKNOWN
+                  ? batch.NormalBufferView.Offset
+                  : batch.PositionBufferView.Offset;
+            }
+
+            //  Tangent
+            {
+                bufferViews[kTangentIndex]   = pBuffer->Resource.Buffer.get();
+                bufferOffsets[kTangentIndex] = batch.TangentBufferView.Format != GREX_FORMAT_UNKNOWN
+                  ? batch.TangentBufferView.Offset
+                  : batch.PositionBufferView.Offset;
+            }
+
+            pRenderEncoder->setVertexBuffers(bufferViews, bufferOffsets, NS::Range::Make(0, 4));
         }
 
         // Draw root constants
@@ -431,7 +511,7 @@ void Draw(const FauxRender::SceneGraph* pGraph, const FauxRender::Scene* pScene,
     // Set camera
     {
         auto&    resource = MtlFauxRender::Cast(pScene->pCameraArgs)->Resource;
-        uint32_t index   = static_cast<const MtlFauxRender::SceneGraph*>(pGraph)->RootParameterIndices.Camera;
+        uint32_t index    = static_cast<const MtlFauxRender::SceneGraph*>(pGraph)->RootParameterIndices.Camera;
         pRenderEncoder->setVertexBuffer(resource.Buffer.get(), 0, index);
         pRenderEncoder->setFragmentBuffer(resource.Buffer.get(), 0, index);
     }
@@ -439,7 +519,7 @@ void Draw(const FauxRender::SceneGraph* pGraph, const FauxRender::Scene* pScene,
     // Set instance buffer
     {
         auto&    resource = MtlFauxRender::Cast(pScene->pInstanceBuffer)->Resource;
-        uint32_t index   = static_cast<const MtlFauxRender::SceneGraph*>(pGraph)->RootParameterIndices.InstanceBuffer;
+        uint32_t index    = static_cast<const MtlFauxRender::SceneGraph*>(pGraph)->RootParameterIndices.InstanceBuffer;
         pRenderEncoder->setVertexBuffer(resource.Buffer.get(), 0, index);
         pRenderEncoder->setFragmentBuffer(resource.Buffer.get(), 0, index);
     }
@@ -447,7 +527,7 @@ void Draw(const FauxRender::SceneGraph* pGraph, const FauxRender::Scene* pScene,
     // Set material buffer
     {
         auto&    resource = MtlFauxRender::Cast(pGraph->pMaterialBuffer)->Resource;
-        uint32_t index   = static_cast<const MtlFauxRender::SceneGraph*>(pGraph)->RootParameterIndices.MaterialBuffer;
+        uint32_t index    = static_cast<const MtlFauxRender::SceneGraph*>(pGraph)->RootParameterIndices.MaterialBuffer;
         pRenderEncoder->setVertexBuffer(resource.Buffer.get(), 0, index);
         pRenderEncoder->setFragmentBuffer(resource.Buffer.get(), 0, index);
     }

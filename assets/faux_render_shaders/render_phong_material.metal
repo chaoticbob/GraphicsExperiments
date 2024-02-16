@@ -164,8 +164,8 @@ float4 fragment psmain(
     //   The roughness values are sampled from the G channel
     //
     float metallic = material.MetallicFactor;
-    float roughness = material.RoughnessFactor;
     /*
+    float roughness = material.RoughnessFactor;
     if (material.MaterialFlags & MATERIAL_FLAG_METALLIC_ROUGHNESS_TEXTURE) {
         TextureData params = {material.MetallicRoughnessTexture.x, material.MetallicRoughnessTexture.y};
 
