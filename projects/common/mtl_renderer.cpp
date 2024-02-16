@@ -1021,8 +1021,7 @@ NS::Error* CreateGraphicsPipeline2(
     MTL::PixelFormat          rtvFormat,
     MTL::PixelFormat          dsvFormat,
     MetalPipelineRenderState* pPipelineRenderState,
-    MetalDepthStencilState*   pDepthStencilState,
-    uint32_t*                 pOptionalVertexStrides)
+    MetalDepthStencilState*   pDepthStencilState)
 {
     MTL::VertexDescriptor* pVertexDescriptor = MTL::VertexDescriptor::alloc()->init();
     if (pVertexDescriptor != nullptr)
