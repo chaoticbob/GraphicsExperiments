@@ -266,7 +266,7 @@ HitInfo GetHitInfo(
     ray                                                 worldRay);     
 
 //
-// The Metal version of 030_raytracing_path_trace is different from the D3D12
+// The Metal version of this sample is slightly different from the D3D12
 // and Vulkan versions. Metal doesn't support recursive ray tracing so the 
 // an iterative approach is used instead. This approach produces results
 // similar to but not exactly like the D3D12 and Vulkan versions. Thankfully
