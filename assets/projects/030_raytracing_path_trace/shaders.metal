@@ -392,7 +392,12 @@ kernel void MyRayGen(
                 */
 
                 float diceRoll = Random01(rngState);
-                rayType = (diceRoll > 0.66) ? RAY_TYPE_REFRACT : ((diceRoll > 0.33) ? RAY_TYPE_SPECULAR : RAY_TYPE_DIFFUSE);
+                if (ior > 1.0) {
+                    rayType = (diceRoll > 0.66) ? RAY_TYPE_REFRACT : ((diceRoll > 0.33) ? RAY_TYPE_SPECULAR : RAY_TYPE_DIFFUSE);
+                }
+                else {
+                    rayType = (diceRoll > 0.5) ? RAY_TYPE_SPECULAR : RAY_TYPE_DIFFUSE;
+                }
 
                 //float3 reflection = 0;
                 if (rayType == RAY_TYPE_DIFFUSE) {
@@ -423,6 +428,11 @@ kernel void MyRayGen(
                     rayDirection = refract(I, N, eta1 / eta2);
                 }
 
+                // HACK: give non-refractive surfaces a GI color bleed boost
+                if (ior <= 1.0) {
+                    throughPut += 0.05 * baseColor;
+                }                
+
                 // Update rayOrigin and rayDirection in case there's another bounce
                 rayOrigin = hit.P + (kTraceOffset * rayDirection);
             }
@@ -446,16 +456,6 @@ kernel void MyRayGen(
 
     RenderTarget.write(float4(pow(finalColor, 1 / 2.2), 0), rayIndex2);
     RayGenSamples[rayIndex] = sampleCount;
-}
-
-void MyMissShader(
-    texture2d<float>   IBLEnvironmentMap,
-    ray                WorldRay,    
-    thread RayPayload& payload)
-{
-    float3 dir = WorldRay.direction;
-    float3 color = GetIBLEnvironment(dir, 0, IBLEnvironmentMap);    
-    payload.color = float4(color, 1);
 }
 
 HitInfo GetHitInfo(

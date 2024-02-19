@@ -120,7 +120,6 @@ void CreateTLAS(
     
 void CreateIBLTextures(
     MetalRenderer* pRenderer,
-    MetalTexture*  pBRDFLUT,
     IBLTextures&   outIBLTextures);
 
 // =============================================================================
@@ -267,7 +266,7 @@ int main(int argc, char** argv)
         boxGeometry);        
 
     // *************************************************************************
-    // Ray trace argument buffer
+    // Geometry argument buffer
     // *************************************************************************
     NS::SharedPtr<MTL::Buffer> geometryArgBuffer;
     {
@@ -329,11 +328,9 @@ int main(int argc, char** argv)
     // *************************************************************************
     // IBL txtures
     // *************************************************************************
-    MetalTexture brdfLUT;
     IBLTextures iblTextures = {};
     CreateIBLTextures(
         renderer.get(),
-        &brdfLUT,
         iblTextures);
 
     // *************************************************************************
@@ -908,28 +905,8 @@ void CreateTLAS(
     
 void CreateIBLTextures(
     MetalRenderer* pRenderer,
-    MetalTexture*  pBRDFLUT,
     IBLTextures&   outIBLTextures)
 {
-    // BRDF LUT
-    {
-        auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut.hdr"));
-        if (bitmap.Empty())
-        {
-            assert(false && "Load image failed");
-            return;
-        }
-
-        CHECK_CALL(CreateTexture(
-            pRenderer,
-            bitmap.GetWidth(),
-            bitmap.GetHeight(),
-            MTL::PixelFormatRGBA32Float,
-            bitmap.GetSizeInBytes(),
-            bitmap.GetPixels(),
-            pBRDFLUT));
-    }
-
     // IBL file
     auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
 
