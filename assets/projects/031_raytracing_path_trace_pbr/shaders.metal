@@ -463,7 +463,7 @@ kernel void MyRayGen(
 
                 // HACK: give non-refractive surfaces a GI color bleed boost
                 if (ior <= 1.0) {
-                    throughPut += 0.05 * baseColor;
+                    throughPut += 0.15 * baseColor;
                 }
 
                 // Add emission
@@ -475,8 +475,7 @@ kernel void MyRayGen(
             else if (intersection.type == intersection_type::none) {
                 // *** MISS ***            
                 float3 envColor = GetIBLEnvironment(worldRay.direction, 0, SceneParams, IBL);
-                float s = (rayDepth > 0) ? 1.25 : 1;
-                color += throughPut * s * envColor;
+                color += throughPut *  envColor;
                 break;
             }
         }
@@ -490,7 +489,10 @@ kernel void MyRayGen(
     float3 finalColor = accumColor.xyz / (float)sampleCount;
     finalColor = ACESFilm(finalColor);     
 
-    RenderTarget.write(float4(pow(finalColor, 1 / 2.2), 0), rayIndex2);
+    // Readjusting gamma on output makes the image appear to too bright, disable for now.
+    //RenderTarget.write(float4(pow(finalColor, 1 / 1.0), 0), rayIndex2);
+    //
+    RenderTarget.write(float4(finalColor, 0), rayIndex2);
     RayGenSamples[rayIndex] = sampleCount;
 }
 
