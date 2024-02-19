@@ -116,6 +116,15 @@ struct CommandObjects
     ~CommandObjects();
 };
 
+// Descriptor container for convenience
+struct Descriptors
+{
+    VkDescriptorPool      DescriptorPool;
+    VkDescriptorSet       DescriptorSet;
+    VkDescriptorSetLayout DescriptorSetLayout;
+
+};
+
 bool     InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeatures& features, uint32_t apiVersion = VK_API_VERSION_1_3);
 bool     InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t height, uint32_t imageCount = 2);
 bool     WaitForGpu(VulkanRenderer* pRenderer);

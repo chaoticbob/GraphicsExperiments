@@ -139,16 +139,11 @@ void CreateGeometryBuffers(
    VulkanBuffer*                pPositionBuffer,
    VulkanBuffer*                pNormalBuffer,
    vec3*                        pLightPosition);
-void CreateDescriptorBuffer(
-   VulkanRenderer*              pRenderer,
-   VkDescriptorSetLayout        descriptorSetLayout,
-   VulkanBuffer*                pDescriptorBuffer);
-void WriteDescriptors(
-   VulkanRenderer*              pRenderer,
-   VkDescriptorSetLayout        descriptorSetLayout,
-   VulkanBuffer*                pDescriptorBuffer,
-   VulkanBuffer*                pCameraBuffer,
-   VulkanBuffer*                pMaterialBuffer);
+void  CreateDescriptors(
+    VulkanRenderer* pRenderer,
+    VulkanBuffer*   pCameraPropertiesBuffer,
+    VulkanBuffer*   pMaterials,
+    Descriptors*    pDescriptors);
 
 // =============================================================================
 // main()
@@ -243,17 +238,10 @@ int main(int argc, char** argv)
        &lightPosition);
 
    // *************************************************************************
-   // Descriptor heaps
-   // *************************************************************************
-   VulkanBuffer descriptorBuffer = {};
-   CreateDescriptorBuffer(renderer.get(), pipelineLayout.DescriptorSetLayout, &descriptorBuffer);
-
-   WriteDescriptors(
-      renderer.get(),
-      pipelineLayout.DescriptorSetLayout,
-      &descriptorBuffer,
-      &cameraBuffer,
-      &materialsBuffer);
+    // Descriptor heaps
+    // *************************************************************************
+    Descriptors descriptors;
+    CreateDescriptors(renderer.get(), &cameraBuffer, &materialsBuffer, &descriptors);
 
     // *************************************************************************
     // Window
@@ -341,15 +329,6 @@ int main(int argc, char** argv)
     Camera* pCameraParams = nullptr;
     CHECK_CALL(vmaMapMemory(renderer->Allocator, cameraBuffer.Allocation, reinterpret_cast<void**>(&pCameraParams)));
 
-   // *************************************************************************
-   // Persistent map descriptor buffer
-   // *************************************************************************
-   char* pDescriptorBufferStartAddress = nullptr;
-   CHECK_CALL(vmaMapMemory(
-      renderer->Allocator,
-      descriptorBuffer.Allocation,
-      reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
-
     // *************************************************************************
     // Main loop
     // *************************************************************************
@@ -411,23 +390,15 @@ int main(int argc, char** argv)
            // Bind the VS/FS Graphics Pipeline
            vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-           VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT };
-           descriptorBufferBindingInfo.pNext                            = nullptr;
-           descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &descriptorBuffer);
-           descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-
-           fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
-
-           uint32_t     bufferIndices           = 0;
-           VkDeviceSize descriptorBufferOffsets = 0;
-           fn_vkCmdSetDescriptorBufferOffsetsEXT(
-              cmdBuf.CommandBuffer,
-              VK_PIPELINE_BIND_POINT_GRAPHICS,
-              pipelineLayout.PipelineLayout,
-              0, // firstSet
-              1, // setCount
-              &bufferIndices,
-              &descriptorBufferOffsets);
+           vkCmdBindDescriptorSets(
+               cmdBuf.CommandBuffer,
+               VK_PIPELINE_BIND_POINT_GRAPHICS,
+               pipelineLayout.PipelineLayout,
+               0, // firstSet
+               2, // setCount
+               &descriptors.DescriptorSet,
+               0,
+               nullptr);
 
            // Bind the Vertex Buffer
            VkBuffer vertexBuffers[] = { positionBuffer.Buffer, normalBuffer.Buffer };
@@ -623,7 +594,7 @@ void CreateGeometryBuffers(
       pRenderer,
       Align<size_t>(sizeof(Camera), 256),
       nullptr,
-      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
       0,
       pCameraBuffer));
 
@@ -631,7 +602,7 @@ void CreateGeometryBuffers(
       pRenderer,
       SizeInBytes(materials),
       DataPtr(materials),
-      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
       VMA_MEMORY_USAGE_GPU_ONLY,
       0,
       pMaterialBuffer));
@@ -655,58 +626,82 @@ void CreateGeometryBuffers(
       pNormalBuffer));
 }
 
-void CreateDescriptorBuffer(
-   VulkanRenderer*              pRenderer,
-   VkDescriptorSetLayout        descriptorSetLayout,
-   VulkanBuffer*                pDescriptorBuffer)
+void  CreateDescriptors(
+    VulkanRenderer* pRenderer,
+    VulkanBuffer*   pCameraPropertiesBuffer,
+    VulkanBuffer*   pMaterials,
+    Descriptors*    pDescriptors)
 {
-   VkDeviceSize size = 256;
-   fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
+    uint32_t poolCount = 1;
 
-   VkBufferUsageFlags usageFlags =
-      VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    // Allocate the Descriptor Pool
+    std::vector<VkDescriptorPoolSize> poolSizes = 
+    {
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, poolCount},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, poolCount}
+    };
 
-   CHECK_CALL(CreateBuffer(
-      pRenderer,           // pRenderer
-      size,                // srcSize
-      nullptr,             // pSrcData
-      usageFlags,          // usageFlags
-      0,                   // minAlignment
-      pDescriptorBuffer)); // pBuffer
-}
+    uint32_t setCount  = 2;
+    VkDescriptorPoolCreateInfo poolCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    poolCreateInfo.maxSets                    = setCount;
+    poolCreateInfo.poolSizeCount              = CountU32(poolSizes);
+    poolCreateInfo.pPoolSizes                 = DataPtr(poolSizes);
 
-void WriteDescriptors(
-   VulkanRenderer*        pRenderer,
-   VkDescriptorSetLayout  descriptorSetLayout,
-   VulkanBuffer*          pDescriptorBuffer,
-   VulkanBuffer*          pCameraBuffer,
-   VulkanBuffer*          pMaterialBuffer)
-{
-   char* pDescriptorBufferStartAddress = nullptr;
+    CHECK_CALL(vkCreateDescriptorPool(pRenderer->Device, &poolCreateInfo, nullptr, &pDescriptors->DescriptorPool));
 
-   CHECK_CALL(vmaMapMemory(
-      pRenderer->Allocator,
-      pDescriptorBuffer->Allocation,
-      reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
+    // Setup the Descriptor set layout
+    VkDescriptorSetLayoutBinding cameraBinding{};
+    cameraBinding.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    cameraBinding.stageFlags      = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    cameraBinding.binding         = 0;
+    cameraBinding.descriptorCount = 1;
 
-    WriteDescriptor(
-       pRenderer,
-       pDescriptorBufferStartAddress,
-       descriptorSetLayout,
-       0, // binding
-       0, // arrayElement
-       VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-       pCameraBuffer);
+    VkDescriptorSetLayoutBinding materialStructureBinding{};
+    materialStructureBinding.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    materialStructureBinding.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+    materialStructureBinding.binding         = 2;
+    materialStructureBinding.descriptorCount = 1;
 
-    WriteDescriptor(
-       pRenderer,
-       pDescriptorBufferStartAddress,
-       descriptorSetLayout,
-       2, // binding
-       0, // arrayElement
-       VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-       pMaterialBuffer);
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding = {cameraBinding, materialStructureBinding};
 
-    vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
+    VkDescriptorSetLayoutCreateInfo layoutCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    layoutCreateInfo.pBindings                       = DataPtr(setLayoutBinding);
+    layoutCreateInfo.bindingCount                    = CountU32(setLayoutBinding);
+
+    CHECK_CALL(vkCreateDescriptorSetLayout(pRenderer->Device, &layoutCreateInfo, nullptr, &pDescriptors->DescriptorSetLayout));
+
+     // Setup the descriptor set 
+    VkDescriptorSetAllocateInfo allocInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    allocInfo.descriptorPool              = pDescriptors->DescriptorPool;
+    allocInfo.pSetLayouts                 = &pDescriptors->DescriptorSetLayout;
+    allocInfo.descriptorSetCount          = 2;
+
+    CHECK_CALL(vkAllocateDescriptorSets(pRenderer->Device, &allocInfo, &pDescriptors->DescriptorSet));
+
+    VkDescriptorBufferInfo cameraBufferInfo{};
+    cameraBufferInfo.buffer = pCameraPropertiesBuffer->Buffer;
+    cameraBufferInfo.offset = 0;
+    cameraBufferInfo.range  = pCameraPropertiesBuffer->Size;
+
+    VkDescriptorBufferInfo materialBufferInfo{};
+    materialBufferInfo.buffer = pMaterials->Buffer;
+    materialBufferInfo.offset = 0;
+    materialBufferInfo.range  = pMaterials->Size;
+
+    VkWriteDescriptorSet cameraWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    cameraWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    cameraWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    cameraWriteDescriptor.dstBinding           = 0;
+    cameraWriteDescriptor.pBufferInfo          = &cameraBufferInfo;
+    cameraWriteDescriptor.descriptorCount      = 1;
+
+    VkWriteDescriptorSet materialWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    materialWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    materialWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    materialWriteDescriptor.dstBinding           = 2;
+    materialWriteDescriptor.pBufferInfo          = &materialBufferInfo;
+    materialWriteDescriptor.descriptorCount      = 1;
+
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets = {cameraWriteDescriptor, materialWriteDescriptor};
+    vkUpdateDescriptorSets(pRenderer->Device, CountU32(writeDescriptorSets), DataPtr(writeDescriptorSets), 0, nullptr);
 }
