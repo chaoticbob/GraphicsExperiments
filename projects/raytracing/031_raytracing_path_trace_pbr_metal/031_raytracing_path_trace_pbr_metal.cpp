@@ -1,7 +1,6 @@
 #include "window.h"
 
 #include "mtl_renderer.h"
-
 #include "tri_mesh.h"
 
 #include <glm/glm.hpp>
@@ -29,11 +28,10 @@ using namespace glm;
 // =============================================================================
 // Macros, enums, and constants
 // =============================================================================
-//const uint32_t kOutputResourcesOffset = 0;
-//const uint32_t kGeoBuffersOffset      = 20;
-//const uint32_t kIBLTextureOffset      = 3;
+const uint32_t kMaxIBLs = 100;
 
-const uint32_t kGeometryArgBufferParamIndex = 6;
+const uint32_t kGeometryArgBufferParamIndex    = 6;
+const uint32_t kIBLTexturesArgBufferParamIndex = 7;
 
 // =============================================================================
 // Globals
@@ -45,6 +43,11 @@ static bool     gEnableDebug  = true;
 static float gTargetAngle = 0.0f;
 static float gAngle       = 0.0f;
 
+static std::vector<std::string> gMaterialNames = {};
+static std::vector<std::string> gIBLNames      = {};
+
+static uint32_t gIBLIndex           = 0;
+static uint32_t gCurrentIBLIndex    = 0xFFFFFFFF;
 static bool     gResetRayGenSamples = true;
 static uint32_t gMaxSamples         = 5120;
 static uint32_t gCurrentMaxSamples  = 0;
@@ -63,9 +66,10 @@ struct SceneParameters
     mat4  ProjectionInverseMatrix;
     mat4  ViewProjectionMatrix;
     vec3  EyePosition;
+    uint  IBLIndex;
     uint  MaxSamples;
     uint  NumLights;
-    uint  _pad0[3];
+    uint  _pad0[2];
     Light Lights[8];
 };
 
@@ -93,6 +97,8 @@ struct MaterialParameters
     float specularReflectance;
     float ior;
     uint  _pad0;
+    vec3  emissionColor;
+    uint  _pad1;
 };
 
 // =============================================================================
@@ -101,26 +107,38 @@ struct MaterialParameters
 void CreateGeometries(
     MetalRenderer* pRenderer,
     Geometry&      outSphereGeometry,
+    Geometry&      outKnobGeometry,
+    Geometry&      outMonkeyGeometry,
+    Geometry&      outTeapotGeometry,
     Geometry&      outBoxGeometry);
 
 void CreateBLASes(
     MetalRenderer*   pRenderer,
     const Geometry&  sphereGeometry,
+    const Geometry&  knobGeometry,
+    const Geometry&  monkeyGeometry,
+    const Geometry&  teapotGeometry,
     const Geometry&  boxGeometry,
     MetalAS*         pSphereBLAS,
+    MetalAS*         pKnobBLAS,
+    MetalAS*         pMonkeyBLAS,
+    MetalAS*         pTeapotBLAS,
     MetalAS*         pBoxBLAS);
 
 void CreateTLAS(
     MetalRenderer*                   pRenderer,
     const MetalAS*                   pSphereBLAS,
+    const MetalAS*                   pKnobBLAS,
+    const MetalAS*                   pMonkeyBLAS,
+    const MetalAS*                   pTeapotBLAS,
     const MetalAS*                   pBoxBLAS,
     MetalAS*                         pTLAS,
     MetalBuffer*                     pInstanceBuffer,
     std::vector<MaterialParameters>& outMaterialParams);
     
 void CreateIBLTextures(
-    MetalRenderer* pRenderer,
-    IBLTextures&   outIBLTextures);
+    MetalRenderer*            pRenderer,
+    std::vector<IBLTextures>& outIBLTextures);
 
 // =============================================================================
 // Input functions
@@ -159,7 +177,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Compile shaders
     // *************************************************************************
-    auto source = LoadString("projects/030_raytracing_path_trace/shaders.metal");
+    auto source = LoadString("projects/031_raytracing_path_trace_pbr/shaders.metal");
     assert((!source.empty()) && "no shader source!");
     
     auto compileOptions = NS::TransferPtr(MTL::CompileOptions::alloc()->init());
@@ -259,11 +277,17 @@ int main(int argc, char** argv)
     // Create geometry
     // *************************************************************************
     Geometry sphereGeometry;
+    Geometry knobGeometry;
+    Geometry monkeyGeometry;
+    Geometry teapotGeometry;
     Geometry boxGeometry;
     CreateGeometries(
         renderer.get(),
         sphereGeometry,
-        boxGeometry);        
+        knobGeometry,
+        monkeyGeometry,
+        teapotGeometry,
+        boxGeometry);   
 
     // *************************************************************************
     // Geometry argument buffer
@@ -273,17 +297,40 @@ int main(int argc, char** argv)
         auto argEncoder = NS::TransferPtr(rayTraceShader.Function->newArgumentEncoder(kGeometryArgBufferParamIndex));
         
         geometryArgBuffer = NS::TransferPtr(renderer->Device->newBuffer(argEncoder->encodedLength(), MTL::ResourceStorageModeManaged));
+        geometryArgBuffer->setLabel(NS::String::string("IBL Textures Arg Buffer", NS::UTF8StringEncoding));
+
         argEncoder->setArgumentBuffer(geometryArgBuffer.get(), 0);
         
-        for (uint i = 0; i < 4; ++i) {
-            argEncoder->setBuffer(sphereGeometry.indexBuffer.Buffer.get(),    0, 0 + i);
-            argEncoder->setBuffer(sphereGeometry.positionBuffer.Buffer.get(), 0, 5 + i);
-            argEncoder->setBuffer(sphereGeometry.normalBuffer.Buffer.get(),   0, 10 + i);
-        }
-        argEncoder->setBuffer(boxGeometry.indexBuffer.Buffer.get(),    0, 0 + 4);
-        argEncoder->setBuffer(boxGeometry.positionBuffer.Buffer.get(), 0, 5 + 4);
-        argEncoder->setBuffer(boxGeometry.normalBuffer.Buffer.get(),   0, 10 + 4);
-        
+        auto encodeBuffers = [&argEncoder](const Geometry& geometry, uint32_t subIndex) {
+            argEncoder->setBuffer(geometry.indexBuffer.Buffer.get(),    0,  0 + subIndex);
+            argEncoder->setBuffer(geometry.positionBuffer.Buffer.get(), 0, 25 + subIndex);
+            argEncoder->setBuffer(geometry.normalBuffer.Buffer.get(),   0, 50 + subIndex);
+        };
+
+        uint32_t subIndex = 0;
+        // Spheres
+        encodeBuffers(sphereGeometry, subIndex++);
+        encodeBuffers(sphereGeometry, subIndex++);
+        encodeBuffers(sphereGeometry, subIndex++);
+        encodeBuffers(sphereGeometry, subIndex++);
+        // Khobs
+        encodeBuffers(knobGeometry, subIndex++);
+        encodeBuffers(knobGeometry, subIndex++);
+        encodeBuffers(knobGeometry, subIndex++);
+        encodeBuffers(knobGeometry, subIndex++);
+        // Monkeys
+        encodeBuffers(monkeyGeometry, subIndex++);
+        encodeBuffers(monkeyGeometry, subIndex++);
+        encodeBuffers(monkeyGeometry, subIndex++);
+        encodeBuffers(monkeyGeometry, subIndex++);
+        // Teapots
+        encodeBuffers(teapotGeometry, subIndex++);
+        encodeBuffers(teapotGeometry, subIndex++);
+        encodeBuffers(teapotGeometry, subIndex++);
+        encodeBuffers(teapotGeometry, subIndex++);
+        // Box
+        encodeBuffers(boxGeometry, subIndex++);
+            
         geometryArgBuffer->didModifyRange(NS::Range::Make(0, geometryArgBuffer->length()));
     }
 
@@ -291,8 +338,22 @@ int main(int argc, char** argv)
     // Bottom level acceleration structure
     // *************************************************************************
     MetalAS sphereBLAS;
-    MetalAS boxBLAS;
-    CreateBLASes(renderer.get(), sphereGeometry, boxGeometry, &sphereBLAS, &boxBLAS);
+    MetalAS knobBLAS;
+    MetalAS monkeyBLAS;
+    MetalAS teapotBLAS;
+    MetalAS boxBLAS;    
+    CreateBLASes(
+        renderer.get(),
+        sphereGeometry,
+        knobGeometry,
+        monkeyGeometry,
+        teapotGeometry,
+        boxGeometry,
+        &sphereBLAS,
+        &knobBLAS,
+        &monkeyBLAS,
+        &teapotBLAS,
+        &boxBLAS);
 
     // *************************************************************************
     // Top level acceleration structure
@@ -300,7 +361,16 @@ int main(int argc, char** argv)
     MetalAS                         TLAS;
     MetalBuffer                     instanceBuffer;
     std::vector<MaterialParameters> materialParams;
-    CreateTLAS(renderer.get(), &sphereBLAS, &boxBLAS, &TLAS, &instanceBuffer, materialParams);
+    CreateTLAS(
+        renderer.get(),
+        &sphereBLAS,
+        &knobBLAS,
+        &monkeyBLAS,
+        &teapotBLAS,
+        &boxBLAS,
+        &TLAS,
+        &instanceBuffer,
+        materialParams);
 
     // *************************************************************************
     // Material params buffer
@@ -328,10 +398,29 @@ int main(int argc, char** argv)
     // *************************************************************************
     // IBL txtures
     // *************************************************************************
-    IBLTextures iblTextures = {};
+    std::vector<IBLTextures> iblTextures = {};
     CreateIBLTextures(
         renderer.get(),
         iblTextures);
+        
+    // *************************************************************************
+    // IBL textures argument buffer
+    // *************************************************************************
+    NS::SharedPtr<MTL::Buffer> iblTexturesArgBuffer;
+    {
+        auto argEncoder = NS::TransferPtr(rayTraceShader.Function->newArgumentEncoder(kIBLTexturesArgBufferParamIndex));
+        
+        iblTexturesArgBuffer = NS::TransferPtr(renderer->Device->newBuffer(argEncoder->encodedLength(), MTL::ResourceStorageModeManaged));
+        iblTexturesArgBuffer->setLabel(NS::String::string("IBL Textures Arg Buffer", NS::UTF8StringEncoding));
+        
+        argEncoder->setArgumentBuffer(iblTexturesArgBuffer.get(), 0);
+               
+        for (size_t i = 0; i < iblTextures.size(); ++i) {
+            argEncoder->setTexture(iblTextures[i].envTexture.Texture.get(), i);
+        }
+            
+        iblTexturesArgBuffer->didModifyRange(NS::Range::Make(0, iblTexturesArgBuffer->length()));
+    }        
 
     // *************************************************************************
     // Render Pass Description
@@ -392,6 +481,21 @@ int main(int argc, char** argv)
         if (ImGui::Begin("Scene")) {
             ImGui::SliderInt("Max Samples Per Pixel", reinterpret_cast<int*>(&gMaxSamples), 1, 16384);
 
+            static const char* currentIBLName = gIBLNames[0].c_str();
+            if (ImGui::BeginCombo("IBL", currentIBLName)) {
+                for (size_t i = 0; i < gIBLNames.size(); ++i) {
+                    bool isSelected = (currentIBLName == gIBLNames[i]);
+                    if (ImGui::Selectable(gIBLNames[i].c_str(), isSelected)) {
+                        currentIBLName = gIBLNames[i].c_str();
+                        gIBLIndex      = static_cast<uint32_t>(i);
+                    }
+                    if (isSelected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
             ImGui::Separator();
 
             float progress = sampleCount / static_cast<float>(gMaxSamples);
@@ -418,6 +522,12 @@ int main(int argc, char** argv)
             gCurrentMaxSamples  = gMaxSamples;
             gResetRayGenSamples = true;
         }
+        
+        if (gCurrentIBLIndex != gIBLIndex)
+        {
+            gCurrentIBLIndex    = gIBLIndex;
+            gResetRayGenSamples = true;
+        }        
 
         // Smooth out the rotation on Y
         gAngle += (gTargetAngle - gAngle) * 0.25f;
@@ -437,6 +547,7 @@ int main(int argc, char** argv)
         // Set constant buffer values
         pSceneParams->ViewInverseMatrix       = glm::inverse(viewMat);
         pSceneParams->ProjectionInverseMatrix = glm::inverse(projMat);
+        pSceneParams->IBLIndex                = gCurrentIBLIndex;
         pSceneParams->EyePosition             = eyePosition;
         pSceneParams->MaxSamples              = gCurrentMaxSamples;
 
@@ -488,21 +599,34 @@ int main(int argc, char** argv)
             pComputeEncoder->setBuffer(geometryArgBuffer.get(), 0, kGeometryArgBufferParamIndex);
             pComputeEncoder->setBuffer(materialParamsBuffer.Buffer.get(), 0, 4);
             pComputeEncoder->setBuffer(rayGenSamplesBuffer.Buffer.get(), 0, 5);
-            pComputeEncoder->setTexture(iblTextures.envTexture.Texture.get(), 3);
+            pComputeEncoder->setBuffer(iblTexturesArgBuffer.get(), 0, kIBLTexturesArgBufferParamIndex);
             pComputeEncoder->setTexture(outputTexture.Texture.get(), 0);
             pComputeEncoder->setTexture(accumTexture.Texture.get(), 1);
             
             pComputeEncoder->useResource(materialParamsBuffer.Buffer.get(), MTL::ResourceUsageRead);
             pComputeEncoder->useResource(sphereGeometry.indexBuffer.Buffer.get(), MTL::ResourceUsageRead);
             pComputeEncoder->useResource(sphereGeometry.normalBuffer.Buffer.get(), MTL::ResourceUsageRead);
+            pComputeEncoder->useResource(knobGeometry.indexBuffer.Buffer.get(), MTL::ResourceUsageRead);
+            pComputeEncoder->useResource(knobGeometry.normalBuffer.Buffer.get(), MTL::ResourceUsageRead);
+            pComputeEncoder->useResource(monkeyGeometry.indexBuffer.Buffer.get(), MTL::ResourceUsageRead);
+            pComputeEncoder->useResource(monkeyGeometry.normalBuffer.Buffer.get(), MTL::ResourceUsageRead);
+            pComputeEncoder->useResource(teapotGeometry.indexBuffer.Buffer.get(), MTL::ResourceUsageRead);
+            pComputeEncoder->useResource(teapotGeometry.normalBuffer.Buffer.get(), MTL::ResourceUsageRead);
             pComputeEncoder->useResource(boxGeometry.indexBuffer.Buffer.get(), MTL::ResourceUsageRead);
             pComputeEncoder->useResource(boxGeometry.normalBuffer.Buffer.get(), MTL::ResourceUsageRead);
+            
+            for (size_t i = 0; i < iblTextures.size(); ++i) {
+                pComputeEncoder->useResource(iblTextures[i].envTexture.Texture.get(), MTL::ResourceUsageRead);
+            }
             
             pComputeEncoder->useResource(accumTexture.Texture.get(), MTL::ResourceUsageRead);
             pComputeEncoder->useResource(rayGenSamplesBuffer.Buffer.get(), MTL::ResourceUsageRead);
             
             // Add a useResource() call for every BLAS used by the TLAS
             pComputeEncoder->useResource(sphereBLAS.AS.get(), MTL::ResourceUsageRead);
+            pComputeEncoder->useResource(knobBLAS.AS.get(), MTL::ResourceUsageRead);
+            pComputeEncoder->useResource(monkeyBLAS.AS.get(), MTL::ResourceUsageRead);
+            pComputeEncoder->useResource(teapotBLAS.AS.get(), MTL::ResourceUsageRead);
             pComputeEncoder->useResource(boxBLAS.AS.get(), MTL::ResourceUsageRead);
 
             // Dispatch
@@ -556,15 +680,18 @@ int main(int argc, char** argv)
 void CreateGeometries(
     MetalRenderer* pRenderer,
     Geometry&      outSphereGeometry,
+    Geometry&      outKnobGeometry,
+    Geometry&      outMonkeyGeometry,
+    Geometry&      outTeapotGeometry,
     Geometry&      outBoxGeometryy)
 {
-    TriMesh::Options triMeshOptions = {};
-    triMeshOptions.enableNormals    = true;
 
-    // Geometry
+    // Sphere
     {
-        // Sphere
-        TriMesh mesh = TriMesh::Sphere(1.0f, 32, 32, triMeshOptions);
+        TriMesh::Options options = {};
+        options.enableNormals    = true;
+        
+        TriMesh mesh = TriMesh::Sphere(1.0f, 256, 256, options);
 
         Geometry& geo = outSphereGeometry;
 
@@ -594,10 +721,21 @@ void CreateGeometries(
         geo.normalBuffer.Buffer->setLabel(NS::String::string("Sphere Normal Buffer", NS::UTF8StringEncoding));
     }
 
-    // Box
+    // Knob
     {
-        TriMesh   mesh = TriMesh::Cube(glm::vec3(15, 1, 4.5f), false, triMeshOptions);
-        Geometry& geo  = outBoxGeometryy;
+        TriMesh::Options options  = {};
+        options.enableNormals     = true;
+        options.applyTransform    = true;
+        options.transformRotate.y = glm::radians(180.0f); 
+
+        TriMesh mesh;
+        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh);
+        if (!res) {
+            assert(false && "failed to load model");
+        }
+        mesh.ScaleToFit(1.25f);
+
+        Geometry& geo = outKnobGeometry;
 
         CHECK_CALL(CreateBuffer(
             pRenderer,
@@ -619,7 +757,128 @@ void CreateGeometries(
 
         geo.indexCount  = 3 * mesh.GetNumTriangles();
         geo.vertexCount = mesh.GetNumVertices();
+        
+        geo.indexBuffer.Buffer->setLabel(NS::String::string("Knob Index Buffer", NS::UTF8StringEncoding));
+        geo.positionBuffer.Buffer->setLabel(NS::String::string("Knob Position Buffer", NS::UTF8StringEncoding));
+        geo.normalBuffer.Buffer->setLabel(NS::String::string("Knob Normal Buffer", NS::UTF8StringEncoding));
+    }
 
+    // Monkey
+    {
+        TriMesh::Options options = {};
+        options.enableNormals    = true;
+
+        TriMesh mesh;
+        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/monkey_lowres.obj").string(), "", options, &mesh);
+        if (!res) {
+            assert(false && "failed to load model");
+        }
+        mesh.ScaleToFit(1.20f);
+
+        Geometry& geo = outMonkeyGeometry;
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTriangles()),
+            DataPtr(mesh.GetTriangles()),
+            &geo.indexBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetPositions()),
+            DataPtr(mesh.GetPositions()),
+            &geo.positionBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetNormals()),
+            DataPtr(mesh.GetNormals()),
+            &geo.normalBuffer));
+
+        geo.indexCount  = 3 * mesh.GetNumTriangles();
+        geo.vertexCount = mesh.GetNumVertices();
+        
+        geo.indexBuffer.Buffer->setLabel(NS::String::string("Monkey Index Buffer", NS::UTF8StringEncoding));
+        geo.positionBuffer.Buffer->setLabel(NS::String::string("Monkey Position Buffer", NS::UTF8StringEncoding));
+        geo.normalBuffer.Buffer->setLabel(NS::String::string("Monkey Normal Buffer", NS::UTF8StringEncoding));
+    }
+
+    // Teapot
+    {
+        TriMesh::Options options  = {};
+        options.enableNormals     = true;
+        options.applyTransform    = true;
+        options.transformRotate.y = glm::radians(160.0f);
+
+        TriMesh mesh;
+        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/teapot.obj").string(), "", options, &mesh);
+        if (!res) {
+            assert(false && "failed to load model");
+        }
+        mesh.ScaleToFit(1.5f);
+
+        Geometry& geo = outTeapotGeometry;
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTriangles()),
+            DataPtr(mesh.GetTriangles()),
+            &geo.indexBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetPositions()),
+            DataPtr(mesh.GetPositions()),
+            &geo.positionBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetNormals()),
+            DataPtr(mesh.GetNormals()),
+            &geo.normalBuffer));
+
+        geo.indexCount  = 3 * mesh.GetNumTriangles();
+        geo.vertexCount = mesh.GetNumVertices();
+        
+        geo.indexBuffer.Buffer->setLabel(NS::String::string("Teapot Index Buffer", NS::UTF8StringEncoding));
+        geo.positionBuffer.Buffer->setLabel(NS::String::string("Teapot Position Buffer", NS::UTF8StringEncoding));
+        geo.normalBuffer.Buffer->setLabel(NS::String::string("Teapot Normal Buffer", NS::UTF8StringEncoding));
+    }
+
+    // Box
+    {
+        TriMesh::Options options = {};
+        options.enableNormals    = true;
+
+        TriMesh mesh;
+        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/shelf.obj").string(), "", options, &mesh);
+        if (!res) {
+            assert(false && "failed to load model");
+        }
+
+        Geometry& geo = outBoxGeometryy;
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetTriangles()),
+            DataPtr(mesh.GetTriangles()),
+            &geo.indexBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetPositions()),
+            DataPtr(mesh.GetPositions()),
+            &geo.positionBuffer));
+
+        CHECK_CALL(CreateBuffer(
+            pRenderer,
+            SizeInBytes(mesh.GetNormals()),
+            DataPtr(mesh.GetNormals()),
+            &geo.normalBuffer));
+
+        geo.indexCount  = 3 * mesh.GetNumTriangles();
+        geo.vertexCount = mesh.GetNumVertices();
+        
         geo.indexBuffer.Buffer->setLabel(NS::String::string("Box Index Buffer", NS::UTF8StringEncoding));
         geo.positionBuffer.Buffer->setLabel(NS::String::string("Box Position Buffer", NS::UTF8StringEncoding));
         geo.normalBuffer.Buffer->setLabel(NS::String::string("Box Normal Buffer", NS::UTF8StringEncoding));
@@ -629,14 +888,21 @@ void CreateGeometries(
 void CreateBLASes(
     MetalRenderer*   pRenderer,
     const Geometry&  sphereGeometry,
+    const Geometry&  knobGeometry,
+    const Geometry&  monkeyGeometry,
+    const Geometry&  teapotGeometry,
     const Geometry&  boxGeometry,
     MetalAS*         pSphereBLAS,
+    MetalAS*         pKnobBLAS,
+    MetalAS*         pMonkeyBLAS,
+    MetalAS*         pTeapotBLAS,
     MetalAS*         pBoxBLAS)
 {
-    std::vector<const Geometry*>  geometries = {&sphereGeometry, &boxGeometry};
-    std::vector<MetalAS*>         BLASes     = {pSphereBLAS, pBoxBLAS};
+    std::vector<const Geometry*>  geometries = {&sphereGeometry, &knobGeometry, &monkeyGeometry, &teapotGeometry, &boxGeometry};
+    std::vector<MetalAS*>         BLASes     = {pSphereBLAS, pKnobBLAS, pMonkeyBLAS, pTeapotBLAS, pBoxBLAS};
     
-    for (uint32_t i = 0; i < 2; ++i) {
+    uint32_t n = static_cast<uint32_t>(geometries.size());
+    for (uint32_t i = 0; i < n; ++i) {
         auto pGeometry = geometries[i];
         auto pBLAS     = BLASes[i];
         
@@ -698,6 +964,9 @@ void CreateBLASes(
 void CreateTLAS(
     MetalRenderer*                   pRenderer,
     const MetalAS*                   pSphereBLAS,
+    const MetalAS*                   pKnobBLAS,
+    const MetalAS*                   pMonkeyBLAS,
+    const MetalAS*                   pTeapotBLAS,
     const MetalAS*                   pBoxBLAS,
     MetalAS*                         pTLAS,
     MetalBuffer*                     pInstanceBuffer,
@@ -705,40 +974,91 @@ void CreateTLAS(
 {
     // clang-format off
     std::vector<glm::mat3x4> transforms = {
-        // Rough plastic sphere
-        {{1.0f, 0.0f, 0.0f, -3.75f},
-         {0.0f, 1.0f, 0.0f,  2.0f},
-         {0.0f, 0.0f, 1.0f,  0.0f}},
-        /*
-        {{1.0f, 0.0f, 0.0f,  0.0f},
-         {0.0f, 1.0f, 0.0f,  0.0f},
-         {0.0f, 0.0f, 1.0f,  0.0f}},
-         */
-        // Shiny plastic sphere
-        {{1.0f, 0.0f, 0.0f, -1.25f},
-         {0.0f, 1.0f, 0.0f,  2.0f},
-         {0.0f, 0.0f, 1.0f,  0.0f}},
-        // Glass sphere
-        {{1.0f, 0.0f, 0.0f,  1.25f},
-         {0.0f, 1.0f, 0.0f,  2.0f},
-         {0.0f, 0.0f, 1.0f,  0.0f}},
-        // Gold sphere
-        {{1.0f, 0.0f, 0.0f,  3.75f},
-         {0.0f, 1.0f, 0.0f,  2.0f},
-         {0.0f, 0.0f, 1.0f,  0.0f}},
-        // Box
-        {{1.0f, 0.0f, 0.0f,  0.0f},
-         {0.0f, 1.0f, 0.0f,  0.5f},
-         {0.0f, 0.0f, 1.0f,  0.0f}},
+         // Rough plastic sphere
+         {{ 1.0f, 0.0f, 0.0f, 1.25f},
+          { 0.0f, 1.0f, 0.0f, 4.0f},
+          { 0.0f, 0.0f, 1.0f, 1.5f}},
+         // Shiny plastic sphere 
+         {{-1.0f, 0.0f,  0.0f, -1.25f},
+          { 0.0f, 1.0f,  0.0f,  1.0f},
+          { 0.0f, 0.0f, -1.0f, -1.5f}},
+         // Crystal sphere
+         {{1.0f, 0.0f, 0.0f,  3.75f},
+          {0.0f, 1.0f, 0.0f,  1.0f},
+          {0.0f, 0.0f, 1.0f,  1.5f}},
+         // Metal sphere
+         {{-1.0f, 0.0f,  0.0f,  3.75f},
+          { 0.0f, 1.0f,  0.0f,  4.0f},
+          { 0.0f, 0.0f, -1.0f, -1.5f}},
+
+         // Rough plastic knob
+         {{-1.0f, 0.0f,  0.0f,  3.75f},
+          { 0.0f, 1.0f,  0.0f,  0.96f},
+          { 0.0f, 0.0f, -1.0f, -1.5f}},
+         // Shiny plastic knob 
+         {{-1.0f, 0.0f,  0.0f, -3.75f},
+          { 0.0f, 1.0f,  0.0f,  3.96f},
+          { 0.0f, 0.0f, -1.0f, -1.5f}},
+         // Glass knob
+         {{1.0f, 0.0f, 0.0f, -3.75f},
+          {0.0f, 1.0f, 0.0f,  3.96f},
+          {0.0f, 0.0f, 1.0f,  1.5f}},
+         // Metal knob
+         {{1.0f, 0.0f, 0.0f, -1.25f},
+          {0.0f, 1.0f, 0.0f,  0.96f},
+          {0.0f, 0.0f, 1.0f,  1.5f}},
+
+         // Rough plastic monkey
+         {{-1.0f, 0.0f,  0.0f,  1.25f},
+          { 0.0f, 1.0f,  0.0f,  3.96f},
+          { 0.0f, 0.0f, -1.0f, -1.5f}},
+         // Shiny plastic monkey 
+         {{1.0f, 0.0f, 0.0f,  1.25f},
+          {0.0f, 1.0f, 0.0f,  0.96f},
+          {0.0f, 0.0f, 1.0f,  1.5f}},
+         // Diamond monkey
+         {{-1.0f, 0.0f,  0.0f, -3.75f},
+          { 0.0f, 1.0f,  0.0f,  0.96f},
+          { 0.0f, 0.0f, -1.0f, -1.5f}},
+         // Metal monkey
+         {{ 1.0f, 0.0f,  0.0f,  3.75f},
+          { 0.0f, 1.0f,  0.0f,  3.96f},
+          { 0.0f, 0.0f,  1.0f,  1.5f}},
+
+         // Rough plastic teapot
+         {{ 1.0f, 0.0f,  0.0f, -3.75f},
+          { 0.0f, 1.0f,  0.0f,  0.001f},
+          { 0.0f, 0.0f,  1.0f,  1.35f}},
+         // Shiny plastic teapot 
+         {{1.0f, 0.0f, 0.0f, -1.25f},
+          {0.0f, 1.0f, 0.0f,  3.001f},
+          {0.0f, 0.0f, 1.0f,  1.35f}},
+         // Glass teapot
+         {{-1.0f, 0.0f,  0.0f, -1.25f},
+          { 0.0f, 1.0f,  0.0f,  3.001f},
+          { 0.0f, 0.0f, -1.0f, -1.35f}},
+         // Metal teapot
+         {{-1.0f, 0.0f,  0.0f,  1.25f},
+          { 0.0f, 1.0f,  0.0f,  0.001f},
+          { 0.0f, 0.0f, -1.0f, -1.35f}},
+
+         // Box
+         {{1.0f, 0.0f, 0.0f,  0.0f},
+          {0.0f, 1.0f, 0.0f,  0.0f},
+          {0.0f, 0.0f, 1.0f,  0.0f}},
     };
     // clang-format on
     
     // Material params
     {
+        // ---------------------------------------------------------------------
+        // Spheres
+        // ---------------------------------------------------------------------
+
         // Rough plastic
         {
             MaterialParameters materialParams  = {};
-            materialParams.baseColor           = vec3(1, 1, 1);
+            materialParams.baseColor           = vec3(0.0f, 1.0f, 1.0f);
             materialParams.roughness           = 1.0f;
             materialParams.metallic            = 0;
             materialParams.specularReflectance = 0.0f;
@@ -750,10 +1070,62 @@ void CreateTLAS(
         // Shiny plastic
         {
             MaterialParameters materialParams  = {};
-            materialParams.baseColor           = vec3(1, 1, 1);
+            materialParams.baseColor           = vec3(0.07f, 0.05f, 0.1f);
+            materialParams.roughness           = 0.0f;
+            materialParams.metallic            = 0;
+            materialParams.specularReflectance = 1.0f;
+            materialParams.ior                 = 0;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Crystal
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = F0_DiletricCrystal;
             materialParams.roughness           = 0;
             materialParams.metallic            = 0;
             materialParams.specularReflectance = 0.5f;
+            materialParams.ior                 = 2.0f;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Metal with a bit of roughness
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = F0_MetalChromium;
+            materialParams.roughness           = 0.25f;
+            materialParams.metallic            = 1;
+            materialParams.specularReflectance = 0.0f;
+            materialParams.ior                 = 0;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // ---------------------------------------------------------------------
+        // Knob
+        // ---------------------------------------------------------------------
+
+        // Rough plastic
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = vec3(1.0f, 0.0f, 1.0f);
+            materialParams.roughness           = 1.0f;
+            materialParams.metallic            = 0;
+            materialParams.specularReflectance = 0.0f;
+            materialParams.ior                 = 0;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Shiny plastic
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = vec3(1.25f, 0.07f, 0.05f);
+            materialParams.roughness           = 0.0f;
+            materialParams.metallic            = 0;
+            materialParams.specularReflectance = 1.0f;
             materialParams.ior                 = 0;
 
             outMaterialParams.push_back(materialParams);
@@ -765,17 +1137,17 @@ void CreateTLAS(
             materialParams.baseColor           = vec3(1, 1, 1);
             materialParams.roughness           = 0;
             materialParams.metallic            = 0;
-            materialParams.specularReflectance = 0.0f;
-            materialParams.ior                 = 1.50f;
+            materialParams.specularReflectance = 0.5f;
+            materialParams.ior                 = 1.5f;
 
             outMaterialParams.push_back(materialParams);
         }
 
-        // Gold with a bit of roughness
+        // Metal with a bit of roughness
         {
             MaterialParameters materialParams  = {};
             materialParams.baseColor           = F0_MetalGold;
-            materialParams.roughness           = 0.30f;
+            materialParams.roughness           = 0.25f;
             materialParams.metallic            = 1;
             materialParams.specularReflectance = 0.0f;
             materialParams.ior                 = 0;
@@ -783,13 +1155,122 @@ void CreateTLAS(
             outMaterialParams.push_back(materialParams);
         }
 
-        // Box
+        // ---------------------------------------------------------------------
+        // Monkey
+        // ---------------------------------------------------------------------
+
+        // Rough plastic
         {
             MaterialParameters materialParams  = {};
-            materialParams.baseColor           = vec3(0.6f, 0.7f, 0.75f);
+            materialParams.baseColor           = vec3(1.0f, 1.0f, 0.2f);
             materialParams.roughness           = 1.0f;
             materialParams.metallic            = 0;
             materialParams.specularReflectance = 0.0f;
+            materialParams.ior                 = 0;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Shiny plastic
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = vec3(0.2f, 1.0f, 0.2f);
+            materialParams.roughness           = 0.0f;
+            materialParams.metallic            = 0;
+            materialParams.specularReflectance = 1.0f;
+            materialParams.ior                 = 0;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Diamond
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = F0_DiletricDiamond + vec3(0, 0, 0.25f);
+            materialParams.roughness           = 0;
+            materialParams.metallic            = 0;
+            materialParams.specularReflectance = 0.5f;
+            materialParams.ior                 = 2.418f;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Metal
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = F0_MetalSilver;
+            materialParams.roughness           = 0.0f;
+            materialParams.metallic            = 1;
+            materialParams.specularReflectance = 0.0f;
+            materialParams.ior                 = 0;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // ---------------------------------------------------------------------
+        // Teapot
+        // ---------------------------------------------------------------------
+
+        // Rough plastic
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = vec3(1.0f, 1.0f, 1.0f);
+            materialParams.roughness           = 1.0f;
+            materialParams.metallic            = 0;
+            materialParams.specularReflectance = 0.0f;
+            materialParams.ior                 = 0;
+            materialParams.emissionColor       = vec3(1.0f, 1.0f, 1.0f);
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Shiny plastic
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = 2.0f * vec3(1.0f, 0.35f, 0.05f);
+            materialParams.roughness           = 0.0f;
+            materialParams.metallic            = 0;
+            materialParams.specularReflectance = 1.0f;
+            materialParams.ior                 = 0;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Glass
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = vec3(1, 1, 1);
+            materialParams.roughness           = 0.25f;
+            materialParams.metallic            = 0;
+            materialParams.specularReflectance = 0.5f;
+            materialParams.ior                 = 1.5f;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // Metal with a bit of roughness
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = F0_MetalCopper;
+            materialParams.roughness           = 0.45f;
+            materialParams.metallic            = 1;
+            materialParams.specularReflectance = 0.0f;
+            materialParams.ior                 = 0;
+
+            outMaterialParams.push_back(materialParams);
+        }
+
+        // ---------------------------------------------------------------------
+        // Box
+        // ---------------------------------------------------------------------
+
+        // Box
+        {
+            MaterialParameters materialParams  = {};
+            materialParams.baseColor           = vec3(0.35f, 0.36f, 0.36f);
+            materialParams.roughness           = 1.0f;
+            materialParams.metallic            = 0;
+            materialParams.specularReflectance = 0.2f;
             materialParams.ior                 = 0;
 
             outMaterialParams.push_back(materialParams);
@@ -821,13 +1302,16 @@ void CreateTLAS(
      
         uint32_t transformIdx = 0;
            
+        // ---------------------------------------------------------------------
+        // Sphere
+        // ---------------------------------------------------------------------
         // Rough plastic sphere
         CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
         pDescriptors[transformIdx].mask                       = 1;
         pDescriptors[transformIdx].accelerationStructureIndex = transformIdx;
         BLASes.push_back(pSphereBLAS->AS.get());
         ++transformIdx;
-        
+
         // Shiny plastic sphere
         CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
         pDescriptors[transformIdx].mask                       = 1;
@@ -835,27 +1319,128 @@ void CreateTLAS(
         BLASes.push_back(pSphereBLAS->AS.get());
         ++transformIdx;
 
-        // Glass sphere
+        // Crystal sphere
+       
         CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
         pDescriptors[transformIdx].options                    = MTL::AccelerationStructureInstanceOptionNonOpaque;
         pDescriptors[transformIdx].mask                       = 1;
         pDescriptors[transformIdx].accelerationStructureIndex = transformIdx;
         BLASes.push_back(pSphereBLAS->AS.get());
-        ++transformIdx;
+        ++transformIdx;        
 
-        // Gold sphere
+        // Metal sphere
         CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
         pDescriptors[transformIdx].mask                       = 1;
         pDescriptors[transformIdx].accelerationStructureIndex = transformIdx;
         BLASes.push_back(pSphereBLAS->AS.get());
         ++transformIdx;
 
+        // ---------------------------------------------------------------------
+        // Knob
+        // ---------------------------------------------------------------------
+        // Rough plastic knob
+        CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
+        pDescriptors[transformIdx].mask                       = 1;
+        pDescriptors[transformIdx].accelerationStructureIndex = transformIdx;
+        BLASes.push_back(pKnobBLAS->AS.get());
+        ++transformIdx;
+
+        // Shiny plastic knob
+        CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
+        pDescriptors[transformIdx].mask                       = 1;
+        pDescriptors[transformIdx].accelerationStructureIndex = transformIdx;
+        BLASes.push_back(pKnobBLAS->AS.get());
+        ++transformIdx;
+
+        // Glass knob
+        CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
+        pDescriptors[transformIdx].options                    = MTL::AccelerationStructureInstanceOptionNonOpaque;
+        pDescriptors[transformIdx].mask                       = 1;
+        pDescriptors[transformIdx].accelerationStructureIndex = transformIdx;
+        BLASes.push_back(pKnobBLAS->AS.get());
+        ++transformIdx;
+
+        // Metal knob
+        CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
+        pDescriptors[transformIdx].mask                       = 1;
+        pDescriptors[transformIdx].accelerationStructureIndex = transformIdx;
+        BLASes.push_back(pKnobBLAS->AS.get());
+        ++transformIdx;
+
+        // ---------------------------------------------------------------------
+        // Monkey
+        // ---------------------------------------------------------------------
+        // Rough plastic monkey
+        CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
+        pDescriptors[transformIdx].mask                       = 1;
+        pDescriptors[transformIdx].accelerationStructureIndex = transformIdx;
+        BLASes.push_back(pMonkeyBLAS->AS.get());
+        ++transformIdx;
+
+        // Shiny plastic monkey
+        CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
+        pDescriptors[transformIdx].mask                       = 1;
+        pDescriptors[transformIdx].accelerationStructureIndex = transformIdx;
+        BLASes.push_back(pMonkeyBLAS->AS.get());
+        ++transformIdx;
+
+        // Diamond monkey
+        CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
+        pDescriptors[transformIdx].options                    = MTL::AccelerationStructureInstanceOptionNonOpaque;
+        pDescriptors[transformIdx].mask                       = 1;
+        pDescriptors[transformIdx].accelerationStructureIndex = transformIdx;
+        BLASes.push_back(pMonkeyBLAS->AS.get());
+        ++transformIdx;
+
+        // Metal monkey
+        CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
+        pDescriptors[transformIdx].mask                       = 1;
+        pDescriptors[transformIdx].accelerationStructureIndex = transformIdx;
+        BLASes.push_back(pMonkeyBLAS->AS.get());
+        ++transformIdx;
+
+        // ---------------------------------------------------------------------
+        // Teapot
+        // ---------------------------------------------------------------------
+        // Rough plastic teapot
+        CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
+        pDescriptors[transformIdx].mask                       = 1;
+        pDescriptors[transformIdx].accelerationStructureIndex = transformIdx;
+        BLASes.push_back(pTeapotBLAS->AS.get());
+        ++transformIdx;
+
+        // Shiny plastic teapot
+        CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
+        pDescriptors[transformIdx].mask                       = 1;
+        pDescriptors[transformIdx].accelerationStructureIndex = transformIdx;
+        BLASes.push_back(pTeapotBLAS->AS.get());
+        ++transformIdx;
+
+        // Glass teapot
+        CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
+        pDescriptors[transformIdx].options                    = MTL::AccelerationStructureInstanceOptionNonOpaque;
+        pDescriptors[transformIdx].mask                       = 1;
+        pDescriptors[transformIdx].accelerationStructureIndex = transformIdx;
+        BLASes.push_back(pTeapotBLAS->AS.get());
+        ++transformIdx;        
+
+        // Metal teapot
+        CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
+        pDescriptors[transformIdx].mask                       = 1;
+        pDescriptors[transformIdx].accelerationStructureIndex = transformIdx;
+        BLASes.push_back(pTeapotBLAS->AS.get());
+        ++transformIdx;
+
+        // ---------------------------------------------------------------------
+        // Box
+        // ---------------------------------------------------------------------
         // Box
         CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
         pDescriptors[transformIdx].mask                       = 1;
         pDescriptors[transformIdx].accelerationStructureIndex = transformIdx;
         BLASes.push_back(pBoxBLAS->AS.get());
-        ++transformIdx;
+        ++transformIdx;        
+
     }
     
     // Add BLASes to instanced acceleration structure array
@@ -904,65 +1489,82 @@ void CreateTLAS(
 }
     
 void CreateIBLTextures(
-    MetalRenderer* pRenderer,
-    IBLTextures&   outIBLTextures)
+    MetalRenderer*            pRenderer,
+    std::vector<IBLTextures>& outIBLTextures)
 {
-    // IBL file
-    auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
-
-    IBLMaps ibl = {};
-    if (!LoadIBLMaps32f(iblFile, &ibl))
+    std::vector<std::filesystem::path> iblFiles;
     {
-        GREX_LOG_ERROR("failed to load: " << iblFile);
-        return;
+        auto iblDirs = GetEveryAssetPath("IBL");
+        for (auto& dir : iblDirs) {
+            for (auto& entry : std::filesystem::directory_iterator(dir)) {
+                if (!entry.is_regular_file()) {
+                    continue;
+                }
+                auto path = entry.path();
+                auto ext  = path.extension();
+                if (ext == ".ibl") {
+                    path = std::filesystem::relative(path, dir.parent_path());
+                    iblFiles.push_back(path);
+                }
+            }
+        }
     }
+    
+    // Sort the file names since the come back out of order on macOS
+    std::sort(iblFiles.begin(), iblFiles.end());
 
-    outIBLTextures.envNumLevels = ibl.numLevels;
+    size_t maxEntries = std::min<size_t>(kMaxIBLs, iblFiles.size());
+    for (size_t i = 0; i < maxEntries; ++i) {
+        std::filesystem::path iblFile = iblFiles[i];
 
-    // Irradiance
-    {
-        CHECK_CALL(CreateTexture(
-            pRenderer,
-            ibl.irradianceMap.GetWidth(),
-            ibl.irradianceMap.GetHeight(),
-            MTL::PixelFormatRGBA32Float,
-            ibl.irradianceMap.GetSizeInBytes(),
-            ibl.irradianceMap.GetPixels(),
-            &outIBLTextures.irrTexture));
-    }
-
-    // Environment
-    {
-        const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
-        const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
-
-        std::vector<MipOffset> mipOffsets;
-        uint32_t               levelOffset = 0;
-        uint32_t               levelWidth  = ibl.baseWidth;
-        uint32_t               levelHeight = ibl.baseHeight;
-        for (uint32_t i = 0; i < ibl.numLevels; ++i)
-        {
-            MipOffset mipOffset = {};
-            mipOffset.Offset    = levelOffset;
-            mipOffset.RowStride = rowStride;
-
-            mipOffsets.push_back(mipOffset);
-
-            levelOffset += (rowStride * levelHeight);
-            levelWidth >>= 1;
-            levelHeight >>= 1;
+        IBLMaps ibl = {};
+        if (!LoadIBLMaps32f(iblFile, &ibl)) {
+            GREX_LOG_ERROR("failed to load: " << iblFile);
+            return;
         }
 
-        CHECK_CALL(CreateTexture(
-            pRenderer,
-            ibl.baseWidth,
-            ibl.baseHeight,
-            MTL::PixelFormatRGBA32Float,
-            mipOffsets,
-            ibl.environmentMap.GetSizeInBytes(),
-            ibl.environmentMap.GetPixels(),
-            &outIBLTextures.envTexture));
-    }
+        IBLTextures iblTexture = {};
 
-    GREX_LOG_INFO("Loaded " << iblFile);
+        iblTexture.envNumLevels = ibl.numLevels;
+
+        // Environment
+        {
+            const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
+            const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
+
+            std::vector<MipOffset> mipOffsets;
+            uint32_t               levelOffset = 0;
+            uint32_t               levelWidth  = ibl.baseWidth;
+            uint32_t               levelHeight = ibl.baseHeight;
+            for (uint32_t i = 0; i < ibl.numLevels; ++i) {
+                MipOffset mipOffset = {};
+                mipOffset.Offset    = levelOffset;
+                mipOffset.RowStride = rowStride;
+
+                mipOffsets.push_back(mipOffset);
+
+                levelOffset += (rowStride * levelHeight);
+                levelWidth >>= 1;
+                levelHeight >>= 1;
+            }
+
+            MetalTexture texture;
+            CHECK_CALL(CreateTexture(
+                pRenderer,
+                ibl.baseWidth,
+                ibl.baseHeight,
+                MTL::PixelFormatRGBA32Float,
+                mipOffsets,
+                ibl.environmentMap.GetSizeInBytes(),
+                ibl.environmentMap.GetPixels(),
+                &texture));
+            iblTexture.envTexture = texture;
+
+            outIBLTextures.push_back(iblTexture);
+        }
+
+        gIBLNames.push_back(iblFile.filename().replace_extension().string());
+
+        GREX_LOG_INFO("Loaded " << iblFile);
+    }
 }
