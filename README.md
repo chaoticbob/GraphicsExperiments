@@ -1,13 +1,13 @@
 ![alt text](images/screenshots/raytracing/path_trace_pbr_main_page.png?raw=true)
 
-# Graphics Experiments
+# Graphics Experiments (GREX)
 Collection of small and mostly self contained graphics experiments for reference. 
 These experiments focus on doing graphics things using the graphics API. 
 The graphics API objects are not always properly cleaned up. Just keep that in 
 mind if you make use of the code.
 
 #### What kinds of experiments are in here?
-Graphics experiments for rendering, [ray tracing](https://github.com/chaoticbob/GraphicsExperiments/tree/main/projects/raytracing), [PBR](https://github.com/chaoticbob/GraphicsExperiments/tree/main/projects/pbr), geometry generation, procedural textures, [normal mapping, parallax occlusion mapping](https://github.com/chaoticbob/GraphicsExperiments/tree/main/projects/texture), etc.
+Graphics experiments for rendering, [ray tracing](https://github.com/chaoticbob/GraphicsExperiments/tree/main/projects/raytracing), [PBR](https://github.com/chaoticbob/GraphicsExperiments/tree/main/projects/pbr), geometry generation, [mesh shading](https://github.com/chaoticbob/GraphicsExperiments/tree/main/projects/geometry), procedural textures, [normal mapping, parallax occlusion mapping](https://github.com/chaoticbob/GraphicsExperiments/tree/main/projects/texture), etc.
 Pretty much anything that's graphically interesting. Everything can be foundin the [projects](https://github.com/chaoticbob/GraphicsExperiments/tree/main/assets/projects) directory.
 
 # Some Stuff
@@ -47,4 +47,23 @@ And obviously the ray tracing related extensions.
 ## DXIL.DLL
 If shader compilation on D3D12 fails because DXIL.DLL can't be found, copy it from
 the [DirectXShaderCompiler v1.7.2212 release](https://github.com/microsoft/DirectXShaderCompiler/releases).
+
+# Building
+## macOS
+GREX development on macOS is done primarily in Xcode.
+
+From the cloned GREX directory:
+```
+cmake -G Xcode -B build-xcode
+```
+This will generate an Xcode project in the `build-xcode` directory.
+
+## Windows
+GREX development on Windows is done in Visual Studio 2022 Professional. 
+
+From the cloned GREX directory:
+```
+cmake -B build-vs2022
+```
+This will generate a solution for Visual Studio 2022 Professional in the `build-vs2022` directory.
 
