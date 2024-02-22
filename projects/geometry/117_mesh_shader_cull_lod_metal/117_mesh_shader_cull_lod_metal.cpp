@@ -663,10 +663,7 @@ int main(int argc, char** argv)
         // ---------------------------------------------------------------------
 
         // Copy instances transforms to instances buffer
-        {
-            memcpy(instancesBuffer.Buffer->contents(), DataPtr(instances), SizeInBytes(instances));
-            instancesBuffer.Buffer->didModifyRange(NS::Range::Make(0, SizeInBytes(instances)));
-        }
+        memcpy(instancesBuffer.Buffer->contents(), DataPtr(instances), SizeInBytes(instances));
 
         // ---------------------------------------------------------------------
         
