@@ -270,7 +270,7 @@ int main(int argc, char** argv)
         meshletTriangleCount += m.triangle_count;
     }
 
-    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to 
+    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to
     // make it easier to unpack on the GPU.
     //
     std::vector<uint32_t> meshletTrianglesU32;
@@ -305,8 +305,8 @@ int main(int argc, char** argv)
     VulkanBuffer meshletTrianglesBuffer;
     VulkanBuffer meshletBoundsBuffer;
     {
-        VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-        VmaMemoryUsage     memoryUsage      = VMA_MEMORY_USAGE_CPU_TO_GPU;
+        VkBufferUsageFlags usageFlags  = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        VmaMemoryUsage     memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU;
 
         CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(positions), DataPtr(positions), usageFlags, memoryUsage, 0, &positionBuffer));
         CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshlets), DataPtr(meshlets), usageFlags, memoryUsage, 0, &meshletBuffer));
@@ -474,6 +474,7 @@ int main(int argc, char** argv)
     // Pipeline statistics
     // *************************************************************************
     VkQueryPool queryPool = VK_NULL_HANDLE;
+    if (renderer->HasMeshShaderQueries)
     {
         VkQueryPoolCreateInfo createInfo = {VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
         createInfo.flags                 = 0;
@@ -481,8 +482,8 @@ int main(int argc, char** argv)
         createInfo.queryCount            = 1;
         createInfo.pipelineStatistics    = 0;
         //
-        // NOTE: Disabling this for now, for some reason having 
-        //       VK_QUERY_PIPELINE_STATISTIC_MESH_SHADER_INVOCATIONS_BIT_EXT 
+        // NOTE: Disabling this for now, for some reason having
+        //       VK_QUERY_PIPELINE_STATISTIC_MESH_SHADER_INVOCATIONS_BIT_EXT
         //       in the pipeline statistic causes a massive performance drop
         //       on NVIDIA.
         /*
@@ -511,8 +512,8 @@ int main(int argc, char** argv)
     SceneProperties scene = {};
 
     VulkanBuffer sceneBuffer;
-    {   
-        size_t size = Align<size_t>(sizeof(SceneProperties), 256);        
+    {
+        size_t size = Align<size_t>(sizeof(SceneProperties), 256);
         CHECK_CALL(CreateBuffer(renderer.get(), sizeof(SceneProperties), nullptr, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 0, &sceneBuffer));
     }
 
@@ -543,7 +544,7 @@ int main(int argc, char** argv)
         std::vector<uint64_t> pipelineStatistics(13);
         std::memset(DataPtr(pipelineStatistics), 0, SizeInBytes(pipelineStatistics));
 
-        if (hasPiplineStats)
+        if ((queryPool != VK_NULL_HANDLE) && hasPiplineStats)
         {
             VkDeviceSize stride = static_cast<VkDeviceSize>(SizeInBytes(pipelineStatistics));
 
@@ -727,7 +728,10 @@ int main(int argc, char** argv)
         CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
         {
             // Reset query pool - this needs to happen outside of render pass
-            vkCmdResetQueryPool(cmdBuf.CommandBuffer, queryPool, 0, 1);
+            if (queryPool != VK_NULL_HANDLE)
+            {
+                vkCmdResetQueryPool(cmdBuf.CommandBuffer, queryPool, 0, 1);
+            }
 
             CmdTransitionImageLayout(
                 cmdBuf.CommandBuffer,
@@ -779,13 +783,19 @@ int main(int argc, char** argv)
 
             // vkCmdDrawMeshTasksEXT with pipeline statistics
             {
-                vkCmdBeginQuery(cmdBuf.CommandBuffer, queryPool, 0, 0);
+                if (queryPool != VK_NULL_HANDLE)
+                {
+                    vkCmdBeginQuery(cmdBuf.CommandBuffer, queryPool, 0, 0);
+                }
 
                 // Task (amplification) shader uses 32 for thread group size
                 uint32_t threadGroupCountX = static_cast<uint32_t>((meshlets.size() / 32) + 1) * static_cast<uint32_t>(instances.size());
                 fn_vkCmdDrawMeshTasksEXT(cmdBuf.CommandBuffer, threadGroupCountX, 1, 1);
 
-                vkCmdEndQuery(cmdBuf.CommandBuffer, queryPool, 0);
+                if (queryPool != VK_NULL_HANDLE)
+                {
+                    vkCmdEndQuery(cmdBuf.CommandBuffer, queryPool, 0);
+                }
             }
 
             vkCmdEndRendering(cmdBuf.CommandBuffer);

@@ -240,6 +240,17 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
             }
         }
 
+        // Check for mesh shader queries because some GPUs don't support it
+        {
+            VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT};
+            
+            VkPhysicalDeviceFeatures2 features = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+            features.pNext                     = &meshShaderFeatures;
+
+            vkGetPhysicalDeviceFeatures2(pRenderer->PhysicalDevice, &features);
+            pRenderer->HasMeshShaderQueries = meshShaderFeatures.meshShaderQueries;           
+        }
+
         // ---------------------------------------------------------------------
 
         VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures      = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR};
@@ -260,11 +271,7 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
         VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT};
         meshShaderFeatures.taskShader                            = VK_TRUE;
         meshShaderFeatures.meshShader                            = VK_TRUE;
-        meshShaderFeatures.meshShaderQueries                     = VK_TRUE;
-
-        VkPhysicalDeviceMeshShaderFeaturesNV meshShaderFeaturesNV = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV};
-        meshShaderFeaturesNV.meshShader                          = VK_TRUE;
-        meshShaderFeaturesNV.taskShader                          = VK_TRUE;
+        meshShaderFeatures.meshShaderQueries                     = pRenderer->HasMeshShaderQueries ? VK_TRUE : VK_FALSE;
 
         // ---------------------------------------------------------------------
 

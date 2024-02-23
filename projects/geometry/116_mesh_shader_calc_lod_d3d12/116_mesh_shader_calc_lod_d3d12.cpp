@@ -41,18 +41,19 @@ using uint4  = glm::uvec4;
 
 struct SceneProperties
 {
-    float3      EyePosition;
-    uint        __pad0;
-    float4x4    ViewMatrix;
-    float4x4    ProjMatrix;
-    uint        InstanceCount;
-    uint        MeshletCount;
-    uint        __pad1;
-    float       MaxLODDistance;          // Use least detail level at or beyond this distance
-    uint        Meshlet_LOD_Offsets[20]; // Align array element to 16 bytes
-    uint        Meshlet_LOD_Counts[17];  // Align array element to 16 bytes
-    float3      MeshBoundsMin;
-    float3      MeshBoundsMax;
+    float3   EyePosition;
+    uint     __pad0;
+    float4x4 ViewMatrix;
+    float4x4 ProjMatrix;
+    uint     InstanceCount;
+    uint     MeshletCount;
+    uint     __pad1;
+    float    MaxLODDistance;         // Use least detail level at or beyond this distance
+    uint4    Meshlet_LOD_Offsets[5]; // Align array element to 16 bytes
+    uint4    Meshlet_LOD_Counts[5];  // Align array element to 16 bytes
+    float3   MeshBoundsMin;
+    uint     __pad2;
+    float3   MeshBoundsMax;
 };
 
 // =============================================================================
@@ -273,7 +274,8 @@ int main(int argc, char** argv)
             meshlet.triangle_offset += meshletTriangleOffset;
             combinedMeshlets.push_back(meshlet);
 
-            if (lodIdx == 0) {
+            if (lodIdx == 0)
+            {
                 LOD_0_vertexCount += meshlet.vertex_count;
                 LOD_0_triangleCount += meshlet.triangle_count;
             }
@@ -311,7 +313,7 @@ int main(int argc, char** argv)
         combinedMeshletTriangleCount += m.triangle_count;
     }
 
-    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to 
+    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to
     // make it easier to unpack on the GPU.
     //
     std::vector<uint32_t> meshletTrianglesU32;
@@ -574,24 +576,24 @@ int main(int argc, char** argv)
             Camera::FrustumPlane frLeft, frRight, frTop, frBottom, frNear, frFar;
             camera.GetFrustumPlanes(&frLeft, &frRight, &frTop, &frBottom, &frNear, &frFar);
 
-            scene.EyePosition                          = camera.GetEyePosition();
-            scene.ViewMatrix                           = camera.GetViewMatrix();
-            scene.ProjMatrix                           = camera.GetProjectionMatrix();
-            scene.InstanceCount                        = static_cast<uint32_t>(instances.size());
-            scene.MeshletCount                         = meshlet_LOD_Counts[0];
-            scene.MaxLODDistance                       = gMaxLODDistance;
-            scene.Meshlet_LOD_Offsets[0]               = meshlet_LOD_Offsets[0];
-            scene.Meshlet_LOD_Offsets[4]               = meshlet_LOD_Offsets[1];
-            scene.Meshlet_LOD_Offsets[8]               = meshlet_LOD_Offsets[2];
-            scene.Meshlet_LOD_Offsets[12]              = meshlet_LOD_Offsets[3];
-            scene.Meshlet_LOD_Offsets[16]              = meshlet_LOD_Offsets[4];
-            scene.Meshlet_LOD_Counts[0]                = meshlet_LOD_Counts[0];
-            scene.Meshlet_LOD_Counts[4]                = meshlet_LOD_Counts[1];
-            scene.Meshlet_LOD_Counts[8]                = meshlet_LOD_Counts[2];
-            scene.Meshlet_LOD_Counts[12]               = meshlet_LOD_Counts[3];
-            scene.Meshlet_LOD_Counts[16]               = meshlet_LOD_Counts[4];
-            scene.MeshBoundsMin                        = float3(meshBounds.min);
-            scene.MeshBoundsMax                        = float3(meshBounds.max);
+            scene.EyePosition              = camera.GetEyePosition();
+            scene.ViewMatrix               = camera.GetViewMatrix();
+            scene.ProjMatrix               = camera.GetProjectionMatrix();
+            scene.InstanceCount            = static_cast<uint32_t>(instances.size());
+            scene.MeshletCount             = meshlet_LOD_Counts[0];
+            scene.MaxLODDistance           = gMaxLODDistance;
+            scene.Meshlet_LOD_Offsets[0].x = meshlet_LOD_Offsets[0];
+            scene.Meshlet_LOD_Offsets[1].x = meshlet_LOD_Offsets[1];
+            scene.Meshlet_LOD_Offsets[2].x = meshlet_LOD_Offsets[2];
+            scene.Meshlet_LOD_Offsets[3].x = meshlet_LOD_Offsets[3];
+            scene.Meshlet_LOD_Offsets[4].x = meshlet_LOD_Offsets[4];
+            scene.Meshlet_LOD_Counts[0].x  = meshlet_LOD_Counts[0];
+            scene.Meshlet_LOD_Counts[1].x  = meshlet_LOD_Counts[1];
+            scene.Meshlet_LOD_Counts[2].x  = meshlet_LOD_Counts[2];
+            scene.Meshlet_LOD_Counts[3].x  = meshlet_LOD_Counts[3];
+            scene.Meshlet_LOD_Counts[3].x  = meshlet_LOD_Counts[4];
+            scene.MeshBoundsMin            = float3(meshBounds.min);
+            scene.MeshBoundsMax            = float3(meshBounds.max);
 
             void* pDst = nullptr;
             CHECK_CALL(sceneBuffer->Map(0, nullptr, &pDst));

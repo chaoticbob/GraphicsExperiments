@@ -34,18 +34,19 @@ using namespace glm;
 // =============================================================================
 struct SceneProperties
 {
-    vec3        EyePosition;
-    uint        __pad0;
-    mat4        ViewMatrix;
-    mat4        ProjMatrix;
-    uint        InstanceCount;
-    uint        MeshletCount;
-    uint        __pad1;
-    float       MaxLODDistance;          // Use least detail level at or beyond this distance
-    uint        Meshlet_LOD_Offsets[20]; // Align array element to 16 bytes
-    uint        Meshlet_LOD_Counts[17];  // Align array element to 16 bytes
-    vec3        MeshBoundsMin;
-    vec3        MeshBoundsMax;
+    vec3  EyePosition;
+    uint  __pad0;
+    mat4  ViewMatrix;
+    mat4  ProjMatrix;
+    uint  InstanceCount;
+    uint  MeshletCount;
+    uint  __pad1;
+    float MaxLODDistance;         // Use least detail level at or beyond this distance
+    uvec4 Meshlet_LOD_Offsets[5]; // Align array element to 16 bytes
+    uvec4 Meshlet_LOD_Counts[5];  // Align array element to 16 bytes
+    vec3  MeshBoundsMin;
+    uint  __pad2;
+    vec3  MeshBoundsMax;
 };
 
 // =============================================================================
@@ -53,7 +54,7 @@ struct SceneProperties
 // =============================================================================
 static uint32_t gWindowWidth  = 1920;
 static uint32_t gWindowHeight = 1080;
-static bool     gEnableDebug  = false;
+static bool     gEnableDebug  = true;
 
 static float gMaxLODDistance = 10.0f;
 
@@ -376,7 +377,7 @@ int main(int argc, char** argv)
     // Create the pipeline
     // *************************************************************************
     VkPipeline pipeline = VK_NULL_HANDLE;
-    CreateMeshShaderPipeline(
+    CHECK_CALL(CreateMeshShaderPipeline(
         renderer.get(),
         pipelineLayout,
         moduleAS,
@@ -385,7 +386,7 @@ int main(int argc, char** argv)
         GREX_DEFAULT_RTV_FORMAT,
         GREX_DEFAULT_DSV_FORMAT,
         &pipeline,
-        VK_CULL_MODE_NONE);
+        VK_CULL_MODE_NONE));
 
     // *************************************************************************
     // Get descriptor buffer properties
@@ -504,6 +505,7 @@ int main(int argc, char** argv)
     // Pipeline statistics
     // *************************************************************************
     VkQueryPool queryPool = VK_NULL_HANDLE;
+    if (renderer->HasMeshShaderQueries)
     {
         VkQueryPoolCreateInfo createInfo = {VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
         createInfo.flags                 = 0;
@@ -573,7 +575,7 @@ int main(int argc, char** argv)
         std::vector<uint64_t> pipelineStatistics(13);
         std::memset(DataPtr(pipelineStatistics), 0, SizeInBytes(pipelineStatistics));
 
-        if (hasPiplineStats)
+        if ((queryPool != VK_NULL_HANDLE) && hasPiplineStats)
         {
             VkDeviceSize stride = static_cast<VkDeviceSize>(SizeInBytes(pipelineStatistics));
 
@@ -698,24 +700,24 @@ int main(int argc, char** argv)
             Camera::FrustumPlane frLeft, frRight, frTop, frBottom, frNear, frFar;
             camera.GetFrustumPlanes(&frLeft, &frRight, &frTop, &frBottom, &frNear, &frFar);
 
-            scene.EyePosition                          = camera.GetEyePosition();
-            scene.ViewMatrix                           = camera.GetViewMatrix();
-            scene.ProjMatrix                           = camera.GetProjectionMatrix();
-            scene.InstanceCount                        = static_cast<uint32_t>(instances.size());
-            scene.MeshletCount                         = meshlet_LOD_Counts[0];
-            scene.MaxLODDistance                       = gMaxLODDistance;
-            scene.Meshlet_LOD_Offsets[0]               = meshlet_LOD_Offsets[0];
-            scene.Meshlet_LOD_Offsets[4]               = meshlet_LOD_Offsets[1];
-            scene.Meshlet_LOD_Offsets[8]               = meshlet_LOD_Offsets[2];
-            scene.Meshlet_LOD_Offsets[12]              = meshlet_LOD_Offsets[3];
-            scene.Meshlet_LOD_Offsets[16]              = meshlet_LOD_Offsets[4];
-            scene.Meshlet_LOD_Counts[0]                = meshlet_LOD_Counts[0];
-            scene.Meshlet_LOD_Counts[4]                = meshlet_LOD_Counts[1];
-            scene.Meshlet_LOD_Counts[8]                = meshlet_LOD_Counts[2];
-            scene.Meshlet_LOD_Counts[12]               = meshlet_LOD_Counts[3];
-            scene.Meshlet_LOD_Counts[16]               = meshlet_LOD_Counts[4];
-            scene.MeshBoundsMin                        = vec3(meshBounds.min);
-            scene.MeshBoundsMax                        = vec3(meshBounds.max);
+            scene.EyePosition              = camera.GetEyePosition();
+            scene.ViewMatrix               = camera.GetViewMatrix();
+            scene.ProjMatrix               = camera.GetProjectionMatrix();
+            scene.InstanceCount            = static_cast<uint32_t>(instances.size());
+            scene.MeshletCount             = meshlet_LOD_Counts[0];
+            scene.MaxLODDistance           = gMaxLODDistance;
+            scene.Meshlet_LOD_Offsets[0].x = meshlet_LOD_Offsets[0];
+            scene.Meshlet_LOD_Offsets[1].x = meshlet_LOD_Offsets[1];
+            scene.Meshlet_LOD_Offsets[2].x = meshlet_LOD_Offsets[2];
+            scene.Meshlet_LOD_Offsets[3].x = meshlet_LOD_Offsets[3];
+            scene.Meshlet_LOD_Offsets[4].x = meshlet_LOD_Offsets[4];
+            scene.Meshlet_LOD_Counts[0].x  = meshlet_LOD_Counts[0];
+            scene.Meshlet_LOD_Counts[1].x  = meshlet_LOD_Counts[1];
+            scene.Meshlet_LOD_Counts[2].x  = meshlet_LOD_Counts[2];
+            scene.Meshlet_LOD_Counts[3].x  = meshlet_LOD_Counts[3];
+            scene.Meshlet_LOD_Counts[3].x  = meshlet_LOD_Counts[4];
+            scene.MeshBoundsMin            = vec3(meshBounds.min);
+            scene.MeshBoundsMax            = vec3(meshBounds.max);
 
             void* pDst = nullptr;
             CHECK_CALL(vmaMapMemory(renderer.get()->Allocator, sceneBuffer.Allocation, reinterpret_cast<void**>(&pDst)));
@@ -800,7 +802,10 @@ int main(int argc, char** argv)
 
             // vkCmdDrawMeshTasksEXT with pipeline statistics
             {
-                vkCmdBeginQuery(cmdBuf.CommandBuffer, queryPool, 0, 0);
+                if (queryPool != VK_NULL_HANDLE)
+                {
+                    vkCmdBeginQuery(cmdBuf.CommandBuffer, queryPool, 0, 0);
+                }
 
                 // Task (amplification) shader uses 32 for thread group size
                 uint32_t meshletCount      = static_cast<uint32_t>(meshlet_LOD_Counts[0]);
@@ -808,7 +813,10 @@ int main(int argc, char** argv)
                 uint32_t threadGroupCountX = ((meshletCount * instanceCount) / 32) + 1;
                 fn_vkCmdDrawMeshTasksEXT(cmdBuf.CommandBuffer, threadGroupCountX, 1, 1);
 
-                vkCmdEndQuery(cmdBuf.CommandBuffer, queryPool, 0);
+                if (queryPool != VK_NULL_HANDLE)
+                {
+                    vkCmdEndQuery(cmdBuf.CommandBuffer, queryPool, 0);
+                }
             }
 
             vkCmdEndRendering(cmdBuf.CommandBuffer);
