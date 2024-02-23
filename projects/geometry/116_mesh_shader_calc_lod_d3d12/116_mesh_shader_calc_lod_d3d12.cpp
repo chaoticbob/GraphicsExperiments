@@ -43,8 +43,7 @@ struct SceneProperties
 {
     float3   EyePosition;
     uint     __pad0;
-    float4x4 ViewMatrix;
-    float4x4 ProjMatrix;
+    float4x4 CameraVP;
     uint     InstanceCount;
     uint     MeshletCount;
     uint     __pad1;
@@ -577,8 +576,7 @@ int main(int argc, char** argv)
             camera.GetFrustumPlanes(&frLeft, &frRight, &frTop, &frBottom, &frNear, &frFar);
 
             scene.EyePosition              = camera.GetEyePosition();
-            scene.ViewMatrix               = camera.GetViewMatrix();
-            scene.ProjMatrix               = camera.GetProjectionMatrix();
+            scene.CameraVP                 = camera.GetViewProjectionMatrix();
             scene.InstanceCount            = static_cast<uint32_t>(instances.size());
             scene.MeshletCount             = meshlet_LOD_Counts[0];
             scene.MaxLODDistance           = gMaxLODDistance;
@@ -591,7 +589,7 @@ int main(int argc, char** argv)
             scene.Meshlet_LOD_Counts[1].x  = meshlet_LOD_Counts[1];
             scene.Meshlet_LOD_Counts[2].x  = meshlet_LOD_Counts[2];
             scene.Meshlet_LOD_Counts[3].x  = meshlet_LOD_Counts[3];
-            scene.Meshlet_LOD_Counts[3].x  = meshlet_LOD_Counts[4];
+            scene.Meshlet_LOD_Counts[4].x  = meshlet_LOD_Counts[4];
             scene.MeshBoundsMin            = float3(meshBounds.min);
             scene.MeshBoundsMax            = float3(meshBounds.max);
 
