@@ -67,12 +67,7 @@ void asmain(
 
         if (meshletIndex < lodMeshletCount) {
             meshletIndex += Scene.Meshlet_LOD_Offsets[lod];
-
-            // Transform meshlet's bounding sphere into world space
-            float4x4 M = Instances[instanceIndex].M;
-            float4 meshletBoundingSphere = mul(M, float4(MeshletBounds[meshletIndex].xyz, 1.0));
-            meshletBoundingSphere.w = MeshletBounds[meshletIndex].w;
-            
+          
             // Assuming visibile, no culling here
             visible = 1;
         }
