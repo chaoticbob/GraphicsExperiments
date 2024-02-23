@@ -4,8 +4,7 @@
 
 struct SceneProperties {
     float3      EyePosition;
-    float4x4    ViewMatrix;
-    float4x4    ProjMatrix;
+    float4x4    CameraVP;
     uint        InstanceCount;
     uint        MeshletCount;
     uint        __pad0;
