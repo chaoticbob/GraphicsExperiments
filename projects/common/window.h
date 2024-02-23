@@ -3,13 +3,17 @@
 #include "config.h"
 #include "bitmap.h"
 
+#if defined(GREX_ENABLE_VULKAN) || defined(ENABLE_IMGUI_VULKAN)
+#    include "vk_renderer.h"
+#endif
+
 #if !defined(GLFW_INCLUDE_NONE)
 #    define GLFW_INCLUDE_NONE
 #endif
 #include <GLFW/glfw3.h>
 
 #if defined(__linux__)
-#    define GLFW_EXPOSE_NATIVE_X11
+//#    define GLFW_EXPOSE_NATIVE_X11
 #elif defined(__APPLE__)
 #    define GLFW_EXPOSE_NATIVE_COCOA
 #elif defined(WIN32)
@@ -28,7 +32,6 @@ namespace fs = std::filesystem;
 #endif // defined(ENABLE_IMGUI_D3D12)
 
 #if defined(ENABLE_IMGUI_VULKAN)
-#    include "vk_renderer.h"
 #    include "backends/imgui_impl_glfw.h"
 #    include "backends/imgui_impl_vulkan.h"
 #endif // defined(ENABLE_IMGUI_VULKAN)
@@ -46,15 +49,15 @@ enum MouseButton
     MOUSE_BUTTON_RIGHT  = 0x4,
 };
 
-class Window
+class GrexWindow
 {
 private:
-    Window(uint32_t width, uint32_t height, const char* pTitle);
+    GrexWindow(uint32_t width, uint32_t height, const char* pTitle);
 
 public:
-    ~Window();
+    ~GrexWindow();
 
-    static std::unique_ptr<Window> Create(uint32_t width, uint32_t height, const char* pTitle);
+    static std::unique_ptr<GrexWindow> Create(uint32_t width, uint32_t height, const char* pTitle);
 
     uint32_t    GetWidth() const { return mWidth; }
     uint32_t    GetHeight() const { return mHeight; }
@@ -67,6 +70,10 @@ public:
 
 #if defined(__APPLE__)
     void* GetNativeWindow() const;
+#endif
+
+#if defined(GREX_ENABLE_VULKAN)
+    VkSurfaceKHR CreateVkSurface(VkInstance instance, const VkAllocationCallbacks* allocator = nullptr);
 #endif
 
     bool PollEvents();

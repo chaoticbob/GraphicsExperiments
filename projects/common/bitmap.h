@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cfloat>
+#include <cmath>
 #include "config.h"
 
 enum BitmapSampleMode
