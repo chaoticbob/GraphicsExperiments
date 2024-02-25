@@ -82,10 +82,11 @@ struct SceneProperties
     uint        InstanceCount;
     uint        MeshletCount;
     uint        VisibilityFunc;
-    float       MaxLODDistance;          // Use least detail level at or beyond this distance
-    uint        Meshlet_LOD_Offsets[20]; // Align array element to 16 bytes
-    uint        Meshlet_LOD_Counts[17];  // Align array element to 16 bytes
+    float       MaxLODDistance;         // Use least detail level at or beyond this distance
+    uint4       Meshlet_LOD_Offsets[5]; // Align array element to 16 bytes
+    uint4       Meshlet_LOD_Counts[5];  // Align array element to 16 bytes   
     float3      MeshBoundsMin;
+    uint        __pad1;
     float3      MeshBoundsMax;
     uint        EnableLOD;
 };
@@ -100,7 +101,7 @@ static bool     gEnableDebug  = true;
 static float gTargetAngle = 55.0f;
 static float gAngle       = gTargetAngle;
 
-static bool gFitConeToFarClip = false;
+static bool gFitConeToFarClip = true;
 
 enum VisibilityFunc
 {
@@ -119,7 +120,7 @@ static std::vector<std::string> gVisibilityFuncNames = {
     "Frustum Cone and Near Plane",
 };
 
-static int gVisibilityFunc = VISIBILITY_FUNC_PLANES;
+static int gVisibilityFunc = VISIBILITY_FUNC_CONE_AND_NEAR_PLANE;
 
 static float gMaxLODDistance = 10.0f;
 
@@ -157,6 +158,10 @@ void MouseMove(int x, int y, int buttons)
 // =============================================================================
 int main(int argc, char** argv)
 {
+    size_t offset0 = offsetof(SceneProperties, MeshBoundsMin);
+    size_t offset1 = offsetof(SceneProperties, MeshBoundsMax);
+    size_t offset2 = offsetof(SceneProperties, EnableLOD);
+
     // *************************************************************************
     // Renderer
     // *************************************************************************
@@ -693,16 +698,16 @@ int main(int argc, char** argv)
             scene.MeshletCount                         = meshlet_LOD_Counts[0];
             scene.VisibilityFunc                       = gVisibilityFunc;
             scene.MaxLODDistance                       = gMaxLODDistance;
-            scene.Meshlet_LOD_Offsets[0]               = meshlet_LOD_Offsets[0];
-            scene.Meshlet_LOD_Offsets[4]               = meshlet_LOD_Offsets[1];
-            scene.Meshlet_LOD_Offsets[8]               = meshlet_LOD_Offsets[2];
-            scene.Meshlet_LOD_Offsets[12]              = meshlet_LOD_Offsets[3];
-            scene.Meshlet_LOD_Offsets[16]              = meshlet_LOD_Offsets[4];
-            scene.Meshlet_LOD_Counts[0]                = meshlet_LOD_Counts[0];
-            scene.Meshlet_LOD_Counts[4]                = meshlet_LOD_Counts[1];
-            scene.Meshlet_LOD_Counts[8]                = meshlet_LOD_Counts[2];
-            scene.Meshlet_LOD_Counts[12]               = meshlet_LOD_Counts[3];
-            scene.Meshlet_LOD_Counts[16]               = meshlet_LOD_Counts[4];
+            scene.Meshlet_LOD_Offsets[0].x             = meshlet_LOD_Offsets[0];
+            scene.Meshlet_LOD_Offsets[1].x             = meshlet_LOD_Offsets[1];
+            scene.Meshlet_LOD_Offsets[2].x             = meshlet_LOD_Offsets[2];
+            scene.Meshlet_LOD_Offsets[3].x             = meshlet_LOD_Offsets[3];
+            scene.Meshlet_LOD_Offsets[4].x             = meshlet_LOD_Offsets[4];
+            scene.Meshlet_LOD_Counts[0].x              = meshlet_LOD_Counts[0];
+            scene.Meshlet_LOD_Counts[1].x              = meshlet_LOD_Counts[1];
+            scene.Meshlet_LOD_Counts[2].x              = meshlet_LOD_Counts[2];
+            scene.Meshlet_LOD_Counts[3].x              = meshlet_LOD_Counts[3];
+            scene.Meshlet_LOD_Counts[4].x              = meshlet_LOD_Counts[4];
             scene.MeshBoundsMin                        = float3(meshBounds.min);
             scene.MeshBoundsMax                        = float3(meshBounds.max);
             scene.EnableLOD                            = gEnableLOD;
