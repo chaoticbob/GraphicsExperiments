@@ -101,7 +101,7 @@ static bool     gEnableDebug  = true;
 static float gTargetAngle = 55.0f;
 static float gAngle       = gTargetAngle;
 
-static bool gFitConeToFarClip = false;
+static bool gFitConeToFarClip = true;
 
 enum VisibilityFunc
 {
@@ -120,7 +120,7 @@ static std::vector<std::string> gVisibilityFuncNames = {
     "Frustum Cone and Near Plane",
 };
 
-static int gVisibilityFunc = VISIBILITY_FUNC_PLANES;
+static int gVisibilityFunc = VISIBILITY_FUNC_CONE_AND_NEAR_PLANE;
 
 static float gMaxLODDistance = 10.0f;
 
