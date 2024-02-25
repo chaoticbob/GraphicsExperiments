@@ -158,10 +158,6 @@ void MouseMove(int x, int y, int buttons)
 // =============================================================================
 int main(int argc, char** argv)
 {
-    size_t offset0 = offsetof(SceneProperties, MeshBoundsMin);
-    size_t offset1 = offsetof(SceneProperties, MeshBoundsMax);
-    size_t offset2 = offsetof(SceneProperties, EnableLOD);
-
     // *************************************************************************
     // Renderer
     // *************************************************************************
