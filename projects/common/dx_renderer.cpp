@@ -199,7 +199,7 @@ bool HasMeshShaderPipelineStats(DxRenderer* pRenderer)
     }
 
     D3D12_FEATURE_DATA_D3D12_OPTIONS9 featureData = {};
-    pRenderer->Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS8, &featureData, sizeof(featureData));
+    pRenderer->Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS9, &featureData, sizeof(featureData));
     return featureData.MeshShaderPipelineStatsSupported;
 }
 
