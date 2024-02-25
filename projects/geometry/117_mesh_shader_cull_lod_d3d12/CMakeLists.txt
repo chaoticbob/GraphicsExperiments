@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 3.5)
 project(117_mesh_shader_cull_lod_d3d12)
 
 add_executable(
-    117_mesh_shader_cull_lod_d3d12
-    117_mesh_shader_cull_lod_d3d12.cpp
+    ${PROJECT_NAME}
+    ${PROJECT_NAME}.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/dx_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/dx_renderer.cpp
@@ -17,16 +17,16 @@ add_executable(
     ${IMGUI_D3D12_FILES}
 )
 
-set_target_properties(117_mesh_shader_cull_lod_d3d12 PROPERTIES FOLDER "geometry")
+set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER "geometry")
 
 target_compile_definitions(
-	117_mesh_shader_cull_lod_d3d12
+	${PROJECT_NAME}
 	PUBLIC GREX_USE_D3DX12
            ENABLE_IMGUI_D3D12
 )	
 
 target_include_directories(
-    117_mesh_shader_cull_lod_d3d12	
+    ${PROJECT_NAME}	
     PUBLIC ${GREX_THIRD_PARTY_DIR}/DirectX-Headers/include
 	       ${GREX_PROJECTS_COMMON_DIR}
            ${IMGUI_INC_DIR}
@@ -36,7 +36,7 @@ target_include_directories(
 )
 
 target_link_libraries(
-    117_mesh_shader_cull_lod_d3d12
+    ${PROJECT_NAME}
     PUBLIC glfw
            d3d12
            dxgi

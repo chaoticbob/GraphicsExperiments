@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 3.5)
 project(117_mesh_shader_cull_lod_vulkan)
 
 add_executable(
-    117_mesh_shader_cull_lod_vulkan
-    117_mesh_shader_cull_lod_vulkan.cpp
+    ${PROJECT_NAME}
+    ${PROJECT_NAME}.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.cpp
@@ -19,15 +19,15 @@ add_executable(
     ${IMGUI_VULKAN_FILES}
 )
 
-set_target_properties(117_mesh_shader_cull_lod_vulkan PROPERTIES FOLDER "geometry")
+set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER "geometry")
 
 target_compile_definitions(
-	117_mesh_shader_cull_lod_vulkan
+	${PROJECT_NAME}
 	PUBLIC ENABLE_IMGUI_VULKAN
 )
 
 target_include_directories(
-    117_mesh_shader_cull_lod_vulkan
+    ${PROJECT_NAME}
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
            ${GREX_THIRD_PARTY_DIR}/glslang # This needs to come before ${VULKAN_INCLUDE_DIR}
            ${VULKAN_INCLUDE_DIR}
@@ -39,7 +39,7 @@ target_include_directories(
 )
 
 target_link_libraries(
-    117_mesh_shader_cull_lod_vulkan
+    ${PROJECT_NAME}
     PUBLIC glfw
            glslang
            SPIRV
@@ -49,12 +49,12 @@ target_link_libraries(
 
 if(WIN32)
     target_compile_definitions(
-        117_mesh_shader_cull_lod_vulkan
+        ${PROJECT_NAME}
         PUBLIC VK_USE_PLATFORM_WIN32_KHR
     )
 
     target_link_libraries(
-        117_mesh_shader_cull_lod_vulkan
+        ${PROJECT_NAME}
         PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
     )
 endif()
