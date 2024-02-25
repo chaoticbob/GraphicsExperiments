@@ -11,7 +11,7 @@ struct SceneProperties {
     float       MaxLODDistance;
     uint        Meshlet_LOD_Offsets[5];
     uint        Meshlet_LOD_Counts[5];
-    uint        __pad1[3];
+    uint3        __pad1;
     float3      MeshBoundsMin;
     float3      MeshBoundsMax;
 };
