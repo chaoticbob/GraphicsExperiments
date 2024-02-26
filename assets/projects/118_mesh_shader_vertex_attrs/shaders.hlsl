@@ -97,8 +97,6 @@ void msmain(
         uint vertexIndex = m.VertexOffset + gtid;        
         vertexIndex = MeshletVertexIndices[vertexIndex];
 
-        float4x4 MVP = mul(Scene.CameraVP, Scene.InstanceM);
-
         float4 PositionOS = float4(Positions[vertexIndex], 1.0);
         float4 PositionWS = mul(Scene.InstanceM, PositionOS);
 
