@@ -378,6 +378,22 @@ void TriMesh::SetPositions(size_t count, const glm::vec3* pPositions)
     std::copy(pPositions, pPositions + count, std::back_inserter(mPositions));
 }
 
+void TriMesh::SetTexCoords(size_t count, const glm::vec2* pTexCoords)
+{
+    assert((count > 0) && (pTexCoords != nullptr));
+
+    mTexCoords.clear();
+    std::copy(pTexCoords, pTexCoords + count, std::back_inserter(mTexCoords));
+}
+
+void TriMesh::SetNormals(size_t count, const glm::vec3* pNormals)
+{
+    assert((count > 0) && (pNormals != nullptr));
+    
+    mNormals.clear();
+    std::copy(pNormals, pNormals + count, std::back_inserter(mNormals));
+}
+
 void TriMesh::AddVertex(const TriMesh::Vertex& vtx)
 {
     mPositions.push_back(vtx.position);
@@ -1766,12 +1782,31 @@ bool TriMesh::LoadOBJ2(const std::string& path, TriMesh* pMesh)
     {
         return false;
     }
+    
+    // If there's normals and tex coords, they need to line up with the vertex positions
+    const size_t positionCount = attrib.vertices.size() / 3;
+    const size_t normalCount   = attrib.normals.size() / 3;
+    const size_t texCoordCount = attrib.texcoords.size() / 2;
+    if ((normalCount > 0) && (normalCount != positionCount)) {
+        return false;
+    }
+    if ((texCoordCount > 0) && (texCoordCount != positionCount)) {
+        return false;
+    }
 
     // Create mesh
     *pMesh = TriMesh();
 
     // Set positions
-    pMesh->SetPositions(attrib.vertices.size() / 3, reinterpret_cast<const glm::vec3*>(attrib.vertices.data()));
+    pMesh->SetPositions(positionCount, reinterpret_cast<const glm::vec3*>(attrib.vertices.data()));
+    // Set normals
+    if (normalCount > 0) {
+        pMesh->SetNormals(normalCount, reinterpret_cast<const glm::vec3*>(attrib.normals.data()));
+    }
+    // Set tex coords
+    if (texCoordCount > 0) {
+        pMesh->SetTexCoords(texCoordCount, reinterpret_cast<const glm::vec2*>(attrib.texcoords.data()));
+    }
 
     for (size_t shapeIdx = 0; shapeIdx < numShapes; ++shapeIdx)
     {
@@ -1792,6 +1827,10 @@ bool TriMesh::LoadOBJ2(const std::string& path, TriMesh* pMesh)
     }
 
     pMesh->CalculateBounds();
+    
+    GREX_LOG_INFO("Loaded " << path);
+    GREX_LOG_INFO("  num vertices: " << pMesh->GetNumVertices());
+    GREX_LOG_INFO("  num indices : " << pMesh->GetNumIndices());
 
     return true;
 }
