@@ -35,14 +35,14 @@ using float4   = glm::vec4;
 using float4x4 = glm::mat4;
 using uint4    = glm::uvec4;
 
-struct SceneProperties {
+struct SceneProperties
+{
     float4x4 InstanceM;
     float4x4 CameraVP;
     float3   EyePosition;
     uint     DrawFunc;
     float3   LightPosition;
 };
-
 
 // =============================================================================
 // Globals
@@ -51,7 +51,8 @@ static uint32_t gWindowWidth  = 1280;
 static uint32_t gWindowHeight = 720;
 static bool     gEnableDebug  = true;
 
-enum DrawFunc {
+enum DrawFunc
+{
     DRAW_FUNC_POSITION  = 0,
     DRAW_FUNC_TEX_COORD = 1,
     DRAW_FUNC_NORMAL    = 2,
@@ -191,7 +192,7 @@ int main(int argc, char** argv)
         meshlets.resize(meshletCount);
     }
 
-    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to 
+    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to
     // make it easier to unpack on the GPU.
     //
     std::vector<uint32_t> meshletTrianglesU32;
@@ -375,8 +376,9 @@ int main(int argc, char** argv)
     while (window->PollEvents())
     {
         window->ImGuiNewFrameD3D12();
-        
-        if (ImGui::Begin("Params")) {
+
+        if (ImGui::Begin("Params"))
+        {
             // Visibility Func
             static const char* currentDrawFuncName = gDrawFuncNames[gDrawFunc].c_str();
             if (ImGui::BeginCombo("Draw Func", currentDrawFuncName))
@@ -398,9 +400,9 @@ int main(int argc, char** argv)
             }
         }
         ImGui::End();
-        
+
         // ---------------------------------------------------------------------
-        
+
         // Update scene
         {
             float3 eyePosition = float3(0, 0.105f, 0.40f);
@@ -464,7 +466,7 @@ int main(int argc, char** argv)
             // Amplification shader uses 32 for thread group size
             UINT threadGroupCountX = static_cast<UINT>((meshlets.size() / 32) + 1);
             commandList->DispatchMesh(threadGroupCountX, 1, 1);
-            
+
             // ImGui
             window->ImGuiRenderDrawData(renderer.get(), commandList.Get());
         }
@@ -497,13 +499,13 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
 {
     std::vector<D3D12_ROOT_PARAMETER> rootParameters;
 
-    // ConstantBuffer<CameraProperties> Cam : register(b0);
+    // ConstantBuffer<SceneProperties> Cam : register(b0);
     {
-        D3D12_ROOT_PARAMETER rootParameter     = {};
-        rootParameter.ParameterType            = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        D3D12_ROOT_PARAMETER rootParameter      = {};
+        rootParameter.ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
         rootParameter.Descriptor.ShaderRegister = 0;
         rootParameter.Descriptor.RegisterSpace  = 0;
-        rootParameter.ShaderVisibility         = D3D12_SHADER_VISIBILITY_ALL;
+        rootParameter.ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
         rootParameters.push_back(rootParameter);
     }
 
@@ -547,7 +549,7 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
         rootParameters.push_back(rootParameter);
     }
 
-    // StructuredBuffer<uint> VertexIndices : register(t5);
+    // StructuredBuffer<uint> MeshletVertexIndices : register(t5);
     {
         D3D12_ROOT_PARAMETER rootParameter      = {};
         rootParameter.ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
