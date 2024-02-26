@@ -519,7 +519,7 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
         rootParameters.push_back(rootParameter);
     }
 
-    // StructuredBuffer<float3> TexCoords : register(t2);
+    // StructuredBuffer<float2> TexCoords : register(t2);
     {
         D3D12_ROOT_PARAMETER rootParameter      = {};
         rootParameter.ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;

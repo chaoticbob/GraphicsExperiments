@@ -612,7 +612,7 @@ void CreatePipelineLayout(
         bindings.push_back(binding);
     }
 
-    // StructuredBuffer<float3> TexCoords : register(t2);
+    // StructuredBuffer<float2> TexCoords : register(t2);
     {
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding                      = 2;
@@ -623,7 +623,7 @@ void CreatePipelineLayout(
         bindings.push_back(binding);
     }
 
-    // StructuredBuffer<float2> Normals : register(t3);
+    // StructuredBuffer<float3> Normals : register(t3);
     {
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding                      = 3;
