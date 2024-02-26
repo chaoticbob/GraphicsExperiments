@@ -40,6 +40,11 @@ target_link_libraries(
            meshoptimizer
 )
 
+target_compile_definitions(
+    112_mesh_shader_amplification_vulkan
+    PUBLIC GREX_ENABLE_VULKAN
+)
+
 if(WIN32)
     target_compile_definitions(
         112_mesh_shader_amplification_vulkan
@@ -49,5 +54,14 @@ if(WIN32)
     target_link_libraries(
         112_mesh_shader_amplification_vulkan
         PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
+    )
+elseif(LINUX)
+    target_compile_definitions(
+        112_mesh_shader_amplification_vulkan
+        PUBLIC VK_USE_PLATFORM_XCB_KHR
+    )
+    target_link_libraries(
+        112_mesh_shader_amplification_vulkan
+        PUBLIC vulkan
     )
 endif()

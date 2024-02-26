@@ -1,5 +1,6 @@
 #include "window.h"
 
+#include <cstring>
 #include <cassert>
 #include <fstream>
 
@@ -17,7 +18,7 @@ static std::vector<fs::path> sAssetDirs;
 // =============================================================================
 struct WindowEvents
 {
-    static std::unordered_map<GLFWwindow*, Window*> sWindows;
+    static std::unordered_map<GLFWwindow*, GrexWindow*> sWindows;
 
     static void WindowMoveCallback(GLFWwindow* window, int eventX, int eventY)
     {
@@ -25,7 +26,7 @@ struct WindowEvents
         if (it == sWindows.end()) {
             return;
         }
-        Window* pAppWindow = it->second;
+        GrexWindow* pAppWindow = it->second;
 
         pAppWindow->WindowMoveEvent(eventX, eventY);
     }
@@ -36,7 +37,7 @@ struct WindowEvents
         if (it == sWindows.end()) {
             return;
         }
-        Window* pAppWindow = it->second;
+        GrexWindow* pAppWindow = it->second;
 
         pAppWindow->WindowResizeEvent(eventWidth, eventHeight);
     }
@@ -47,7 +48,7 @@ struct WindowEvents
         if (it == sWindows.end()) {
             return;
         }
-        Window* pAppWindow = it->second;
+        GrexWindow* pAppWindow = it->second;
 
         int buttons = 0;
         if (eventButton == GLFW_MOUSE_BUTTON_LEFT) {
@@ -88,7 +89,7 @@ struct WindowEvents
         if (it == sWindows.end()) {
             return;
         }
-        Window* pAppWindow = it->second;
+        GrexWindow* pAppWindow = it->second;
 
         uint32_t buttons = 0;
         if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
@@ -112,7 +113,7 @@ struct WindowEvents
         if (it == sWindows.end()) {
             return;
         }
-        Window* pAppWindow = it->second;
+        GrexWindow* pAppWindow = it->second;
 
         pAppWindow->MouseScrollEvent(
             static_cast<float>(xoffset),
@@ -129,7 +130,7 @@ struct WindowEvents
         if (it == sWindows.end()) {
             return;
         }
-        Window* pAppWindow = it->second;
+        GrexWindow* pAppWindow = it->second;
 
         if (action == GLFW_PRESS) {
             pAppWindow->KeyDownEvent(key);
@@ -155,7 +156,7 @@ struct WindowEvents
         // #endif
     }
 
-    static bool RegisterWindowEvents(GLFWwindow* window, Window* pAppWindow)
+    static bool RegisterWindowEvents(GLFWwindow* window, GrexWindow* pAppWindow)
     {
         auto it = sWindows.find(window);
         if (it != sWindows.end()) {
@@ -176,12 +177,12 @@ struct WindowEvents
     }
 };
 
-std::unordered_map<GLFWwindow*, Window*> WindowEvents::sWindows;
+std::unordered_map<GLFWwindow*, GrexWindow*> WindowEvents::sWindows;
 
 // =============================================================================
 // Window
 // =============================================================================
-Window::Window(uint32_t width, uint32_t height, const char* pTitle)
+GrexWindow::GrexWindow(uint32_t width, uint32_t height, const char* pTitle)
     : mWidth(width),
       mHeight(height)
 {
@@ -209,7 +210,7 @@ Window::Window(uint32_t width, uint32_t height, const char* pTitle)
     }
 }
 
-Window::~Window()
+GrexWindow::~GrexWindow()
 {
     if (mWindow == nullptr) {
         return;
@@ -245,9 +246,9 @@ Window::~Window()
     glfwTerminate();
 }
 
-std::unique_ptr<Window> Window::Create(uint32_t width, uint32_t height, const char* pTitle)
+std::unique_ptr<GrexWindow> GrexWindow::Create(uint32_t width, uint32_t height, const char* pTitle)
 {
-    Window* pWindow = new Window(width, height, pTitle);
+    GrexWindow* pWindow = new GrexWindow(width, height, pTitle);
     if (IsNull(pWindow)) {
         return nullptr;
     }
@@ -255,24 +256,24 @@ std::unique_ptr<Window> Window::Create(uint32_t width, uint32_t height, const ch
         delete pWindow;
         return nullptr;
     }
-    return std::unique_ptr<Window>(pWindow);
+    return std::unique_ptr<GrexWindow>(pWindow);
 }
 
-void Window::WindowMoveEvent(int x, int y)
+void GrexWindow::WindowMoveEvent(int x, int y)
 {
     for (auto& callbackFn : mWindowMoveCallbacks) {
         callbackFn(x, y);
     }
 }
 
-void Window::WindowResizeEvent(int width, int height)
+void GrexWindow::WindowResizeEvent(int width, int height)
 {
     for (auto& callbackFn : mWindowResizeCallbacks) {
         callbackFn(width, height);
     }
 }
 
-void Window::MouseDownEvent(int x, int y, int buttons)
+void GrexWindow::MouseDownEvent(int x, int y, int buttons)
 {
 #if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN) || defined(ENABLE_IMGUI_METAL)
     if (mImGuiEnabled) {
@@ -288,7 +289,7 @@ void Window::MouseDownEvent(int x, int y, int buttons)
     }
 }
 
-void Window::MouseUpEvent(int x, int y, int buttons)
+void GrexWindow::MouseUpEvent(int x, int y, int buttons)
 {
 #if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN) || defined(ENABLE_IMGUI_METAL)
     if (mImGuiEnabled) {
@@ -304,7 +305,7 @@ void Window::MouseUpEvent(int x, int y, int buttons)
     }
 }
 
-void Window::MouseMoveEvent(int x, int y, int buttons)
+void GrexWindow::MouseMoveEvent(int x, int y, int buttons)
 {
 #if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN) || defined(ENABLE_IMGUI_METAL)
     if (mImGuiEnabled) {
@@ -320,7 +321,7 @@ void Window::MouseMoveEvent(int x, int y, int buttons)
     }
 }
 
-void Window::MouseScrollEvent(float xoffset, float yoffset)
+void GrexWindow::MouseScrollEvent(float xoffset, float yoffset)
 {
 #if defined(ENABLE_IMGUI_D3D12)
     if (mImGuiEnabled) {
@@ -336,7 +337,7 @@ void Window::MouseScrollEvent(float xoffset, float yoffset)
     }
 }
 
-void Window::KeyDownEvent(int key)
+void GrexWindow::KeyDownEvent(int key)
 {
     for (auto& callbackFn : mKeyDownCallbacks) {
         callbackFn(key);
@@ -348,7 +349,7 @@ void Window::KeyDownEvent(int key)
     }
 }
 
-void Window::KeyUpEvent(int key)
+void GrexWindow::KeyUpEvent(int key)
 {
     for (auto& callbackFn : mKeyUpCallbacks) {
         callbackFn(key);
@@ -360,47 +361,47 @@ void Window::KeyUpEvent(int key)
     }
 }
 
-void Window::AddWindowMoveCallbacks(std::function<void(int, int)> fn)
+void GrexWindow::AddWindowMoveCallbacks(std::function<void(int, int)> fn)
 {
     mWindowMoveCallbacks.push_back(fn);
 }
 
-void Window::AddWindowResizeCallbacks(std::function<void(int, int)> fn)
+void GrexWindow::AddWindowResizeCallbacks(std::function<void(int, int)> fn)
 {
     mWindowResizeCallbacks.push_back(fn);
 }
 
-void Window::AddMouseDownCallbacks(std::function<void(int, int, int)> fn)
+void GrexWindow::AddMouseDownCallbacks(std::function<void(int, int, int)> fn)
 {
     mMouseDownCallbacks.push_back(fn);
 }
 
-void Window::AddMouseUpCallbacks(std::function<void(int, int, int)> fn)
+void GrexWindow::AddMouseUpCallbacks(std::function<void(int, int, int)> fn)
 {
     mMouseUpCallbacks.push_back(fn);
 }
 
-void Window::AddMouseMoveCallbacks(std::function<void(int, int, int)> fn)
+void GrexWindow::AddMouseMoveCallbacks(std::function<void(int, int, int)> fn)
 {
     mMouseMoveCallbacks.push_back(fn);
 }
 
-void Window::AddMouseScrollCallbacks(std::function<void(float, float)> fn)
+void GrexWindow::AddMouseScrollCallbacks(std::function<void(float, float)> fn)
 {
     mMouseScrollCallbacks.push_back(fn);
 }
 
-void Window::AddKeyDownCallbacks(std::function<void(int)> fn)
+void GrexWindow::AddKeyDownCallbacks(std::function<void(int)> fn)
 {
     mKeyDownCallbacks.push_back(fn);
 }
 
-void Window::AddKeyUpCallbacks(std::function<void(int)> fn)
+void GrexWindow::AddKeyUpCallbacks(std::function<void(int)> fn)
 {
     mKeyUpCallbacks.push_back(fn);
 }
 
-bool Window::IsKeyDown(int key)
+bool GrexWindow::IsKeyDown(int key)
 {
     size_t keyIndex = static_cast<size_t>(key);
     if (keyIndex < mKeyDownState.size()) {
@@ -410,7 +411,7 @@ bool Window::IsKeyDown(int key)
 }
 
 #if defined(ENABLE_IMGUI_D3D12)
-bool Window::InitImGuiForD3D12(DxRenderer* pRenderer)
+bool GrexWindow::InitImGuiForD3D12(DxRenderer* pRenderer)
 {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -435,14 +436,14 @@ bool Window::InitImGuiForD3D12(DxRenderer* pRenderer)
     return true;
 }
 
-void Window::ImGuiNewFrameD3D12()
+void GrexWindow::ImGuiNewFrameD3D12()
 {
     ImGui_ImplDX12_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 }
 
-void Window::ImGuiRenderDrawData(DxRenderer* pRenderer, ID3D12GraphicsCommandList* pCtx)
+void GrexWindow::ImGuiRenderDrawData(DxRenderer* pRenderer, ID3D12GraphicsCommandList* pCtx)
 {
     ID3D12DescriptorHeap* ppHeaps[1] = {pRenderer->ImGuiFontDescriptorHeap.Get()};
     pCtx->SetDescriptorHeaps(1, ppHeaps);
@@ -463,7 +464,7 @@ static void CheckVkResult(VkResult err)
         abort();
 }
 
-bool Window::InitImGuiForVulkan(VulkanRenderer* pRenderer, VkRenderPass renderPass)
+bool GrexWindow::InitImGuiForVulkan(VulkanRenderer* pRenderer, VkRenderPass renderPass)
 {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -603,14 +604,14 @@ bool Window::InitImGuiForVulkan(VulkanRenderer* pRenderer, VkRenderPass renderPa
     return true;
 }
 
-void Window::ImGuiNewFrameVulkan()
+void GrexWindow::ImGuiNewFrameVulkan()
 {
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 }
 
-void Window::ImGuiRenderDrawData(VulkanRenderer* pRenderer, VkCommandBuffer cmdBuf)
+void GrexWindow::ImGuiRenderDrawData(VulkanRenderer* pRenderer, VkCommandBuffer cmdBuf)
 {
     ImGui::Render();
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuf);
@@ -618,7 +619,7 @@ void Window::ImGuiRenderDrawData(VulkanRenderer* pRenderer, VkCommandBuffer cmdB
 #endif // defined(ENABLE_IMGUI_VULKAN)
 
 #if defined(ENABLE_IMGUI_METAL)
-bool Window::InitImGuiForMetal(MetalRenderer* pRenderer)
+bool GrexWindow::InitImGuiForMetal(MetalRenderer* pRenderer)
 {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -644,14 +645,14 @@ bool Window::InitImGuiForMetal(MetalRenderer* pRenderer)
     return mImGuiEnabled;
 }
 
-void Window::ImGuiNewFrameMetal(MTL::RenderPassDescriptor* pRenderPassDescriptor)
+void GrexWindow::ImGuiNewFrameMetal(MTL::RenderPassDescriptor* pRenderPassDescriptor)
 {
     ImGui_ImplMetal_NewFrame(pRenderPassDescriptor);
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 }
 
-void Window::ImGuiRenderDrawData(MetalRenderer* pRenderer, MTL::CommandBuffer* pCommandBuffer, MTL::RenderCommandEncoder* pRenderEncoder)
+void GrexWindow::ImGuiRenderDrawData(MetalRenderer* pRenderer, MTL::CommandBuffer* pCommandBuffer, MTL::RenderCommandEncoder* pRenderEncoder)
 {
     ImGui::Render();
    
@@ -676,20 +677,20 @@ void Window::ImGuiRenderDrawData(MetalRenderer* pRenderer, MTL::CommandBuffer* p
 // Platform functions
 // =============================================================================
 #if defined(WIN32)
-HWND Window::GetHWND() const
+HWND GrexWindow::GetHWND() const
 {
     return glfwGetWin32Window(mWindow);
 }
 #endif
 
 #if defined(__APPLE__)
-void* Window::GetNativeWindow() const
+void* GrexWindow::GetNativeWindow() const
 {
    return glfwGetCocoaWindow(mWindow);
 }
 #endif
 
-bool Window::PollEvents()
+bool GrexWindow::PollEvents()
 {
     bool shouldClose = (glfwWindowShouldClose(mWindow) != 0);
     if (shouldClose) {
@@ -866,3 +867,19 @@ std::string LoadString(const fs::path& subPath)
 
     return str;
 }
+
+#if defined(GREX_ENABLE_VULKAN)
+VkSurfaceKHR GrexWindow::CreateVkSurface(VkInstance instance,
+                                         const VkAllocationCallbacks* allocator)
+{
+    VkSurfaceKHR surface;
+    VkResult result = glfwCreateWindowSurface(instance, mWindow, allocator, &surface);
+
+    if (result != VK_SUCCESS) {
+        GREX_LOG_ERROR("Failed to create VkSurface");
+        return VK_NULL_HANDLE;
+    }
+
+    return surface;
+}
+#endif

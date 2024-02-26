@@ -169,17 +169,24 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
     if (!window)
     {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
     }
 
+    auto surface = window->CreateVkSurface(renderer->Instance);
+    if (!surface)
+    {
+        assert(false && "CreateVkSurface failed");
+        return EXIT_FAILURE;
+    }
+
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight()))
+    if (!InitSwapchain(renderer.get(), surface, window->GetWidth(), window->GetHeight()))
     {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
