@@ -122,12 +122,19 @@ float4 psmain(PSInput input) : SV_TARGET
     uint vIdx2 = GetAttributeAtVertex(input.VertexIndex, 2);
 
 #if defined(USE_QUAD_SHUFFLE)
+    //
+    // Use quad shuffle as for barycentric interpolation similar to:
+    //   https://github.com/nvpro-samples/gl_vk_meshlet_cadscene/commit/77f82988d39752e061ff00e7e8de9347afe70cc3
+    //
+    // NOTE: GetAttributeAtVertex() currently can't take a variable for the 
+    //       second param (VertexID) so we have to use a if block.
+    //
     int quadId = (int)(WaveGetLaneIndex() % 4);
 
     uint vIdx = 0;
     if (quadId == 0) vIdx = GetAttributeAtVertex(input.VertexIndex, 0);
-    if (quadId == 1) vIdx = GetAttributeAtVertex(input.VertexIndex, 1);
-    if (quadId == 2) vIdx = GetAttributeAtVertex(input.VertexIndex, 2);    
+    else if (quadId == 1) vIdx = GetAttributeAtVertex(input.VertexIndex, 1);
+    else if (quadId == 2) vIdx = GetAttributeAtVertex(input.VertexIndex, 2);    
 
     float3 position = Positions[vIdx];
     float3 position0 = QuadReadLaneAt(position, 0);
