@@ -224,6 +224,7 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
 
         if (pRenderer->Features.EnableMeshShader) {
             enabledExtensions.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
+            enabledExtensions.push_back(VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME);
         }
 
         if (pRenderer->Features.EnablePushDescriptor) {
@@ -267,8 +268,11 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
         rayTracingPipelineFeatures.rayTracingPipeline                            = VK_TRUE;
 
         // ---------------------------------------------------------------------
+        VkPhysicalDeviceFragmentShaderBarycentricFeaturesKHR shaderBarycentricFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_BARYCENTRIC_FEATURES_KHR};
+        shaderBarycentricFeatures.fragmentShaderBarycentric = VK_TRUE;
 
         VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT};
+        meshShaderFeatures.pNext                                 = &shaderBarycentricFeatures;
         meshShaderFeatures.taskShader                            = VK_TRUE;
         meshShaderFeatures.meshShader                            = VK_TRUE;
         meshShaderFeatures.meshShaderQueries                     = pRenderer->HasMeshShaderQueries ? VK_TRUE : VK_FALSE;
