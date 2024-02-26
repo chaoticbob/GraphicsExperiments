@@ -7,9 +7,19 @@
 
 #define AS_GROUP_SIZE 32
 
+enum DrawFunc {
+    DRAW_FUNC_POSITION  = 0,
+    DRAW_FUNC_TEX_COORD = 1,
+    DRAW_FUNC_NORMAL    = 2,
+    DRAW_FUNC_PHONG     = 3,
+};
+
 struct SceneProperties {
     float4x4 InstanceM;
     float4x4 CameraVP;
+    float3   EyePosition;
+    uint     DrawFunc;
+    float3   LightPosition;
 };
 
 DEFINE_AS_PUSH_CONSTANT
@@ -83,7 +93,7 @@ void msmain(
         // aligned to 4 and we can easily grab it as a uint without any 
         // additional offset math.
         //
-        uint packed = TriangleIndices[m.TriangleOffset + gtid];
+        uint packed = MeshletTriangles[m.TriangleOffset + gtid];
         uint vIdx0  = (packed >>  0) & 0xFF;
         uint vIdx1  = (packed >>  8) & 0xFF;
         uint vIdx2  = (packed >> 16) & 0xFF;
@@ -94,15 +104,15 @@ void msmain(
         uint vertexIndex = m.VertexOffset + gtid;        
         vertexIndex = MeshletVertexIndices[vertexIndex];
 
-        float4x4 MVP = mul(Scene.CameraVP, Scenen.InstancesM);
+        float4x4 MVP = mul(Scene.CameraVP, Scene.InstanceM);
 
-        float4 PositionOS = float4(MeshPositions[vertexIndex], 1.0);
+        float4 PositionOS = float4(Positions[vertexIndex], 1.0);
         float4 PositionWS = mul(Scene.InstanceM, PositionOS);
 
         vertices[gtid].PositionCS = mul(Scene.CameraVP, PositionWS);
         vertices[gtid].PositionWS = PositionWS.xyz;
-        vertices[gtid].Normal     = mul(Scene.InstanceM, float4(MeshNormals[vertexIndex], 0.0));
-        vertices[gtid].TexCorod   = MeshTexCoords[vertexIndex];
+        vertices[gtid].Normal     = mul(Scene.InstanceM, float4(Normals[vertexIndex], 0.0)).xyz;
+        vertices[gtid].TexCoord   = TexCoords[vertexIndex];
     }
 }
 
@@ -111,5 +121,27 @@ void msmain(
 // -------------------------------------------------------------------------------------------------
 float4 psmain(MeshOutput input) : SV_TARGET
 {
-    return float4(input.Color, 1);
+    float3 color = input.PositionWS;
+    if (Scene.DrawFunc == DRAW_FUNC_TEX_COORD) {
+        color = float3(input.TexCoord, 0.0);
+    }
+    else if (Scene.DrawFunc == DRAW_FUNC_NORMAL) {
+        color = input.Normal;
+    }
+    else if (Scene.DrawFunc == DRAW_FUNC_PHONG) {
+        float3 V = normalize(Scene.EyePosition - input.PositionWS);
+        float3 L = normalize(Scene.LightPosition - input.PositionWS);
+        float3 H = normalize(V + L);
+        float3 N = normalize(input.Normal);
+        float  NoL = saturate(dot(N, L));
+        float  NoH = saturate(dot(N, H));
+
+        float d = NoL;
+        float s = pow(NoH, 50.0);
+        float a = 0.65;
+        
+        color = float3(0.549, 0.556, 0.554) * (s + d + a);
+    }
+
+    return float4(color, 1);
 }
