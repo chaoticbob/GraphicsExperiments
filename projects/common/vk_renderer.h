@@ -77,9 +77,10 @@ enum VkPipelineFlags
 };
 
 struct VulkanFeatures {
-    bool EnableRayTracing     = false;
-    bool EnableMeshShader     = false;
-    bool EnablePushDescriptor = false;
+    bool EnableRayTracing       = false;
+    bool EnableMeshShader       = false;
+    bool EnablePushDescriptor   = false;
+    bool EnableDescriptorBuffer = true;
 };
 
 struct VulkanRenderer
@@ -115,6 +116,15 @@ struct CommandObjects
     VkCommandBuffer CommandBuffer = VK_NULL_HANDLE;
 
     ~CommandObjects();
+};
+
+// Descriptor container for convenience
+struct Descriptors
+{
+    VkDescriptorPool      DescriptorPool;
+    VkDescriptorSet       DescriptorSet;
+    VkDescriptorSetLayout DescriptorSetLayout;
+
 };
 
 bool     InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeatures& features, uint32_t apiVersion = VK_API_VERSION_1_3);
