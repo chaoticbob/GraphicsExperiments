@@ -77,9 +77,10 @@ enum VkPipelineFlags
 };
 
 struct VulkanFeatures {
-    bool EnableRayTracing     = false;
-    bool EnableMeshShader     = false;
-    bool EnablePushDescriptor = false;
+    bool EnableRayTracing       = false;
+    bool EnableMeshShader       = false;
+    bool EnablePushDescriptor   = false;
+    bool EnableDescriptorBuffer = true;
 };
 
 struct VulkanRenderer

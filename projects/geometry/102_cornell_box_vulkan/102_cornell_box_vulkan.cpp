@@ -23,7 +23,7 @@ using namespace glm;
         }                                            \
     }
 
-struct DrawInfo
+struct DrawParameters
 {
     uint32_t      materialIndex = 0;
     uint32_t      numIndices    = 0;
@@ -40,11 +40,6 @@ struct Camera
 {
    mat4 mvp;
    vec3 lightPosition;
-};
-
-struct DrawParameters
-{
-   uint MaterialIndex;
 };
 
 // =============================================================================
@@ -124,16 +119,10 @@ static uint32_t gWindowWidth  = 1280;
 static uint32_t gWindowHeight = 720;
 static bool     gEnableDebug  = true;
 
-void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout);
-void CreateShaderModules(
-   VulkanRenderer*               pRenderer,
-   const std::vector<uint32_t>&  spirvVS,
-   const std::vector<uint32_t>&  spirvFS,
-   VkShaderModule*               pModuleVS,
-   VkShaderModule*               pModuleFS);
+
 void CreateGeometryBuffers(
    VulkanRenderer*              pRenderer,
-   std::vector<DrawInfo>&       outDrawParams,
+   std::vector<DrawParameters>&       outDrawParams,
    VulkanBuffer*                pCameraBuffer,
    VulkanBuffer*                pMaterialBuffer,
    VulkanBuffer*                pPositionBuffer,
@@ -144,6 +133,13 @@ void  CreateDescriptors(
     VulkanBuffer*   pCameraPropertiesBuffer,
     VulkanBuffer*   pMaterials,
     Descriptors*    pDescriptors);
+void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout);
+void CreateShaderModules(
+   VulkanRenderer*               pRenderer,
+   const std::vector<uint32_t>&  spirvVS,
+   const std::vector<uint32_t>&  spirvFS,
+   VkShaderModule*               pModuleVS,
+   VkShaderModule*               pModuleFS);
 
 // =============================================================================
 // main()
@@ -152,7 +148,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    VulkanFeatures features = {};
+    VulkanFeatures features         = {};
+    features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features)) {
        return EXIT_FAILURE;
     }
@@ -186,15 +183,6 @@ int main(int argc, char** argv)
     }
 
     // *************************************************************************
-    // Pipeline layout
-    //
-    // This is used for pipeline creation
-    //
-    // *************************************************************************
-    VulkanPipelineLayout pipelineLayout = {};
-    CreatePipelineLayout(renderer.get(), &pipelineLayout);
-
-    // *************************************************************************
     // Shader module
     // *************************************************************************
     VkShaderModule moduleVS = VK_NULL_HANDLE;
@@ -205,6 +193,15 @@ int main(int argc, char** argv)
        spirvFS,
        &moduleVS,
        &moduleFS);
+
+    // *************************************************************************
+    // Pipeline layout
+    //
+    // This is used for pipeline creation
+    //
+    // *************************************************************************
+    VulkanPipelineLayout pipelineLayout = {};
+    CreatePipelineLayout(renderer.get(), &pipelineLayout);
 
     // *************************************************************************
     // Graphics pipeline state object
@@ -222,7 +219,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Geometry data
     // *************************************************************************
-    std::vector<DrawInfo>  drawParams;
+    std::vector<DrawParameters>  drawParams;
     VulkanBuffer           cameraBuffer;
     VulkanBuffer           materialsBuffer;
     VulkanBuffer           positionBuffer;
@@ -246,7 +243,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "102_cornell_box_vulkan");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -333,7 +330,7 @@ int main(int argc, char** argv)
     // Main loop
     // *************************************************************************
     VkClearValue clearValues[2];
-    clearValues[0].color = { {0.0f, 0.0f, 0.2f, 1.0f } };
+    clearValues[0].color = { {0.23f, 0.23f, 0.31f, 0} };
     clearValues[1].depthStencil = { 1.0f, 0 };
 
     while (window->PollEvents()) {
@@ -381,21 +378,20 @@ int main(int argc, char** argv)
 
            vkCmdBeginRendering(cmdBuf.CommandBuffer, &vkri);
 
-           VkViewport viewport = { 0, static_cast<float>(gWindowHeight), static_cast<float>(gWindowWidth), -static_cast<float>(gWindowHeight), 0.0f, 1.0f };
-           vkCmdSetViewport(cmdBuf.CommandBuffer, 0, 1, &viewport);
+            mat4 modelMat = mat4(1);
+            mat4 viewMat  = glm::lookAt(vec3(0, 3, 5), vec3(0, 2.8f, 0), vec3(0, 1, 0));
+            mat4 projMat  = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+            mat4 mvpMat   = projMat * viewMat * modelMat;
 
-           VkRect2D scissor = { 0, 0, gWindowWidth, gWindowHeight };
-           vkCmdSetScissor(cmdBuf.CommandBuffer, 0, 1, &scissor);
-
-           // Bind the VS/FS Graphics Pipeline
-           vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+            pCameraParams->mvp           = mvpMat;
+            pCameraParams->lightPosition = lightPosition;
 
            vkCmdBindDescriptorSets(
                cmdBuf.CommandBuffer,
                VK_PIPELINE_BIND_POINT_GRAPHICS,
                pipelineLayout.PipelineLayout,
                0, // firstSet
-               2, // setCount
+               1, // setCount
                &descriptors.DescriptorSet,
                0,
                nullptr);
@@ -405,17 +401,14 @@ int main(int argc, char** argv)
            VkDeviceSize offsets[] = { 0, 0 };
            vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 2, vertexBuffers, offsets);
 
-            mat4 modelMat = mat4(1);
-            mat4 viewMat  = glm::lookAt(vec3(0, 3, 5), vec3(0, 2.8f, 0), vec3(0, 1, 0));
-            mat4 projMat  = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
-            mat4 mvpMat   = projMat * viewMat * modelMat;
+           VkViewport viewport = { 0, static_cast<float>(gWindowHeight), static_cast<float>(gWindowWidth), -static_cast<float>(gWindowHeight), 0.0f, 1.0f };
+           vkCmdSetViewport(cmdBuf.CommandBuffer, 0, 1, &viewport);
 
-            int32 cameraOffsetInBytes     = 0;
-            int32 materialOffsetInBytes   = sizeof(Camera);
-            int32 materialsOffsetInBytes  = sizeof(Camera) + sizeof(Material);
+           VkRect2D scissor = { 0, 0, gWindowWidth, gWindowHeight };
+           vkCmdSetScissor(cmdBuf.CommandBuffer, 0, 1, &scissor);
 
-            pCameraParams->mvp            = mvpMat;
-            pCameraParams->lightPosition  = lightPosition;
+           // Bind the VS/FS Graphics Pipeline
+           vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
             for (auto& draw : drawParams) {
                // Bind the index buffer for this draw
@@ -426,22 +419,21 @@ int main(int argc, char** argv)
                   pipelineLayout.PipelineLayout,
                   VK_SHADER_STAGE_FRAGMENT_BIT,
                   0,
-                  sizeof(DrawParameters),
+                  sizeof(uint32_t),
                   &draw.materialIndex);
 
                vkCmdDrawIndexed(cmdBuf.CommandBuffer, draw.numIndices, 1, 0, 0, 0);
             }
 
             vkCmdEndRendering(cmdBuf.CommandBuffer);
-
-            CmdTransitionImageLayout(
-               cmdBuf.CommandBuffer,
-               images[bufferIndex],
-               GREX_ALL_SUBRESOURCES,
-               VK_IMAGE_ASPECT_COLOR_BIT,
-               RESOURCE_STATE_RENDER_TARGET,
-               RESOURCE_STATE_PRESENT);
         }
+        CmdTransitionImageLayout(
+            cmdBuf.CommandBuffer,
+            images[bufferIndex],
+            GREX_ALL_SUBRESOURCES,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            RESOURCE_STATE_RENDER_TARGET,
+            RESOURCE_STATE_PRESENT);
 
         CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));
 
@@ -463,93 +455,9 @@ int main(int argc, char** argv)
     return 0;
 }
 
-void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
-{
-   // Descriptor set layout
-   {
-      std::vector<VkDescriptorSetLayoutBinding> bindings = {};
-      // layout(binding=0) uniform CameraProperties Camera;
-      {
-         VkDescriptorSetLayoutBinding binding = {};
-         binding.binding                      = 0;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-         binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-         bindings.push_back(binding);
-      }
-      // layout(binding=2) buffer MaterialStructuredBuffer
-      {
-         VkDescriptorSetLayoutBinding binding = {};
-         binding.binding                      = 2;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-         binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_FRAGMENT_BIT;
-         bindings.push_back(binding);
-      }
-
-      VkDescriptorSetLayoutCreateInfo createInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-      createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-      createInfo.bindingCount                    = CountU32(bindings);
-      createInfo.pBindings                       = DataPtr(bindings);
-
-      CHECK_CALL(vkCreateDescriptorSetLayout(
-         pRenderer->Device,
-         &createInfo,
-         nullptr,
-         &pLayout->DescriptorSetLayout));
-   }
-
-   // Pipeline layout
-   {
-      // layout(push_constants) uniform MaterialParameters MaterialParams;
-      VkPushConstantRange push_constant    = {};
-      push_constant.offset                 = 0;
-      push_constant.size                   = sizeof(DrawParameters);
-      push_constant.stageFlags             = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-      VkPipelineLayoutCreateInfo createInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
-      createInfo.setLayoutCount             = 1;
-      createInfo.pSetLayouts                = &pLayout->DescriptorSetLayout;
-      createInfo.pushConstantRangeCount     = 1;
-      createInfo.pPushConstantRanges        = &push_constant;
-
-      CHECK_CALL(vkCreatePipelineLayout(
-         pRenderer->Device,
-         &createInfo,
-         nullptr,
-         &pLayout->PipelineLayout));
-   }
-}
-
-void CreateShaderModules(
-   VulkanRenderer*               pRenderer,
-   const std::vector<uint32_t>&  spirvVS,
-   const std::vector<uint32_t>&  spirvFS,
-   VkShaderModule*               pModuleVS,
-   VkShaderModule*               pModuleFS)
-{
-   // Vertex Shader
-   {
-      VkShaderModuleCreateInfo createInfo = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
-      createInfo.codeSize                 = SizeInBytes(spirvVS);
-      createInfo.pCode                    = DataPtr(spirvVS);
-
-      CHECK_CALL(vkCreateShaderModule(pRenderer->Device, &createInfo, nullptr, pModuleVS));
-   }
-
-   // Fragment Shader
-   {
-      VkShaderModuleCreateInfo createInfo = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
-      createInfo.codeSize                 = SizeInBytes(spirvFS);
-      createInfo.pCode                    = DataPtr(spirvFS);
-
-      CHECK_CALL(vkCreateShaderModule(pRenderer->Device, &createInfo, nullptr, pModuleFS));
-   }
-}
-
 void CreateGeometryBuffers(
    VulkanRenderer*        pRenderer,
-   std::vector<DrawInfo>& outDrawParams,
+   std::vector<DrawParameters>& outDrawParams,
    VulkanBuffer*          pCameraBuffer,
    VulkanBuffer*          pMaterialBuffer,
    VulkanBuffer*          pPositionBuffer,
@@ -574,7 +482,7 @@ void CreateGeometryBuffers(
 
       auto triangles = mesh.GetTrianglesForMaterial(materialIndex);
 
-      DrawInfo params = {};
+      DrawParameters params = {};
       params.numIndices     = static_cast<uint32_t>(3 * triangles.size());
       params.materialIndex  = materialIndex;
 
@@ -641,7 +549,7 @@ void  CreateDescriptors(
         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, poolCount}
     };
 
-    uint32_t setCount  = 2;
+    uint32_t setCount  = 1;
     VkDescriptorPoolCreateInfo poolCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
     poolCreateInfo.maxSets                    = setCount;
     poolCreateInfo.poolSizeCount              = CountU32(poolSizes);
@@ -674,7 +582,7 @@ void  CreateDescriptors(
     VkDescriptorSetAllocateInfo allocInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
     allocInfo.descriptorPool              = pDescriptors->DescriptorPool;
     allocInfo.pSetLayouts                 = &pDescriptors->DescriptorSetLayout;
-    allocInfo.descriptorSetCount          = 2;
+    allocInfo.descriptorSetCount          = 1;
 
     CHECK_CALL(vkAllocateDescriptorSets(pRenderer->Device, &allocInfo, &pDescriptors->DescriptorSet));
 
@@ -704,4 +612,88 @@ void  CreateDescriptors(
 
     std::vector<VkWriteDescriptorSet> writeDescriptorSets = {cameraWriteDescriptor, materialWriteDescriptor};
     vkUpdateDescriptorSets(pRenderer->Device, CountU32(writeDescriptorSets), DataPtr(writeDescriptorSets), 0, nullptr);
+}
+
+void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
+{
+   // Descriptor set layout
+   {
+      std::vector<VkDescriptorSetLayoutBinding> bindings = {};
+      // layout(binding=0) uniform CameraProperties Camera;
+      {
+         VkDescriptorSetLayoutBinding binding = {};
+         binding.binding                      = 0;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+         binding.descriptorCount              = 1;
+         binding.stageFlags                   = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+         bindings.push_back(binding);
+      }
+      // layout(binding=2) buffer MaterialStructuredBuffer
+      {
+         VkDescriptorSetLayoutBinding binding = {};
+         binding.binding                      = 2;
+         binding.descriptorType               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+         binding.descriptorCount              = 1;
+         binding.stageFlags                   = VK_SHADER_STAGE_FRAGMENT_BIT;
+         bindings.push_back(binding);
+      }
+
+      VkDescriptorSetLayoutCreateInfo createInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+      createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+      createInfo.bindingCount                    = CountU32(bindings);
+      createInfo.pBindings                       = DataPtr(bindings);
+
+      CHECK_CALL(vkCreateDescriptorSetLayout(
+         pRenderer->Device,
+         &createInfo,
+         nullptr,
+         &pLayout->DescriptorSetLayout));
+   }
+
+   // Pipeline layout
+   {
+      // layout(push_constants) uniform MaterialParameters MaterialParams;
+      VkPushConstantRange push_constant    = {};
+      push_constant.offset                 = 0;
+      push_constant.size                   = sizeof(uint32_t);
+      push_constant.stageFlags             = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+      VkPipelineLayoutCreateInfo createInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+      createInfo.setLayoutCount             = 1;
+      createInfo.pSetLayouts                = &pLayout->DescriptorSetLayout;
+      createInfo.pushConstantRangeCount     = 1;
+      createInfo.pPushConstantRanges        = &push_constant;
+
+      CHECK_CALL(vkCreatePipelineLayout(
+         pRenderer->Device,
+         &createInfo,
+         nullptr,
+         &pLayout->PipelineLayout));
+   }
+}
+
+void CreateShaderModules(
+   VulkanRenderer*               pRenderer,
+   const std::vector<uint32_t>&  spirvVS,
+   const std::vector<uint32_t>&  spirvFS,
+   VkShaderModule*               pModuleVS,
+   VkShaderModule*               pModuleFS)
+{
+   // Vertex Shader
+   {
+      VkShaderModuleCreateInfo createInfo = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+      createInfo.codeSize                 = SizeInBytes(spirvVS);
+      createInfo.pCode                    = DataPtr(spirvVS);
+
+      CHECK_CALL(vkCreateShaderModule(pRenderer->Device, &createInfo, nullptr, pModuleVS));
+   }
+
+   // Fragment Shader
+   {
+      VkShaderModuleCreateInfo createInfo = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+      createInfo.codeSize                 = SizeInBytes(spirvFS);
+      createInfo.pCode                    = DataPtr(spirvFS);
+
+      CHECK_CALL(vkCreateShaderModule(pRenderer->Device, &createInfo, nullptr, pModuleFS));
+   }
 }

@@ -210,8 +210,12 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
 
         std::vector<const char*> enabledExtensions = {
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-            VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
-            VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME};
+            VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME};
+
+        if (pRenderer->Features.EnableDescriptorBuffer)
+        {
+            enabledExtensions.push_back(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME);
+        }
 
         if (pRenderer->Features.EnableRayTracing) {
             enabledExtensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
@@ -321,7 +325,7 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
         timelineSemaphoreFeatures.timelineSemaphore                         = VK_TRUE;
 
         VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptorBufferFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT, &timelineSemaphoreFeatures};
-        descriptorBufferFeatures.descriptorBuffer                            = VK_TRUE;
+        descriptorBufferFeatures.descriptorBuffer                            = pRenderer->Features.EnableDescriptorBuffer ? VK_TRUE : VK_FALSE;
 
         VkPhysicalDeviceScalarBlockLayoutFeatures scalarBlockLayoutFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES, &descriptorBufferFeatures};
         scalarBlockLayoutFeatures.scalarBlockLayout                         = VK_TRUE;
@@ -1010,9 +1014,12 @@ VkResult CreateBuffer(
     VulkanBuffer*      pSrcBuffer,
     VulkanBuffer*      pBuffer)
 {
-    usageFlags |=
-        VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    if (pRenderer->Features.EnableDescriptorBuffer)
+    {
+        usageFlags |= VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+    }
+
+    usageFlags |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
     VkResult vkres = CreateBuffer(
         pRenderer,
@@ -2045,7 +2052,6 @@ HRESULT CreateDrawNormalPipeline(
     pipelineMultiStateCreateInfo.rasterizationSamples                 = VK_SAMPLE_COUNT_1_BIT;
 
     VkGraphicsPipelineCreateInfo pipeline_info = {VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
-    pipeline_info.flags                        = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
     pipeline_info.pNext                        = &pipeline_rendering_create_info;
     pipeline_info.stageCount                   = 2;
     pipeline_info.pStages                      = shader_stages;
@@ -2062,6 +2068,11 @@ HRESULT CreateDrawNormalPipeline(
     pipeline_info.subpass                      = 0;
     pipeline_info.basePipelineHandle           = VK_NULL_HANDLE;
     pipeline_info.basePipelineIndex            = -1;
+
+    if (pRenderer->Features.EnableDescriptorBuffer)
+    {
+        pipeline_info.flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    }
 
     VkResult vkres = vkCreateGraphicsPipelines(
         pRenderer->Device,
@@ -2188,7 +2199,6 @@ HRESULT CreateDrawTexturePipeline(
     pipelineMultiStateCreateInfo.rasterizationSamples                 = VK_SAMPLE_COUNT_1_BIT;
 
     VkGraphicsPipelineCreateInfo pipeline_info = {VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
-    pipeline_info.flags                        = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
     pipeline_info.pNext                        = &pipeline_rendering_create_info;
     pipeline_info.stageCount                   = 2;
     pipeline_info.pStages                      = shader_stages;
@@ -2205,6 +2215,11 @@ HRESULT CreateDrawTexturePipeline(
     pipeline_info.subpass                      = 0;
     pipeline_info.basePipelineHandle           = VK_NULL_HANDLE;
     pipeline_info.basePipelineIndex            = -1;
+
+    if (pRenderer->Features.EnableDescriptorBuffer)
+    {
+        pipeline_info.flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    }
 
     VkResult vkres = vkCreateGraphicsPipelines(
         pRenderer->Device,
@@ -2336,7 +2351,6 @@ HRESULT CreateDrawBasicPipeline(
     pipelineMultiStateCreateInfo.rasterizationSamples                 = VK_SAMPLE_COUNT_1_BIT;
 
     VkGraphicsPipelineCreateInfo pipeline_info = {VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
-    pipeline_info.flags                        = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
     pipeline_info.pNext                        = &pipeline_rendering_create_info;
     pipeline_info.stageCount                   = 2;
     pipeline_info.pStages                      = shader_stages;
@@ -2353,6 +2367,11 @@ HRESULT CreateDrawBasicPipeline(
     pipeline_info.subpass                      = 0;
     pipeline_info.basePipelineHandle           = VK_NULL_HANDLE;
     pipeline_info.basePipelineIndex            = -1;
+
+    if (pRenderer->Features.EnableDescriptorBuffer)
+    {
+        pipeline_info.flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    }
 
     VkResult vkres = vkCreateGraphicsPipelines(
         pRenderer->Device,
@@ -2508,7 +2527,6 @@ HRESULT CreateGraphicsPipeline1(
     pipelineMultiStateCreateInfo.rasterizationSamples                 = VK_SAMPLE_COUNT_1_BIT;
 
     VkGraphicsPipelineCreateInfo pipeline_info = {VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
-    pipeline_info.flags                        = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
     pipeline_info.pNext                        = &pipeline_rendering_create_info;
     pipeline_info.stageCount                   = 2;
     pipeline_info.pStages                      = shader_stages;
@@ -2525,6 +2543,11 @@ HRESULT CreateGraphicsPipeline1(
     pipeline_info.subpass                      = 0;
     pipeline_info.basePipelineHandle           = VK_NULL_HANDLE;
     pipeline_info.basePipelineIndex            = -1;
+
+    if (pRenderer->Features.EnableDescriptorBuffer)
+    {
+        pipeline_info.flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    }
 
     VkResult vkres = vkCreateGraphicsPipelines(
         pRenderer->Device,
@@ -2673,7 +2696,6 @@ HRESULT CreateGraphicsPipeline2(
     pipelineMultiStateCreateInfo.rasterizationSamples                 = VK_SAMPLE_COUNT_1_BIT;
 
     VkGraphicsPipelineCreateInfo pipeline_info = {VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
-    pipeline_info.flags                        = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
     pipeline_info.pNext                        = &pipeline_rendering_create_info;
     pipeline_info.stageCount                   = 2;
     pipeline_info.pStages                      = shader_stages;
@@ -2690,6 +2712,11 @@ HRESULT CreateGraphicsPipeline2(
     pipeline_info.subpass                      = 0;
     pipeline_info.basePipelineHandle           = VK_NULL_HANDLE;
     pipeline_info.basePipelineIndex            = -1;
+
+    if (pRenderer->Features.EnableDescriptorBuffer)
+    {
+        pipeline_info.flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    }
 
     VkResult vkres = vkCreateGraphicsPipelines(
         pRenderer->Device,
