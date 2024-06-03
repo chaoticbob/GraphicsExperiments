@@ -48,3 +48,65 @@ if(WIN32)
         PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
     )
 endif()
+
+################################################################################
+
+if (GREX_ENABLE_SLANG)
+    add_executable(
+        101_color_cube_vulkan_slang
+        101_color_cube_vulkan.cpp
+        ${GREX_PROJECTS_COMMON_DIR}/config.h
+        ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.h
+        ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.cpp
+        ${GREX_PROJECTS_COMMON_DIR}/window.h
+        ${GREX_PROJECTS_COMMON_DIR}/window.cpp
+        ${GREX_PROJECTS_COMMON_DIR}/tri_mesh.h
+        ${GREX_PROJECTS_COMMON_DIR}/tri_mesh.cpp
+        ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/resource_limits_c.cpp
+        ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/ResourceLimits.cpp
+    )
+
+    set_target_properties(101_color_cube_vulkan_slang PROPERTIES FOLDER "geometry")
+
+    target_compile_definitions(
+        101_color_cube_vulkan_slang
+        PUBLIC GREX_ENABLE_SLANG
+    )
+
+    target_include_directories(
+        101_color_cube_vulkan_slang
+        PUBLIC ${GREX_PROJECTS_COMMON_DIR}
+               ${VULKAN_INCLUDE_DIR}
+               ${GREX_THIRD_PARTY_DIR}/VulkanMemoryAllocator/include
+               ${GREX_THIRD_PARTY_DIR}/glm
+		       ${GREX_THIRD_PARTY_DIR}/tinyobjloader
+		       ${GREX_THIRD_PARTY_DIR}/stb
+               ${GREX_SLANG_INCLUDE_DIR}
+    )
+
+    target_link_libraries(
+        101_color_cube_vulkan_slang
+        PUBLIC glfw
+               glslang
+               SPIRV
+               dxcompiler
+               slang
+    )
+
+    if(WIN32)
+        target_compile_definitions(
+            101_color_cube_vulkan_slang
+            PUBLIC VK_USE_PLATFORM_WIN32_KHR
+        )
+
+        target_link_directories(
+            101_color_cube_vulkan_slang
+            PUBLIC ${GREX_SLANG_DIR}/lib/win64
+        )
+
+        target_link_libraries(
+            101_color_cube_vulkan_slang
+            PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
+        )
+    endif()
+endif()

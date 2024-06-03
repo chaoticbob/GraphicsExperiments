@@ -60,8 +60,8 @@ if (MSVC)
     #    5054
     #    4005
     #
-    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} /MP -D_CRT_SECURE_NO_WARNINGS /wd5054 /wd4005")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP -D_CRT_SECURE_NO_WARNINGS /wd5054  /wd4005")
+    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} /MP -D_CRT_SECURE_NO_WARNINGS /wd5054 /wd4005 /wd4996")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP -D_CRT_SECURE_NO_WARNINGS /wd5054  /wd4005 /wd4996")
 endif()
 
 if (GREX_LINUX)
@@ -148,6 +148,13 @@ set(ENABLE_CTEST            OFF CACHE BOOL "" FORCE)
 add_subdirectory(${GREX_THIRD_PARTY_DIR}/glslang)
 message("Enabled GLSL runtime shader compilation with glslang")
 
+# ------------------------------------------------------------------------------
+# Slang
+# ------------------------------------------------------------------------------
+if (GREX_ENABLE_SLANG)
+    set(GREX_SLANG_DIR         "${GREX_THIRD_PARTY_DIR}/slang")
+    set(GREX_SLANG_INCLUDE_DIR "${GREX_SLANG_DIR}/include")
+endif()
 
 # ------------------------------------------------------------------------------
 # Configure GLFW

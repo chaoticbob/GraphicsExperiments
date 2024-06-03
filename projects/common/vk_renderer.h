@@ -434,6 +434,16 @@ HRESULT CompileHLSL(
     std::vector<uint32_t>* pSPIRV,
     std::string*           pErrorMsg);
 
+#if defined(GREX_ENABLE_SLANG)
+CompileResult CompileSlang(
+    const std::string&     shaderSource,
+    const std::string&     entryPoint,
+    const std::string&     profile,
+    const CompilerOptions& options,
+    std::vector<uint32_t>* pSPIRV,
+    std::string*           pErrorMsg);
+#endif
+
 // Buffer
 void WriteDescriptor(
     VulkanRenderer*       pRenderer,
