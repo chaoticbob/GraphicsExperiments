@@ -23,10 +23,11 @@ struct SceneParameters
 	float4x4      ViewInverseMatrix;
 	float4x4      ProjectionInverseMatrix;
 	float4x4      ViewProjectionMatrix;
-    packed_float3 EyePosition;    
+    packed_float3 EyePosition;     
+    uint          IBLIndex;   
     uint          MaxSamples;
     uint          NumLights;
-    uint          _pad0[3];
+    uint          _pad0[2];
     Light         Lights[8];
 };
 
@@ -40,9 +41,13 @@ struct Triangle {
 };
 
 struct GeometryBuffers {
-    array<device const Triangle*, 5>      Triangles [[id(0)]];  // Triangle indices
-    array<device const packed_float3*, 5> Positions [[id(5)]];  // Vertex positions
-    array<device const packed_float3*, 5> Normals   [[id(10)]]; // Vertex normals
+    array<device const Triangle*, 25>      Triangles [[id(0)]];  // Triangle indices
+    array<device const packed_float3*, 25> Positions [[id(25)]]; // Vertex positions
+    array<device const packed_float3*, 25> Normals   [[id(50)]]; // Vertex normals
+};
+
+struct IBLTextures {
+    array<texture2d<float>, 100> EnvironmentMaps[[id(0)]];
 };
 
 // -------------------------------------------------------------------------------------------------
@@ -56,6 +61,8 @@ struct MaterialParameters
     float         specularReflectance;
     float         ior;
     uint          _pad0;
+    packed_float3 emissionColor;
+    uint          _pad1;
 };
 
 constexpr sampler IBLMapSampler(
@@ -84,6 +91,32 @@ float Random01(thread uint& input)
 // -------------------------------------------------------------------------------------------------
 // Lighting Functions
 // -------------------------------------------------------------------------------------------------
+float Geometry_SchlickBeckman(float NoV, float k)
+{
+	return NoV / (NoV * (1 - k) + k);
+}
+
+float Geometry_Smith(float3 N, float3 V, float3 L,  float roughness)
+{    
+    float k   = pow(roughness + 1, 2) / 8.0; 
+    float NoL = saturate(dot(N, L));
+    float NoV = saturate(dot(N, V));    
+    float G1  = Geometry_SchlickBeckman(NoV, k);
+    float G2  = Geometry_SchlickBeckman(NoL, k);
+    return G1 * G2;
+}
+
+// Geometry for IBL uses a different k than direct lighting
+float Geometry_SmithIBL(float3 N, float3 V, float3 L,  float roughness)
+{
+    float k = (roughness * roughness) / 2.0;
+    float NoL = saturate(dot(N, L));
+    float NoV = saturate(dot(N, V));    
+    float G1 = Geometry_SchlickBeckman(NoV, k);
+    float G2 = Geometry_SchlickBeckman(NoL, k);
+    return G1 * G2;
+}
+
 float3 Fresnel_SchlickRoughness(float cosTheta, float3 F0, float roughness)
 {
     float3 r = (float3)(1 - roughness);
@@ -194,12 +227,16 @@ float3 ImportanceSampleGGX(float2 Xi, float Roughness, float3 N)
     return TangentX * H.x + TangentY * H.y + N * H.z;
 }
 
-float3 GetIBLEnvironment(float3 dir, float lod, texture2d<float> IBLEnvironmentMap)
+float3 GetIBLEnvironment(
+    float3                        dir, 
+    float                         lod, 
+    device const SceneParameters& SceneParams, 
+    device IBLTextures*           IBL)
 {
     float2 uv = CartesianToSpherical(normalize(dir));
     uv.x = saturate(uv.x / (2.0 * PI));
     uv.y = saturate(uv.y / PI);
-    float3 color = IBLEnvironmentMap.sample(IBLMapSampler, uv, level(lod)).rgb;
+    float3 color = IBL->EnvironmentMaps[SceneParams.IBLIndex].sample(IBLMapSampler, uv, level(lod)).rgb;
     color = min(color, (float3)100.0);
     return color;
 }
@@ -282,7 +319,7 @@ kernel void MyRayGen(
     device GeometryBuffers&                              Geometry               [[buffer(6)]],
     device const MaterialParameters*                     MaterialParams         [[buffer(4)]],
     device uint*                                         RayGenSamples          [[buffer(5)]],
-    texture2d<float>                                     IBLEnvironmentMap      [[texture(3)]],
+    device IBLTextures*                                  IBL                    [[buffer(7)]],
     texture2d<float, access::write>                      RenderTarget           [[texture(0)]],
     texture2d<float, access::read_write>                 AccumTarget            [[texture(1)]])
 {
@@ -305,7 +342,7 @@ kernel void MyRayGen(
         RayType rayType      = RAY_TYPE_PRIMARY;
 
         // Max bounces (aka ray depth)
-        const uint  kRayDepthLimit = min(7, MAX_RAY_DEPTH_LIMIT);
+        const uint  kRayDepthLimit = min(10, MAX_RAY_DEPTH_LIMIT);
         const float kTraceOffset   = 0.001;
 
         // Triange intersector
@@ -339,15 +376,13 @@ kernel void MyRayGen(
                 float  metallic  = material.metallic;
                 float  specularReflectance =material.specularReflectance;
                 float  ior = material.ior;
+                 float3 emission = material.emissionColor;
                 
                 // Remap roughness
                 roughness = material.roughness * material.roughness;            
                 
                 // Calculate F0
                 float3 F0 = 0.16 * specularReflectance * specularReflectance * (1 - metallic) + baseColor * metallic;                
-                float  cosTheta = saturate(dot(N, -I));
-                float3 F = Fresnel_SchlickRoughness(cosTheta, F0, roughness);
-                float3 kD = (1.0 - F) * (1.0 - metallic);
 
                 // Refraction
                 float eta1 = 1.0;
@@ -365,32 +400,6 @@ kernel void MyRayGen(
                     kt = 1.0 - kr;
                 }
 
-                /*
-                float diceRoll = Random01(rngState);
-                rayType = (diceRoll > 0.5) ? RAY_TYPE_SPECULAR : RAY_TYPE_DIFFUSE;
-
-                //float3 reflection = 0;
-                if (rayType == RAY_TYPE_DIFFUSE) {
-                    float3 L = normalize(GenIrradianceSampleDirRNG(rngState, N));
-                    float NoL = saturate(dot(N, L));
-                                        
-                    throughPut *= kD * NoL * baseColor;
-                    color += throughPut;
-                    // Update ray direction
-                    rayDirection = L;
-                }
-                else if (rayType == RAY_TYPE_SPECULAR) {
-                    float3 H = normalize(GenSpecularSampleDirRNG(rngState, N, roughness));
-                    float3 L = 2.0 * dot(V, H) * H  - V;
-                    
-                    throughPut *= F * baseColor;
-                    color *= throughPut;
-
-                    // Update ray direction
-                    rayDirection = L;
-                }            
-                */
-
                 float diceRoll = Random01(rngState);
                 if (ior > 1.0) {
                     rayType = (diceRoll > 0.66) ? RAY_TYPE_REFRACT : ((diceRoll > 0.33) ? RAY_TYPE_SPECULAR : RAY_TYPE_DIFFUSE);
@@ -399,8 +408,11 @@ kernel void MyRayGen(
                     rayType = (diceRoll > 0.5) ? RAY_TYPE_SPECULAR : RAY_TYPE_DIFFUSE;
                 }
 
-                //float3 reflection = 0;
                 if (rayType == RAY_TYPE_DIFFUSE) {
+                    float  NoV = saturate(dot(N, V));
+                    float3 F = Fresnel_SchlickRoughness(NoV, F0, roughness);
+                    float3 kD = (1.0 - F) * (1.0 - metallic);
+
                     float3 L = normalize(GenIrradianceSampleDirRNG(rngState, N));
                     float NoL = saturate(dot(N, L));
 
@@ -411,12 +423,33 @@ kernel void MyRayGen(
                     rayDirection = L;
                 }
                 else if (rayType == RAY_TYPE_SPECULAR) {
+                    //
+                    // Most of the logic for specular contribution was understood from here:
+                    //   https://www.mathematik.uni-marburg.de/~thormae/lectures/graphics1/graphics_10_2_eng_web.html#1
+                    //
+
                     float3 H = normalize(GenSpecularSampleDirRNG(rngState, N, roughness));
                     float3 L = 2.0 * dot(V, H) * H  - V;
-                    
-                    throughPut *= (ior > 1.0) ? (F * kr) : (F * baseColor);
-                    color *= throughPut;
 
+                    float NoV = saturate(dot(N, V));
+                    float NoL = saturate(dot(N, L));
+                    float NoH = saturate(dot(N, H));
+                    float VoH = saturate(dot(V, H));
+
+                    float3 F = Fresnel_SchlickRoughness(VoH, F0, roughness);
+                    float  G = Geometry_SmithIBL(N, V, L, roughness);
+
+                    if (ior > 1.0) {
+                        throughPut *= F * kr;
+                        color *= throughPut;                        
+                    } 
+                    else {
+                        if ((NoL > 0) && (NoH > 0) && (NoV > 0) && (VoH > 0)) {
+                            throughPut *= (F * G * VoH / (NoH * NoV) * baseColor) * kr;
+                            color *= throughPut;
+                        }
+                    }
+                 
                     // Update ray direction
                     rayDirection = L;
                 }
@@ -430,17 +463,19 @@ kernel void MyRayGen(
 
                 // HACK: give non-refractive surfaces a GI color bleed boost
                 if (ior <= 1.0) {
-                    throughPut += 0.05 * baseColor;
-                }                
+                    throughPut += 0.15 * baseColor;
+                }
+
+                // Add emission
+                throughPut += emission;
 
                 // Update rayOrigin and rayDirection in case there's another bounce
                 rayOrigin = hit.P + (kTraceOffset * rayDirection);
             }
             else if (intersection.type == intersection_type::none) {
                 // *** MISS ***            
-                float3 envColor = GetIBLEnvironment(worldRay.direction, 0, IBLEnvironmentMap);
-                float s = (rayDepth > 0) ? 1.5 : 1;
-                color += throughPut * s * envColor;
+                float3 envColor = GetIBLEnvironment(worldRay.direction, 0, SceneParams, IBL);
+                color += throughPut *  envColor;
                 break;
             }
         }
@@ -454,7 +489,10 @@ kernel void MyRayGen(
     float3 finalColor = accumColor.xyz / (float)sampleCount;
     finalColor = ACESFilm(finalColor);     
 
-    RenderTarget.write(float4(pow(finalColor, 1 / 2.2), 0), rayIndex2);
+    // Readjusting gamma on output makes the image appear to too bright, disable for now.
+    //RenderTarget.write(float4(pow(finalColor, 1 / 1.0), 0), rayIndex2);
+    //
+    RenderTarget.write(float4(finalColor, 0), rayIndex2);
     RayGenSamples[rayIndex] = sampleCount;
 }
 

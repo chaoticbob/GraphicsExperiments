@@ -44,8 +44,7 @@ struct SceneProperties
 {
     float3      EyePosition;
     uint        __pad0;
-    float4x4    ViewMatrix;
-    float4x4    ProjMatrix;
+    float4x4    CameraVP;
     uint        InstanceCount;
     uint        MeshletCount;
     uint        __pad1;
@@ -526,8 +525,7 @@ int main(int argc, char** argv)
             camera.GetFrustumPlanes(&frLeft, &frRight, &frTop, &frBottom, &frNear, &frFar);
 
             scene.EyePosition                          = camera.GetEyePosition();
-            scene.ViewMatrix                           = camera.GetViewMatrix();
-            scene.ProjMatrix                           = camera.GetProjectionMatrix();
+            scene.CameraVP                             = camera.GetViewProjectionMatrix();
             scene.InstanceCount                        = static_cast<uint32_t>(instances.size());
             scene.MeshletCount                         = meshlet_LOD_Counts[0];
             scene.MaxLODDistance                       = gMaxLODDistance;
@@ -548,10 +546,7 @@ int main(int argc, char** argv)
         // ---------------------------------------------------------------------
 
         // Copy instances transforms to instances buffer
-        {
-            memcpy(instancesBuffer.Buffer->contents(), DataPtr(instances), SizeInBytes(instances));
-            instancesBuffer.Buffer->didModifyRange(NS::Range::Make(0, SizeInBytes(instances)));
-        }
+        memcpy(instancesBuffer.Buffer->contents(), DataPtr(instances), SizeInBytes(instances));
 
         // ---------------------------------------------------------------------
         
@@ -590,10 +585,9 @@ int main(int argc, char** argv)
         pRenderEncoder->setMeshBytes(&scene, sizeof(SceneProperties), 0);
         pRenderEncoder->setMeshBuffer(positionBuffer.Buffer.get(), 0, 1);
         pRenderEncoder->setMeshBuffer(meshletBuffer.Buffer.get(), 0, 2);
-        pRenderEncoder->setMeshBuffer(meshletBoundsBuffer.Buffer.get(), 0, 3);
-        pRenderEncoder->setMeshBuffer(meshletVerticesBuffer.Buffer.get(), 0, 4);
-        pRenderEncoder->setMeshBuffer(meshletTrianglesBuffer.Buffer.get(), 0, 5);
-        pRenderEncoder->setMeshBuffer(instancesBuffer.Buffer.get(), 0, 6);
+        pRenderEncoder->setMeshBuffer(meshletVerticesBuffer.Buffer.get(), 0, 3);
+        pRenderEncoder->setMeshBuffer(meshletTrianglesBuffer.Buffer.get(), 0, 4);
+        pRenderEncoder->setMeshBuffer(instancesBuffer.Buffer.get(), 0, 5);
 
         // Object function uses 32 for thread group size
         uint32_t meshletCount      = static_cast<uint32_t>(meshlet_LOD_Counts[0]);

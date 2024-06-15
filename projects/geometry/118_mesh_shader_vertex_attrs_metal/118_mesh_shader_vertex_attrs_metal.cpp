@@ -29,11 +29,44 @@ using namespace glm;
     }
 
 // =============================================================================
+// Scene Stuff
+// =============================================================================
+using float3   = glm::vec3;
+using float4   = glm::vec4;
+using float4x4 = glm::mat4;
+using uint4    = glm::uvec4;
+
+struct SceneProperties {
+    float4x4 InstanceM;
+    float4x4 CameraVP;
+    float3   EyePosition;
+    uint     DrawFunc;
+    float3   LightPosition;
+    uint     __pad0;
+};
+
+// =============================================================================
 // Globals
 // =============================================================================
 static uint32_t gWindowWidth  = 1280;
 static uint32_t gWindowHeight = 720;
 static bool     gEnableDebug  = true;
+
+enum DrawFunc {
+    DRAW_FUNC_POSITION  = 0,
+    DRAW_FUNC_TEX_COORD = 1,
+    DRAW_FUNC_NORMAL    = 2,
+    DRAW_FUNC_PHONG     = 3,
+};
+
+static std::vector<std::string> gDrawFuncNames = {
+    "Position",
+    "Tex Coord",
+    "Normal",
+    "Phong",
+};
+
+static int gDrawFunc = DRAW_FUNC_PHONG;
 
 // =============================================================================
 // main()
@@ -54,7 +87,7 @@ int main(int argc, char** argv)
     MetalShader fsShader;
     NS::Error*  pError  = nullptr;
     {
-        std::string shaderSource = LoadString("projects/113_mesh_shader_instancing/shaders.metal");
+        std::string shaderSource = LoadString("projects/118_mesh_shader_vertex_attrs/shaders.metal");
         if (shaderSource.empty()) {
             assert(false && "no shader source");
             return EXIT_FAILURE;
@@ -95,22 +128,24 @@ int main(int argc, char** argv)
     
     // *************************************************************************
     // Make them meshlets!
-    // **************************************************************************
-    TriMesh::Aabb                meshBounds = {};
+    // *************************************************************************
     std::vector<glm::vec3>       positions;
+    std::vector<glm::vec2>       texCoords;
+    std::vector<glm::vec3>       normals;
     std::vector<meshopt_Meshlet> meshlets;
     std::vector<uint32_t>        meshletVertices;
     std::vector<uint8_t>         meshletTriangles;
     {
         TriMesh mesh = {};
-        bool    res  = TriMesh::LoadOBJ2(GetAssetPath("models/horse_statue_01_1k.obj").string(), &mesh);
+        bool    res  = TriMesh::LoadOBJ2(GetAssetPath("models/full_horse_statue_01_1k.obj").string(), &mesh);
         if (!res)
         {
             assert(false && "failed to load model");
         }
-        
-        meshBounds = mesh.GetBounds();
+
         positions = mesh.GetPositions();
+        texCoords = mesh.GetTexCoords();
+        normals   = mesh.GetNormals();
 
         const size_t kMaxVertices  = 64;
         const size_t kMaxTriangles = 124;
@@ -171,11 +206,15 @@ int main(int argc, char** argv)
     }
     
     MetalBuffer positionBuffer;
+    MetalBuffer texCoordsBuffer;
+    MetalBuffer normalsBuffer;
     MetalBuffer meshletBuffer;
     MetalBuffer meshletVerticesBuffer;
     MetalBuffer meshletTrianglesBuffer;
     {
         CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(positions), DataPtr(positions), &positionBuffer));
+        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(texCoords), DataPtr(texCoords), &texCoordsBuffer));
+        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(normals), DataPtr(normals), &normalsBuffer));
         CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshlets), DataPtr(meshlets), &meshletBuffer));
         CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshletVertices), DataPtr(meshletVertices), &meshletVerticesBuffer));
         CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshletTrianglesU32), DataPtr(meshletTrianglesU32), &meshletTrianglesBuffer));
@@ -251,20 +290,19 @@ int main(int argc, char** argv)
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
-    
-    // *************************************************************************
-    // Counter statistics - revisit later!
-    // *************************************************************************
-    
-    // *************************************************************************
-    // Instances
-    // *************************************************************************
-    const uint32_t    kNumInstanceCols = 20;
-    const uint32_t    kNumInstanceRows = 10;
-    std::vector<mat4> instances(kNumInstanceCols * kNumInstanceRows);
 
-    MetalBuffer instancesBuffer;
-    CreateBuffer(renderer.get(), SizeInBytes(instances), nullptr, &instancesBuffer);
+    // *************************************************************************
+    // Imgui
+    // *************************************************************************
+    if (!window->InitImGuiForMetal(renderer.get())) {
+        assert(false && "Window::InitImGuiForMetal failed");
+        return EXIT_FAILURE;
+    }
+    
+    // *************************************************************************
+    // Scene
+    // *************************************************************************
+    SceneProperties scene = {};    
 
     // *************************************************************************
     // Main loop
@@ -273,35 +311,47 @@ int main(int argc, char** argv)
     uint32_t        frameIndex = 0;
 
     while (window->PollEvents()) {
-        // ---------------------------------------------------------------------
-
-        // Update instance transforms
-        {
-            float maxSpan       = std::max<float>(meshBounds.Width(), meshBounds.Depth());
-            float instanceSpanX = 2.0f * maxSpan;
-            float instanceSpanZ = 4.5f * maxSpan;
-            float totalSpanX    = kNumInstanceCols * instanceSpanX;
-            float totalSpanZ    = kNumInstanceRows * instanceSpanZ;
-
-            for (uint32_t j = 0; j < kNumInstanceRows; ++j)
+        window->ImGuiNewFrameMetal(pRenderPassDescriptor);
+        
+        if (ImGui::Begin("Params")) {
+            // Visibility Func
+            static const char* currentDrawFuncName = gDrawFuncNames[gDrawFunc].c_str();
+            if (ImGui::BeginCombo("Draw Func", currentDrawFuncName))
             {
-                for (uint32_t i = 0; i < kNumInstanceCols; ++i)
+                for (size_t i = 0; i < gDrawFuncNames.size(); ++i)
                 {
-                    float x = i * instanceSpanX - (totalSpanX / 2.0f) + instanceSpanX / 2.0f;
-                    float y = 0;
-                    float z = j * instanceSpanZ - (totalSpanZ / 2.0f) - 2.15f * instanceSpanZ;
-
-                    uint32_t index   = j * kNumInstanceCols + i;
-                    float    t       = static_cast<float>(glfwGetTime()) + ((i ^ j + i) / 10.0f);
-                    instances[index] = glm::translate(glm::vec3(x, y, z)) * glm::rotate(t, glm::vec3(0, 1, 0));
+                    bool isSelected = (currentDrawFuncName == gDrawFuncNames[i]);
+                    if (ImGui::Selectable(gDrawFuncNames[i].c_str(), isSelected))
+                    {
+                        currentDrawFuncName = gDrawFuncNames[i].c_str();
+                        gDrawFunc           = static_cast<uint32_t>(i);
+                    }
+                    if (isSelected)
+                    {
+                        ImGui::SetItemDefaultFocus();
+                    }
                 }
+                ImGui::EndCombo();
             }
         }
-
+        ImGui::End();
+        
         // ---------------------------------------------------------------------
+        
+        // Update scene
+        {
+            float3 eyePosition = float3(0, 0.105f, 0.40f);
+            float3 target      = float3(0, 0.105f, 0);
 
-        // Copy instances transforms to instances buffer
-        memcpy(instancesBuffer.Buffer->contents(), DataPtr(instances), SizeInBytes(instances));
+            PerspCamera camera = PerspCamera(60.0f, window->GetAspectRatio(), 0.1f, 10000.0f);
+            camera.LookAt(eyePosition, target);
+
+            scene.InstanceM     = glm::rotate(static_cast<float>(glfwGetTime()), glm::vec3(0, 1, 0));
+            scene.CameraVP      = camera.GetViewProjectionMatrix();
+            scene.EyePosition   = eyePosition;
+            scene.DrawFunc      = gDrawFunc;
+            scene.LightPosition = float3(0.25f, 1, 1);
+        }
 
         // ---------------------------------------------------------------------
         
@@ -329,40 +379,27 @@ int main(int argc, char** argv)
 
         pRenderEncoder->setRenderPipelineState(renderPipelineState.State.get());
         pRenderEncoder->setDepthStencilState(depthStencilState.State.get());
-
-        PerspCamera camera = PerspCamera(45.0f, window->GetAspectRatio(), 0.1f, 1000.0f);
-        camera.LookAt(vec3(0, 0.7f, 3.0f), vec3(0, 0.105f, 0));
-
-        mat4 VP = camera.GetViewProjectionMatrix();
-        uint32_t instanceCount = static_cast<uint32_t>(instances.size());
-        uint32_t meshletCount = static_cast<uint32_t>(meshlets.size());
-
+        
+        // Since Metal supports 4kb of constants data - we don't need to change
+        // the scene properties to a buffer.
         //
-        // Use a struct since metalcpp doesn't seem to expose a
-        // variant of set*Bytes with an offset currently.
-        //
-        struct SceneProperties {
-            mat4 CameraVP;
-            uint InstanceCount;
-            uint MeshletCount;
-            uint pad[2];
-        };
-        SceneProperties scene = {VP, instanceCount, meshletCount};
-
-        pRenderEncoder->setObjectBytes(&scene, sizeof(SceneProperties), 0);
         pRenderEncoder->setMeshBytes(&scene, sizeof(SceneProperties), 0);
         pRenderEncoder->setMeshBuffer(positionBuffer.Buffer.get(), 0, 1);
-        pRenderEncoder->setMeshBuffer(meshletBuffer.Buffer.get(), 0, 2);
-        pRenderEncoder->setMeshBuffer(meshletVerticesBuffer.Buffer.get(), 0, 3);
-        pRenderEncoder->setMeshBuffer(meshletTrianglesBuffer.Buffer.get(), 0, 4);
-        pRenderEncoder->setMeshBuffer(instancesBuffer.Buffer.get(), 0, 5);
+        pRenderEncoder->setMeshBuffer(texCoordsBuffer.Buffer.get(), 0, 2);
+        pRenderEncoder->setMeshBuffer(normalsBuffer.Buffer.get(), 0, 3);
+        pRenderEncoder->setMeshBuffer(meshletBuffer.Buffer.get(), 0, 4);
+        pRenderEncoder->setMeshBuffer(meshletVerticesBuffer.Buffer.get(), 0, 5);
+        pRenderEncoder->setMeshBuffer(meshletTrianglesBuffer.Buffer.get(), 0, 6);
+
+        pRenderEncoder->setFragmentBytes(&scene, sizeof(SceneProperties), 0);
 
         // Object function uses 32 for thread group size
-		uint32_t threadGroupCountX = ((meshletCount * instanceCount) / 32) + 1;
-
+        uint32_t threadGroupCountX = static_cast<uint32_t>((meshlets.size() / 32) + 1);
         pRenderEncoder->drawMeshThreadgroups(MTL::Size(threadGroupCountX, 1, 1), MTL::Size(32, 1, 1), MTL::Size(128, 1, 1));
-
-
+        
+        // Draw ImGui
+        window->ImGuiRenderDrawData(renderer.get(), pCommandBuffer, pRenderEncoder);
+        
         pRenderEncoder->endEncoding();
 
         pCommandBuffer->presentDrawable(pDrawable);

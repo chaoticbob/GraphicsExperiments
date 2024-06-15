@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(117_mesh_shader_cull_lod_metal)
+project(118_mesh_shader_vertex_attrs_metal)
 
 add_executable(
     ${PROJECT_NAME} 
@@ -19,7 +19,7 @@ add_executable(
     ${IMGUI_METAL_FILES}
 )
 
-set_target_properties(${PROJECT_NAME}  PROPERTIES FOLDER "geometry")
+set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER "geometry")
 
 target_compile_definitions(
     ${PROJECT_NAME} 
@@ -28,7 +28,7 @@ target_compile_definitions(
 )
 
 target_include_directories(
-    ${PROJECT_NAME} 
+    ${PROJECT_NAME}
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
            ${GREX_THIRD_PARTY_DIR}/glm
            ${GREX_THIRD_PARTY_DIR}/tinyobjloader
@@ -42,7 +42,7 @@ FIND_LIBRARY(METAL_LIBRARY Metal)
 FIND_LIBRARY(METALKIT_LIBRARY MetalKit)
 
 target_link_libraries(
-    ${PROJECT_NAME} 
+    ${PROJECT_NAME}
     PUBLIC glfw
     ${FOUNDATION_LIBRARY}
     ${METAL_LIBRARY}

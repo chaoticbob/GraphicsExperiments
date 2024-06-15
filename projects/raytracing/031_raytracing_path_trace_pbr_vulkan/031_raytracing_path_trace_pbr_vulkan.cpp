@@ -56,6 +56,8 @@ static uint32_t gWindowHeight       = 720;
 static bool     gEnableDebug        = true;
 static uint32_t gUniformmBufferSize = 256;
 
+static uint32_t gMaxRayRecursionDepth = 16;
+
 static const char* gRayGenShaderName     = "MyRaygenShader";
 static const char* gMissShaderName       = "MyMissShader";
 static const char* gClosestHitShaderName = "MyClosestHitShader";
@@ -228,6 +230,8 @@ int main(int argc, char** argv)
         VkPhysicalDeviceProperties2 properties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
         properties.pNext                       = &rayTracingProperties;
         vkGetPhysicalDeviceProperties2(renderer->PhysicalDevice, &properties);
+
+        assert((gMaxRayRecursionDepth <= rayTracingProperties.maxRayRecursionDepth) && "Max ray recursion depth exceeded!");
     }
 
     // *************************************************************************
@@ -1198,7 +1202,7 @@ void CreateRayTracingPipeline(
     createInfo.pStages                           = DataPtr(shaderStages);
     createInfo.groupCount                        = CountU32(shaderGroups);
     createInfo.pGroups                           = DataPtr(shaderGroups);
-    createInfo.maxPipelineRayRecursionDepth      = 16;
+    createInfo.maxPipelineRayRecursionDepth      = gMaxRayRecursionDepth;
     createInfo.pLibraryInterface                 = &pipelineInterfaceCreateInfo;
     createInfo.layout                            = pipelineLayout.PipelineLayout;
     createInfo.basePipelineHandle                = VK_NULL_HANDLE;

@@ -356,6 +356,7 @@ int main(int argc, char** argv)
     // Pipeline statistics
     // *************************************************************************
     VkQueryPool queryPool = VK_NULL_HANDLE;
+    if (renderer->HasMeshShaderQueries)
     {
         VkQueryPoolCreateInfo createInfo = {VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
         createInfo.flags                 = 0;
@@ -363,8 +364,8 @@ int main(int argc, char** argv)
         createInfo.queryCount            = 1;
         createInfo.pipelineStatistics    = 0;
         //
-        // NOTE: Disabling this for now, for some reason having 
-        //       VK_QUERY_PIPELINE_STATISTIC_MESH_SHADER_INVOCATIONS_BIT_EXT 
+        // NOTE: Disabling this for now, for some reason having
+        //       VK_QUERY_PIPELINE_STATISTIC_MESH_SHADER_INVOCATIONS_BIT_EXT
         //       in the pipeline statistic causes a massive performance drop
         //       on NVIDIA.
         /*
@@ -414,7 +415,7 @@ int main(int argc, char** argv)
         std::vector<uint64_t> pipelineStatistics(13);
         std::memset(DataPtr(pipelineStatistics), 0, SizeInBytes(pipelineStatistics));
 
-        if (hasPiplineStats)
+        if ((queryPool != VK_NULL_HANDLE) && hasPiplineStats)
         {
             VkDeviceSize stride = static_cast<VkDeviceSize>(SizeInBytes(pipelineStatistics));
 
@@ -507,7 +508,10 @@ int main(int argc, char** argv)
         CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
         {
             // Reset query pool - this needs to happen outside of render pass
-            vkCmdResetQueryPool(cmdBuf.CommandBuffer, queryPool, 0, 1);
+            if (queryPool != VK_NULL_HANDLE)
+            {
+                vkCmdResetQueryPool(cmdBuf.CommandBuffer, queryPool, 0, 1);
+            }
 
             CmdTransitionImageLayout(
                 cmdBuf.CommandBuffer,
@@ -567,7 +571,10 @@ int main(int argc, char** argv)
 
             // vkCmdDrawMeshTasksEXT with pipeline statistics
             {
-                vkCmdBeginQuery(cmdBuf.CommandBuffer, queryPool, 0, 0);
+                if (queryPool != VK_NULL_HANDLE)
+                {
+                    vkCmdBeginQuery(cmdBuf.CommandBuffer, queryPool, 0, 0);
+                }
 
                 // Task (amplification) shader uses 32 for thread group size
                 uint32_t meshletCount      = static_cast<uint32_t>(meshlets.size());
@@ -576,7 +583,10 @@ int main(int argc, char** argv)
 
                 fn_vkCmdDrawMeshTasksEXT(cmdBuf.CommandBuffer, threadGroupCountX, 1, 1);
 
-                vkCmdEndQuery(cmdBuf.CommandBuffer, queryPool, 0);
+                if (queryPool != VK_NULL_HANDLE)
+                {
+                    vkCmdEndQuery(cmdBuf.CommandBuffer, queryPool, 0);
+                }
             }
 
             vkCmdEndRendering(cmdBuf.CommandBuffer);

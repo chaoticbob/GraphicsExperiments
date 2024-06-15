@@ -42,8 +42,7 @@ struct FrustumData {
 
 struct SceneProperties {
     float3      EyePosition;
-    float4x4    ViewMatrix;
-    float4x4    ProjMatrix;
+    float4x4    CameraVP;
     FrustumData Frustum;
     uint        InstanceCount;
     uint        MeshletCount;
@@ -51,6 +50,7 @@ struct SceneProperties {
     float       MaxLODDistance;
     uint        Meshlet_LOD_Offsets[5];
     uint        Meshlet_LOD_Counts[5];
+    uint3       __pad1;
     float3      MeshBoundsMin;
     float3      MeshBoundsMax;
     uint        EnableLOD;
@@ -274,8 +274,7 @@ void msmain(
         uint vertexIndex = m.VertexOffset + gtid;        
         vertexIndex = VertexIndices[vertexIndex];
 
-        float4x4 VP  = mul(Scene.ProjMatrix, Scene.ViewMatrix);
-        float4x4 MVP = mul(VP, Instances[instanceIndex].M);
+        float4x4 MVP = mul(Scene.CameraVP, Instances[instanceIndex].M);
 
         vertices[gtid].Position = mul(MVP, float4(Vertices[vertexIndex].Position, 1.0));
         

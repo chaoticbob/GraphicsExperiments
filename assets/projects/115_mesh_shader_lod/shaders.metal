@@ -8,7 +8,6 @@ struct SceneProperties {
     float4x4    CameraVP;
     uint        InstanceCount;
     uint        MeshletCount;
-    uint        __pad0[2];
     uint        Meshlet_LOD_Offsets[5];
     uint        Meshlet_LOD_Counts[5];
 };
@@ -64,11 +63,6 @@ void objectMain(
         if (meshletIndex < lodMeshletCount) {
             meshletIndex += Scene.Meshlet_LOD_Offsets[lod];
 
-            // Transform meshlet's bounding sphere into world space
-            float4x4 M = Instances[instanceIndex].M;
-            float4 meshletBoundingSphere = M * float4(MeshletBounds[meshletIndex].xyz, 1.0);
-            meshletBoundingSphere.w = MeshletBounds[meshletIndex].w;
-
             // Assuming visibile, no culling here
             visible = 1;
         }
@@ -95,10 +89,9 @@ void meshMain(
     constant SceneProperties&  Scene                 [[buffer(0)]],
     device const Vertex*       Vertices              [[buffer(1)]],
     device const Meshlet*      Meshlets              [[buffer(2)]],
-    device const float4*       MeshletBounds         [[buffer(3)]],
-    device const uint*         MeshletVertexIndices  [[buffer(4)]],
-    device const uint*         MeshletTriangeIndices [[buffer(5)]],
-    device const Instance*     Instances             [[buffer(6)]],
+    device const uint*         MeshletVertexIndices  [[buffer(3)]],
+    device const uint*         MeshletTriangeIndices [[buffer(4)]],
+    device const Instance*     Instances             [[buffer(5)]],
     object_data const Payload& payload               [[payload]],
     uint                       gtid                  [[thread_position_in_threadgroup]],
     uint                       gid                   [[threadgroup_position_in_grid]],

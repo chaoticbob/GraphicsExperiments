@@ -34,12 +34,12 @@ using namespace glm;
 // =============================================================================
 struct SceneProperties
 {
-    mat4        CameraVP;
-    uint        InstanceCount;
-    uint        MeshletCount;
-    uint        __pad0[2];
-    uvec4       Meshlet_LOD_Offsets[5];
-    uvec4       Meshlet_LOD_Counts[5];
+    mat4  CameraVP;
+    uint  InstanceCount;
+    uint  MeshletCount;
+    uint  __pad0[2];
+    uvec4 Meshlet_LOD_Offsets[5];
+    uvec4 Meshlet_LOD_Counts[5];
 };
 
 // =============================================================================
@@ -66,7 +66,7 @@ void CreateShaderModules(
 // main()
 // =============================================================================
 int main(int argc, char** argv)
-{ 
+{
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
     VulkanFeatures features       = {};
@@ -496,6 +496,7 @@ int main(int argc, char** argv)
     // Pipeline statistics
     // *************************************************************************
     VkQueryPool queryPool = VK_NULL_HANDLE;
+    if (renderer->HasMeshShaderQueries)
     {
         VkQueryPoolCreateInfo createInfo = {VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
         createInfo.flags                 = 0;
@@ -565,7 +566,7 @@ int main(int argc, char** argv)
         std::vector<uint64_t> pipelineStatistics(13);
         std::memset(DataPtr(pipelineStatistics), 0, SizeInBytes(pipelineStatistics));
 
-        if (hasPiplineStats)
+        if ((queryPool != VK_NULL_HANDLE) && hasPiplineStats)
         {
             VkDeviceSize stride = static_cast<VkDeviceSize>(SizeInBytes(pipelineStatistics));
 
@@ -686,19 +687,19 @@ int main(int argc, char** argv)
             Camera::FrustumPlane frLeft, frRight, frTop, frBottom, frNear, frFar;
             camera.GetFrustumPlanes(&frLeft, &frRight, &frTop, &frBottom, &frNear, &frFar);
 
-            scene.CameraVP                             = camera.GetViewProjectionMatrix();
-            scene.InstanceCount                        = static_cast<uint32_t>(instances.size());
-            scene.MeshletCount                         = meshlet_LOD_Counts[0];
-            scene.Meshlet_LOD_Offsets[0].x             = meshlet_LOD_Offsets[0];
-            scene.Meshlet_LOD_Offsets[1].x             = meshlet_LOD_Offsets[1];
-            scene.Meshlet_LOD_Offsets[2].x             = meshlet_LOD_Offsets[2];
-            scene.Meshlet_LOD_Offsets[3].x             = meshlet_LOD_Offsets[3];
-            scene.Meshlet_LOD_Offsets[4].x             = meshlet_LOD_Offsets[4];
-            scene.Meshlet_LOD_Counts[0].x              = meshlet_LOD_Counts[0];
-            scene.Meshlet_LOD_Counts[1].x              = meshlet_LOD_Counts[1];
-            scene.Meshlet_LOD_Counts[2].x              = meshlet_LOD_Counts[2];
-            scene.Meshlet_LOD_Counts[3].x              = meshlet_LOD_Counts[3];
-            scene.Meshlet_LOD_Counts[4].x              = meshlet_LOD_Counts[4];
+            scene.CameraVP                 = camera.GetViewProjectionMatrix();
+            scene.InstanceCount            = static_cast<uint32_t>(instances.size());
+            scene.MeshletCount             = meshlet_LOD_Counts[0];
+            scene.Meshlet_LOD_Offsets[0].x = meshlet_LOD_Offsets[0];
+            scene.Meshlet_LOD_Offsets[1].x = meshlet_LOD_Offsets[1];
+            scene.Meshlet_LOD_Offsets[2].x = meshlet_LOD_Offsets[2];
+            scene.Meshlet_LOD_Offsets[3].x = meshlet_LOD_Offsets[3];
+            scene.Meshlet_LOD_Offsets[4].x = meshlet_LOD_Offsets[4];
+            scene.Meshlet_LOD_Counts[0].x  = meshlet_LOD_Counts[0];
+            scene.Meshlet_LOD_Counts[1].x  = meshlet_LOD_Counts[1];
+            scene.Meshlet_LOD_Counts[2].x  = meshlet_LOD_Counts[2];
+            scene.Meshlet_LOD_Counts[3].x  = meshlet_LOD_Counts[3];
+            scene.Meshlet_LOD_Counts[4].x  = meshlet_LOD_Counts[4];
 
             void* pDst = nullptr;
             CHECK_CALL(vmaMapMemory(renderer.get()->Allocator, sceneBuffer.Allocation, reinterpret_cast<void**>(&pDst)));
@@ -731,7 +732,9 @@ int main(int argc, char** argv)
         CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
         {
             // Reset query pool - this needs to happen outside of render pass
-            vkCmdResetQueryPool(cmdBuf.CommandBuffer, queryPool, 0, 1);
+            if (queryPool != VK_NULL_HANDLE) {
+                vkCmdResetQueryPool(cmdBuf.CommandBuffer, queryPool, 0, 1);
+            }
 
             CmdTransitionImageLayout(
                 cmdBuf.CommandBuffer,
@@ -783,7 +786,10 @@ int main(int argc, char** argv)
 
             // vkCmdDrawMeshTasksEXT with pipeline statistics
             {
-                vkCmdBeginQuery(cmdBuf.CommandBuffer, queryPool, 0, 0);
+                if (queryPool != VK_NULL_HANDLE)
+                {
+                    vkCmdBeginQuery(cmdBuf.CommandBuffer, queryPool, 0, 0);
+                }
 
                 // Task (amplification) shader uses 32 for thread group size
                 uint32_t meshletCount      = static_cast<uint32_t>(meshlet_LOD_Counts[0]);
@@ -791,7 +797,10 @@ int main(int argc, char** argv)
                 uint32_t threadGroupCountX = ((meshletCount * instanceCount) / 32) + 1;
                 fn_vkCmdDrawMeshTasksEXT(cmdBuf.CommandBuffer, threadGroupCountX, 1, 1);
 
-                vkCmdEndQuery(cmdBuf.CommandBuffer, queryPool, 0);
+                if (queryPool != VK_NULL_HANDLE)
+                {
+                    vkCmdEndQuery(cmdBuf.CommandBuffer, queryPool, 0);
+                }
             }
 
             vkCmdEndRendering(cmdBuf.CommandBuffer);

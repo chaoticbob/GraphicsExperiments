@@ -1,19 +1,22 @@
 
 #define AS_GROUP_SIZE 32
 
+enum DrawFunc {
+    DRAW_FUNC_POSITION  = 0,
+    DRAW_FUNC_TEX_COORD = 1,
+    DRAW_FUNC_NORMAL    = 2,
+    DRAW_FUNC_PHONG     = 3,
+};
+
 struct SceneProperties {
-    float4x4    CameraVP;
-    uint        InstanceCount;
-    uint        MeshletCount;
-    uint        Meshlet_LOD_Offsets[5];
-    uint        Meshlet_LOD_Counts[5];
+    float4x4 InstanceM;
+    float4x4 CameraVP;
+    float3   EyePosition;
+    uint     DrawFunc;
+    float3   LightPosition;
 };
 
 ConstantBuffer<SceneProperties> Scene : register(b0);
-
-struct Vertex {
-    float3 Position;
-};
 
 struct Meshlet {
 	uint VertexOffset;
@@ -22,25 +25,21 @@ struct Meshlet {
 	uint TriangleCount;
 };
 
-struct Instance
-{
-    float4x4 M;
-};
-
-StructuredBuffer<Vertex>   Vertices        : register(t1);
-StructuredBuffer<Meshlet>  Meshlets        : register(t2);
-StructuredBuffer<float4>   MeshletBounds   : register(t3);
-StructuredBuffer<uint>     VertexIndices   : register(t4);
-StructuredBuffer<uint>     TriangleIndices : register(t5);
-StructuredBuffer<Instance> Instances       : register(t6);
+StructuredBuffer<float3>  Positions            : register(t1);
+StructuredBuffer<float2>  TexCoords            : register(t2);
+StructuredBuffer<float3>  Normals              : register(t3);
+StructuredBuffer<Meshlet> Meshlets             : register(t4);
+StructuredBuffer<uint>    MeshletVertexIndices : register(t5);
+StructuredBuffer<uint>    MeshletTriangles     : register(t6);
 
 struct MeshOutput {
-    float4 Position : SV_POSITION;
-    float3 Color    : COLOR;
+    float4 PositionCS : SV_POSITION;
+    float3 PositionWS : POSITIONWS;
+    float3 Normal     : NORMAL;
+    float2 TexCoord   : TEXCOORD;
 };
 
 struct Payload {
-    uint InstanceIndices[AS_GROUP_SIZE];
     uint MeshletIndices[AS_GROUP_SIZE];
 };
 
@@ -56,31 +55,9 @@ void asmain(
     uint gid  : SV_GroupID
 )
 {
-    bool visible = false;
-
-    uint instanceIndex = dtid / Scene.MeshletCount;
-    uint meshletIndex  = dtid % Scene.MeshletCount;
-
-    if (instanceIndex < Scene.InstanceCount){
-        uint lod             = instanceIndex;
-        uint lodMeshletCount = Scene.Meshlet_LOD_Counts[lod];
-
-        if (meshletIndex < lodMeshletCount) {
-            meshletIndex += Scene.Meshlet_LOD_Offsets[lod];
-          
-            // Assuming visibile, no culling here
-            visible = 1;
-        }
-    }
-
-    if (visible) {
-        uint index = WavePrefixCountBits(visible);
-        sPayload.InstanceIndices[index] = instanceIndex;
-        sPayload.MeshletIndices[index]  = meshletIndex;
-    }
-    
-    uint visibleCount = WaveActiveCountBits(visible);    
-    DispatchMesh(visibleCount, 1, 1, sPayload); 
+    sPayload.MeshletIndices[gtid] = dtid;
+    // Assumes all meshlets are visible
+    DispatchMesh(AS_GROUP_SIZE, 1, 1, sPayload);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -95,8 +72,7 @@ void msmain(
     out indices  uint3      triangles[128], 
     out vertices MeshOutput vertices[64]) 
 {
-    uint instanceIndex = payload.InstanceIndices[gid];
-    uint meshletIndex  = payload.MeshletIndices[gid];
+    uint meshletIndex = payload.MeshletIndices[gid];
 
     Meshlet m = Meshlets[meshletIndex];
     SetMeshOutputCounts(m.VertexCount, m.TriangleCount);
@@ -110,7 +86,7 @@ void msmain(
         // aligned to 4 and we can easily grab it as a uint without any 
         // additional offset math.
         //
-        uint packed = TriangleIndices[m.TriangleOffset + gtid];
+        uint packed = MeshletTriangles[m.TriangleOffset + gtid];
         uint vIdx0  = (packed >>  0) & 0xFF;
         uint vIdx1  = (packed >>  8) & 0xFF;
         uint vIdx2  = (packed >> 16) & 0xFF;
@@ -119,18 +95,16 @@ void msmain(
 
     if (gtid < m.VertexCount) {
         uint vertexIndex = m.VertexOffset + gtid;        
-        vertexIndex = VertexIndices[vertexIndex];
+        vertexIndex = MeshletVertexIndices[vertexIndex];
 
-        float4x4 MVP = mul(Scene.CameraVP, Instances[instanceIndex].M);
+        float4 PositionOS = float4(Positions[vertexIndex], 1.0);
+        float4 PositionWS = mul(Scene.InstanceM, PositionOS);
 
-        vertices[gtid].Position = mul(MVP, float4(Vertices[vertexIndex].Position, 1.0));
-        
-        float3 color = float3(
-            float(meshletIndex & 1),
-            float(meshletIndex & 3) / 4,
-            float(meshletIndex & 7) / 8);
-        vertices[gtid].Color = color;
-    }    
+        vertices[gtid].PositionCS = mul(Scene.CameraVP, PositionWS);
+        vertices[gtid].PositionWS = PositionWS.xyz;
+        vertices[gtid].Normal     = mul(Scene.InstanceM, float4(Normals[vertexIndex], 0.0)).xyz;
+        vertices[gtid].TexCoord   = TexCoords[vertexIndex];
+    }
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -138,5 +112,27 @@ void msmain(
 // -------------------------------------------------------------------------------------------------
 float4 psmain(MeshOutput input) : SV_TARGET
 {
-    return float4(input.Color, 1);
+    float3 color = input.PositionWS;
+    if (Scene.DrawFunc == DRAW_FUNC_TEX_COORD) {
+        color = float3(input.TexCoord, 0.0);
+    }
+    else if (Scene.DrawFunc == DRAW_FUNC_NORMAL) {
+        color = input.Normal;
+    }
+    else if (Scene.DrawFunc == DRAW_FUNC_PHONG) {
+        float3 V = normalize(Scene.EyePosition - input.PositionWS);
+        float3 L = normalize(Scene.LightPosition - input.PositionWS);
+        float3 H = normalize(V + L);
+        float3 N = normalize(input.Normal);
+        float  NoL = saturate(dot(N, L));
+        float  NoH = saturate(dot(N, H));
+
+        float d = NoL;
+        float s = pow(NoH, 50.0);
+        float a = 0.65;
+        
+        color = float3(0.549, 0.556, 0.554) * (s + d + a);
+    }
+
+    return float4(color, 1);
 }

@@ -259,6 +259,8 @@ public:
     const std::vector<glm::vec3>& GetTangents() const { return mTangents; }
     const std::vector<glm::vec3>& GetBitangents() const { return mBitangents; }
     const TriMesh::Aabb&          GetBounds() const { return mBounds; }
+    void                          SetTexCoords(size_t count, const glm::vec2* pTexCoords);
+    void                          SetNormals(size_t count, const glm::vec3* pNormals);
 
     uint32_t GetNumVertices() const { return static_cast<uint32_t>(mPositions.size()); }
 

@@ -7,8 +7,7 @@ using namespace metal;
 
 struct SceneProperties {
     packed_float3 EyePosition;
-    float4x4      ViewMatrix;
-    float4x4      ProjMatrix;
+    float4x4      CameraVP;
     uint          InstanceCount;
     uint          MeshletCount;
     uint          __pad0;
@@ -86,10 +85,6 @@ void objectMain(
 
         if (meshletIndex < lodMeshletCount) {
             meshletIndex += Scene.Meshlet_LOD_Offsets[lod];
-
-            // Transform meshlet's bounding sphere into world space
-            float4 meshletBoundingSphere = M * float4(MeshletBounds[meshletIndex].xyz, 1.0);
-            meshletBoundingSphere.w = MeshletBounds[meshletIndex].w;
             
             // Assuming visibile, no culling here
             visible = 1;
@@ -117,10 +112,9 @@ void meshMain(
     constant SceneProperties&  Scene                 [[buffer(0)]],
     device const Vertex*       Vertices              [[buffer(1)]],
     device const Meshlet*      Meshlets              [[buffer(2)]],
-    device const float4*       MeshletBounds         [[buffer(3)]],
-    device const uint*         MeshletVertexIndices  [[buffer(4)]],
-    device const uint*         MeshletTriangeIndices [[buffer(5)]],
-    device const Instance*     Instances             [[buffer(6)]],
+    device const uint*         MeshletVertexIndices  [[buffer(3)]],
+    device const uint*         MeshletTriangeIndices [[buffer(4)]],
+    device const Instance*     Instances             [[buffer(5)]],
     object_data const Payload& payload               [[payload]],
     uint                       gtid                  [[thread_position_in_threadgroup]],
     uint                       gid                   [[threadgroup_position_in_grid]],
@@ -156,8 +150,7 @@ void meshMain(
         uint vertexIndex = m.VertexOffset + gtid;
         vertexIndex = MeshletVertexIndices[vertexIndex];
 
-        float4x4 VP  = Scene.ProjMatrix * Scene.ViewMatrix;
-        float4x4 MVP = VP * Instances[instanceIndex].M;
+        float4x4 MVP = Scene.CameraVP * Instances[instanceIndex].M;
 
         MeshVertex vtx;
         vtx.PositionCS = MVP * float4(Vertices[vertexIndex].Position, 1.0);

@@ -77,8 +77,7 @@ struct SceneProperties
 {
     float3      EyePosition;
     uint        __pad0;
-    float4x4    ViewMatrix;
-    float4x4    ProjMatrix;
+    float4x4    CameraVP;
     FrustumData Frustum;
     uint        InstanceCount;
     uint        MeshletCount;
@@ -102,7 +101,7 @@ static bool     gEnableDebug  = true;
 static float gTargetAngle = 55.0f;
 static float gAngle       = gTargetAngle;
 
-static bool gFitConeToFarClip = false;
+static bool gFitConeToFarClip = true;
 
 enum VisibilityFunc
 {
@@ -121,7 +120,7 @@ static std::vector<std::string> gVisibilityFuncNames = {
     "Frustum Cone and Near Plane",
 };
 
-static int gVisibilityFunc = VISIBILITY_FUNC_PLANES;
+static int gVisibilityFunc = VISIBILITY_FUNC_CONE_AND_NEAR_PLANE;
 
 static float gMaxLODDistance = 10.0f;
 
@@ -626,8 +625,7 @@ int main(int argc, char** argv)
             auto frCone = camera.GetFrustumCone(gFitConeToFarClip);
 
             scene.EyePosition                          = camera.GetEyePosition();
-            scene.ViewMatrix                           = camera.GetViewMatrix();
-            scene.ProjMatrix                           = camera.GetProjectionMatrix();
+            scene.CameraVP                             = camera.GetViewProjectionMatrix();
             scene.Frustum.Planes[FRUSTUM_PLANE_LEFT]   = {frLeft.Normal, 0.0f, frLeft.Position, 0.0f};
             scene.Frustum.Planes[FRUSTUM_PLANE_RIGHT]  = {frRight.Normal, 0.0f, frRight.Position, 0.0f};
             scene.Frustum.Planes[FRUSTUM_PLANE_TOP]    = {frTop.Normal, 0.0f, frTop.Position, 0.0f};
@@ -656,17 +654,12 @@ int main(int argc, char** argv)
             scene.MeshBoundsMin                        = float3(meshBounds.min);
             scene.MeshBoundsMax                        = float3(meshBounds.max);
             scene.EnableLOD                            = gEnableLOD;
-
-
         }
 
         // ---------------------------------------------------------------------
 
         // Copy instances transforms to instances buffer
-        {
-            memcpy(instancesBuffer.Buffer->contents(), DataPtr(instances), SizeInBytes(instances));
-            instancesBuffer.Buffer->didModifyRange(NS::Range::Make(0, SizeInBytes(instances)));
-        }
+        memcpy(instancesBuffer.Buffer->contents(), DataPtr(instances), SizeInBytes(instances));
 
         // ---------------------------------------------------------------------
         

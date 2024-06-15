@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(117_mesh_shader_cull_lod_d3d12)
+project(119_mesh_shader_vertex_bary_d3d12)
 
 add_executable(
     ${PROJECT_NAME}
@@ -24,7 +24,6 @@ target_compile_definitions(
 	PUBLIC GREX_USE_D3DX12
            ENABLE_IMGUI_D3D12
 )	
-
 target_include_directories(
     ${PROJECT_NAME}	
     PUBLIC ${GREX_THIRD_PARTY_DIR}/DirectX-Headers/include

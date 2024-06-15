@@ -228,6 +228,7 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
 
         if (pRenderer->Features.EnableMeshShader) {
             enabledExtensions.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
+            enabledExtensions.push_back(VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME);
         }
 
         if (pRenderer->Features.EnablePushDescriptor) {
@@ -242,6 +243,17 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
                 assert(false);
                 return false;
             }
+        }
+
+        // Check for mesh shader queries because some GPUs don't support it
+        {
+            VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT};
+            
+            VkPhysicalDeviceFeatures2 features = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+            features.pNext                     = &meshShaderFeatures;
+
+            vkGetPhysicalDeviceFeatures2(pRenderer->PhysicalDevice, &features);
+            pRenderer->HasMeshShaderQueries = meshShaderFeatures.meshShaderQueries;           
         }
 
         // ---------------------------------------------------------------------
@@ -260,15 +272,14 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
         rayTracingPipelineFeatures.rayTracingPipeline                            = VK_TRUE;
 
         // ---------------------------------------------------------------------
+        VkPhysicalDeviceFragmentShaderBarycentricFeaturesKHR shaderBarycentricFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_BARYCENTRIC_FEATURES_KHR};
+        shaderBarycentricFeatures.fragmentShaderBarycentric = VK_TRUE;
 
         VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT};
+        meshShaderFeatures.pNext                                 = &shaderBarycentricFeatures;
         meshShaderFeatures.taskShader                            = VK_TRUE;
         meshShaderFeatures.meshShader                            = VK_TRUE;
-        meshShaderFeatures.meshShaderQueries                     = VK_TRUE;
-
-        VkPhysicalDeviceMeshShaderFeaturesNV meshShaderFeaturesNV = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV};
-        meshShaderFeaturesNV.meshShader                          = VK_TRUE;
-        meshShaderFeaturesNV.taskShader                          = VK_TRUE;
+        meshShaderFeatures.meshShaderQueries                     = pRenderer->HasMeshShaderQueries ? VK_TRUE : VK_FALSE;
 
         // ---------------------------------------------------------------------
 

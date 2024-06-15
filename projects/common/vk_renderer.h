@@ -86,6 +86,7 @@ struct VulkanFeatures {
 struct VulkanRenderer
 {
     bool              DebugEnabled             = true;
+    bool              HasMeshShaderQueries     = false;
     VulkanFeatures    Features                 = {};
     VkInstance        Instance                 = VK_NULL_HANDLE;
     VkPhysicalDevice  PhysicalDevice           = VK_NULL_HANDLE;

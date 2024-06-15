@@ -69,16 +69,16 @@ struct SceneProperties
 {
     vec3        EyePosition;
     uint        __pad0;
-    mat4        ViewMatrix;
-    mat4        ProjMatrix;
+    mat4        CameraVP;
     FrustumData Frustum;
     uint        InstanceCount;
     uint        MeshletCount;
     uint        VisibilityFunc;
-    float       MaxLODDistance;          // Use least detail level at or beyond this distance
-    uint        Meshlet_LOD_Offsets[20]; // Align array element to 16 bytes
-    uint        Meshlet_LOD_Counts[17];  // Align array element to 16 bytes
+    float       MaxLODDistance;         // Use least detail level at or beyond this distance
+    uvec4       Meshlet_LOD_Offsets[5]; // Align array element to 16 bytes
+    uvec4       Meshlet_LOD_Counts[5];  // Align array element to 16 bytes
     vec3        MeshBoundsMin;
+    uint        __pad1;
     vec3        MeshBoundsMax;
     uint        EnableLOD;
 };
@@ -93,7 +93,7 @@ static bool     gEnableDebug  = false;
 static float gTargetAngle = 55.0f;
 static float gAngle       = gTargetAngle;
 
-static bool gFitConeToFarClip = false;
+static bool gFitConeToFarClip = true;
 
 enum VisibilityFunc
 {
@@ -112,7 +112,7 @@ static std::vector<std::string> gVisibilityFuncNames = {
     "Frustum Cone and Near Plane",
 };
 
-static int gVisibilityFunc = VISIBILITY_FUNC_PLANES;
+static int gVisibilityFunc = VISIBILITY_FUNC_CONE_AND_NEAR_PLANE;
 
 static float gMaxLODDistance = 10.0f;
 
@@ -587,6 +587,7 @@ int main(int argc, char** argv)
     // Pipeline statistics
     // *************************************************************************
     VkQueryPool queryPool = VK_NULL_HANDLE;
+    if (renderer->HasMeshShaderQueries)
     {
         VkQueryPoolCreateInfo createInfo = {VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
         createInfo.flags                 = 0;
@@ -656,7 +657,7 @@ int main(int argc, char** argv)
         std::vector<uint64_t> pipelineStatistics(13);
         std::memset(DataPtr(pipelineStatistics), 0, SizeInBytes(pipelineStatistics));
 
-        if (hasPiplineStats)
+        if ((queryPool != VK_NULL_HANDLE) && hasPiplineStats)
         {
             VkDeviceSize stride = static_cast<VkDeviceSize>(SizeInBytes(pipelineStatistics));
 
@@ -798,8 +799,7 @@ int main(int argc, char** argv)
             auto frCone = camera.GetFrustumCone(gFitConeToFarClip);
 
             scene.EyePosition                          = camera.GetEyePosition();
-            scene.ViewMatrix                           = camera.GetViewMatrix();
-            scene.ProjMatrix                           = camera.GetProjectionMatrix();
+            scene.CameraVP                             = camera.GetViewProjectionMatrix();
             scene.Frustum.Planes[FRUSTUM_PLANE_LEFT]   = {frLeft.Normal, 0.0f, frLeft.Position, 0.0f};
             scene.Frustum.Planes[FRUSTUM_PLANE_RIGHT]  = {frRight.Normal, 0.0f, frRight.Position, 0.0f};
             scene.Frustum.Planes[FRUSTUM_PLANE_TOP]    = {frTop.Normal, 0.0f, frTop.Position, 0.0f};
@@ -815,16 +815,16 @@ int main(int argc, char** argv)
             scene.MeshletCount                         = meshlet_LOD_Counts[0];
             scene.VisibilityFunc                       = gVisibilityFunc;
             scene.MaxLODDistance                       = gMaxLODDistance;
-            scene.Meshlet_LOD_Offsets[0]               = meshlet_LOD_Offsets[0];
-            scene.Meshlet_LOD_Offsets[4]               = meshlet_LOD_Offsets[1];
-            scene.Meshlet_LOD_Offsets[8]               = meshlet_LOD_Offsets[2];
-            scene.Meshlet_LOD_Offsets[12]              = meshlet_LOD_Offsets[3];
-            scene.Meshlet_LOD_Offsets[16]              = meshlet_LOD_Offsets[4];
-            scene.Meshlet_LOD_Counts[0]                = meshlet_LOD_Counts[0];
-            scene.Meshlet_LOD_Counts[4]                = meshlet_LOD_Counts[1];
-            scene.Meshlet_LOD_Counts[8]                = meshlet_LOD_Counts[2];
-            scene.Meshlet_LOD_Counts[12]               = meshlet_LOD_Counts[3];
-            scene.Meshlet_LOD_Counts[16]               = meshlet_LOD_Counts[4];
+            scene.Meshlet_LOD_Offsets[0].x             = meshlet_LOD_Offsets[0];
+            scene.Meshlet_LOD_Offsets[1].x             = meshlet_LOD_Offsets[1];
+            scene.Meshlet_LOD_Offsets[2].x             = meshlet_LOD_Offsets[2];
+            scene.Meshlet_LOD_Offsets[3].x             = meshlet_LOD_Offsets[3];
+            scene.Meshlet_LOD_Offsets[4].x             = meshlet_LOD_Offsets[4];
+            scene.Meshlet_LOD_Counts[0].x              = meshlet_LOD_Counts[0];
+            scene.Meshlet_LOD_Counts[1].x              = meshlet_LOD_Counts[1];
+            scene.Meshlet_LOD_Counts[2].x              = meshlet_LOD_Counts[2];
+            scene.Meshlet_LOD_Counts[3].x              = meshlet_LOD_Counts[3];
+            scene.Meshlet_LOD_Counts[4].x              = meshlet_LOD_Counts[4];
             scene.MeshBoundsMin                        = vec3(meshBounds.min);
             scene.MeshBoundsMax                        = vec3(meshBounds.max);
             scene.EnableLOD                            = gEnableLOD;
@@ -912,7 +912,10 @@ int main(int argc, char** argv)
 
             // vkCmdDrawMeshTasksEXT with pipeline statistics
             {
-                vkCmdBeginQuery(cmdBuf.CommandBuffer, queryPool, 0, 0);
+                if (queryPool != VK_NULL_HANDLE)
+                {
+                    vkCmdBeginQuery(cmdBuf.CommandBuffer, queryPool, 0, 0);
+                }
 
                 // Task (amplification) shader uses 32 for thread group size
                 uint32_t meshletCount      = static_cast<uint32_t>(meshlet_LOD_Counts[0]);
@@ -920,7 +923,10 @@ int main(int argc, char** argv)
                 uint32_t threadGroupCountX = ((meshletCount * instanceCount) / 32) + 1;
                 fn_vkCmdDrawMeshTasksEXT(cmdBuf.CommandBuffer, threadGroupCountX, 1, 1);
 
-                vkCmdEndQuery(cmdBuf.CommandBuffer, queryPool, 0);
+                if (queryPool != VK_NULL_HANDLE)
+                {
+                    vkCmdEndQuery(cmdBuf.CommandBuffer, queryPool, 0);
+                }
             }
 
             vkCmdEndRendering(cmdBuf.CommandBuffer);

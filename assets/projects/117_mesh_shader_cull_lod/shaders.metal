@@ -45,8 +45,7 @@ struct FrustumData {
 
 struct SceneProperties {
     packed_float3 EyePosition;
-    float4x4      ViewMatrix;
-    float4x4      ProjMatrix;
+    float4x4      CameraVP;
     FrustumData   Frustum;
     uint          InstanceCount;
     uint          MeshletCount;
@@ -225,7 +224,6 @@ void objectMain(
         outPayload.MeshletIndices[index]  = meshletIndex;
     }
 
-    // Assumes all meshlets are visible
     uint visibleCount = simd_sum(visible);
     outGrid.set_threadgroups_per_grid(uint3(visibleCount, 1, 1));
 }
@@ -279,8 +277,7 @@ void meshMain(
         uint vertexIndex = m.VertexOffset + gtid;
         vertexIndex = MeshletVertexIndices[vertexIndex];
 
-        float4x4 VP  = Scene.ProjMatrix * Scene.ViewMatrix;
-        float4x4 MVP = VP * Instances[instanceIndex].M;
+        float4x4 MVP = Scene.CameraVP * Instances[instanceIndex].M;
 
         MeshVertex vtx;
         vtx.PositionCS = MVP * float4(Vertices[vertexIndex].Position, 1.0);

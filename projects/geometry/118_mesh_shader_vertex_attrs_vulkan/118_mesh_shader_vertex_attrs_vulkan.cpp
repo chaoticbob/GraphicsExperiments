@@ -12,8 +12,6 @@ using namespace glm;
 
 #include "meshoptimizer.h"
 
-#include <cinttypes>
-
 #define CHECK_CALL(FN)                               \
     {                                                \
         VkResult vkres = FN;                         \
@@ -32,79 +30,38 @@ using namespace glm;
 // =============================================================================
 // Scene Stuff
 // =============================================================================
-
-enum
-{
-    FRUSTUM_PLANE_LEFT   = 0,
-    FRUSTUM_PLANE_RIGHT  = 1,
-    FRUSTUM_PLANE_TOP    = 2,
-    FRUSTUM_PLANE_BOTTOM = 3,
-    FRUSTUM_PLANE_NEAR   = 4,
-    FRUSTUM_PLANE_FAR    = 5,
-};
-
-struct FrustumPlane
-{
-    vec3  Normal;
-    float __pad0;
-    vec3  Position;
-    float __pad1;
-};
-
-struct FrustumCone
-{
-    vec3  Tip;
-    float Height;
-    vec3  Direction;
-    float Angle;
-};
-
-struct FrustumData
-{
-    FrustumPlane Planes[6];
-    vec4         Sphere;
-    FrustumCone  Cone;
-};
-
 struct SceneProperties
 {
-    mat4        CameraVP;
-    FrustumData Frustum;
-    uint        InstanceCount;
-    uint        MeshletCount;
-    uint        VisibilityFunc;
+    mat4 InstanceM;
+    mat4 CameraVP;
+    vec3 EyePosition;
+    uint DrawFunc;
+    vec3 LightPosition;
 };
 
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth  = 1920;
-static uint32_t gWindowHeight = 1080;
-static bool     gEnableDebug  = false;
+static uint32_t gWindowWidth  = 1280;
+static uint32_t gWindowHeight = 720;
+static bool     gEnableDebug  = true;
 
-static float gTargetAngle = 55.0f;
-static float gAngle       = gTargetAngle;
-
-static bool gFitConeToFarClip = true;
-
-enum VisibilityFunc
+enum DrawFunc
 {
-    VISIBILITY_FUNC_NONE                = 0,
-    VISIBILITY_FUNC_PLANES              = 1,
-    VISIBILITY_FUNC_SPHERE              = 2,
-    VISIBILITY_FUNC_CONE                = 3,
-    VISIBILITY_FUNC_CONE_AND_NEAR_PLANE = 4,
+    DRAW_FUNC_POSITION  = 0,
+    DRAW_FUNC_TEX_COORD = 1,
+    DRAW_FUNC_NORMAL    = 2,
+    DRAW_FUNC_PHONG     = 3,
 };
 
-static std::vector<std::string> gVisibilityFuncNames = {
-    "None",
-    "Frustum Planes",
-    "Frustum Sphere",
-    "Frustum Cone",
-    "Frustum Cone and Near Plane",
+static std::vector<std::string> gDrawFuncNames = {
+    "Position",
+    "Tex Coord",
+    "Normal",
+    "Phong",
 };
 
-static int gVisibilityFunc = VISIBILITY_FUNC_CONE_AND_NEAR_PLANE;
+static int gDrawFunc = DRAW_FUNC_PHONG;
 
 void CreatePipelineLayout(
     VulkanRenderer*        pRenderer,
@@ -118,26 +75,6 @@ void CreateShaderModules(
     VkShaderModule*              pModuleAS,
     VkShaderModule*              pModuleMS,
     VkShaderModule*              pModuleFS);
-
-// =============================================================================
-// Event functions
-// =============================================================================
-void MouseMove(int x, int y, int buttons)
-{
-    static int prevX = x;
-    static int prevY = y;
-
-    if (buttons & MOUSE_BUTTON_LEFT)
-    {
-        int dx = x - prevX;
-        int dy = y - prevY;
-
-        gTargetAngle += 0.25f * dx;
-    }
-
-    prevX = x;
-    prevY = y;
-}
 
 // =============================================================================
 // main()
@@ -164,7 +101,7 @@ int main(int argc, char** argv)
     std::vector<uint32_t> spirvMS;
     std::vector<uint32_t> spirvFS;
     {
-        auto source = LoadString("projects/114_mesh_shader_culling/shaders.hlsl");
+        auto source = LoadString("projects/118_mesh_shader_vertex_attrs/shaders.hlsl");
         assert((!source.empty()) && "no shader source!");
 
         std::string errorMsg;
@@ -202,21 +139,23 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Make them meshlets!
     // *************************************************************************
-    TriMesh::Aabb                meshBounds = {};
-    std::vector<vec3>            positions;
+    std::vector<glm::vec3>       positions;
+    std::vector<glm::vec2>       texCoords;
+    std::vector<glm::vec3>       normals;
     std::vector<meshopt_Meshlet> meshlets;
     std::vector<uint32_t>        meshletVertices;
     std::vector<uint8_t>         meshletTriangles;
     {
         TriMesh mesh = {};
-        bool    res  = TriMesh::LoadOBJ2(GetAssetPath("models/horse_statue_01_1k.obj").string(), &mesh);
+        bool    res  = TriMesh::LoadOBJ2(GetAssetPath("models/full_horse_statue_01_1k.obj").string(), &mesh);
         if (!res)
         {
             assert(false && "failed to load model");
         }
 
-        meshBounds = mesh.GetBounds();
-        positions  = mesh.GetPositions();
+        positions = mesh.GetPositions();
+        texCoords = mesh.GetTexCoords();
+        normals   = mesh.GetNormals();
 
         const size_t kMaxVertices  = 64;
         const size_t kMaxTriangles = 124;
@@ -236,7 +175,7 @@ int main(int argc, char** argv)
             mesh.GetNumIndices(),
             reinterpret_cast<const float*>(mesh.GetPositions().data()),
             mesh.GetNumVertices(),
-            sizeof(vec3),
+            sizeof(glm::vec3),
             kMaxVertices,
             kMaxTriangles,
             kConeWeight);
@@ -245,29 +184,6 @@ int main(int argc, char** argv)
         meshletVertices.resize(last.vertex_offset + last.vertex_count);
         meshletTriangles.resize(last.triangle_offset + ((last.triangle_count * 3 + 3) & ~3));
         meshlets.resize(meshletCount);
-    }
-
-    // Meshlet bounds (we're using bounding spheres)
-    std::vector<vec4> meshletBounds;
-    for (auto& meshlet : meshlets)
-    {
-        auto bounds = meshopt_computeMeshletBounds(
-            &meshletVertices[meshlet.vertex_offset],
-            &meshletTriangles[meshlet.triangle_offset],
-            meshlet.triangle_count,
-            reinterpret_cast<const float*>(positions.data()),
-            positions.size(),
-            sizeof(vec3));
-        meshletBounds.push_back(vec4(bounds.center[0], bounds.center[1], bounds.center[2], bounds.radius));
-    }
-
-    // Get some counts to use later
-    uint64_t meshletVertexCount   = 0;
-    uint64_t meshletTriangleCount = 0;
-    for (auto& m : meshlets)
-    {
-        meshletVertexCount += m.vertex_count;
-        meshletTriangleCount += m.triangle_count;
     }
 
     // Repack triangles from 3 consecutive byes to 4-byte uint32_t to
@@ -300,19 +216,20 @@ int main(int argc, char** argv)
     }
 
     VulkanBuffer positionBuffer;
+    VulkanBuffer texCoordsBuffer;
+    VulkanBuffer normalsBuffer;
     VulkanBuffer meshletBuffer;
     VulkanBuffer meshletVerticesBuffer;
     VulkanBuffer meshletTrianglesBuffer;
-    VulkanBuffer meshletBoundsBuffer;
     {
-        VkBufferUsageFlags usageFlags  = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-        VmaMemoryUsage     memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-
-        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(positions), DataPtr(positions), usageFlags, memoryUsage, 0, &positionBuffer));
-        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshlets), DataPtr(meshlets), usageFlags, memoryUsage, 0, &meshletBuffer));
-        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshletVertices), DataPtr(meshletVertices), usageFlags, memoryUsage, 0, &meshletVerticesBuffer));
-        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshletTrianglesU32), DataPtr(meshletTrianglesU32), usageFlags, memoryUsage, 0, &meshletTrianglesBuffer));
-        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshletBounds), DataPtr(meshletBounds), usageFlags, memoryUsage, 0, &meshletBoundsBuffer));
+        VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        
+        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(positions), DataPtr(positions), usageFlags, 0, &positionBuffer));
+        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(texCoords), DataPtr(texCoords), usageFlags, 0, &texCoordsBuffer));
+        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(normals), DataPtr(normals), usageFlags, 0, &normalsBuffer));
+        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshlets), DataPtr(meshlets), usageFlags, 0, &meshletBuffer));
+        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshletVertices), DataPtr(meshletVertices), usageFlags, 0, &meshletVerticesBuffer));
+        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(meshletTrianglesU32), DataPtr(meshletTrianglesU32), usageFlags, 0, &meshletTrianglesBuffer));
     }
 
     // *************************************************************************
@@ -342,6 +259,11 @@ int main(int argc, char** argv)
 
     // *************************************************************************
     // Create the pipeline
+    //
+    // The pipeline is created with 2 shaders
+    //    1) Mesh Shader
+    //    2) Fragment Shader
+    //
     // *************************************************************************
     VkPipeline pipeline = VK_NULL_HANDLE;
     CreateMeshShaderPipeline(
@@ -374,8 +296,6 @@ int main(int argc, char** argv)
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
     }
-
-    window->AddMouseMoveCallbacks(MouseMove);
 
     // *************************************************************************
     // Swapchain
@@ -471,42 +391,6 @@ int main(int argc, char** argv)
     }
 
     // *************************************************************************
-    // Pipeline statistics
-    // *************************************************************************
-    VkQueryPool queryPool = VK_NULL_HANDLE;
-    if (renderer->HasMeshShaderQueries)
-    {
-        VkQueryPoolCreateInfo createInfo = {VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
-        createInfo.flags                 = 0;
-        createInfo.queryType             = VK_QUERY_TYPE_PIPELINE_STATISTICS;
-        createInfo.queryCount            = 1;
-        createInfo.pipelineStatistics    = 0;
-        //
-        // NOTE: Disabling this for now, for some reason having
-        //       VK_QUERY_PIPELINE_STATISTIC_MESH_SHADER_INVOCATIONS_BIT_EXT
-        //       in the pipeline statistic causes a massive performance drop
-        //       on NVIDIA.
-        /*
-        VK_QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_VERTICES_BIT |
-        VK_QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_PRIMITIVES_BIT |
-        VK_QUERY_PIPELINE_STATISTIC_VERTEX_SHADER_INVOCATIONS_BIT |
-        VK_QUERY_PIPELINE_STATISTIC_GEOMETRY_SHADER_INVOCATIONS_BIT |
-        VK_QUERY_PIPELINE_STATISTIC_GEOMETRY_SHADER_PRIMITIVES_BIT |
-        VK_QUERY_PIPELINE_STATISTIC_CLIPPING_INVOCATIONS_BIT |
-        VK_QUERY_PIPELINE_STATISTIC_CLIPPING_PRIMITIVES_BIT |
-        VK_QUERY_PIPELINE_STATISTIC_FRAGMENT_SHADER_INVOCATIONS_BIT |
-        VK_QUERY_PIPELINE_STATISTIC_TESSELLATION_CONTROL_SHADER_PATCHES_BIT |
-        VK_QUERY_PIPELINE_STATISTIC_TESSELLATION_EVALUATION_SHADER_INVOCATIONS_BIT |
-        VK_QUERY_PIPELINE_STATISTIC_COMPUTE_SHADER_INVOCATIONS_BIT |
-        VK_QUERY_PIPELINE_STATISTIC_TASK_SHADER_INVOCATIONS_BIT_EXT |
-        VK_QUERY_PIPELINE_STATISTIC_MESH_SHADER_INVOCATIONS_BIT_EXT;
-        */
-
-        CHECK_CALL(vkCreateQueryPool(renderer.get()->Device, &createInfo, nullptr, &queryPool));
-    }
-    bool hasPiplineStats = false;
-
-    // *************************************************************************
     // Scene and constant buffer
     // *************************************************************************
     SceneProperties scene = {};
@@ -518,20 +402,6 @@ int main(int argc, char** argv)
     }
 
     // *************************************************************************
-    // Instances
-    // *************************************************************************
-    const uint32_t    kNumInstanceCols = 40;
-    const uint32_t    kNumInstanceRows = 40;
-    std::vector<mat4> instances(kNumInstanceCols * kNumInstanceRows);
-
-    VulkanBuffer instancesBuffer;
-    {
-        VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-
-        CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(instances), DataPtr(instances), usageFlags, 0, &instancesBuffer));
-    }
-
-    // *************************************************************************
     // Main loop
     // *************************************************************************
     VkClearValue clearValues[2];
@@ -540,45 +410,21 @@ int main(int argc, char** argv)
 
     while (window->PollEvents())
     {
-        // Should match up with what was specified in the query pool's create info
-        std::vector<uint64_t> pipelineStatistics(13);
-        std::memset(DataPtr(pipelineStatistics), 0, SizeInBytes(pipelineStatistics));
-
-        if ((queryPool != VK_NULL_HANDLE) && hasPiplineStats)
-        {
-            VkDeviceSize stride = static_cast<VkDeviceSize>(SizeInBytes(pipelineStatistics));
-
-            //
-            // NOTE: For some reason pipeline statistics returns information for tessellation
-            //       shaders even though there's no tessellation shader present in the pipeline.
-            //
-            vkGetQueryPoolResults(
-                renderer.get()->Device,                             // device
-                queryPool,                                          // queryPool
-                0,                                                  // firstQuery
-                1,                                                  // queryCount
-                SizeInBytes(pipelineStatistics),                    // dataSize
-                DataPtr(pipelineStatistics),                        // pData
-                stride,                                             // stride
-                VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT); // flags
-        }
-
-        // ---------------------------------------------------------------------
         window->ImGuiNewFrameVulkan();
 
         if (ImGui::Begin("Params"))
         {
             // Visibility Func
-            static const char* currentVisibilityFuncName = gVisibilityFuncNames[gVisibilityFunc].c_str();
-            if (ImGui::BeginCombo("Visibility Func", currentVisibilityFuncName))
+            static const char* currentDrawFuncName = gDrawFuncNames[gDrawFunc].c_str();
+            if (ImGui::BeginCombo("Draw Func", currentDrawFuncName))
             {
-                for (size_t i = 0; i < gVisibilityFuncNames.size(); ++i)
+                for (size_t i = 0; i < gDrawFuncNames.size(); ++i)
                 {
-                    bool isSelected = (currentVisibilityFuncName == gVisibilityFuncNames[i]);
-                    if (ImGui::Selectable(gVisibilityFuncNames[i].c_str(), isSelected))
+                    bool isSelected = (currentDrawFuncName == gDrawFuncNames[i]);
+                    if (ImGui::Selectable(gDrawFuncNames[i].c_str(), isSelected))
                     {
-                        currentVisibilityFuncName = gVisibilityFuncNames[i].c_str();
-                        gVisibilityFunc           = static_cast<uint32_t>(i);
+                        currentDrawFuncName = gDrawFuncNames[i].c_str();
+                        gDrawFunc           = static_cast<uint32_t>(i);
                     }
                     if (isSelected)
                     {
@@ -587,130 +433,29 @@ int main(int argc, char** argv)
                 }
                 ImGui::EndCombo();
             }
-
-            ImGui::Checkbox("Fit Cone to Far Clip", &gFitConeToFarClip);
-
-            ImGui::Separator();
-
-            auto meshletCount               = meshlets.size();
-            auto instanceCount              = instances.size();
-            auto totalMeshletCount          = meshletCount * instanceCount;
-            auto totalMeshletVertexCount    = meshletVertexCount * instanceCount;
-            auto totalMeshletPrimitiveCount = meshletTriangleCount * instanceCount;
-
-            ImGui::Columns(2);
-            // clang-format off
-            ImGui::Text("Meshlet Count");                     ImGui::NextColumn(); ImGui::Text("%d", meshletCount); ImGui::NextColumn();
-            ImGui::Text("Meshlet Vertex Count");              ImGui::NextColumn(); ImGui::Text("%d", meshletVertexCount); ImGui::NextColumn();
-            ImGui::Text("Meshlet Primitive Count");           ImGui::NextColumn(); ImGui::Text("%d", meshletTriangleCount); ImGui::NextColumn();
-            ImGui::Text("Instance Count");                    ImGui::NextColumn(); ImGui::Text("%d", instanceCount); ImGui::NextColumn();                
-            ImGui::Text("Instanced Meshlet Count");           ImGui::NextColumn(); ImGui::Text("%d", totalMeshletCount); ImGui::NextColumn();                
-            ImGui::Text("Instanced Meshlet Vertex Count");    ImGui::NextColumn(); ImGui::Text("%d", totalMeshletVertexCount); ImGui::NextColumn();                
-            ImGui::Text("Instanced Meshlet Primitive Count"); ImGui::NextColumn(); ImGui::Text("%d", totalMeshletPrimitiveCount); ImGui::NextColumn();                
-            ImGui::Columns(2);
-            // clang-format on
-            ImGui::Columns(1);
-
-            ImGui::Separator();
-
-            ImGui::Columns(2);
-            // clang-format off
-            ImGui::Text("Input Assembly Vertices"     ); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics[ 0]); ImGui::NextColumn();
-            ImGui::Text("Input Assembly Primitives"   ); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics[ 1]); ImGui::NextColumn();
-            ImGui::Text("Vertex Shader Invocations"   ); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics[ 2]); ImGui::NextColumn();
-            ImGui::Text("Geometry Shader Invocations" ); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics[ 3]); ImGui::NextColumn();
-            ImGui::Text("Geometry Shader Primitives"  ); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics[ 4]); ImGui::NextColumn();
-            ImGui::Text("Clipping Invocations"        ); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics[ 4]); ImGui::NextColumn();
-            ImGui::Text("Clipping Primitives"         ); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics[ 5]); ImGui::NextColumn();
-            ImGui::Text("Fragment Shader Invocations" ); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics[ 6]); ImGui::NextColumn();
-            ImGui::Text("Tess Ctrl Shader Patches"    ); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics[ 7]); ImGui::NextColumn();
-            ImGui::Text("Tess Eval Shader Invocations"); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics[ 9]); ImGui::NextColumn();
-            ImGui::Text("Compute Shader Invocations"  ); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics[10]); ImGui::NextColumn();
-            ImGui::Text("Task Shader Invocations"     ); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics[11]); ImGui::NextColumn();
-            ImGui::Text("Mesh Shader Invocations"     ); ImGui::NextColumn(); ImGui::Text("%" PRIu64, pipelineStatistics[12]); ImGui::NextColumn();
-
-            // clang-format on
         }
         ImGui::End();
 
         // ---------------------------------------------------------------------
 
-        // Update instance transforms
-        float farDist = 1000.0f;
-        {
-            float maxSpan       = std::max<float>(meshBounds.Width(), meshBounds.Depth());
-            float instanceSpanX = 4.0f * maxSpan;
-            float instanceSpanZ = 4.5f * maxSpan;
-            float totalSpanX    = kNumInstanceCols * instanceSpanX;
-            float totalSpanZ    = kNumInstanceRows * instanceSpanZ;
-
-            farDist = std::min(totalSpanX, totalSpanZ);
-
-            for (uint32_t j = 0; j < kNumInstanceRows; ++j)
-            {
-                for (uint32_t i = 0; i < kNumInstanceCols; ++i)
-                {
-                    float x = i * instanceSpanX - (totalSpanX / 2.0f) + instanceSpanX / 2.0f;
-                    float y = 0;
-                    float z = j * instanceSpanZ - (totalSpanZ / 2.0f) + instanceSpanZ / 2.0f;
-
-                    uint32_t index   = j * kNumInstanceCols + i;
-                    float    t       = static_cast<float>(glfwGetTime()) + ((i ^ j + i) / 10.0f);
-                    instances[index] = glm::translate(vec3(x, y, z)) * glm::rotate(t, vec3(0, 1, 0));
-                }
-            }
-        }
-
-        // ---------------------------------------------------------------------
-
         // Update scene
         {
-            vec3 eyePosition = vec3(0, 0.2f, 0.0f);
-            vec3 target      = vec3(0, 0.0f, -1.3f);
+            vec3 eyePosition = vec3(0, 0.105f, 0.40f);
+            vec3 target      = vec3(0, 0.105f, 0);
 
-            // Smooth out the rotation on Y
-            gAngle += (gTargetAngle - gAngle) * 0.1f;
-            mat4 rotMat = glm::rotate(glm::radians(gAngle), vec3(0, 1, 0));
-            target      = rotMat * vec4(target, 1.0);
-
-            PerspCamera camera = PerspCamera(45.0f, window->GetAspectRatio(), 0.1f, farDist);
+            PerspCamera camera = PerspCamera(60.0f, window->GetAspectRatio(), 0.1f, 10000.0f);
             camera.LookAt(eyePosition, target);
 
-            Camera::FrustumPlane frLeft, frRight, frTop, frBottom, frNear, frFar;
-            camera.GetFrustumPlanes(&frLeft, &frRight, &frTop, &frBottom, &frNear, &frFar);
-            //
-            auto frCone = camera.GetFrustumCone(gFitConeToFarClip);
-
-            scene.CameraVP                             = camera.GetViewProjectionMatrix();
-            scene.Frustum.Planes[FRUSTUM_PLANE_LEFT]   = {frLeft.Normal, 0.0f, frLeft.Position, 0.0f};
-            scene.Frustum.Planes[FRUSTUM_PLANE_RIGHT]  = {frRight.Normal, 0.0f, frRight.Position, 0.0f};
-            scene.Frustum.Planes[FRUSTUM_PLANE_TOP]    = {frTop.Normal, 0.0f, frTop.Position, 0.0f};
-            scene.Frustum.Planes[FRUSTUM_PLANE_BOTTOM] = {frBottom.Normal, 0.0f, frBottom.Position, 0.0f};
-            scene.Frustum.Planes[FRUSTUM_PLANE_NEAR]   = {frNear.Normal, 0.0f, frNear.Position, 0.0f};
-            scene.Frustum.Planes[FRUSTUM_PLANE_FAR]    = {frFar.Normal, 0.0f, frFar.Position, 0.0f};
-            scene.Frustum.Sphere                       = camera.GetFrustumSphere();
-            scene.Frustum.Cone.Tip                     = frCone.Tip;
-            scene.Frustum.Cone.Height                  = frCone.Height;
-            scene.Frustum.Cone.Direction               = frCone.Dir;
-            scene.Frustum.Cone.Angle                   = frCone.Angle;
-            scene.InstanceCount                        = static_cast<uint32_t>(instances.size());
-            scene.MeshletCount                         = static_cast<uint32_t>(meshlets.size());
-            scene.VisibilityFunc                       = gVisibilityFunc;
+            scene.InstanceM     = glm::rotate(static_cast<float>(glfwGetTime()), glm::vec3(0, 1, 0));
+            scene.CameraVP      = camera.GetViewProjectionMatrix();
+            scene.EyePosition   = eyePosition;
+            scene.DrawFunc      = gDrawFunc;
+            scene.LightPosition = vec3(0.25f, 1, 1);
 
             void* pDst = nullptr;
             CHECK_CALL(vmaMapMemory(renderer.get()->Allocator, sceneBuffer.Allocation, reinterpret_cast<void**>(&pDst)));
             memcpy(pDst, &scene, sizeof(SceneProperties));
             vmaUnmapMemory(renderer.get()->Allocator, sceneBuffer.Allocation);
-        }
-
-        // ---------------------------------------------------------------------
-
-        // Copy instances transforms to instances buffer
-        {
-            void* pDst = nullptr;
-            CHECK_CALL(vmaMapMemory(renderer.get()->Allocator, instancesBuffer.Allocation, reinterpret_cast<void**>(&pDst)));
-            memcpy(pDst, instances.data(), SizeInBytes(instances));
-            vmaUnmapMemory(renderer.get()->Allocator, instancesBuffer.Allocation);
         }
 
         // ---------------------------------------------------------------------
@@ -727,12 +472,6 @@ int main(int argc, char** argv)
 
         CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
         {
-            // Reset query pool - this needs to happen outside of render pass
-            if (queryPool != VK_NULL_HANDLE)
-            {
-                vkCmdResetQueryPool(cmdBuf.CommandBuffer, queryPool, 0, 1);
-            }
-
             CmdTransitionImageLayout(
                 cmdBuf.CommandBuffer,
                 swapchainImages[swapchainImageIndex],
@@ -773,30 +512,23 @@ int main(int argc, char** argv)
 
             vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
+            PerspCamera camera = PerspCamera(60.0f, window->GetAspectRatio());
+            camera.LookAt(vec3(0, 0.105f, 0.40f), vec3(0, 0.105f, 0));
+
+            mat4 R   = glm::rotate(static_cast<float>(glfwGetTime()), glm::vec3(0, 1, 0));
+            mat4 MVP = camera.GetViewProjectionMatrix() * R;
+
             PushGraphicsDescriptor(cmdBuf.CommandBuffer, pipelineLayout, 0, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &sceneBuffer);
             PushGraphicsDescriptor(cmdBuf.CommandBuffer, pipelineLayout, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &positionBuffer);
-            PushGraphicsDescriptor(cmdBuf.CommandBuffer, pipelineLayout, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &meshletBuffer);
-            PushGraphicsDescriptor(cmdBuf.CommandBuffer, pipelineLayout, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &meshletBoundsBuffer);
-            PushGraphicsDescriptor(cmdBuf.CommandBuffer, pipelineLayout, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &meshletVerticesBuffer);
-            PushGraphicsDescriptor(cmdBuf.CommandBuffer, pipelineLayout, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &meshletTrianglesBuffer);
-            PushGraphicsDescriptor(cmdBuf.CommandBuffer, pipelineLayout, 0, 6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &instancesBuffer);
+            PushGraphicsDescriptor(cmdBuf.CommandBuffer, pipelineLayout, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &texCoordsBuffer);
+            PushGraphicsDescriptor(cmdBuf.CommandBuffer, pipelineLayout, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &normalsBuffer);
+            PushGraphicsDescriptor(cmdBuf.CommandBuffer, pipelineLayout, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &meshletBuffer);
+            PushGraphicsDescriptor(cmdBuf.CommandBuffer, pipelineLayout, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &meshletVerticesBuffer);
+            PushGraphicsDescriptor(cmdBuf.CommandBuffer, pipelineLayout, 0, 6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &meshletTrianglesBuffer);
 
-            // vkCmdDrawMeshTasksEXT with pipeline statistics
-            {
-                if (queryPool != VK_NULL_HANDLE)
-                {
-                    vkCmdBeginQuery(cmdBuf.CommandBuffer, queryPool, 0, 0);
-                }
-
-                // Task (amplification) shader uses 32 for thread group size
-                uint32_t threadGroupCountX = static_cast<uint32_t>((meshlets.size() / 32) + 1) * static_cast<uint32_t>(instances.size());
-                fn_vkCmdDrawMeshTasksEXT(cmdBuf.CommandBuffer, threadGroupCountX, 1, 1);
-
-                if (queryPool != VK_NULL_HANDLE)
-                {
-                    vkCmdEndQuery(cmdBuf.CommandBuffer, queryPool, 0);
-                }
-            }
+            // Task (amplification) shader uses 32 for thread group size
+            uint32_t threadGroupCountX = static_cast<UINT>((meshlets.size() / 32) + 1);
+            fn_vkCmdDrawMeshTasksEXT(cmdBuf.CommandBuffer, threadGroupCountX, 1, 1);
 
             vkCmdEndRendering(cmdBuf.CommandBuffer);
 
@@ -841,9 +573,6 @@ int main(int argc, char** argv)
             assert(false && "WaitForGpu failed");
         }
 
-        // Command list execution is done we can read the pipeline stats
-        hasPiplineStats = true;
-
         if (!SwapchainPresent(renderer.get(), swapchainImageIndex))
         {
             assert(false && "SwapchainPresent failed");
@@ -859,25 +588,20 @@ void CreatePipelineLayout(
     VkPipelineLayout*      pPipelineLayout,
     VkDescriptorSetLayout* pDescriptorSetLayout)
 {
-    VkPushConstantRange push_constant = {};
-    push_constant.offset              = 0;
-    push_constant.size                = sizeof(mat4) + sizeof(uint32_t);
-    push_constant.stageFlags          = VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_TASK_BIT_EXT;
-
     std::vector<VkDescriptorSetLayoutBinding> bindings = {};
 
-    // ConstantBuffer<SceneProperties> Scene : register(b0);
+    // ConstantBuffer<SceneProperties> Cam : register(b0);
     {
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding                      = 0;
         binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         binding.descriptorCount              = 1;
-        binding.stageFlags                   = VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_TASK_BIT_EXT;
+        binding.stageFlags                   = VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
         bindings.push_back(binding);
     }
 
-    // StructuredBuffer<Vertex> Vertices : register(t1);
+    // StructuredBuffer<float3> Positions : register(t1);
     {
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding                      = 1;
@@ -888,7 +612,7 @@ void CreatePipelineLayout(
         bindings.push_back(binding);
     }
 
-    // StructuredBuffer<Meshlet> Meshlets : register(t2);
+    // StructuredBuffer<float2> TexCoords : register(t2);
     {
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding                      = 2;
@@ -899,18 +623,18 @@ void CreatePipelineLayout(
         bindings.push_back(binding);
     }
 
-    // StructuredBuffer<float4> MeshletBounds : register(t3);
+    // StructuredBuffer<float3> Normals : register(t3);
     {
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding                      = 3;
         binding.descriptorType               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         binding.descriptorCount              = 1;
-        binding.stageFlags                   = VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_TASK_BIT_EXT;
+        binding.stageFlags                   = VK_SHADER_STAGE_MESH_BIT_EXT;
 
         bindings.push_back(binding);
     }
 
-    // StructuredBuffer<uint> VertexIndices : register(t4);
+    // StructuredBuffer<Meshlet> Meshlets : register(t4);
     {
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding                      = 4;
@@ -921,7 +645,7 @@ void CreatePipelineLayout(
         bindings.push_back(binding);
     }
 
-    // StructuredBuffer<Instance> TriangleIndices : register(t5);
+    // ByteAddressBuffer MeshletVertexIndices : register(t5);
     {
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding                      = 5;
@@ -932,13 +656,13 @@ void CreatePipelineLayout(
         bindings.push_back(binding);
     }
 
-    // ByteAddressBuffer Instances : register(t6);
+    // StructuredBuffer<uint> MeshletTriangles : register(t6);
     {
         VkDescriptorSetLayoutBinding binding = {};
         binding.binding                      = 6;
         binding.descriptorType               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         binding.descriptorCount              = 1;
-        binding.stageFlags                   = VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_TASK_BIT_EXT;
+        binding.stageFlags                   = VK_SHADER_STAGE_MESH_BIT_EXT;
 
         bindings.push_back(binding);
     }

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(117_mesh_shader_cull_lod_vulkan)
+project(119_mesh_shader_vertex_bary_vulkan)
 
 add_executable(
     ${PROJECT_NAME}
@@ -20,6 +20,7 @@ add_executable(
 )
 
 set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER "geometry")
+
 
 target_compile_definitions(
 	${PROJECT_NAME}

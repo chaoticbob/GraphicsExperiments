@@ -4,14 +4,14 @@
 
 struct SceneProperties {
     float3      EyePosition;
-    float4x4    ViewMatrix;
-    float4x4    ProjMatrix;
+    float4x4    CameraVP;
     uint        InstanceCount;
     uint        MeshletCount;
     uint        __pad0;
     float       MaxLODDistance;
     uint        Meshlet_LOD_Offsets[5];
     uint        Meshlet_LOD_Counts[5];
+    uint3        __pad1;
     float3      MeshBoundsMin;
     float3      MeshBoundsMax;
 };
@@ -93,10 +93,6 @@ void asmain(
         // Make sure meshlet index is within bounds of current LOD's meshlet count
         if (meshletIndex < lodMeshletCount) {
             meshletIndex += Scene.Meshlet_LOD_Offsets[lod];
-
-            // Transform meshlet's bounding sphere into world space
-            float4 meshletBoundingSphere = mul(M, float4(MeshletBounds[meshletIndex].xyz, 1.0));
-            meshletBoundingSphere.w = MeshletBounds[meshletIndex].w;
             
             // Assuming visibile, no culling here
             visible = 1;
@@ -151,8 +147,7 @@ void msmain(
         uint vertexIndex = m.VertexOffset + gtid;        
         vertexIndex = VertexIndices[vertexIndex];
 
-        float4x4 VP  = mul(Scene.ProjMatrix, Scene.ViewMatrix);
-        float4x4 MVP = mul(VP, Instances[instanceIndex].M);
+        float4x4 MVP = mul(Scene.CameraVP, Instances[instanceIndex].M);
 
         vertices[gtid].Position = mul(MVP, float4(Vertices[vertexIndex].Position, 1.0));
         
