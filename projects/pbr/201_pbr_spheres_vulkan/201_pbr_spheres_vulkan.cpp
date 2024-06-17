@@ -575,6 +575,16 @@ int main(int argc, char** argv)
 
             // Draw environment
             {
+
+                // Bind the VS/FS Graphics Pipeline
+                vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, envPipelineState);
+
+                glm::mat4 moveUp = glm::translate(vec3(0, 0, 0));
+
+                // SceneParams (b0)
+                mat4 mvp = projMat * viewMat * moveUp;
+                vkCmdPushConstants(cmdBuf.CommandBuffer, envPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16 * sizeof(float), &mvp);
+                // Textures (32)
                 vkCmdBindDescriptorSets(
                     cmdBuf.CommandBuffer,
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -585,19 +595,10 @@ int main(int argc, char** argv)
                     0,
                     nullptr);
 
-                // Bind the VS/FS Graphics Pipeline
-                vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, envPipelineState);
-
-                glm::mat4 moveUp = glm::translate(vec3(0, 0, 0));
-
-                // SceneParams (b0)
-                mat4 mvp = projMat * viewMat * moveUp;
-                vkCmdPushConstants(cmdBuf.CommandBuffer, envPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16 * sizeof(float), &mvp);
-
-                // Bind the Index Buffer
+                // Index Buffer
                 vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, envIndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
 
-                // Bind the Vertex Buffer
+                // Vertex Buffer
                 VkBuffer     vertexBuffers[] = {envPositionBuffer.Buffer, envTexCoordBuffer.Buffer};
                 VkDeviceSize offsets[]       = {0, 0};
                 vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 2, vertexBuffers, offsets);
@@ -618,10 +619,10 @@ int main(int argc, char** argv)
                     nullptr);
 
 
-                // Bind the Index Buffer
+                // Index Buffer
                 vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, materialSphereIndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
 
-                // Bind the Vertex Buffer
+                // Vertex Buffer
                 VkBuffer     vertexBuffers[] = {materialSpherePositionBuffer.Buffer, materialSphereNormalBuffer.Buffer};
                 VkDeviceSize offsets[]       = {0, 0};
                 vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 2, vertexBuffers, offsets);
