@@ -13,7 +13,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -26,41 +27,41 @@ using namespace glm;
 
 struct Light
 {
-   vec3     position;
-   uint32_t __pad;
-   vec3     color;
-   float    intensity;
+    vec3     position;
+    uint32_t __pad;
+    vec3     color;
+    float    intensity;
 };
 
-struct PBRSceneParameters
+struct SceneParameters
 {
-   mat4     viewProjectionMatrix;
-   vec3     eyePosition;
-   uint32_t numLights;
-   Light    lights[8];
-   uint     iblEnvironmentNumLevels;
+    mat4     viewProjectionMatrix;
+    vec3     eyePosition;
+    uint32_t numLights;
+    Light    lights[8];
+    uint     iblEnvironmentNumLevels;
 };
 
 struct EnvSceneParameters
 {
-   mat4     MVP;
+    mat4 MVP;
 };
 
 struct DrawParameters
-{ 
-   mat4     ModelMatrix;
+{
+    mat4 ModelMatrix;
 };
 
 struct MaterialParameters
 {
-   vec3     baseColor;
-   float    roughness;
-   float    metallic;
+    vec3  baseColor;
+    float roughness;
+    float metallic;
 };
 
 struct PBRImplementationInfo
 {
-   std::string description;
+    std::string description;
 };
 
 // =============================================================================
@@ -75,54 +76,47 @@ static float gAngle       = 0.0f;
 
 static uint32_t gNumLights = 0;
 
-void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout);
-void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout);
+void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout);
+void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout);
 void CreateSphereParamBuffers(
-   VulkanRenderer* pRenderer, 
-   std::vector<VulkanBuffer> &materialParamBuffers,
-   std::vector<VulkanBuffer> &drawParamBuffers);
+    VulkanRenderer*            pRenderer,
+    std::vector<VulkanBuffer>& materialParamBuffers,
+    std::vector<VulkanBuffer>& drawParamBuffers);
 void CreateMaterialSphereVertexBuffers(
-    VulkanRenderer*  pRenderer,
-    uint32_t*        pNumIndices,
-    VulkanBuffer*    pIndexBuffer,
-    VulkanBuffer*    pPositionBuffer,
-    VulkanBuffer*    pNormalBuffer);
+    VulkanRenderer* pRenderer,
+    uint32_t*       pNumIndices,
+    VulkanBuffer*   pIndexBuffer,
+    VulkanBuffer*   pPositionBuffer,
+    VulkanBuffer*   pNormalBuffer);
 void CreateEnvironmentVertexBuffers(
-    VulkanRenderer*  pRenderer,
-    uint32_t*        pNumIndices,
-    VulkanBuffer*    pIndexBuffer,
-    VulkanBuffer*    pPositionBuffer,
-    VulkanBuffer*    pTexCoordBuffer);
+    VulkanRenderer* pRenderer,
+    uint32_t*       pNumIndices,
+    VulkanBuffer*   pIndexBuffer,
+    VulkanBuffer*   pPositionBuffer,
+    VulkanBuffer*   pTexCoordBuffer);
 void CreateIBLTextures(
-    VulkanRenderer*  pRenderer,
-    VulkanImage*     pBRDFLUT,
-    VulkanImage*     pIrradianceTexture,
-    VulkanImage*     pEnvironmentTexture,
-    uint32_t*        pEnvNumLevels);
-void CreateDescriptorBuffer(
-   VulkanRenderer*         pRenderer,
-   VkDescriptorSetLayout   pDescriptorSetLayout,
-   VulkanBuffer*           pBuffer);
-void WritePBRDescriptors(
-   VulkanRenderer*         pRenderer,
-   VkDescriptorSetLayout   descriptorSetLayout,
-   VulkanBuffer*           pDescriptorBuffer,
-   const VulkanBuffer*     pSceneParamsBuffer,
-   const VulkanImage*      pBRDFLUT,
-   const VulkanImage*      pIrradianceTexture,
-   const VulkanImage*      pEnvTexture);
-void WriteEnvDescriptors(
-   VulkanRenderer*         pRenderer,
-   VkDescriptorSetLayout   descriptorSetLayout,
-   VulkanBuffer*           pDescrptorBuffer,
-   VulkanImage*            pEnvTexture);
+    VulkanRenderer* pRenderer,
+    VulkanImage*    pBRDFLUT,
+    VulkanImage*    pIrradianceTexture,
+    VulkanImage*    pEnvironmentTexture,
+    uint32_t*       pEnvNumLevels);
+void CreateDescriptors(
+    VulkanRenderer* pRenderer,
+    VulkanBuffer*   pPBRSceneParamsBuffer,
+    VulkanImage*    pBRDFLUT,
+    VulkanImage*    pIrradianceTexture,
+    VulkanImage*    pEnvironmentTexture,
+    uint32_t        pEnvNumLevels,
+    Descriptors*    pDescriptors);
+
 
 void MouseMove(int x, int y, int buttons)
 {
     static int prevX = x;
     static int prevY = y;
 
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         int dx = x - prevX;
         int dy = y - prevY;
 
@@ -140,10 +134,12 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-   VulkanFeatures features = {};
-   if (!InitVulkan(renderer.get(), gEnableDebug, features)) {
-      return EXIT_FAILURE;
-   }
+    VulkanFeatures features = {};
+    features.EnableDescriptorBuffer = false;
+    if (!InitVulkan(renderer.get(), gEnableDebug, features))
+    {
+        return EXIT_FAILURE;
+    }
 
     // *************************************************************************
     // Compile shaders
@@ -156,7 +152,8 @@ int main(int argc, char** argv)
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &spirvVS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
@@ -166,7 +163,8 @@ int main(int argc, char** argv)
         }
 
         hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &spirvFS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (FS): " << errorMsg << "\n";
@@ -178,20 +176,20 @@ int main(int argc, char** argv)
 
     VkShaderModule shaderModuleVS = VK_NULL_HANDLE;
     {
-       VkShaderModuleCreateInfo createInfo   = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
-       createInfo.codeSize                   = SizeInBytes(spirvVS);
-       createInfo.pCode                      = DataPtr(spirvVS);
+        VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+        createInfo.codeSize                 = SizeInBytes(spirvVS);
+        createInfo.pCode                    = DataPtr(spirvVS);
 
-       CHECK_CALL(vkCreateShaderModule(renderer->Device, &createInfo, nullptr, &shaderModuleVS));
+        CHECK_CALL(vkCreateShaderModule(renderer->Device, &createInfo, nullptr, &shaderModuleVS));
     }
 
     VkShaderModule shaderModuleFS = VK_NULL_HANDLE;
     {
-       VkShaderModuleCreateInfo createInfo   = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
-       createInfo.codeSize                   = SizeInBytes(spirvFS);
-       createInfo.pCode                      = DataPtr(spirvFS);
+        VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+        createInfo.codeSize                 = SizeInBytes(spirvFS);
+        createInfo.pCode                    = DataPtr(spirvFS);
 
-       CHECK_CALL(vkCreateShaderModule(renderer->Device, &createInfo, nullptr, &shaderModuleFS));
+        CHECK_CALL(vkCreateShaderModule(renderer->Device, &createInfo, nullptr, &shaderModuleFS));
     }
 
     // Draw texture shaders
@@ -199,14 +197,16 @@ int main(int argc, char** argv)
     std::vector<uint32_t> drawTextureSpirvFS;
     {
         std::string shaderSource = LoadString("projects/201_pbr_spheres/drawtexture.hlsl");
-        if (shaderSource.empty()) {
+        if (shaderSource.empty())
+        {
             assert(false && "no shader source");
             return EXIT_FAILURE;
         }
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &drawTextureSpirvVS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
@@ -216,7 +216,8 @@ int main(int argc, char** argv)
         }
 
         hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &drawTextureSpirvFS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (FS): " << errorMsg << "\n";
@@ -228,23 +229,21 @@ int main(int argc, char** argv)
 
     VkShaderModule drawTextureShaderModuleVS = VK_NULL_HANDLE;
     {
-       VkShaderModuleCreateInfo createInfo   = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
-       createInfo.codeSize                   = SizeInBytes(drawTextureSpirvVS);
-       createInfo.pCode                      = DataPtr(drawTextureSpirvVS);
+        VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+        createInfo.codeSize                 = SizeInBytes(drawTextureSpirvVS);
+        createInfo.pCode                    = DataPtr(drawTextureSpirvVS);
 
-       CHECK_CALL(vkCreateShaderModule(renderer->Device, &createInfo, nullptr, &drawTextureShaderModuleVS));
+        CHECK_CALL(vkCreateShaderModule(renderer->Device, &createInfo, nullptr, &drawTextureShaderModuleVS));
     }
 
     VkShaderModule drawTextureShaderModuleFS = VK_NULL_HANDLE;
     {
-       VkShaderModuleCreateInfo createInfo   = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
-       createInfo.codeSize                   = SizeInBytes(drawTextureSpirvFS);
-       createInfo.pCode                      = DataPtr(drawTextureSpirvFS);
+        VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+        createInfo.codeSize                 = SizeInBytes(drawTextureSpirvFS);
+        createInfo.pCode                    = DataPtr(drawTextureSpirvFS);
 
-       CHECK_CALL(vkCreateShaderModule(renderer->Device, &createInfo, nullptr, &drawTextureShaderModuleFS));
+        CHECK_CALL(vkCreateShaderModule(renderer->Device, &createInfo, nullptr, &drawTextureShaderModuleFS));
     }
-
-
 
     // *************************************************************************
     // PBR pipeline layout
@@ -263,31 +262,31 @@ int main(int argc, char** argv)
     // *************************************************************************
     VkPipeline pbrPipelineState;
     CHECK_CALL(CreateDrawNormalPipeline(
-       renderer.get(),
-       pbrPipelineLayout.PipelineLayout,
-       shaderModuleVS,
-       shaderModuleFS,
-       GREX_DEFAULT_RTV_FORMAT,
-       GREX_DEFAULT_DSV_FORMAT,
-       &pbrPipelineState,
-       false,
-       VK_CULL_MODE_BACK_BIT,
-       "vsmain",
-       "psmain"));
+        renderer.get(),
+        pbrPipelineLayout.PipelineLayout,
+        shaderModuleVS,
+        shaderModuleFS,
+        GREX_DEFAULT_RTV_FORMAT,
+        GREX_DEFAULT_DSV_FORMAT,
+        &pbrPipelineState,
+        false,
+        VK_CULL_MODE_BACK_BIT,
+        "vsmain",
+        "psmain"));
 
     // *************************************************************************
     // Environment pipeline state object
     // *************************************************************************
     VkPipeline envPipelineState;
     CHECK_CALL(CreateDrawTexturePipeline(
-       renderer.get(),
-       envPipelineLayout.PipelineLayout,
-       drawTextureShaderModuleVS,
-       drawTextureShaderModuleFS,
-       GREX_DEFAULT_RTV_FORMAT,
-       GREX_DEFAULT_DSV_FORMAT,
-       &envPipelineState,
-       VK_CULL_MODE_FRONT_BIT,
+        renderer.get(),
+        envPipelineLayout.PipelineLayout,
+        drawTextureShaderModuleVS,
+        drawTextureShaderModuleFS,
+        GREX_DEFAULT_RTV_FORMAT,
+        GREX_DEFAULT_DSV_FORMAT,
+        &envPipelineState,
+        VK_CULL_MODE_FRONT_BIT,
         "vsmain",
         "psmain"));
 
@@ -296,13 +295,13 @@ int main(int argc, char** argv)
     // *************************************************************************
     VulkanBuffer pbrSceneParamsBuffer;
     CHECK_CALL(CreateBuffer(
-       renderer.get(),
-       Align<size_t>(sizeof(PBRSceneParameters), 256),
-       nullptr,
-       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-       VMA_MEMORY_USAGE_CPU_TO_GPU,
-       0,
-       &pbrSceneParamsBuffer));
+        renderer.get(),
+        Align<size_t>(sizeof(SceneParameters), 256),
+        nullptr,
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VMA_MEMORY_USAGE_CPU_TO_GPU,
+        0,
+        &pbrSceneParamsBuffer));
 
     // *************************************************************************
     // Material sphere vertex buffers
@@ -341,35 +340,25 @@ int main(int argc, char** argv)
     uint32_t    envNumLevels = 0;
     CreateIBLTextures(renderer.get(), &brdfLUT, &irrTexture, &envTexture, &envNumLevels);
 
+   // *************************************************************************
+    // Descriptor heaps
     // *************************************************************************
-    // Descriptor buffers
-    // *************************************************************************
-    VulkanBuffer pbrDescriptorBuffer = {};
-    CreateDescriptorBuffer(renderer.get(), pbrPipelineLayout.DescriptorSetLayout, &pbrDescriptorBuffer);
-
-    WritePBRDescriptors(
-       renderer.get(),
-       pbrPipelineLayout.DescriptorSetLayout,
-       &pbrDescriptorBuffer,
+    Descriptors descriptors;
+    CreateDescriptors(
+       renderer.get(), 
        &pbrSceneParamsBuffer,
        &brdfLUT,
        &irrTexture,
-       &envTexture);
-
-    VulkanBuffer envDescriptorBuffer = {};
-    CreateDescriptorBuffer(renderer.get(), envPipelineLayout.DescriptorSetLayout, &envDescriptorBuffer);
-
-    WriteEnvDescriptors(
-       renderer.get(),
-       envPipelineLayout.DescriptorSetLayout,
-       &envDescriptorBuffer,
-       &envTexture);
+       &envTexture,
+       envNumLevels,
+       &descriptors);
 
     // *************************************************************************
     // Window
     // *************************************************************************
     auto window = Window::Create(gWindowWidth, gWindowHeight, "201_pbr_spheres_vulkan");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
     }
@@ -378,7 +367,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight())) {
+    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight()))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -396,7 +386,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForVulkan(renderer.get(), renderPass.RenderPass)) {
+    if (!window->InitImGuiForVulkan(renderer.get(), renderPass.RenderPass))
+    {
         assert(false && "Window::InitImGuiForVulkan failed");
         return EXIT_FAILURE;
     }
@@ -404,56 +395,58 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain image views, depth buffers/views
     // *************************************************************************
-    std::vector<VkImage>      images;
-    std::vector<VkImageView>  imageViews;
-    std::vector<VkImageView>  depthViews;
+    std::vector<VkImage>     images;
+    std::vector<VkImageView> imageViews;
+    std::vector<VkImageView> depthViews;
     {
-       CHECK_CALL(GetSwapchainImages(renderer.get(), images));
+        CHECK_CALL(GetSwapchainImages(renderer.get(), images));
 
-       for (auto& image : images) {
-          // Create swap chain images
-          VkImageViewCreateInfo createInfo           = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
-          createInfo.image                           = image;
-          createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
-          createInfo.format                          = GREX_DEFAULT_RTV_FORMAT;
-          createInfo.components                      = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A };
-          createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-          createInfo.subresourceRange.baseMipLevel   = 0;
-          createInfo.subresourceRange.levelCount     = 1;
-          createInfo.subresourceRange.baseArrayLayer = 0;
-          createInfo.subresourceRange.layerCount     = 1;
+        for (auto& image : images)
+        {
+            // Create swap chain images
+            VkImageViewCreateInfo createInfo           = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+            createInfo.image                           = image;
+            createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+            createInfo.format                          = GREX_DEFAULT_RTV_FORMAT;
+            createInfo.components                      = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A};
+            createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+            createInfo.subresourceRange.baseMipLevel   = 0;
+            createInfo.subresourceRange.levelCount     = 1;
+            createInfo.subresourceRange.baseArrayLayer = 0;
+            createInfo.subresourceRange.layerCount     = 1;
 
-          VkImageView imageView = VK_NULL_HANDLE;
-          CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &imageView));
+            VkImageView imageView = VK_NULL_HANDLE;
+            CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &imageView));
 
-          imageViews.push_back(imageView);
-       }
+            imageViews.push_back(imageView);
+        }
 
-       size_t imageCount = images.size();
+        size_t imageCount = images.size();
 
-       std::vector<VulkanImage> depthImages;
-       depthImages.resize(images.size());
+        std::vector<VulkanImage> depthImages;
+        depthImages.resize(images.size());
 
-       for (int depthIndex = 0; depthIndex < imageCount; depthIndex++) {
-          // Create depth images
-          CHECK_CALL(CreateDSV(renderer.get(), window->GetWidth(), window->GetHeight(), &depthImages[depthIndex]));
+        for (int depthIndex = 0; depthIndex < imageCount; depthIndex++)
+        {
+            // Create depth images
+            CHECK_CALL(CreateDSV(renderer.get(), window->GetWidth(), window->GetHeight(), &depthImages[depthIndex]));
 
-          VkImageViewCreateInfo createInfo           = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
-          createInfo.image                           = depthImages[depthIndex].Image;
-          createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
-          createInfo.format                          = GREX_DEFAULT_DSV_FORMAT;
-          createInfo.components                      = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY };
-          createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
-          createInfo.subresourceRange.baseMipLevel   = 0;
-          createInfo.subresourceRange.levelCount     = 1;
-          createInfo.subresourceRange.baseArrayLayer = 0;
-          createInfo.subresourceRange.layerCount     = 1;
+            VkImageViewCreateInfo createInfo           = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+            createInfo.image                           = depthImages[depthIndex].Image;
+            createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+            createInfo.format                          = GREX_DEFAULT_DSV_FORMAT;
+            createInfo.components                      = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY};
+            createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
+            createInfo.subresourceRange.baseMipLevel   = 0;
+            createInfo.subresourceRange.levelCount     = 1;
+            createInfo.subresourceRange.baseArrayLayer = 0;
+            createInfo.subresourceRange.layerCount     = 1;
 
-          VkImageView depthView = VK_NULL_HANDLE;
-          CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &depthView));
+            VkImageView depthView = VK_NULL_HANDLE;
+            CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &depthView));
 
-          depthViews.push_back(depthView);
-       }
+            depthViews.push_back(depthView);
+        }
     }
 
     // *************************************************************************
@@ -461,835 +454,765 @@ int main(int argc, char** argv)
     // *************************************************************************
     CommandObjects cmdBuf = {};
     {
-       CHECK_CALL(CreateCommandBuffer(renderer.get(), 0, &cmdBuf));
+        CHECK_CALL(CreateCommandBuffer(renderer.get(), 0, &cmdBuf));
     }
 
     // *************************************************************************
     // Persistent map scene parameters
     // *************************************************************************
-    PBRSceneParameters* pPBRSceneParams = nullptr;
-    vmaMapMemory(renderer->Allocator, pbrSceneParamsBuffer.Allocation, reinterpret_cast<void**>(&pPBRSceneParams));
+    SceneParameters* pSceneParams = nullptr;
+    vmaMapMemory(renderer->Allocator, pbrSceneParamsBuffer.Allocation, reinterpret_cast<void**>(&pSceneParams));
 
     // *************************************************************************
     // Main loop
     // *************************************************************************
     VkClearValue clearValues[2];
-    clearValues[0].color = { {0.0f, 0.0f, 0.2f, 1.0f } };
-    clearValues[1].depthStencil = { 1.0f, 0 };
+    clearValues[0].color = {
+        {0.0f, 0.0f, 0.2f, 1.0f}
+    };
+    clearValues[1].depthStencil = {1.0f, 0};
 
-    while (window->PollEvents()) {
-       window->ImGuiNewFrameVulkan();
+    while (window->PollEvents())
+    {
+        window->ImGuiNewFrameVulkan();
 
-       if (ImGui::Begin("Scene")) {
-          ImGui::SliderInt("Number of Lights", reinterpret_cast<int*>(&gNumLights), 0, 4);
-       }
-       ImGui::End();
+        if (ImGui::Begin("Scene"))
+        {
+            ImGui::SliderInt("Number of Lights", reinterpret_cast<int*>(&gNumLights), 0, 4);
+        }
+        ImGui::End();
 
-       // ---------------------------------------------------------------------
+        // ---------------------------------------------------------------------
 
-       UINT bufferIndex = 0;
-       if (AcquireNextImage(renderer.get(), &bufferIndex)) {
-          assert(false && "AcquireNextImage failed");
-          break;
-       }
+        UINT bufferIndex = 0;
+        if (AcquireNextImage(renderer.get(), &bufferIndex))
+        {
+            assert(false && "AcquireNextImage failed");
+            break;
+        }
 
-       VkCommandBufferBeginInfo vkbi = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-       vkbi.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        VkCommandBufferBeginInfo vkbi = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        vkbi.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-       CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
+        CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
 
-       {
-          CmdTransitionImageLayout(
-             cmdBuf.CommandBuffer,
-             images[bufferIndex],
-             GREX_ALL_SUBRESOURCES,
-             VK_IMAGE_ASPECT_COLOR_BIT,
-             RESOURCE_STATE_PRESENT,
-             RESOURCE_STATE_RENDER_TARGET);
-
-          VkRenderingAttachmentInfo colorAttachment  = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
-          colorAttachment.imageView                  = imageViews[bufferIndex];
-          colorAttachment.imageLayout                = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
-          colorAttachment.loadOp                     = VK_ATTACHMENT_LOAD_OP_CLEAR;
-          colorAttachment.storeOp                    = VK_ATTACHMENT_STORE_OP_STORE;
-          colorAttachment.clearValue                 = clearValues[0];
-
-          VkRenderingAttachmentInfo depthAttachment  = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
-          depthAttachment.imageView                  = depthViews[bufferIndex];
-          depthAttachment.imageLayout                = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-          depthAttachment.loadOp                     = VK_ATTACHMENT_LOAD_OP_CLEAR;
-          depthAttachment.storeOp                    = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-          depthAttachment.clearValue                 = clearValues[1];
-
-          VkRenderingInfo vkri                       = { VK_STRUCTURE_TYPE_RENDERING_INFO };
-          vkri.layerCount                            = 1;
-          vkri.colorAttachmentCount                  = 1;
-          vkri.pColorAttachments                     = &colorAttachment;
-          vkri.pDepthAttachment                      = &depthAttachment;
-          vkri.renderArea.extent.width               = gWindowWidth;
-          vkri.renderArea.extent.height              = gWindowHeight;
-
-          vkCmdBeginRendering(cmdBuf.CommandBuffer, &vkri);
-
-          VkViewport viewport = { 0, static_cast<float>(gWindowHeight), static_cast<float>(gWindowWidth), -static_cast<float>(gWindowHeight), 0.0f, 1.0f };
-          vkCmdSetViewport(cmdBuf.CommandBuffer, 0, 1, &viewport);
-
-          VkRect2D scissor = { 0, 0, gWindowWidth, gWindowHeight };
-          vkCmdSetScissor(cmdBuf.CommandBuffer, 0, 1, &scissor);
-
-          // Smooth out the rotation on Y
-          gAngle += (gTargetAngle - gAngle) * 0.1f;
-
-          // Camera matrices
-          vec3 eyePosition = vec3(0, 0, 9);
-          mat4 viewMat     = glm::lookAt(eyePosition, vec3(0, 0, 0), vec3(0, 1, 0));
-          mat4 projMat     = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
-          mat4 rotMat      = glm::rotate(glm::radians(gAngle), vec3(0, 1, 0));
-
-          // Set constant buffer values
-          pPBRSceneParams->viewProjectionMatrix    = projMat * viewMat;
-          pPBRSceneParams->eyePosition             = eyePosition;
-          pPBRSceneParams->numLights               = gNumLights;
-          pPBRSceneParams->lights[0].position      = vec3(5, 7, 32);
-          pPBRSceneParams->lights[0].color         = vec3(0.98f, 0.85f, 0.71f);
-          pPBRSceneParams->lights[0].intensity     = 0.5f;
-          pPBRSceneParams->lights[1].position      = vec3(-8, 1, 4);
-          pPBRSceneParams->lights[1].color         = vec3(1.00f, 0.00f, 0.00f);
-          pPBRSceneParams->lights[1].intensity     = 0.5f;
-          pPBRSceneParams->lights[2].position      = vec3(0, 8, -8);
-          pPBRSceneParams->lights[2].color         = vec3(0.00f, 1.00f, 0.00f);
-          pPBRSceneParams->lights[2].intensity     = 0.5f;
-          pPBRSceneParams->lights[3].position      = vec3(15, 8, 0);
-          pPBRSceneParams->lights[3].color         = vec3(0.00f, 0.00f, 1.00f);
-          pPBRSceneParams->lights[3].intensity     = 0.5f;
-          pPBRSceneParams->iblEnvironmentNumLevels = envNumLevels;
-
-          // Draw environment
-          {
-             VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT };
-             descriptorBufferBindingInfo.pNext                            = nullptr;
-             descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &envDescriptorBuffer);
-             descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-             fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
-
-             uint32_t     bufferIndices           = 0;
-             VkDeviceSize descriptorBufferOffsets = 0;
-             fn_vkCmdSetDescriptorBufferOffsetsEXT(
+        {
+            CmdTransitionImageLayout(
                 cmdBuf.CommandBuffer,
-                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                envPipelineLayout.PipelineLayout,
-                0, // firstSet
-                1, // setCount
-                &bufferIndices,
-                &descriptorBufferOffsets);
+                images[bufferIndex],
+                GREX_ALL_SUBRESOURCES,
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                RESOURCE_STATE_PRESENT,
+                RESOURCE_STATE_RENDER_TARGET);
 
-             // Bind the VS/FS Graphics Pipeline
-             vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, envPipelineState);
+            VkRenderingAttachmentInfo colorAttachment = {VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+            colorAttachment.imageView                 = imageViews[bufferIndex];
+            colorAttachment.imageLayout               = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+            colorAttachment.loadOp                    = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            colorAttachment.storeOp                   = VK_ATTACHMENT_STORE_OP_STORE;
+            colorAttachment.clearValue                = clearValues[0];
 
-             glm::mat4 moveUp = glm::translate(vec3(0, 0, 0));
+            VkRenderingAttachmentInfo depthAttachment = {VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+            depthAttachment.imageView                 = depthViews[bufferIndex];
+            depthAttachment.imageLayout               = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+            depthAttachment.loadOp                    = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            depthAttachment.storeOp                   = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            depthAttachment.clearValue                = clearValues[1];
 
-             // SceneParams (b0)
-             mat4 mvp = projMat * viewMat * moveUp;
-             vkCmdPushConstants(cmdBuf.CommandBuffer, envPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16 * sizeof(float), &mvp);
+            VkRenderingInfo vkri          = {VK_STRUCTURE_TYPE_RENDERING_INFO};
+            vkri.layerCount               = 1;
+            vkri.colorAttachmentCount     = 1;
+            vkri.pColorAttachments        = &colorAttachment;
+            vkri.pDepthAttachment         = &depthAttachment;
+            vkri.renderArea.extent.width  = gWindowWidth;
+            vkri.renderArea.extent.height = gWindowHeight;
 
-             // Bind the Index Buffer
-             vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, envIndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
+            vkCmdBeginRendering(cmdBuf.CommandBuffer, &vkri);
 
-             // Bind the Vertex Buffer
-             VkBuffer vertexBuffers[] = { envPositionBuffer.Buffer, envTexCoordBuffer.Buffer };
-             VkDeviceSize offsets[] = { 0, 0 };
-             vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 2, vertexBuffers, offsets);
+            // Viewport and scissor
+            VkViewport viewport = {0, static_cast<float>(gWindowHeight), static_cast<float>(gWindowWidth), -static_cast<float>(gWindowHeight), 0.0f, 1.0f};
+            vkCmdSetViewport(cmdBuf.CommandBuffer, 0, 1, &viewport);
 
-             vkCmdDrawIndexed(cmdBuf.CommandBuffer, envNumIndices, 1, 0, 0, 0);
-          }
+            VkRect2D scissor = {0, 0, gWindowWidth, gWindowHeight};
+            vkCmdSetScissor(cmdBuf.CommandBuffer, 0, 1, &scissor);
 
-          // Draw material sphere
-          {
-             VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT };
-             descriptorBufferBindingInfo.pNext                            = nullptr;
-             descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &pbrDescriptorBuffer);
-             descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-             fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
+            // Smooth out the rotation on Y
+            gAngle += (gTargetAngle - gAngle) * 0.1f;
 
-             uint32_t     bufferIndices           = 0;
-             VkDeviceSize descriptorBufferOffsets = 0;
-             fn_vkCmdSetDescriptorBufferOffsetsEXT(
-                cmdBuf.CommandBuffer,
-                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                pbrPipelineLayout.PipelineLayout,
-                0, // firstSet
-                1, // setCount
-                &bufferIndices,
-                &descriptorBufferOffsets);
+            // Camera matrices
+            vec3 eyePosition = vec3(0, 0, 9);
+            mat4 viewMat     = glm::lookAt(eyePosition, vec3(0, 0, 0), vec3(0, 1, 0));
+            mat4 projMat     = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+            mat4 rotMat      = glm::rotate(glm::radians(gAngle), vec3(0, 1, 0));
 
-             // Bind the Index Buffer
-             vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, materialSphereIndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
+            // Set constant buffer values
+            pSceneParams->viewProjectionMatrix    = projMat * viewMat;
+            pSceneParams->eyePosition             = eyePosition;
+            pSceneParams->numLights               = gNumLights;
+            pSceneParams->lights[0].position      = vec3(5, 7, 32);
+            pSceneParams->lights[0].color         = vec3(0.98f, 0.85f, 0.71f);
+            pSceneParams->lights[0].intensity     = 0.5f;
+            pSceneParams->lights[1].position      = vec3(-8, 1, 4);
+            pSceneParams->lights[1].color         = vec3(1.00f, 0.00f, 0.00f);
+            pSceneParams->lights[1].intensity     = 0.5f;
+            pSceneParams->lights[2].position      = vec3(0, 8, -8);
+            pSceneParams->lights[2].color         = vec3(0.00f, 1.00f, 0.00f);
+            pSceneParams->lights[2].intensity     = 0.5f;
+            pSceneParams->lights[3].position      = vec3(15, 8, 0);
+            pSceneParams->lights[3].color         = vec3(0.00f, 0.00f, 1.00f);
+            pSceneParams->lights[3].intensity     = 0.5f;
+            pSceneParams->iblEnvironmentNumLevels = envNumLevels;
 
-             // Bind the Vertex Buffer
-             VkBuffer vertexBuffers[] = { materialSpherePositionBuffer.Buffer, materialSphereNormalBuffer.Buffer };
-             VkDeviceSize offsets[] = { 0, 0 };
-             vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 2, vertexBuffers, offsets);
+            // Draw environment
+            if (0)
+            {
+                vkCmdBindDescriptorSets(
+                    cmdBuf.CommandBuffer,
+                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    envPipelineLayout.PipelineLayout,
+                    0, // firstSet
+                    1, // setCount
+                    &descriptors.DescriptorSet,
+                    0,
+                    nullptr);
 
-             // Pipeline state
-             vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pbrPipelineState);
+                // Bind the VS/FS Graphics Pipeline
+                vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, envPipelineState);
 
-             MaterialParameters materialParams = {};
-             materialParams.baseColor             = vec3(0.8f, 0.8f, 0.9f);
-             materialParams.roughness          = 0;
-             materialParams.metallic          = 0;
+                glm::mat4 moveUp = glm::translate(vec3(0, 0, 0));
 
-             uint32_t numSlotsX     = 10;
-             uint32_t numSlotsY     = 10;
-             float    slotSize      = 0.9f;
-             float    spanX         = numSlotsX * slotSize;
-             float    spanY         = numSlotsY * slotSize;
-             float    halfSpanX     = spanX / 2.0f;
-             float    halfSpanY     = spanY / 2.0f;
-             float    roughnessStep = 1.0f / (numSlotsX - 1);
-             float    metalnessStep = 1.0f / (numSlotsY - 1);
+                // SceneParams (b0)
+                mat4 mvp = projMat * viewMat * moveUp;
+                vkCmdPushConstants(cmdBuf.CommandBuffer, envPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16 * sizeof(float), &mvp);
 
-             for (uint32_t i = 0; i < numSlotsY; ++i) {
-                materialParams.metallic = 0;
+                // Bind the Index Buffer
+                vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, envIndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
 
-                for (uint32_t j = 0; j < numSlotsX; ++j) {
-                   float x = -halfSpanX + j * slotSize;
-                   float y = -halfSpanY + i * slotSize;
-                   float z = 0;
-                   // Readjust center
-                   x += slotSize / 2.0f;
-                   y += slotSize / 2.0f;
+                // Bind the Vertex Buffer
+                VkBuffer     vertexBuffers[] = {envPositionBuffer.Buffer, envTexCoordBuffer.Buffer};
+                VkDeviceSize offsets[]       = {0, 0};
+                vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 2, vertexBuffers, offsets);
 
-                   glm::mat4 modelMat = rotMat * glm::translate(vec3(x, y, z));
+                vkCmdDrawIndexed(cmdBuf.CommandBuffer, envNumIndices, 1, 0, 0, 0);
+            }
 
-                   vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(mat4), &modelMat);
-                   vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(mat4), sizeof(MaterialParameters), &materialParams);
+            // Draw material sphere
+            {
+                vkCmdBindDescriptorSets(
+                    cmdBuf.CommandBuffer,
+                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    pbrPipelineLayout.PipelineLayout,
+                    0, // firstSet
+                    1, // setCount
+                    &descriptors.DescriptorSet,
+                    0,
+                    nullptr);
 
-                   vkCmdDrawIndexed(cmdBuf.CommandBuffer, materialSphereNumIndices, 1, 0, 0, 0);
 
-                   materialParams.metallic += roughnessStep;
+                // Bind the Index Buffer
+                vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, materialSphereIndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
+
+                // Bind the Vertex Buffer
+                VkBuffer     vertexBuffers[] = {materialSpherePositionBuffer.Buffer, materialSphereNormalBuffer.Buffer};
+                VkDeviceSize offsets[]       = {0, 0};
+                vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 2, vertexBuffers, offsets);
+
+                // Pipeline state
+                vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pbrPipelineState);
+
+                MaterialParameters materialParams = {};
+                materialParams.baseColor          = vec3(0.8f, 0.8f, 0.9f);
+                materialParams.roughness          = 0;
+                materialParams.metallic           = 0;
+
+                uint32_t numSlotsX     = 10;
+                uint32_t numSlotsY     = 10;
+                float    slotSize      = 0.9f;
+                float    spanX         = numSlotsX * slotSize;
+                float    spanY         = numSlotsY * slotSize;
+                float    halfSpanX     = spanX / 2.0f;
+                float    halfSpanY     = spanY / 2.0f;
+                float    roughnessStep = 1.0f / (numSlotsX - 1);
+                float    metalnessStep = 1.0f / (numSlotsY - 1);
+
+                for (uint32_t i = 0; i < numSlotsY; ++i)
+                {
+                    materialParams.metallic = 0;
+
+                    for (uint32_t j = 0; j < numSlotsX; ++j)
+                    {
+                        float x = -halfSpanX + j * slotSize;
+                        float y = -halfSpanY + i * slotSize;
+                        float z = 0;
+                        // Readjust center
+                        x += slotSize / 2.0f;
+                        y += slotSize / 2.0f;
+
+                        glm::mat4 modelMat = rotMat * glm::translate(vec3(x, y, z));
+
+                        vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(mat4), &modelMat);
+                        vkCmdPushConstants(cmdBuf.CommandBuffer, pbrPipelineLayout.PipelineLayout, VK_SHADER_STAGE_ALL_GRAPHICS, sizeof(mat4), sizeof(MaterialParameters), &materialParams);
+
+                        vkCmdDrawIndexed(cmdBuf.CommandBuffer, materialSphereNumIndices, 1, 0, 0, 0);
+
+                        materialParams.metallic += roughnessStep;
+                    }
+                    materialParams.roughness += metalnessStep;
                 }
-                materialParams.roughness += metalnessStep;
-             }
-          }
+            }
 
-          vkCmdEndRendering(cmdBuf.CommandBuffer);
+            vkCmdEndRendering(cmdBuf.CommandBuffer);
 
-          // Setup render passes and draw ImGui
-          {
-             VkRenderPassAttachmentBeginInfo attachmentBeginInfo = { VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO };
-             attachmentBeginInfo.pNext                           = 0;
-             attachmentBeginInfo.attachmentCount                 = 1;
-             attachmentBeginInfo.pAttachments                    = &imageViews[bufferIndex];
+            // Setup render passes and draw ImGui
+            {
+                VkRenderPassAttachmentBeginInfo attachmentBeginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO};
+                attachmentBeginInfo.pNext                           = 0;
+                attachmentBeginInfo.attachmentCount                 = 1;
+                attachmentBeginInfo.pAttachments                    = &imageViews[bufferIndex];
 
-             VkRenderPassBeginInfo beginInfo = { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
-             beginInfo.pNext                 = &attachmentBeginInfo;
-             beginInfo.renderPass            = renderPass.RenderPass;
-             beginInfo.framebuffer           = renderPass.Framebuffer;
-             beginInfo.renderArea            = scissor;
+                VkRenderPassBeginInfo beginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+                beginInfo.pNext                 = &attachmentBeginInfo;
+                beginInfo.renderPass            = renderPass.RenderPass;
+                beginInfo.framebuffer           = renderPass.Framebuffer;
+                beginInfo.renderArea            = scissor;
 
-             vkCmdBeginRenderPass(cmdBuf.CommandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+                vkCmdBeginRenderPass(cmdBuf.CommandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-             // Draw ImGui
-             window->ImGuiRenderDrawData(renderer.get(), cmdBuf.CommandBuffer);
+                // Draw ImGui
+                window->ImGuiRenderDrawData(renderer.get(), cmdBuf.CommandBuffer);
 
-             vkCmdEndRenderPass(cmdBuf.CommandBuffer);
-          }
+                vkCmdEndRenderPass(cmdBuf.CommandBuffer);
+            }
 
-          CmdTransitionImageLayout(
-             cmdBuf.CommandBuffer,
-             images[bufferIndex],
-             GREX_ALL_SUBRESOURCES,
-             VK_IMAGE_ASPECT_COLOR_BIT,
-             RESOURCE_STATE_RENDER_TARGET,
-             RESOURCE_STATE_PRESENT);
-       }
+            CmdTransitionImageLayout(
+                cmdBuf.CommandBuffer,
+                images[bufferIndex],
+                GREX_ALL_SUBRESOURCES,
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                RESOURCE_STATE_RENDER_TARGET,
+                RESOURCE_STATE_PRESENT);
+        }
 
-      CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));
+        CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));
 
-      // Execute command buffer
-      CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
+        // Execute command buffer
+        CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
 
-      // Wait for the GPU to finish the work
-      if (!WaitForGpu(renderer.get())) {
-         assert(false && "WaitForGpu failed");
-         break;
-      }
+        // Wait for the GPU to finish the work
+        if (!WaitForGpu(renderer.get()))
+        {
+            assert(false && "WaitForGpu failed");
+            break;
+        }
 
-      // Present
-      if (!SwapchainPresent(renderer.get(), bufferIndex)) {
-         assert(false && "SwapchainPresent failed");
-         break;
-      }
+        // Present
+        if (!SwapchainPresent(renderer.get(), bufferIndex))
+        {
+            assert(false && "SwapchainPresent failed");
+            break;
+        }
     }
 
     return 0;
 }
 
-void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout)
+void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
 {
-   // Descriptor set layout
-   {
-      std::vector<VkDescriptorSetLayoutBinding> bindings = {};
-      {
-         VkDescriptorSetLayoutBinding binding = {};
-         binding.binding                      = 0;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-         binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-         bindings.push_back(binding);
-      }
-      {
-         VkDescriptorSetLayoutBinding binding = {};
-         binding.binding                      = 3;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-         binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-         bindings.push_back(binding);
-      }
-      {
-         VkDescriptorSetLayoutBinding binding = {};
-         binding.binding                      = 4;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-         binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-         bindings.push_back(binding);
-      }
-      {
-         VkDescriptorSetLayoutBinding binding = {};
-         binding.binding                      = 5;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-         binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-         bindings.push_back(binding);
-      }
-      {
-         VkDescriptorSetLayoutBinding binding = {};
-         binding.binding                      = 6;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
-         binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-         bindings.push_back(binding);
-      }
-      {
-         VkDescriptorSetLayoutBinding binding = {};
-         binding.binding                      = 7;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
-         binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-         bindings.push_back(binding);
-      }
+    // Descriptor set layout
+    {
+        std::vector<VkDescriptorSetLayoutBinding> bindings = {};
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 0;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            binding.descriptorCount              = 1;
+            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+            bindings.push_back(binding);
+        }
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 3;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+            binding.descriptorCount              = 1;
+            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+            bindings.push_back(binding);
+        }
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 4;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+            binding.descriptorCount              = 1;
+            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+            bindings.push_back(binding);
+        }
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 5;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+            binding.descriptorCount              = 1;
+            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+            bindings.push_back(binding);
+        }
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 6;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
+            binding.descriptorCount              = 1;
+            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+            bindings.push_back(binding);
+        }
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 7;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
+            binding.descriptorCount              = 1;
+            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+            bindings.push_back(binding);
+        }
 
-      VkDescriptorSetLayoutCreateInfo createInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-      createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-      createInfo.bindingCount                    = CountU32(bindings);
-      createInfo.pBindings                       = DataPtr(bindings);
+        VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+        createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+        createInfo.bindingCount                    = CountU32(bindings);
+        createInfo.pBindings                       = DataPtr(bindings);
 
-      CHECK_CALL(vkCreateDescriptorSetLayout(
-         pRenderer->Device,
-         &createInfo,
-         nullptr,
-         &pLayout->DescriptorSetLayout));
-   }
+        CHECK_CALL(vkCreateDescriptorSetLayout(
+            pRenderer->Device,
+            &createInfo,
+            nullptr,
+            &pLayout->DescriptorSetLayout));
+    }
 
-   std::vector<VkPushConstantRange> push_constants;
-   {
-      VkPushConstantRange push_constant = {};
-      push_constant.offset              = 0;
-      push_constant.size                = sizeof(DrawParameters) + sizeof(MaterialParameters);
-      push_constant.stageFlags          = VK_SHADER_STAGE_ALL_GRAPHICS;
-      push_constants.push_back(push_constant);
-   }
+    std::vector<VkPushConstantRange> push_constants;
+    {
+        VkPushConstantRange push_constant = {};
+        push_constant.offset              = 0;
+        push_constant.size                = sizeof(DrawParameters) + sizeof(MaterialParameters);
+        push_constant.stageFlags          = VK_SHADER_STAGE_ALL_GRAPHICS;
+        push_constants.push_back(push_constant);
+    }
 
-   VkPipelineLayoutCreateInfo createInfo  = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
-   createInfo.setLayoutCount              = 1;
-   createInfo.pSetLayouts                 = &pLayout->DescriptorSetLayout;
-   createInfo.pushConstantRangeCount      = CountU32(push_constants);
-   createInfo.pPushConstantRanges         = DataPtr(push_constants);
+    VkPipelineLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    createInfo.setLayoutCount             = 1;
+    createInfo.pSetLayouts                = &pLayout->DescriptorSetLayout;
+    createInfo.pushConstantRangeCount     = CountU32(push_constants);
+    createInfo.pPushConstantRanges        = DataPtr(push_constants);
 
-   CHECK_CALL(vkCreatePipelineLayout(pRenderer->Device, &createInfo, nullptr, &pLayout->PipelineLayout));
+    CHECK_CALL(vkCreatePipelineLayout(pRenderer->Device, &createInfo, nullptr, &pLayout->PipelineLayout));
 }
 
-void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout)
+void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
 {
-   // Descriptor set layout
-   {
-      std::vector<VkDescriptorSetLayoutBinding> bindings = {};
-      {
-         VkDescriptorSetLayoutBinding binding = {};
-         binding.binding                      = 0;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-         binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-         bindings.push_back(binding);
-      }
-      {
-         VkDescriptorSetLayoutBinding binding = {};
-         binding.binding                      = 1;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
-         binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-         bindings.push_back(binding);
-      }
-      {
-         VkDescriptorSetLayoutBinding binding = {};
-         binding.binding                      = 2;
-         binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-         binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-         bindings.push_back(binding);
-      }
+    // Descriptor set layout
+    {
+        std::vector<VkDescriptorSetLayoutBinding> bindings = {};
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 0;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            binding.descriptorCount              = 1;
+            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+            bindings.push_back(binding);
+        }
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 1;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
+            binding.descriptorCount              = 1;
+            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+            bindings.push_back(binding);
+        }
+        {
+            VkDescriptorSetLayoutBinding binding = {};
+            binding.binding                      = 2;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+            binding.descriptorCount              = 1;
+            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
+            bindings.push_back(binding);
+        }
 
-      VkDescriptorSetLayoutCreateInfo createInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-      createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-      createInfo.bindingCount                    = CountU32(bindings);
-      createInfo.pBindings                       = DataPtr(bindings);
+        VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+        createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+        createInfo.bindingCount                    = CountU32(bindings);
+        createInfo.pBindings                       = DataPtr(bindings);
 
-      CHECK_CALL(vkCreateDescriptorSetLayout(
-         pRenderer->Device,
-         &createInfo,
-         nullptr,
-         &pLayout->DescriptorSetLayout));
-   }
+        CHECK_CALL(vkCreateDescriptorSetLayout(
+            pRenderer->Device,
+            &createInfo,
+            nullptr,
+            &pLayout->DescriptorSetLayout));
+    }
 
-   VkPushConstantRange push_constant   = {};
-   push_constant.offset                = 0;
-   push_constant.size                  = sizeof(EnvSceneParameters);
-   push_constant.stageFlags            = VK_SHADER_STAGE_ALL_GRAPHICS;
+    VkPushConstantRange push_constant = {};
+    push_constant.offset              = 0;
+    push_constant.size                = sizeof(EnvSceneParameters);
+    push_constant.stageFlags          = VK_SHADER_STAGE_ALL_GRAPHICS;
 
-   VkPipelineLayoutCreateInfo createInfo  = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
-   createInfo.setLayoutCount              = 1;
-   createInfo.pSetLayouts                 = &pLayout->DescriptorSetLayout;
-   createInfo.pushConstantRangeCount      = 1;
-   createInfo.pPushConstantRanges         = &push_constant;
+    VkPipelineLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    createInfo.setLayoutCount             = 1;
+    createInfo.pSetLayouts                = &pLayout->DescriptorSetLayout;
+    createInfo.pushConstantRangeCount     = 1;
+    createInfo.pPushConstantRanges        = &push_constant;
 
-   CHECK_CALL(vkCreatePipelineLayout(pRenderer->Device, &createInfo, nullptr, &pLayout->PipelineLayout));
+    CHECK_CALL(vkCreatePipelineLayout(pRenderer->Device, &createInfo, nullptr, &pLayout->PipelineLayout));
 }
 
 void CreateMaterialSphereVertexBuffers(
-    VulkanRenderer*  pRenderer,
-    uint32_t*        pNumIndices,
-    VulkanBuffer*    pIndexBuffer,
-    VulkanBuffer*    pPositionBuffer,
-    VulkanBuffer*    pNormalBuffer)
+    VulkanRenderer* pRenderer,
+    uint32_t*       pNumIndices,
+    VulkanBuffer*   pIndexBuffer,
+    VulkanBuffer*   pPositionBuffer,
+    VulkanBuffer*   pNormalBuffer)
 {
-   TriMesh mesh = TriMesh::Sphere(0.42f, 256, 256, { .enableNormals = true });
+    TriMesh mesh = TriMesh::Sphere(0.42f, 256, 256, {.enableNormals = true});
 
-   *pNumIndices = 3 * mesh.GetNumTriangles();
+    *pNumIndices = 3 * mesh.GetNumTriangles();
 
-   CHECK_CALL(CreateBuffer(
-      pRenderer,
-      SizeInBytes(mesh.GetTriangles()),
-      DataPtr(mesh.GetTriangles()),
-      VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-      VMA_MEMORY_USAGE_GPU_ONLY,
-      0,
-      pIndexBuffer));
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(mesh.GetTriangles()),
+        DataPtr(mesh.GetTriangles()),
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY,
+        0,
+        pIndexBuffer));
 
-   CHECK_CALL(CreateBuffer(
-      pRenderer,
-      SizeInBytes(mesh.GetPositions()),
-      DataPtr(mesh.GetPositions()),
-      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-      VMA_MEMORY_USAGE_GPU_ONLY,
-      0,
-      pPositionBuffer));
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(mesh.GetPositions()),
+        DataPtr(mesh.GetPositions()),
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY,
+        0,
+        pPositionBuffer));
 
-   CHECK_CALL(CreateBuffer(
-      pRenderer,
-      SizeInBytes(mesh.GetNormals()),
-      DataPtr(mesh.GetNormals()),
-      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-      VMA_MEMORY_USAGE_GPU_ONLY,
-      0,
-      pNormalBuffer));
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(mesh.GetNormals()),
+        DataPtr(mesh.GetNormals()),
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY,
+        0,
+        pNormalBuffer));
 }
 
 void CreateEnvironmentVertexBuffers(
-    VulkanRenderer*  pRenderer,
-    uint32_t*        pNumIndices,
-    VulkanBuffer*    pIndexBuffer,
-    VulkanBuffer*    pPositionBuffer,
-    VulkanBuffer*    pTexCoordBuffer)
+    VulkanRenderer* pRenderer,
+    uint32_t*       pNumIndices,
+    VulkanBuffer*   pIndexBuffer,
+    VulkanBuffer*   pPositionBuffer,
+    VulkanBuffer*   pTexCoordBuffer)
 {
-   TriMesh mesh = TriMesh::Sphere(100, 64, 64, { .enableTexCoords = true, .faceInside = true });
+    TriMesh mesh = TriMesh::Sphere(100, 64, 64, {.enableTexCoords = true, .faceInside = true});
 
-   *pNumIndices = 3 * mesh.GetNumTriangles();
+    *pNumIndices = 3 * mesh.GetNumTriangles();
 
-   CHECK_CALL(CreateBuffer(
-      pRenderer,
-      SizeInBytes(mesh.GetTriangles()),
-      DataPtr(mesh.GetTriangles()),
-      VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-      VMA_MEMORY_USAGE_GPU_ONLY,
-      0,
-      pIndexBuffer));
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(mesh.GetTriangles()),
+        DataPtr(mesh.GetTriangles()),
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY,
+        0,
+        pIndexBuffer));
 
-   CHECK_CALL(CreateBuffer(
-      pRenderer,
-      SizeInBytes(mesh.GetPositions()),
-      DataPtr(mesh.GetPositions()),
-      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-      VMA_MEMORY_USAGE_GPU_ONLY,
-      0,
-      pPositionBuffer));
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(mesh.GetPositions()),
+        DataPtr(mesh.GetPositions()),
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY,
+        0,
+        pPositionBuffer));
 
-   CHECK_CALL(CreateBuffer(
-      pRenderer,
-      SizeInBytes(mesh.GetTexCoords()),
-      DataPtr(mesh.GetTexCoords()),
-      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-      VMA_MEMORY_USAGE_GPU_ONLY,
-      0,
-      pTexCoordBuffer));
+    CHECK_CALL(CreateBuffer(
+        pRenderer,
+        SizeInBytes(mesh.GetTexCoords()),
+        DataPtr(mesh.GetTexCoords()),
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY,
+        0,
+        pTexCoordBuffer));
 }
 
 void CreateIBLTextures(
-    VulkanRenderer*  pRenderer,
-    VulkanImage*     pBRDFLUT,
-    VulkanImage*     pIrradianceTexture,
-    VulkanImage*     pEnvironmentTexture,
-    uint32_t*        pEnvNumLevels)
+    VulkanRenderer* pRenderer,
+    VulkanImage*    pBRDFLUT,
+    VulkanImage*    pIrradianceTexture,
+    VulkanImage*    pEnvironmentTexture,
+    uint32_t*       pEnvNumLevels)
 {
-   // BRDF LUT
-   {
-      auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut.hdr"));
-      if (bitmap.Empty()) {
-         assert(false && "Load image failed");
-         return;
-      }
+    // BRDF LUT
+    {
+        auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut.hdr"));
+        if (bitmap.Empty())
+        {
+            assert(false && "Load image failed");
+            return;
+        }
 
-      CHECK_CALL(CreateTexture(
-         pRenderer,
-         bitmap.GetWidth(),
-         bitmap.GetHeight(),
-         VK_FORMAT_R32G32B32A32_SFLOAT,
-         bitmap.GetSizeInBytes(),
-         bitmap.GetPixels(),
-         pBRDFLUT));
-   }
+        CHECK_CALL(CreateTexture(
+            pRenderer,
+            bitmap.GetWidth(),
+            bitmap.GetHeight(),
+            VK_FORMAT_R32G32B32A32_SFLOAT,
+            bitmap.GetSizeInBytes(),
+            bitmap.GetPixels(),
+            pBRDFLUT));
+    }
 
-   // IBL file
-   auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
+    // IBL file
+    auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
 
-   IBLMaps ibl = {};
-   if (!LoadIBLMaps32f(iblFile, &ibl)) {
-      GREX_LOG_ERROR("failed to load: " << iblFile);
-      return;
-   }
+    IBLMaps ibl = {};
+    if (!LoadIBLMaps32f(iblFile, &ibl))
+    {
+        GREX_LOG_ERROR("failed to load: " << iblFile);
+        return;
+    }
 
-   *pEnvNumLevels = ibl.numLevels;
+    *pEnvNumLevels = ibl.numLevels;
 
-   // Irradiance
-   {
-      CHECK_CALL(CreateTexture(
-         pRenderer,
-         ibl.irradianceMap.GetWidth(),
-         ibl.irradianceMap.GetHeight(),
-         VK_FORMAT_R32G32B32A32_SFLOAT,
-         ibl.irradianceMap.GetSizeInBytes(),
-         ibl.irradianceMap.GetPixels(),
-         pIrradianceTexture));
-   }
+    // Irradiance
+    {
+        CHECK_CALL(CreateTexture(
+            pRenderer,
+            ibl.irradianceMap.GetWidth(),
+            ibl.irradianceMap.GetHeight(),
+            VK_FORMAT_R32G32B32A32_SFLOAT,
+            ibl.irradianceMap.GetSizeInBytes(),
+            ibl.irradianceMap.GetPixels(),
+            pIrradianceTexture));
+    }
 
-   // Environment
-   {
-      const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
-      const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
+    // Environment
+    {
+        const uint32_t pixelStride = ibl.environmentMap.GetPixelStride();
+        const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
 
-      std::vector<MipOffset> mipOffsets;
-      uint32_t               levelOffset = 0;
-      uint32_t               levelWidth  = ibl.baseWidth;
-      uint32_t               levelHeight = ibl.baseHeight;
-      for (uint32_t i = 0; i < ibl.numLevels; ++i) {
-         MipOffset mipOffset = {};
-         mipOffset.Offset    = levelOffset;
-         mipOffset.RowStride = rowStride;
+        std::vector<MipOffset> mipOffsets;
+        uint32_t               levelOffset = 0;
+        uint32_t               levelWidth  = ibl.baseWidth;
+        uint32_t               levelHeight = ibl.baseHeight;
+        for (uint32_t i = 0; i < ibl.numLevels; ++i)
+        {
+            MipOffset mipOffset = {};
+            mipOffset.Offset    = levelOffset;
+            mipOffset.RowStride = rowStride;
 
-         mipOffsets.push_back(mipOffset);
+            mipOffsets.push_back(mipOffset);
 
-         levelOffset += (rowStride * levelHeight);
-         levelWidth >>= 1;
-         levelHeight >>= 1;
-      }
+            levelOffset += (rowStride * levelHeight);
+            levelWidth >>= 1;
+            levelHeight >>= 1;
+        }
 
-      CHECK_CALL(CreateTexture(
-         pRenderer,
-         ibl.baseWidth,
-         ibl.baseHeight,
-         VK_FORMAT_R32G32B32A32_SFLOAT,
-         mipOffsets,
-         ibl.environmentMap.GetSizeInBytes(),
-         ibl.environmentMap.GetPixels(),
-         pEnvironmentTexture));
-   }
+        CHECK_CALL(CreateTexture(
+            pRenderer,
+            ibl.baseWidth,
+            ibl.baseHeight,
+            VK_FORMAT_R32G32B32A32_SFLOAT,
+            mipOffsets,
+            ibl.environmentMap.GetSizeInBytes(),
+            ibl.environmentMap.GetPixels(),
+            pEnvironmentTexture));
+    }
 
-   GREX_LOG_INFO("Loaded " << iblFile);
+    GREX_LOG_INFO("Loaded " << iblFile);
 }
 
-void CreateDescriptorBuffer(
-   VulkanRenderer*         pRenderer,
-   VkDescriptorSetLayout   descriptorSetLayout,
-   VulkanBuffer*           pBuffer)
+void CreateDescriptors(
+    VulkanRenderer* pRenderer,
+    VulkanBuffer*   pPBRSceneParamsBuffer,
+    VulkanImage*    pBRDFLUT,
+    VulkanImage*    pIrradianceTexture,
+    VulkanImage*    pEnvironmentTexture,
+    uint32_t        pEnvNumLevels,
+    Descriptors*    pDescriptors)
 {
-   VkDeviceSize size = 0;
-   fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
+    // Allocate the Descriptor Pool
+    std::vector<VkDescriptorPoolSize> poolSizes =
+    {
+       {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,       1},
+       {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 3},
+       {VK_DESCRIPTOR_TYPE_SAMPLER,              2},
+    };
 
-   VkBufferUsageFlags usageFlags =
-      VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    uint32_t                   setCount       = 3;
+    VkDescriptorPoolCreateInfo poolCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    poolCreateInfo.maxSets                    = setCount;
+    poolCreateInfo.poolSizeCount              = CountU32(poolSizes);
+    poolCreateInfo.pPoolSizes                 = DataPtr(poolSizes);
 
-   CHECK_CALL(CreateBuffer(
-      pRenderer,  // pRenderer
-      size,       // srcSize
-      nullptr,    // pSrcData
-      usageFlags, // usageFlags
-      0,          // minAlignment
-      pBuffer));  // pBuffer
-}
+    CHECK_CALL(vkCreateDescriptorPool(pRenderer->Device, &poolCreateInfo, nullptr, &pDescriptors->DescriptorPool));
 
-void WritePBRDescriptors(
-   VulkanRenderer*         pRenderer,
-   VkDescriptorSetLayout   descriptorSetLayout,
-   VulkanBuffer*           pDescriptorBuffer,
-   const VulkanBuffer*     pSceneParamsBuffer,
-   const VulkanImage*      pBRDFLUT,
-   const VulkanImage*      pIrradianceTexture,
-   const VulkanImage*      pEnvTexture)
-{
-   char* pDescriptorBufferStartAddress = nullptr;
-   CHECK_CALL(vmaMapMemory(
-      pRenderer->Allocator,
-      pDescriptorBuffer->Allocation,
-      reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
+    // Setup the Descriptor set layout
+    VkDescriptorSetLayoutBinding sceneParamsBinding{};
+    sceneParamsBinding.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    sceneParamsBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    sceneParamsBinding.binding         = 0;
+    sceneParamsBinding.descriptorCount = 1;
 
-   // ConstantBuffer<SceneParameters>    SceneParams           : register(b0);
-   WriteDescriptor(
-      pRenderer,
-      pDescriptorBufferStartAddress,
-      descriptorSetLayout,
-      0, // binding
-      0, // arrayElement
-      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-      pSceneParamsBuffer);
+    VkDescriptorSetLayoutBinding IBLTexturesBinding0{};
+    IBLTexturesBinding0.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    IBLTexturesBinding0.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    IBLTexturesBinding0.binding         = 3;
+    IBLTexturesBinding0.descriptorCount = 1;
 
-   // Set via push constants
-   // ConstantBuffer<DrawParameters>     DrawParams            : register(b1);
-   // ConstantBuffer<MaterialParameters> MaterialParams        : register(b2);
+    VkDescriptorSetLayoutBinding IBLTexturesBinding1{};
+    IBLTexturesBinding1.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    IBLTexturesBinding1.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    IBLTexturesBinding1.binding         = 4;
+    IBLTexturesBinding1.descriptorCount = 1;
 
-   // Texture2D                          IBLIntegrationLUT     : register(t3);
-   {
-      VkImageView imageView = VK_NULL_HANDLE;
-      CHECK_CALL(CreateImageView(
-         pRenderer,
-         pBRDFLUT,
-         VK_IMAGE_VIEW_TYPE_2D,
-         VK_FORMAT_R32G32B32A32_SFLOAT,
-         GREX_ALL_SUBRESOURCES,
-         &imageView));
+    VkDescriptorSetLayoutBinding IBLTexturesBinding2{};
+    IBLTexturesBinding2.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    IBLTexturesBinding2.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    IBLTexturesBinding2.binding         = 5;
+    IBLTexturesBinding2.descriptorCount = 1;
 
-      WriteDescriptor(
-         pRenderer,
-         pDescriptorBufferStartAddress,
-         descriptorSetLayout,
-         3, // binding
-         0, // arrayElement
-         VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-         imageView,
-         VK_IMAGE_LAYOUT_GENERAL);
-   }
+    VkDescriptorSetLayoutBinding samplerBinding0{};
+    samplerBinding0.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
+    samplerBinding0.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    samplerBinding0.binding         = 6;
+    samplerBinding0.descriptorCount = 1;
 
-   // Texture2D                          IBLIrradianceMap      : register(t4);
-   {
-      VkImageView imageView = VK_NULL_HANDLE;
-      CHECK_CALL(CreateImageView(
-         pRenderer,
-         pIrradianceTexture,
-         VK_IMAGE_VIEW_TYPE_2D,
-         VK_FORMAT_R32G32B32A32_SFLOAT,
-         GREX_ALL_SUBRESOURCES,
-         &imageView));
+    VkDescriptorSetLayoutBinding samplerBinding1{};
+    samplerBinding1.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
+    samplerBinding1.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    samplerBinding1.binding         = 7;
+    samplerBinding1.descriptorCount = 1;
 
-      WriteDescriptor(
-         pRenderer,
-         pDescriptorBufferStartAddress,
-         descriptorSetLayout,
-         4, // binding
-         0, // arrayElement
-         VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-         imageView,
-         VK_IMAGE_LAYOUT_GENERAL);
-   }
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding = 
+    {
+        sceneParamsBinding,
+        IBLTexturesBinding0,
+        IBLTexturesBinding1,
+        IBLTexturesBinding2,
+        samplerBinding0,
+        samplerBinding1
+    };
 
-   // Texture2D                          IBLEnvironmentMap     : register(t5);
-   {
-      VkImageView imageView = VK_NULL_HANDLE;
-      CHECK_CALL(CreateImageView(
-         pRenderer,
-         pEnvTexture,
-         VK_IMAGE_VIEW_TYPE_2D,
-         VK_FORMAT_R32G32B32A32_SFLOAT,
-         GREX_ALL_SUBRESOURCES,
-         &imageView));
+    VkDescriptorSetLayoutCreateInfo layoutCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    layoutCreateInfo.pBindings                       = DataPtr(setLayoutBinding);
+    layoutCreateInfo.bindingCount                    = CountU32(setLayoutBinding);
 
-      WriteDescriptor(
-         pRenderer,
-         pDescriptorBufferStartAddress,
-         descriptorSetLayout,
-         5, // binding
-         0, // arrayElement
-         VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-         imageView,
-         VK_IMAGE_LAYOUT_GENERAL);
-   }
+    CHECK_CALL(vkCreateDescriptorSetLayout(pRenderer->Device, &layoutCreateInfo, nullptr, &pDescriptors->DescriptorSetLayout));
 
-   // Samplers are setup in the immutable samplers in the DescriptorSetLayout
-   // SamplerState                       IBLIntegrationSampler : register(s6);
-   {
-      VkSamplerCreateInfo samplerInfo       = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
-      samplerInfo.flags                     = 0;
-      samplerInfo.magFilter                 = VK_FILTER_LINEAR;
-      samplerInfo.minFilter                 = VK_FILTER_LINEAR;
-      samplerInfo.mipmapMode                = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-      samplerInfo.addressModeU              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-      samplerInfo.addressModeV              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-      samplerInfo.addressModeW              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-      samplerInfo.mipLodBias                = 0;
-      samplerInfo.anisotropyEnable          = VK_FALSE;
-      samplerInfo.maxAnisotropy             = 0;
-      samplerInfo.compareEnable             = VK_TRUE;
-      samplerInfo.compareOp                 = VK_COMPARE_OP_LESS_OR_EQUAL;
-      samplerInfo.minLod                    = 0;
-      samplerInfo.maxLod                    = 1;
-      samplerInfo.borderColor               = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-      samplerInfo.unnormalizedCoordinates   = VK_FALSE;
+     // Setup the descriptor set 
+    VkDescriptorSetAllocateInfo allocInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    allocInfo.descriptorPool              = pDescriptors->DescriptorPool;
+    allocInfo.pSetLayouts                 = &pDescriptors->DescriptorSetLayout;
+    allocInfo.descriptorSetCount          = 1;
 
-      VkSampler clampedSampler = VK_NULL_HANDLE;
-      CHECK_CALL(vkCreateSampler(
-         pRenderer->Device,
-         &samplerInfo,
-         nullptr,
-         &clampedSampler));
+    CHECK_CALL(vkAllocateDescriptorSets(pRenderer->Device, &allocInfo, &pDescriptors->DescriptorSet));
 
-      WriteDescriptor(
-         pRenderer,
-         pDescriptorBufferStartAddress,
-         descriptorSetLayout,
-         6, // binding
-         0, // arrayElement
-         clampedSampler);
-   }
+    VkDescriptorBufferInfo sceneParamsBufferInfo;
+    sceneParamsBufferInfo.buffer = pPBRSceneParamsBuffer->Buffer;
+    sceneParamsBufferInfo.offset = 0;
+    sceneParamsBufferInfo.range  = VK_WHOLE_SIZE;
 
-   // SamplerState                       IBLMapSampler         : register(s7);
-   {
-      VkSamplerCreateInfo samplerInfo       = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
-      samplerInfo.flags                     = 0;
-      samplerInfo.magFilter                 = VK_FILTER_LINEAR;
-      samplerInfo.minFilter                 = VK_FILTER_LINEAR;
-      samplerInfo.mipmapMode                = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-      samplerInfo.addressModeU              = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-      samplerInfo.addressModeV              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-      samplerInfo.addressModeW              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-      samplerInfo.mipLodBias                = 0;
-      samplerInfo.anisotropyEnable          = VK_FALSE;
-      samplerInfo.maxAnisotropy             = 0;
-      samplerInfo.compareEnable             = VK_TRUE;
-      samplerInfo.compareOp                 = VK_COMPARE_OP_LESS_OR_EQUAL;
-      samplerInfo.minLod                    = 0;
-      samplerInfo.maxLod                    = FLT_MAX;
-      samplerInfo.borderColor               = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-      samplerInfo.unnormalizedCoordinates   = VK_FALSE;
+    VkWriteDescriptorSet sceneParamsWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    sceneParamsWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    sceneParamsWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    sceneParamsWriteDescriptor.dstBinding           = 0;
+    sceneParamsWriteDescriptor.pBufferInfo          = &sceneParamsBufferInfo;
+    sceneParamsWriteDescriptor.descriptorCount      = 1;
 
-      VkSampler uWrapSampler = VK_NULL_HANDLE;
-      CHECK_CALL(vkCreateSampler(
-         pRenderer->Device,
-         &samplerInfo,
-         nullptr,
-         &uWrapSampler));
+    std::vector<VkImageView> imageViews(3);
 
-      WriteDescriptor(
-         pRenderer,
-         pDescriptorBufferStartAddress,
-         descriptorSetLayout,
-         7, // binding
-         0, // arrayElement
-         uWrapSampler);
-   }
+    CHECK_CALL(CreateImageView(pRenderer, pBRDFLUT, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R32G32B32A32_SFLOAT, GREX_ALL_SUBRESOURCES, &imageViews[0]));
+    CHECK_CALL(CreateImageView(pRenderer, pIrradianceTexture, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R32G32B32A32_SFLOAT, GREX_ALL_SUBRESOURCES, &imageViews[1]));
+    CHECK_CALL(CreateImageView(pRenderer, pEnvironmentTexture, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R32G32B32A32_SFLOAT, GREX_ALL_SUBRESOURCES, &imageViews[2]));
 
-   vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
-}
+    std::vector<VkDescriptorImageInfo> textureBufferInfo(3);
 
-void WriteEnvDescriptors(
-   VulkanRenderer*         pRenderer,
-   VkDescriptorSetLayout   descriptorSetLayout,
-   VulkanBuffer*           pDescriptorBuffer,
-   VulkanImage*            pEnvTexture)
-{
-   char* pDescriptorBufferStartAddress = nullptr;
-   CHECK_CALL(vmaMapMemory(
-      pRenderer->Allocator,
-      pDescriptorBuffer->Allocation,
-      reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
+    textureBufferInfo[0].imageView   = imageViews[0];
+    textureBufferInfo[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-   // set via push constants
-   // ConstantBuffer<SceneParameters> SceneParams       : register(b0);
+    textureBufferInfo[1].imageView   = imageViews[1];
+    textureBufferInfo[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-   // SamplerState                    IBLMapSampler     : register(s1);
-   {
-      VkSamplerCreateInfo samplerInfo       = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
-      samplerInfo.flags                     = 0;
-      samplerInfo.magFilter                 = VK_FILTER_LINEAR;
-      samplerInfo.minFilter                 = VK_FILTER_LINEAR;
-      samplerInfo.mipmapMode                = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-      samplerInfo.addressModeU              = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-      samplerInfo.addressModeV              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-      samplerInfo.addressModeW              = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-      samplerInfo.mipLodBias                = 0;
-      samplerInfo.anisotropyEnable          = VK_FALSE;
-      samplerInfo.maxAnisotropy             = 0;
-      samplerInfo.compareEnable             = VK_TRUE;
-      samplerInfo.compareOp                 = VK_COMPARE_OP_NEVER;
-      samplerInfo.minLod                    = 0;
-      samplerInfo.maxLod                    = FLT_MAX;
-      samplerInfo.borderColor               = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-      samplerInfo.unnormalizedCoordinates   = VK_FALSE;
+    textureBufferInfo[2].imageView   = imageViews[2];
+    textureBufferInfo[2].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-      VkSampler uWrapSampler = VK_NULL_HANDLE;
-      CHECK_CALL(vkCreateSampler(
-         pRenderer->Device,
-         &samplerInfo,
-         nullptr,
-         &uWrapSampler));
-      
-      WriteDescriptor(
-         pRenderer,
-         pDescriptorBufferStartAddress,
-         descriptorSetLayout,
-         1, // binding
-         0, // arrayElement
-         uWrapSampler);
-   }
+    VkWriteDescriptorSet IBLTexturesWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    IBLTexturesWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    IBLTexturesWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    IBLTexturesWriteDescriptor.dstBinding           = 3;
+    IBLTexturesWriteDescriptor.pImageInfo           = DataPtr(textureBufferInfo);
+    IBLTexturesWriteDescriptor.descriptorCount      = CountU32(textureBufferInfo);
 
-   // Texture2D                       IBLEnvironmentMap : register(t2);
-   {
-      VkImageView imageView = VK_NULL_HANDLE;
-      CHECK_CALL(CreateImageView(
-         pRenderer,
-         pEnvTexture,
-         VK_IMAGE_VIEW_TYPE_2D,
-         VK_FORMAT_R32G32B32A32_SFLOAT,
-         GREX_ALL_SUBRESOURCES,
-         &imageView));
+    VkSampler IBLIntegrationSampler = VK_NULL_HANDLE;
+    {
+        VkSamplerCreateInfo clampedSamplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+        clampedSamplerInfo.flags                   = 0;
+        clampedSamplerInfo.magFilter               = VK_FILTER_LINEAR;
+        clampedSamplerInfo.minFilter               = VK_FILTER_LINEAR;
+        clampedSamplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        clampedSamplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        clampedSamplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        clampedSamplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        clampedSamplerInfo.mipLodBias              = 0.5f;
+        clampedSamplerInfo.anisotropyEnable        = VK_FALSE;
+        clampedSamplerInfo.maxAnisotropy           = 0;
+        clampedSamplerInfo.compareEnable           = VK_TRUE;
+        clampedSamplerInfo.compareOp               = VK_COMPARE_OP_NEVER;
+        clampedSamplerInfo.minLod                  = 0;
+        clampedSamplerInfo.maxLod                  = 1;
+        clampedSamplerInfo.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+        clampedSamplerInfo.unnormalizedCoordinates = VK_FALSE;
 
-      WriteDescriptor(
-         pRenderer,
-         pDescriptorBufferStartAddress,
-         descriptorSetLayout,
-         2, // binding
-         0, // arrayElement
-         VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-         imageView,
-         VK_IMAGE_LAYOUT_GENERAL);
-   }
+        CHECK_CALL(vkCreateSampler(
+            pRenderer->Device,
+            &clampedSamplerInfo,
+            nullptr,
+            &IBLIntegrationSampler));
+    }
 
-   vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
+    VkSampler IBLMapSampler = VK_NULL_HANDLE;
+    {
+        VkSamplerCreateInfo uWrapSampler     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+        uWrapSampler.flags                   = 0;
+        uWrapSampler.magFilter               = VK_FILTER_LINEAR;
+        uWrapSampler.minFilter               = VK_FILTER_LINEAR;
+        uWrapSampler.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        uWrapSampler.addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        uWrapSampler.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        uWrapSampler.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        uWrapSampler.mipLodBias              = 0.5f;
+        uWrapSampler.anisotropyEnable        = VK_FALSE;
+        uWrapSampler.maxAnisotropy           = 0;
+        uWrapSampler.compareEnable           = VK_TRUE;
+        uWrapSampler.compareOp               = VK_COMPARE_OP_NEVER;
+        uWrapSampler.minLod                  = 0;
+        uWrapSampler.maxLod                  = VK_LOD_CLAMP_NONE;
+        uWrapSampler.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+        uWrapSampler.unnormalizedCoordinates = VK_FALSE;
+
+        CHECK_CALL(vkCreateSampler(
+            pRenderer->Device,
+            &uWrapSampler,
+            nullptr,
+            &IBLMapSampler));
+    }
+
+    std::vector<VkDescriptorImageInfo> samplerInfo(2);
+
+    samplerInfo[0].imageView   = VK_NULL_HANDLE;
+    samplerInfo[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    samplerInfo[0].sampler     = IBLIntegrationSampler;
+
+    samplerInfo[1].imageView   = VK_NULL_HANDLE;
+    samplerInfo[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    samplerInfo[1].sampler     = IBLMapSampler;
+
+    VkWriteDescriptorSet samplersDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    samplersDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    samplersDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_SAMPLER;
+    samplersDescriptor.dstBinding           = 6;
+    samplersDescriptor.pImageInfo           = DataPtr(samplerInfo);
+    samplersDescriptor.descriptorCount      = CountU32(samplerInfo);
+
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets = {sceneParamsWriteDescriptor, IBLTexturesWriteDescriptor, samplersDescriptor};
+    vkUpdateDescriptorSets(pRenderer->Device, CountU32(writeDescriptorSets), DataPtr(writeDescriptorSets), 0, nullptr);
 }
