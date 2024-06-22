@@ -100,22 +100,16 @@ void CreateIBLTextures(
     VulkanImage*    pIrradianceTexture,
     VulkanImage*    pEnvironmentTexture,
     uint32_t*       pEnvNumLevels);
-void CreateDescriptorBuffer(
+void CreatePBRDescriptors(
+    VulkanRenderer*                pRenderer,
+    Descriptors*                   pDescriptors,
+    VulkanBuffer*                  pSceneParamsBuffer,
+    const VulkanImage*             pBRDFLUT,
+    const VulkanImage*             pIrradianceTexture,
+    const VulkanImage*             pEnvTexture);
+void CreateEnvDescriptors(
     VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout pDescriptorSetLayout,
-    VulkanBuffer*         pBuffer);
-void WritePBRDescriptors(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pDescriptorBuffer,
-    const VulkanBuffer*   pSceneParamsBuffer,
-    const VulkanImage*    pBRDFLUT,
-    const VulkanImage*    pIrradianceTexture,
-    const VulkanImage*    pEnvTexture);
-void WriteEnvDescriptors(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pDescrptorBuffer,
+    Descriptors*          pDescriptors,
     VulkanImage*          pEnvTexture);
 
 void MouseMove(int x, int y, int buttons)
@@ -143,6 +137,7 @@ int main(int argc, char** argv)
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
     VulkanFeatures features = {};
+    features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
         return EXIT_FAILURE;
@@ -350,25 +345,19 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Descriptor buffers
     // *************************************************************************
-    VulkanBuffer pbrDescriptorBuffer = {};
-    CreateDescriptorBuffer(renderer.get(), pbrPipelineLayout.DescriptorSetLayout, &pbrDescriptorBuffer);
-
-    WritePBRDescriptors(
+    Descriptors pbrDescriptors;
+    CreatePBRDescriptors(
         renderer.get(),
-        pbrPipelineLayout.DescriptorSetLayout,
-        &pbrDescriptorBuffer,
+        &pbrDescriptors,
         &pbrSceneParamsBuffer,
         &brdfLUT,
         &irrTexture,
         &envTexture);
 
-    VulkanBuffer envDescriptorBuffer = {};
-    CreateDescriptorBuffer(renderer.get(), envPipelineLayout.DescriptorSetLayout, &envDescriptorBuffer);
-
-    WriteEnvDescriptors(
+    Descriptors envDescriptor;
+    CreateEnvDescriptors(
         renderer.get(),
-        envPipelineLayout.DescriptorSetLayout,
-        &envDescriptorBuffer,
+        &envDescriptor,
         &envTexture);
 
     // *************************************************************************
@@ -583,22 +572,15 @@ int main(int argc, char** argv)
 
             // Draw environment
             {
-                VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
-                descriptorBufferBindingInfo.pNext                            = nullptr;
-                descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &envDescriptorBuffer);
-                descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-                fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
-
-                uint32_t     bufferIndices           = 0;
-                VkDeviceSize descriptorBufferOffsets = 0;
-                fn_vkCmdSetDescriptorBufferOffsetsEXT(
+                vkCmdBindDescriptorSets(
                     cmdBuf.CommandBuffer,
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                     envPipelineLayout.PipelineLayout,
                     0, // firstSet
                     1, // setCount
-                    &bufferIndices,
-                    &descriptorBufferOffsets);
+                    &envDescriptor.DescriptorSet,
+                    0,
+                    nullptr);
 
                 // Bind the VS/FS Graphics Pipeline
                 vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, envPipelineState);
@@ -622,22 +604,16 @@ int main(int argc, char** argv)
 
             // Draw material sphere
             {
-                VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
-                descriptorBufferBindingInfo.pNext                            = nullptr;
-                descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &pbrDescriptorBuffer);
-                descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-                fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
 
-                uint32_t     bufferIndices           = 0;
-                VkDeviceSize descriptorBufferOffsets = 0;
-                fn_vkCmdSetDescriptorBufferOffsetsEXT(
+                vkCmdBindDescriptorSets(
                     cmdBuf.CommandBuffer,
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                     pbrPipelineLayout.PipelineLayout,
                     0, // firstSet
                     1, // setCount
-                    &bufferIndices,
-                    &descriptorBufferOffsets);
+                    &pbrDescriptors.DescriptorSet,
+                    0,
+                    nullptr);
 
                 // Bind the Index Buffer
                 vkCmdBindIndexBuffer(cmdBuf.CommandBuffer, materialSphereIndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
@@ -877,14 +853,6 @@ void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* 
         std::vector<VkDescriptorSetLayoutBinding> bindings = {};
         {
             VkDescriptorSetLayoutBinding binding = {};
-            binding.binding                      = 0;
-            binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            binding.descriptorCount              = 1;
-            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-            bindings.push_back(binding);
-        }
-        {
-            VkDescriptorSetLayoutBinding binding = {};
             binding.binding                      = 1;
             binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
             binding.descriptorCount              = 1;
@@ -901,7 +869,6 @@ void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* 
         }
 
         VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
         createInfo.bindingCount                    = CountU32(bindings);
         createInfo.pBindings                       = DataPtr(bindings);
 
@@ -1090,214 +1057,273 @@ void CreateIBLTextures(
     GREX_LOG_INFO("Loaded " << iblFile);
 }
 
-void CreateDescriptorBuffer(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pBuffer)
+void CreatePBRDescriptors(
+    VulkanRenderer*                pRenderer,
+    Descriptors*                   pDescriptors,
+    VulkanBuffer*                  pSceneParamsBuffer,
+    const VulkanImage*             pBRDFLUT,
+    const VulkanImage*             pIrradianceTexture,
+    const VulkanImage*             pEnvTexture)
 {
-    VkDeviceSize size = 0;
-    fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
-
-    VkBufferUsageFlags usageFlags =
-        VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,  // pRenderer
-        size,       // srcSize
-        nullptr,    // pSrcData
-        usageFlags, // usageFlags
-        0,          // minAlignment
-        pBuffer));  // pBuffer
-}
-
-void WritePBRDescriptors(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pDescriptorBuffer,
-    const VulkanBuffer*   pSceneParamsBuffer,
-    const VulkanImage*    pBRDFLUT,
-    const VulkanImage*    pIrradianceTexture,
-    const VulkanImage*    pEnvTexture)
-{
-    char* pDescriptorBufferStartAddress = nullptr;
-    CHECK_CALL(vmaMapMemory(
-        pRenderer->Allocator,
-        pDescriptorBuffer->Allocation,
-        reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
-
-    // ConstantBuffer<SceneParameters>    SceneParams           : register(b0);
-    WriteDescriptor(
-        pRenderer,
-        pDescriptorBufferStartAddress,
-        descriptorSetLayout,
-        0, // binding
-        0, // arrayElement
-        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        pSceneParamsBuffer);
-
-    // Set via push constants
-    // ConstantBuffer<DrawParameters>     DrawParams            : register(b1);
-    // ConstantBuffer<MaterialParameters> MaterialParams        : register(b2);
-
-    // Texture2D                          IBLIntegrationLUT     : register(t3);
+    // Allocate the Descriptor Pool
+    std::vector<VkDescriptorPoolSize> poolSizes =
     {
-        VkImageView imageView = VK_NULL_HANDLE;
-        CHECK_CALL(CreateImageView(
-            pRenderer,
-            pBRDFLUT,
-            VK_IMAGE_VIEW_TYPE_2D,
-            VK_FORMAT_R32G32B32A32_SFLOAT,
-            GREX_ALL_SUBRESOURCES,
-            &imageView));
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1},
+        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,  4},
+        {VK_DESCRIPTOR_TYPE_SAMPLER,        3},
+    };
 
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
-            3, // binding
-            0, // arrayElement
-            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            imageView,
-            VK_IMAGE_LAYOUT_GENERAL);
-    }
+    VkDescriptorPoolCreateInfo poolCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    poolCreateInfo.maxSets                    = 1;
+    poolCreateInfo.poolSizeCount              = CountU32(poolSizes);
+    poolCreateInfo.pPoolSizes                 = DataPtr(poolSizes);
 
-    // Texture2D                          IBLIrradianceMap      : register(t4);
+    CHECK_CALL(vkCreateDescriptorPool(pRenderer->Device, &poolCreateInfo, nullptr, &pDescriptors->DescriptorPool));
+
+    // Setup the Descriptor set layout
+    VkDescriptorSetLayoutBinding SceneParamsBinding{};
+    SceneParamsBinding.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    SceneParamsBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    SceneParamsBinding.binding         = 0;
+    SceneParamsBinding.descriptorCount = 1;
+
+    VkDescriptorSetLayoutBinding IBLIntegrationLUTBinding{};
+    IBLIntegrationLUTBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    IBLIntegrationLUTBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    IBLIntegrationLUTBinding.binding         = 3;
+    IBLIntegrationLUTBinding.descriptorCount = 1;
+
+    VkDescriptorSetLayoutBinding IBLIrradianceMapBinding{};
+    IBLIrradianceMapBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    IBLIrradianceMapBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    IBLIrradianceMapBinding.binding         = 4;
+    IBLIrradianceMapBinding.descriptorCount = 1;
+
+    VkDescriptorSetLayoutBinding IBLEnvironmentMapBinding{};
+    IBLEnvironmentMapBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    IBLEnvironmentMapBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    IBLEnvironmentMapBinding.binding         = 5;
+    IBLEnvironmentMapBinding.descriptorCount = 1;
+
+    VkDescriptorSetLayoutBinding IBLIntegrationSamplerBinding{};
+    IBLIntegrationSamplerBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
+    IBLIntegrationSamplerBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    IBLIntegrationSamplerBinding.binding         = 6;
+    IBLIntegrationSamplerBinding.descriptorCount = 1;
+
+    VkDescriptorSetLayoutBinding IBLMapSamplerBinding{};
+    IBLMapSamplerBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
+    IBLMapSamplerBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    IBLMapSamplerBinding.binding         = 7;
+    IBLMapSamplerBinding.descriptorCount = 1;
+
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
     {
-        VkImageView imageView = VK_NULL_HANDLE;
-        CHECK_CALL(CreateImageView(
-            pRenderer,
-            pIrradianceTexture,
-            VK_IMAGE_VIEW_TYPE_2D,
-            VK_FORMAT_R32G32B32A32_SFLOAT,
-            GREX_ALL_SUBRESOURCES,
-            &imageView));
+       SceneParamsBinding,
+       IBLIntegrationLUTBinding,
+       IBLIrradianceMapBinding,
+       IBLEnvironmentMapBinding,
+       IBLIntegrationSamplerBinding,
+       IBLMapSamplerBinding
+    };
 
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
-            4, // binding
-            0, // arrayElement
-            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            imageView,
-            VK_IMAGE_LAYOUT_GENERAL);
-    }
+    VkDescriptorSetLayoutCreateInfo layoutCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    layoutCreateInfo.pBindings                       = DataPtr(setLayoutBinding);
+    layoutCreateInfo.bindingCount                    = CountU32(setLayoutBinding);
 
-    // Texture2D                          IBLEnvironmentMap     : register(t5);
+    CHECK_CALL(vkCreateDescriptorSetLayout(pRenderer->Device, &layoutCreateInfo, nullptr, &pDescriptors->DescriptorSetLayout));
+
+     // Setup the descriptor set 
+    VkDescriptorSetAllocateInfo allocInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    allocInfo.descriptorPool              = pDescriptors->DescriptorPool;
+    allocInfo.pSetLayouts                 = &pDescriptors->DescriptorSetLayout;
+    allocInfo.descriptorSetCount          = 1;
+
+    CHECK_CALL(vkAllocateDescriptorSets(pRenderer->Device, &allocInfo, &pDescriptors->DescriptorSet));
+
+    VkDescriptorBufferInfo SceneParamsBufferInfo;
+    SceneParamsBufferInfo.buffer = pSceneParamsBuffer->Buffer;
+    SceneParamsBufferInfo.offset = 0;
+    SceneParamsBufferInfo.range  = VK_WHOLE_SIZE;
+
+    VkWriteDescriptorSet SceneParamsWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    SceneParamsWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    SceneParamsWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    SceneParamsWriteDescriptor.dstBinding           = 0;
+    SceneParamsWriteDescriptor.pBufferInfo          = &SceneParamsBufferInfo;
+    SceneParamsWriteDescriptor.descriptorCount      = 1;
+
+    std::vector<VkImageView> IBLViews(3);
+
+    CHECK_CALL(CreateImageView(pRenderer, pBRDFLUT, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R32G32B32A32_SFLOAT, GREX_ALL_SUBRESOURCES, &IBLViews[0]));
+    CHECK_CALL(CreateImageView(pRenderer, pIrradianceTexture, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R32G32B32A32_SFLOAT, GREX_ALL_SUBRESOURCES, &IBLViews[1]));
+    CHECK_CALL(CreateImageView(pRenderer, pEnvTexture, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R32G32B32A32_SFLOAT, GREX_ALL_SUBRESOURCES, &IBLViews[2]));
+
+    std::vector<VkDescriptorImageInfo> IBLImageInfo(3);
+
+    IBLImageInfo[0].imageView   = IBLViews[0];
+    IBLImageInfo[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    IBLImageInfo[1].imageView   = IBLViews[1];
+    IBLImageInfo[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    IBLImageInfo[2].imageView   = IBLViews[2];
+    IBLImageInfo[2].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkWriteDescriptorSet IBLWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    IBLWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    IBLWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    IBLWriteDescriptor.dstBinding           = 3;
+    IBLWriteDescriptor.pImageInfo           = DataPtr(IBLImageInfo);
+    IBLWriteDescriptor.descriptorCount      = CountU32(IBLImageInfo);
+
+    VkSampler IBLIntegrationSampler = VK_NULL_HANDLE;
     {
-        VkImageView imageView = VK_NULL_HANDLE;
-        CHECK_CALL(CreateImageView(
-            pRenderer,
-            pEnvTexture,
-            VK_IMAGE_VIEW_TYPE_2D,
-            VK_FORMAT_R32G32B32A32_SFLOAT,
-            GREX_ALL_SUBRESOURCES,
-            &imageView));
+        VkSamplerCreateInfo clampedSamplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+        clampedSamplerInfo.flags                   = 0;
+        clampedSamplerInfo.magFilter               = VK_FILTER_LINEAR;
+        clampedSamplerInfo.minFilter               = VK_FILTER_LINEAR;
+        clampedSamplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        clampedSamplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        clampedSamplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        clampedSamplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        clampedSamplerInfo.mipLodBias              = 0.5f;
+        clampedSamplerInfo.anisotropyEnable        = VK_FALSE;
+        clampedSamplerInfo.maxAnisotropy           = 0;
+        clampedSamplerInfo.compareEnable           = VK_TRUE;
+        clampedSamplerInfo.compareOp               = VK_COMPARE_OP_NEVER;
+        clampedSamplerInfo.minLod                  = 0;
+        clampedSamplerInfo.maxLod                  = 1;
+        clampedSamplerInfo.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+        clampedSamplerInfo.unnormalizedCoordinates = VK_FALSE;
 
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
-            5, // binding
-            0, // arrayElement
-            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            imageView,
-            VK_IMAGE_LAYOUT_GENERAL);
-    }
-
-    // Samplers are setup in the immutable samplers in the DescriptorSetLayout
-    // SamplerState                       IBLIntegrationSampler : register(s6);
-    {
-        VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-        samplerInfo.flags                   = 0;
-        samplerInfo.magFilter               = VK_FILTER_LINEAR;
-        samplerInfo.minFilter               = VK_FILTER_LINEAR;
-        samplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-        samplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-        samplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-        samplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-        samplerInfo.mipLodBias              = 0;
-        samplerInfo.anisotropyEnable        = VK_FALSE;
-        samplerInfo.maxAnisotropy           = 0;
-        samplerInfo.compareEnable           = VK_TRUE;
-        samplerInfo.compareOp               = VK_COMPARE_OP_LESS_OR_EQUAL;
-        samplerInfo.minLod                  = 0;
-        samplerInfo.maxLod                  = 1;
-        samplerInfo.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-        samplerInfo.unnormalizedCoordinates = VK_FALSE;
-
-        VkSampler clampedSampler = VK_NULL_HANDLE;
         CHECK_CALL(vkCreateSampler(
             pRenderer->Device,
-            &samplerInfo,
+            &clampedSamplerInfo,
             nullptr,
-            &clampedSampler));
-
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
-            6, // binding
-            0, // arrayElement
-            clampedSampler);
+            &IBLIntegrationSampler));
     }
 
-    // SamplerState                       IBLMapSampler         : register(s7);
+    VkSampler IBLMapSampler = VK_NULL_HANDLE;
     {
-        VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-        samplerInfo.flags                   = 0;
-        samplerInfo.magFilter               = VK_FILTER_LINEAR;
-        samplerInfo.minFilter               = VK_FILTER_LINEAR;
-        samplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-        samplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        samplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-        samplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-        samplerInfo.mipLodBias              = 0;
-        samplerInfo.anisotropyEnable        = VK_FALSE;
-        samplerInfo.maxAnisotropy           = 0;
-        samplerInfo.compareEnable           = VK_TRUE;
-        samplerInfo.compareOp               = VK_COMPARE_OP_LESS_OR_EQUAL;
-        samplerInfo.minLod                  = 0;
-        samplerInfo.maxLod                  = FLT_MAX;
-        samplerInfo.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-        samplerInfo.unnormalizedCoordinates = VK_FALSE;
+        VkSamplerCreateInfo uWrapSampler     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+        uWrapSampler.flags                   = 0;
+        uWrapSampler.magFilter               = VK_FILTER_LINEAR;
+        uWrapSampler.minFilter               = VK_FILTER_LINEAR;
+        uWrapSampler.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        uWrapSampler.addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        uWrapSampler.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        uWrapSampler.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        uWrapSampler.mipLodBias              = 0.5f;
+        uWrapSampler.anisotropyEnable        = VK_FALSE;
+        uWrapSampler.maxAnisotropy           = 0;
+        uWrapSampler.compareEnable           = VK_TRUE;
+        uWrapSampler.compareOp               = VK_COMPARE_OP_NEVER;
+        uWrapSampler.minLod                  = 0;
+        uWrapSampler.maxLod                  = VK_LOD_CLAMP_NONE;
+        uWrapSampler.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+        uWrapSampler.unnormalizedCoordinates = VK_FALSE;
 
-        VkSampler uWrapSampler = VK_NULL_HANDLE;
         CHECK_CALL(vkCreateSampler(
             pRenderer->Device,
-            &samplerInfo,
+            &uWrapSampler,
             nullptr,
-            &uWrapSampler));
-
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
-            7, // binding
-            0, // arrayElement
-            uWrapSampler);
+            &IBLMapSampler));
     }
 
-    vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
+    std::vector<VkDescriptorImageInfo> IBLSamplerInfo(2);
+
+    IBLSamplerInfo[0].imageView   = VK_NULL_HANDLE;
+    IBLSamplerInfo[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    IBLSamplerInfo[0].sampler     = IBLIntegrationSampler;
+
+    IBLSamplerInfo[1].imageView   = VK_NULL_HANDLE;
+    IBLSamplerInfo[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    IBLSamplerInfo[1].sampler     = IBLMapSampler;
+
+    VkWriteDescriptorSet IBLSamplersWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    IBLSamplersWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    IBLSamplersWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_SAMPLER;
+    IBLSamplersWriteDescriptor.dstBinding           = 6;
+    IBLSamplersWriteDescriptor.pImageInfo           = DataPtr(IBLSamplerInfo);
+    IBLSamplersWriteDescriptor.descriptorCount      = CountU32(IBLSamplerInfo);
+
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets = 
+    {
+        SceneParamsWriteDescriptor,
+        IBLWriteDescriptor,
+        IBLSamplersWriteDescriptor
+    };
+
+    vkUpdateDescriptorSets(pRenderer->Device, CountU32(writeDescriptorSets), DataPtr(writeDescriptorSets), 0, nullptr);
 }
 
-void WriteEnvDescriptors(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pDescriptorBuffer,
-    VulkanImage*          pEnvTexture)
+void CreateEnvDescriptors(
+    VulkanRenderer* pRenderer,
+    Descriptors*    pDescriptors,
+    VulkanImage*    pEnvTexture)
 {
-    char* pDescriptorBufferStartAddress = nullptr;
-    CHECK_CALL(vmaMapMemory(
-        pRenderer->Allocator,
-        pDescriptorBuffer->Allocation,
-        reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
+    // Allocate the Descriptor Pool
+    std::vector<VkDescriptorPoolSize> poolSizes =
+        {
+            {VK_DESCRIPTOR_TYPE_SAMPLER,              1},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1}
+    };
 
-    // set via push constants
-    // ConstantBuffer<SceneParameters> SceneParams       : register(b0);
+    uint32_t                   setCount       = 2;
+    VkDescriptorPoolCreateInfo poolCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    poolCreateInfo.maxSets                    = setCount;
+    poolCreateInfo.poolSizeCount              = CountU32(poolSizes);
+    poolCreateInfo.pPoolSizes                 = DataPtr(poolSizes);
 
-    // SamplerState                    IBLMapSampler     : register(s1);
+    CHECK_CALL(vkCreateDescriptorPool(pRenderer->Device, &poolCreateInfo, nullptr, &pDescriptors->DescriptorPool));
+
+    // Setup the Descriptor set layout
+    VkDescriptorSetLayoutBinding IBLMapSamplerBinding{};
+    IBLMapSamplerBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
+    IBLMapSamplerBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    IBLMapSamplerBinding.binding         = 1;
+    IBLMapSamplerBinding.descriptorCount = 1;
+
+    VkDescriptorSetLayoutBinding IBLEnvironmentMapBinding{};
+    IBLEnvironmentMapBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    IBLEnvironmentMapBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    IBLEnvironmentMapBinding.binding         = 2;
+    IBLEnvironmentMapBinding.descriptorCount = 1;
+
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding = {IBLMapSamplerBinding, IBLEnvironmentMapBinding};
+
+    VkDescriptorSetLayoutCreateInfo layoutCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    layoutCreateInfo.pBindings                       = DataPtr(setLayoutBinding);
+    layoutCreateInfo.bindingCount                    = CountU32(setLayoutBinding);
+
+    CHECK_CALL(vkCreateDescriptorSetLayout(pRenderer->Device, &layoutCreateInfo, nullptr, &pDescriptors->DescriptorSetLayout));
+
+    // Setup the descriptor set
+    VkDescriptorSetAllocateInfo allocInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    allocInfo.descriptorPool              = pDescriptors->DescriptorPool;
+    allocInfo.pSetLayouts                 = &pDescriptors->DescriptorSetLayout;
+    allocInfo.descriptorSetCount          = 1;
+
+    CHECK_CALL(vkAllocateDescriptorSets(pRenderer->Device, &allocInfo, &pDescriptors->DescriptorSet));
+
+    VkImageView           imageView;
+    VkDescriptorImageInfo textureBufferInfo;
+
+    CHECK_CALL(CreateImageView(pRenderer, pEnvTexture, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R32G32B32A32_SFLOAT, GREX_ALL_SUBRESOURCES, &imageView));
+
+    textureBufferInfo.imageView   = imageView;
+    textureBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkWriteDescriptorSet IBLTexturesWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    IBLTexturesWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    IBLTexturesWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    IBLTexturesWriteDescriptor.dstBinding           = 2;
+    IBLTexturesWriteDescriptor.pImageInfo           = &textureBufferInfo;
+    IBLTexturesWriteDescriptor.descriptorCount      = 1;
+
+    VkSampler IBLMapSampler = VK_NULL_HANDLE;
     {
         VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         samplerInfo.flags                   = 0;
@@ -1317,43 +1343,26 @@ void WriteEnvDescriptors(
         samplerInfo.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
         samplerInfo.unnormalizedCoordinates = VK_FALSE;
 
-        VkSampler uWrapSampler = VK_NULL_HANDLE;
         CHECK_CALL(vkCreateSampler(
             pRenderer->Device,
             &samplerInfo,
             nullptr,
-            &uWrapSampler));
-
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
-            1, // binding
-            0, // arrayElement
-            uWrapSampler);
+            &IBLMapSampler));
     }
 
-    // Texture2D                       IBLEnvironmentMap : register(t2);
-    {
-        VkImageView imageView = VK_NULL_HANDLE;
-        CHECK_CALL(CreateImageView(
-            pRenderer,
-            pEnvTexture,
-            VK_IMAGE_VIEW_TYPE_2D,
-            VK_FORMAT_R32G32B32A32_SFLOAT,
-            GREX_ALL_SUBRESOURCES,
-            &imageView));
+    VkDescriptorImageInfo samplerInfo;
 
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
-            2, // binding
-            0, // arrayElement
-            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            imageView,
-            VK_IMAGE_LAYOUT_GENERAL);
-    }
+    samplerInfo.imageView   = VK_NULL_HANDLE;
+    samplerInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    samplerInfo.sampler     = IBLMapSampler;
 
-    vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
+    VkWriteDescriptorSet samplersDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    samplersDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    samplersDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_SAMPLER;
+    samplersDescriptor.dstBinding           = 1;
+    samplersDescriptor.pImageInfo           = &samplerInfo;
+    samplersDescriptor.descriptorCount      = 1;
+
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets = {IBLTexturesWriteDescriptor, samplersDescriptor};
+    vkUpdateDescriptorSets(pRenderer->Device, CountU32(writeDescriptorSets), DataPtr(writeDescriptorSets), 0, nullptr);
 }
