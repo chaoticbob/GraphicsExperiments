@@ -144,14 +144,9 @@ void CreateMaterials(
     MaterialTextures&                outDefaultMaterialTextures,
     std::vector<MaterialTextures>&   outMaterialTexturesSets,
     std::vector<MaterialParameters>& outMaterialParametersSets);
-void CreateDescriptorBuffer(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout pDescriptorSetLayout,
-    VulkanBuffer*         pBuffer);
-void WritePBRDescriptors(
+void CreatePBRDescriptors(
     VulkanRenderer*                pRenderer,
-    VkDescriptorSetLayout          descriptorSetLayout,
-    VulkanBuffer*                  pDescriptorBuffer,
+    Descriptors*                   pDescriptors,
     VulkanBuffer*                  pSceneParamsBuffer,
     VulkanBuffer*                  pMaterialBuffer,
     std::vector<MaterialTextures>& materialTextureSets,
@@ -159,10 +154,9 @@ void WritePBRDescriptors(
     const VulkanImage*             pMultiscatterBRDFLUT,
     std::vector<VulkanImage>&      irrTextures,
     std::vector<VulkanImage>&      envTextures);
-void WriteEnvDescriptors(
+void CreateEnvDescriptors(
     VulkanRenderer*          pRenderer,
-    VkDescriptorSetLayout    descriptorSetLayout,
-    VulkanBuffer*            pDescriptorBuffer,
+    Descriptors*             pDescriptors,
     std::vector<VulkanImage> envTextures);
 
 void MouseMove(int x, int y, int buttons)
@@ -190,6 +184,7 @@ int main(int argc, char** argv)
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
     VulkanFeatures features = {};
+    features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
         return EXIT_FAILURE;
@@ -411,7 +406,7 @@ int main(int argc, char** argv)
         renderer.get(),
         SizeInBytes(materialParametersSets),
         DataPtr(materialParametersSets),
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         VMA_MEMORY_USAGE_CPU_TO_GPU,
         0,
         &materialBuffer));
@@ -419,13 +414,10 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Descriptor buffers
     // *************************************************************************
-    VulkanBuffer pbrDescriptorBuffer = {};
-    CreateDescriptorBuffer(renderer.get(), pbrPipelineLayout.DescriptorSetLayout, &pbrDescriptorBuffer);
-
-    WritePBRDescriptors(
+    Descriptors pbrDescriptors;
+    CreatePBRDescriptors(
         renderer.get(),
-        pbrPipelineLayout.DescriptorSetLayout,
-        &pbrDescriptorBuffer,
+        &pbrDescriptors,
         &pbrSceneParamsBuffer,
         &materialBuffer,
         materialTexturesSets,
@@ -434,13 +426,10 @@ int main(int argc, char** argv)
         irrTextures,
         envTextures);
 
-    VulkanBuffer envDescriptorBuffer = {};
-    CreateDescriptorBuffer(renderer.get(), envPipelineLayout.DescriptorSetLayout, &envDescriptorBuffer);
-
-    WriteEnvDescriptors(
+    Descriptors envDescriptors;
+    CreateEnvDescriptors(
         renderer.get(),
-        envPipelineLayout.DescriptorSetLayout,
-        &envDescriptorBuffer,
+        &envDescriptors,
         envTextures);
 
     // *************************************************************************
@@ -747,22 +736,15 @@ int main(int argc, char** argv)
 
             // Draw environment
             {
-                VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
-                descriptorBufferBindingInfo.pNext                            = nullptr;
-                descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &envDescriptorBuffer);
-                descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-                fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
-
-                uint32_t     bufferIndices           = 0;
-                VkDeviceSize descriptorBufferOffsets = 0;
-                fn_vkCmdSetDescriptorBufferOffsetsEXT(
+                vkCmdBindDescriptorSets(
                     cmdBuf.CommandBuffer,
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                     envPipelineLayout.PipelineLayout,
                     0, // firstSet
                     1, // setCount
-                    &bufferIndices,
-                    &descriptorBufferOffsets);
+                    &envDescriptors.DescriptorSet,
+                    0,
+                    nullptr);
 
                 // Bind the VS/FS Graphics Pipeline
                 vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, envPipelineState);
@@ -787,22 +769,15 @@ int main(int argc, char** argv)
 
             // Draw material models
             {
-                VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
-                descriptorBufferBindingInfo.pNext                            = nullptr;
-                descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &pbrDescriptorBuffer);
-                descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-                fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
-
-                uint32_t     bufferIndices           = 0;
-                VkDeviceSize descriptorBufferOffsets = 0;
-                fn_vkCmdSetDescriptorBufferOffsetsEXT(
+                vkCmdBindDescriptorSets(
                     cmdBuf.CommandBuffer,
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                     pbrPipelineLayout.PipelineLayout,
                     0, // firstSet
-                    1, // setCount
-                    &bufferIndices,
-                    &descriptorBufferOffsets);
+                    1, // setCOunt
+                    &pbrDescriptors.DescriptorSet,
+                    0,
+                    nullptr);
 
                 // Select which model to draw
                 const GeometryBuffers& geoBuffers = matGeoBuffers[gModelIndex];
@@ -1234,7 +1209,6 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
         }
 
         VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
         createInfo.bindingCount                    = CountU32(bindings);
         createInfo.pBindings                       = DataPtr(bindings);
 
@@ -1291,7 +1265,6 @@ void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* 
         }
 
         VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
         createInfo.bindingCount                    = CountU32(bindings);
         createInfo.pBindings                       = DataPtr(bindings);
 
@@ -1917,31 +1890,9 @@ void CreateMaterials(
     }
 }
 
-void CreateDescriptorBuffer(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pBuffer)
-{
-    VkDeviceSize size = 0;
-    fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
-
-    VkBufferUsageFlags usageFlags =
-        VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,  // pRenderer
-        size,       // srcSize
-        nullptr,    // pSrcData
-        usageFlags, // usageFlags
-        0,          // minAlignment
-        pBuffer));  // pBuffer
-}
-
-void WritePBRDescriptors(
+void CreatePBRDescriptors(
     VulkanRenderer*                pRenderer,
-    VkDescriptorSetLayout          descriptorSetLayout,
-    VulkanBuffer*                  pDescriptorBuffer,
+    Descriptors*                   pDescriptors,
     VulkanBuffer*                  pSceneParamsBuffer,
     VulkanBuffer*                  pMaterialBuffer,
     std::vector<MaterialTextures>& materialTextureSets,
@@ -1950,34 +1901,148 @@ void WritePBRDescriptors(
     std::vector<VulkanImage>&      irrTextures,
     std::vector<VulkanImage>&      envTextures)
 {
-    char* pDescriptorBufferStartAddress = nullptr;
-    CHECK_CALL(vmaMapMemory(
-        pRenderer->Allocator,
-        pDescriptorBuffer->Allocation,
-        reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
+    // Allocate the Descriptor Pool
+    std::vector<VkDescriptorPoolSize> poolSizes =
+    {
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1},
+        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,  66 + TOTAL_MATERIAL_TEXTURES},
+        {VK_DESCRIPTOR_TYPE_SAMPLER,        4},
+    };
+
+    VkDescriptorPoolCreateInfo poolCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    poolCreateInfo.maxSets                    = 1;
+    poolCreateInfo.poolSizeCount              = CountU32(poolSizes);
+    poolCreateInfo.pPoolSizes                 = DataPtr(poolSizes);
+
+    CHECK_CALL(vkCreateDescriptorPool(pRenderer->Device, &poolCreateInfo, nullptr, &pDescriptors->DescriptorPool));
+
+    // Setup the Descriptor set layout
+    VkDescriptorSetLayoutBinding SceneParamsBinding{};
+    SceneParamsBinding.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    SceneParamsBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    SceneParamsBinding.binding         = 0;
+    SceneParamsBinding.descriptorCount = 1;
+
+    VkDescriptorSetLayoutBinding MaterialParamsBinding{};
+    MaterialParamsBinding.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    MaterialParamsBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    MaterialParamsBinding.binding         = 2;
+    MaterialParamsBinding.descriptorCount = 1;
+
+    VkDescriptorSetLayoutBinding IBLIntegrationLUTBinding{};
+    IBLIntegrationLUTBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    IBLIntegrationLUTBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    IBLIntegrationLUTBinding.binding         = 3;
+    IBLIntegrationLUTBinding.descriptorCount = 1;
+
+    VkDescriptorSetLayoutBinding IBLIntegrationMultiscatterLUTBinding{};
+    IBLIntegrationMultiscatterLUTBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    IBLIntegrationMultiscatterLUTBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    IBLIntegrationMultiscatterLUTBinding.binding         = 4;
+    IBLIntegrationMultiscatterLUTBinding.descriptorCount = 1;
+
+    VkDescriptorSetLayoutBinding IBLIrradianceMapBinding{};
+    IBLIrradianceMapBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    IBLIrradianceMapBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    IBLIrradianceMapBinding.binding         = 16;
+    IBLIrradianceMapBinding.descriptorCount = gMaxIBLs;
+
+    VkDescriptorSetLayoutBinding IBLEnvironmentMapBinding{};
+    IBLEnvironmentMapBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    IBLEnvironmentMapBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    IBLEnvironmentMapBinding.binding         = 48;
+    IBLEnvironmentMapBinding.descriptorCount = gMaxIBLs;
+
+    VkDescriptorSetLayoutBinding IBLIntegrationSamplerBinding{};
+    IBLIntegrationSamplerBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
+    IBLIntegrationSamplerBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    IBLIntegrationSamplerBinding.binding         = 32;
+    IBLIntegrationSamplerBinding.descriptorCount = 1;
+
+    VkDescriptorSetLayoutBinding IBLMapSamplerBinding{};
+    IBLMapSamplerBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
+    IBLMapSamplerBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    IBLMapSamplerBinding.binding         = 33;
+    IBLMapSamplerBinding.descriptorCount = 1;
+
+    VkDescriptorSetLayoutBinding MaterialTexturesBinding{};
+    MaterialTexturesBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    MaterialTexturesBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    MaterialTexturesBinding.binding         = 100;
+    MaterialTexturesBinding.descriptorCount = TOTAL_MATERIAL_TEXTURES;
+
+    VkDescriptorSetLayoutBinding MaterialSamplerBinding{};
+    MaterialSamplerBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
+    MaterialSamplerBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    MaterialSamplerBinding.binding         = 34;
+    MaterialSamplerBinding.descriptorCount = 1;
+
+    VkDescriptorSetLayoutBinding MaterialNormalMapSamplerBinding{};
+    MaterialNormalMapSamplerBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
+    MaterialNormalMapSamplerBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    MaterialNormalMapSamplerBinding.binding         = 35;
+    MaterialNormalMapSamplerBinding.descriptorCount = 1;
+
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
+    {
+       SceneParamsBinding,
+       MaterialParamsBinding,
+       IBLIntegrationLUTBinding,
+       IBLIntegrationMultiscatterLUTBinding,
+       IBLIrradianceMapBinding,
+       IBLEnvironmentMapBinding,
+       IBLIntegrationSamplerBinding,
+       IBLMapSamplerBinding,
+       MaterialTexturesBinding,
+       MaterialSamplerBinding,
+       MaterialNormalMapSamplerBinding,
+    };
+
+    VkDescriptorSetLayoutCreateInfo layoutCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    layoutCreateInfo.pBindings                       = DataPtr(setLayoutBinding);
+    layoutCreateInfo.bindingCount                    = CountU32(setLayoutBinding);
+
+    CHECK_CALL(vkCreateDescriptorSetLayout(pRenderer->Device, &layoutCreateInfo, nullptr, &pDescriptors->DescriptorSetLayout));
+
+     // Setup the descriptor set 
+    VkDescriptorSetAllocateInfo allocInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    allocInfo.descriptorPool              = pDescriptors->DescriptorPool;
+    allocInfo.pSetLayouts                 = &pDescriptors->DescriptorSetLayout;
+    allocInfo.descriptorSetCount          = 1;
+
+    CHECK_CALL(vkAllocateDescriptorSets(pRenderer->Device, &allocInfo, &pDescriptors->DescriptorSet));
 
     // ConstantBuffer<SceneParameters>      SceneParams                                : register(b0);
-    WriteDescriptor(
-        pRenderer,
-        pDescriptorBufferStartAddress,
-        descriptorSetLayout,
-        0, // binding
-        0, // arrayElement
-        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        pSceneParamsBuffer);
+    VkDescriptorBufferInfo SceneParamsBufferInfo;
+    SceneParamsBufferInfo.buffer = pSceneParamsBuffer->Buffer;
+    SceneParamsBufferInfo.offset = 0;
+    SceneParamsBufferInfo.range  = VK_WHOLE_SIZE;
+
+    VkWriteDescriptorSet SceneParamsWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    SceneParamsWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    SceneParamsWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    SceneParamsWriteDescriptor.dstBinding           = 0;
+    SceneParamsWriteDescriptor.pBufferInfo          = &SceneParamsBufferInfo;
+    SceneParamsWriteDescriptor.descriptorCount      = 1;
 
     // DEFINE_AS_PUSH_CONSTANT
     // ConstantBuffer<DrawParameters>       DrawParams                                 : register(b1);
 
     // StructuredBuffer<MaterialParameters> MaterialParams                             : register(t2);
-    WriteDescriptor(
-        pRenderer,
-        pDescriptorBufferStartAddress,
-        descriptorSetLayout,
-        2, // binding
-        0, // arrayElement
-        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-        pMaterialBuffer);
+    VkDescriptorBufferInfo MaterialParamsBufferInfo;
+    MaterialParamsBufferInfo.buffer = pMaterialBuffer->Buffer;
+    MaterialParamsBufferInfo.offset = 0;
+    MaterialParamsBufferInfo.range  = VK_WHOLE_SIZE;
+
+    VkWriteDescriptorSet MaterialParamsWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    MaterialParamsWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    MaterialParamsWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    MaterialParamsWriteDescriptor.dstBinding           = 2;
+    MaterialParamsWriteDescriptor.pBufferInfo          = &MaterialParamsBufferInfo;
+    MaterialParamsWriteDescriptor.descriptorCount      = 1;
+
+    std::vector<VkDescriptorImageInfo> iblLUTsImageInfos(2);
 
     // Texture2D                            IBLIntegrationLUT                          : register(t3);
     {
@@ -1990,15 +2055,9 @@ void WritePBRDescriptors(
             GREX_ALL_SUBRESOURCES,
             &imageView));
 
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
-            3, // binding
-            0, // arrayElement
-            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            imageView,
-            VK_IMAGE_LAYOUT_GENERAL);
+        iblLUTsImageInfos[0].imageView   = imageView;
+        iblLUTsImageInfos[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
     }
 
     // Texture2D                            IBLIntegrationMultiscatterLUT              : register(t4);
@@ -2012,74 +2071,89 @@ void WritePBRDescriptors(
             GREX_ALL_SUBRESOURCES,
             &imageView));
 
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
-            4, // binding
-            0, // arrayElement
-            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            imageView,
-            VK_IMAGE_LAYOUT_GENERAL);
+        iblLUTsImageInfos[1].imageView   = imageView;
+        iblLUTsImageInfos[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
+
+    VkWriteDescriptorSet iblLUTsWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    iblLUTsWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    iblLUTsWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    iblLUTsWriteDescriptor.dstBinding           = 3;
+    iblLUTsWriteDescriptor.pImageInfo           = DataPtr(iblLUTsImageInfos);
+    iblLUTsWriteDescriptor.descriptorCount      = CountU32(iblLUTsImageInfos);
 
     // Texture2D                            IBLIrradianceMaps[32]                      : register(t16);
+    std::vector<VkDescriptorImageInfo> iblIrradianceMapsInfos; 
     {
-        uint32_t arrayIndex = 0;
-        for (auto& image : irrTextures)
+        for (int arrayIndex = 0; arrayIndex < gMaxIBLs; arrayIndex++)
         {
-            VkImageView imageView = VK_NULL_HANDLE;
-            CHECK_CALL(CreateImageView(
-                pRenderer,
-                &image,
-                VK_IMAGE_VIEW_TYPE_2D,
-                VK_FORMAT_R32G32B32A32_SFLOAT,
-                GREX_ALL_SUBRESOURCES,
-                &imageView));
+            VkDescriptorImageInfo imageInfo;
+            imageInfo.imageView   = VK_NULL_HANDLE;
+            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                16,         // binding
-                arrayIndex, // arrayElement
-                VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                imageView,
-                VK_IMAGE_LAYOUT_GENERAL);
+            if (arrayIndex < irrTextures.size())
+            {
+                VkImageView imageView = VK_NULL_HANDLE;
+                CHECK_CALL(CreateImageView(
+                    pRenderer,
+                    &irrTextures[arrayIndex],
+                    VK_IMAGE_VIEW_TYPE_2D,
+                    VK_FORMAT_R32G32B32A32_SFLOAT,
+                    GREX_ALL_SUBRESOURCES,
+                    &imageView));
 
-            arrayIndex++;
+                imageInfo.imageView   = imageView;
+            }
+
+            iblIrradianceMapsInfos.push_back(imageInfo);
         }
     }
+
+    VkWriteDescriptorSet iblIrradianceMapsWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    iblIrradianceMapsWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    iblIrradianceMapsWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    iblIrradianceMapsWriteDescriptor.dstBinding           = 16;
+    iblIrradianceMapsWriteDescriptor.pImageInfo           = DataPtr(iblIrradianceMapsInfos);
+    iblIrradianceMapsWriteDescriptor.descriptorCount      = CountU32(iblIrradianceMapsInfos);
 
     // Texture2D                            IBLEnvironmentMaps[32]                     : register(t48);
+    std::vector<VkDescriptorImageInfo> iblEnvironmentMapsInfos;
     {
-        uint32_t arrayIndex = 0;
-        for (auto& image : envTextures)
+        for (int arrayIndex = 0; arrayIndex < gMaxIBLs; arrayIndex++)
         {
-            VkImageView imageView = VK_NULL_HANDLE;
-            CHECK_CALL(CreateImageView(
-                pRenderer,
-                &image,
-                VK_IMAGE_VIEW_TYPE_2D,
-                VK_FORMAT_R32G32B32A32_SFLOAT,
-                GREX_ALL_SUBRESOURCES,
-                &imageView));
+            VkDescriptorImageInfo imageInfo;
+            imageInfo.imageView   = VK_NULL_HANDLE;
+            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                48,         // binding
-                arrayIndex, // arrayElement
-                VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                imageView,
-                VK_IMAGE_LAYOUT_GENERAL);
+            if (arrayIndex < envTextures.size())
+            {
+                VkImageView imageView = VK_NULL_HANDLE;
+                CHECK_CALL(CreateImageView(
+                    pRenderer,
+                    &envTextures[arrayIndex],
+                    VK_IMAGE_VIEW_TYPE_2D,
+                    VK_FORMAT_R32G32B32A32_SFLOAT,
+                    GREX_ALL_SUBRESOURCES,
+                    &imageView));
 
-            arrayIndex++;
+                imageInfo.imageView = imageView;
+            }
+
+            iblEnvironmentMapsInfos.push_back(imageInfo);
         }
     }
 
+    VkWriteDescriptorSet iblEnvironmentMapsWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    iblEnvironmentMapsWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    iblEnvironmentMapsWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    iblEnvironmentMapsWriteDescriptor.dstBinding           = 48;
+    iblEnvironmentMapsWriteDescriptor.pImageInfo           = DataPtr(iblEnvironmentMapsInfos);
+    iblEnvironmentMapsWriteDescriptor.descriptorCount      = CountU32(iblEnvironmentMapsInfos);
+
+
     // SamplerState                         IBLIntegrationSampler                      : register(s32);
+    std::vector<VkDescriptorImageInfo> iblSamplerInfos(2);
+
     {
         VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         samplerInfo.flags                   = 0;
@@ -2106,13 +2180,8 @@ void WritePBRDescriptors(
             nullptr,
             &iblIntegrationSampler));
 
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
-            32, // binding
-            0,  // arrayElement
-            iblIntegrationSampler);
+        iblSamplerInfos[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        iblSamplerInfos[0].sampler     = iblIntegrationSampler;
     }
 
     // SamplerState                         IBLMapSampler                              : register(s33);
@@ -2142,51 +2211,70 @@ void WritePBRDescriptors(
             nullptr,
             &iblMapSampler));
 
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
-            33, // binding
-            0,  // arrayElement
-            iblMapSampler);
+        iblSamplerInfos[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        iblSamplerInfos[1].sampler     = iblMapSampler;
     }
+
+    VkWriteDescriptorSet iblSamplersWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    iblSamplersWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    iblSamplersWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_SAMPLER;
+    iblSamplersWriteDescriptor.dstBinding           = 32;
+    iblSamplersWriteDescriptor.pImageInfo           = DataPtr(iblSamplerInfos);
+    iblSamplersWriteDescriptor.descriptorCount      = CountU32(iblSamplerInfos);
 
     // Texture2D                            MaterialTextures[TOTAL_MATERIAL_TEXTURES]  : register(t100);
+    std::vector<VkDescriptorImageInfo> materialTextureInfos;
     {
-        uint32_t arrayIndex = 0;
-        for (auto& materialTextures : materialTextureSets)
+        for (int arrayIndex = 0; arrayIndex < NUM_MATERIALS; arrayIndex++)
         {
-            VulkanImage* textureImages[] = {
-                &materialTextures.baseColorTexture,
-                &materialTextures.normalTexture,
-                &materialTextures.roughnessTexture,
-                &materialTextures.metallicTexture};
+            VkDescriptorImageInfo imageInfo;
+            imageInfo.imageView          = VK_NULL_HANDLE;
+            imageInfo.imageLayout        = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-            for (auto& image : textureImages)
+            if (arrayIndex < materialTextureSets.size())
             {
-                VkImageView imageView = VK_NULL_HANDLE;
-                CHECK_CALL(CreateImageView(
-                    pRenderer,
-                    image,
-                    VK_IMAGE_VIEW_TYPE_2D,
-                    VK_FORMAT_R8G8B8A8_UNORM,
-                    GREX_ALL_SUBRESOURCES,
-                    &imageView));
+                VulkanImage* textureImages[] = {
+                    &materialTextureSets[arrayIndex].baseColorTexture,
+                    &materialTextureSets[arrayIndex].normalTexture,
+                    &materialTextureSets[arrayIndex].roughnessTexture,
+                    &materialTextureSets[arrayIndex].metallicTexture};
 
-                WriteDescriptor(
-                    pRenderer,
-                    pDescriptorBufferStartAddress,
-                    descriptorSetLayout,
-                    100,        // binding
-                    arrayIndex, // arrayElement
-                    VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                    imageView,
-                    VK_IMAGE_LAYOUT_GENERAL);
+                for (auto& image : textureImages)
+                {
+                    VkImageView imageView = VK_NULL_HANDLE;
+                    CHECK_CALL(CreateImageView(
+                        pRenderer,
+                        image,
+                        VK_IMAGE_VIEW_TYPE_2D,
+                        VK_FORMAT_R8G8B8A8_UNORM,
+                        GREX_ALL_SUBRESOURCES,
+                        &imageView));
 
-                arrayIndex++;
+                    imageInfo.imageView   = imageView;
+                    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+                    materialTextureInfos.push_back(imageInfo);
+                }
             }
+            else
+            {
+               for (int typeIndex = 0; typeIndex < 4; typeIndex++)
+               {
+                   materialTextureInfos.push_back(imageInfo);
+               }
+            }
+
         }
     }
+
+    VkWriteDescriptorSet materialTexturesWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    materialTexturesWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    materialTexturesWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    materialTexturesWriteDescriptor.dstBinding           = 100;
+    materialTexturesWriteDescriptor.pImageInfo           = DataPtr(materialTextureInfos);
+    materialTexturesWriteDescriptor.descriptorCount      = CountU32(materialTextureInfos);
+
+    std::vector<VkDescriptorImageInfo> materialSamplerInfos(2);
 
     // SamplerState                         MaterialSampler                            : register(s34);
     {
@@ -2215,13 +2303,9 @@ void WritePBRDescriptors(
             nullptr,
             &materialSampler));
 
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
-            34, // binding
-            0,  // arrayElement
-            materialSampler);
+        materialSamplerInfos[0].imageView   = VK_NULL_HANDLE;
+        materialSamplerInfos[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        materialSamplerInfos[0].sampler     = materialSampler;
     }
 
     // SamplerState                         MaterialNormalMapSampler                   : register(s35);
@@ -2251,34 +2335,87 @@ void WritePBRDescriptors(
             nullptr,
             &materialNormalSampler));
 
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
-            35, // binding
-            0,  // arrayElement
-            materialNormalSampler);
+        materialSamplerInfos[1].imageView   = VK_NULL_HANDLE;
+        materialSamplerInfos[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        materialSamplerInfos[1].sampler     = materialNormalSampler;
     }
 
-    vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
+    VkWriteDescriptorSet materialSamplersWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    materialSamplersWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    materialSamplersWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_SAMPLER;
+    materialSamplersWriteDescriptor.dstBinding           = 34;
+    materialSamplersWriteDescriptor.pImageInfo           = DataPtr(materialSamplerInfos);
+    materialSamplersWriteDescriptor.descriptorCount      = CountU32(materialSamplerInfos);
+
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets =
+    {
+        SceneParamsWriteDescriptor,
+        MaterialParamsWriteDescriptor,
+        iblLUTsWriteDescriptor,
+        iblIrradianceMapsWriteDescriptor,
+        iblEnvironmentMapsWriteDescriptor,
+        iblSamplersWriteDescriptor,
+        materialTexturesWriteDescriptor,
+        materialSamplersWriteDescriptor,
+    };
+
+    vkUpdateDescriptorSets(pRenderer->Device, CountU32(writeDescriptorSets), DataPtr(writeDescriptorSets), 0, nullptr);
 }
 
-void WriteEnvDescriptors(
+void CreateEnvDescriptors(
     VulkanRenderer*          pRenderer,
-    VkDescriptorSetLayout    descriptorSetLayout,
-    VulkanBuffer*            pDescriptorBuffer,
+    Descriptors*             pDescriptors,
     std::vector<VulkanImage> envTextures)
 {
-    char* pDescriptorBufferStartAddress = nullptr;
-    CHECK_CALL(vmaMapMemory(
-        pRenderer->Allocator,
-        pDescriptorBuffer->Allocation,
-        reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
+    // Allocate the Descriptor Pool
+    std::vector<VkDescriptorPoolSize> poolSizes =
+        {
+            {VK_DESCRIPTOR_TYPE_SAMPLER,              1},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1}
+    };
+
+    uint32_t                   setCount       = 2;
+    VkDescriptorPoolCreateInfo poolCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    poolCreateInfo.maxSets                    = setCount;
+    poolCreateInfo.poolSizeCount              = CountU32(poolSizes);
+    poolCreateInfo.pPoolSizes                 = DataPtr(poolSizes);
+
+    CHECK_CALL(vkCreateDescriptorPool(pRenderer->Device, &poolCreateInfo, nullptr, &pDescriptors->DescriptorPool));
+
+    // Setup the Descriptor set layout
+    VkDescriptorSetLayoutBinding sampler0Binding{};
+    sampler0Binding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
+    sampler0Binding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    sampler0Binding.binding         = 1;
+    sampler0Binding.descriptorCount = 1;
+
+    VkDescriptorSetLayoutBinding texturesBinding{};
+    texturesBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    texturesBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    texturesBinding.binding         = 32;
+    texturesBinding.descriptorCount = 16;
+
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding = {sampler0Binding, texturesBinding};
+
+    VkDescriptorSetLayoutCreateInfo layoutCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    layoutCreateInfo.pBindings                       = DataPtr(setLayoutBinding);
+    layoutCreateInfo.bindingCount                    = CountU32(setLayoutBinding);
+
+    CHECK_CALL(vkCreateDescriptorSetLayout(pRenderer->Device, &layoutCreateInfo, nullptr, &pDescriptors->DescriptorSetLayout));
+
+    // Setup the descriptor set
+    VkDescriptorSetAllocateInfo allocInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    allocInfo.descriptorPool              = pDescriptors->DescriptorPool;
+    allocInfo.pSetLayouts                 = &pDescriptors->DescriptorSetLayout;
+    allocInfo.descriptorSetCount          = 1;
+
+    CHECK_CALL(vkAllocateDescriptorSets(pRenderer->Device, &allocInfo, &pDescriptors->DescriptorSet));
 
     // DEFINE_AS_PUSH_CONSTANT
     // ConstantBuffer<SceneParameters> SceneParmas  : register(b0);
 
     // SamplerState                    Sampler0     : register(s1);
+    VkDescriptorImageInfo sampler0Info;
     {
         VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         samplerInfo.flags                   = 0;
@@ -2305,42 +2442,57 @@ void WriteEnvDescriptors(
             nullptr,
             &uWrapSampler));
 
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
-            1, // binding
-            0, // arrayElement
-            uWrapSampler);
+        sampler0Info.sampler     = uWrapSampler;
+        sampler0Info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
 
+    VkWriteDescriptorSet sampler0WriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    sampler0WriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    sampler0WriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_SAMPLER;
+    sampler0WriteDescriptor.dstBinding           = 1;
+    sampler0WriteDescriptor.pImageInfo           = &sampler0Info;
+    sampler0WriteDescriptor.descriptorCount      = 1;
+
     // Texture2D                       Textures[16] : register(t32);
+    std::vector<VkDescriptorImageInfo> textureInfos;
     {
-        uint32_t arrayIndex = 0;
-        for (auto& image : envTextures)
+        for (int32 arrayIndex = 0; arrayIndex < 16; arrayIndex++)
         {
-            VkImageView imageView = VK_NULL_HANDLE;
-            CHECK_CALL(CreateImageView(
-                pRenderer,
-                &image,
-                VK_IMAGE_VIEW_TYPE_2D,
-                VK_FORMAT_R32G32B32A32_SFLOAT,
-                GREX_ALL_SUBRESOURCES,
-                &imageView));
+            VkDescriptorImageInfo imageInfo;
+            imageInfo.imageView   = VK_NULL_HANDLE;
+            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                32,         // binding
-                arrayIndex, // arrayElement
-                VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                imageView,
-                VK_IMAGE_LAYOUT_GENERAL);
+            if (arrayIndex < envTextures.size())
+            {
+                VkImageView imageView = VK_NULL_HANDLE;
+                CHECK_CALL(CreateImageView(
+                    pRenderer,
+                    &envTextures[arrayIndex],
+                    VK_IMAGE_VIEW_TYPE_2D,
+                    VK_FORMAT_R32G32B32A32_SFLOAT,
+                    GREX_ALL_SUBRESOURCES,
+                    &imageView));
 
-            arrayIndex++;
+                imageInfo.imageView = imageView;
+            }
+
+            textureInfos.push_back(imageInfo);
         }
     }
 
-    vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
+    VkWriteDescriptorSet texturesWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    texturesWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
+    texturesWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    texturesWriteDescriptor.dstBinding           = 32;
+    texturesWriteDescriptor.pImageInfo           = DataPtr(textureInfos);
+    texturesWriteDescriptor.descriptorCount      = CountU32(textureInfos);
+
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets =
+    {
+       sampler0WriteDescriptor,
+       texturesWriteDescriptor,
+    };
+
+    vkUpdateDescriptorSets(pRenderer->Device, CountU32(writeDescriptorSets), DataPtr(writeDescriptorSets), 0, nullptr);
+
 }
