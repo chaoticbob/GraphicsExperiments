@@ -124,7 +124,6 @@ struct Descriptors
     VkDescriptorPool      DescriptorPool;
     VkDescriptorSet       DescriptorSet;
     VkDescriptorSetLayout DescriptorSetLayout;
-
 };
 
 bool     InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeatures& features, uint32_t apiVersion = VK_API_VERSION_1_3);
@@ -184,11 +183,27 @@ struct VulkanBuffer
     VkDeviceSize      Size;
 };
 
+struct VulkanBufferDescriptor
+{
+    VkDescriptorSetLayoutBinding layoutBinding;
+    VkDescriptorBufferInfo       bufferInfo;
+    VkWriteDescriptorSet         writeDescriptorSet;
+};
+
 struct VulkanImage
 {
     VkImage           Image;
     VmaAllocation     Allocation;
     VmaAllocationInfo AllocationInfo;
+};
+
+struct VulkanImageDescriptor
+{
+    VkDescriptorSetLayoutBinding       layoutBinding;
+    std::vector<VkDescriptorImageInfo> imageInfo;
+    VkWriteDescriptorSet               writeDescriptorSet;
+
+    VulkanImageDescriptor(size_t count = 1);
 };
 
 struct VulkanAccelStruct
@@ -445,6 +460,14 @@ HRESULT CompileHLSL(
     std::string*           pErrorMsg);
 
 // Buffer
+void CreateDescriptor(
+    VulkanRenderer*         pRenderer,
+    VulkanBufferDescriptor* pBufferDescriptor,
+    uint32_t                binding,
+    uint32_t                arrayElements,
+    VkDescriptorType        descriptorType,
+    const VulkanBuffer*     pBuffer);
+
 void WriteDescriptor(
     VulkanRenderer*       pRenderer,
     void*                 pDescriptorBufferStartAddress,
@@ -464,6 +487,15 @@ void WriteDescriptor(
     const VulkanAccelStruct* pAccelStruct);
 
 // Image view
+void CreateDescriptor(
+    VulkanRenderer*       pRenderer,
+   VulkanImageDescriptor* pImageDescriptor,
+    uint32_t              binding,
+    uint32_t              arrayElement,
+    VkDescriptorType      descriptorType,
+    VkImageView           imageView,
+    VkImageLayout         imageLayout);
+
 void WriteDescriptor(
     VulkanRenderer*       pRenderer,
     void*                 pDescriptorBufferStartAddress,
@@ -475,6 +507,13 @@ void WriteDescriptor(
     VkImageLayout         imageLayout);
 
 // Sampler 
+void CreateDescriptor(
+    VulkanRenderer*        pRenderer,
+    VulkanImageDescriptor* pImageDescriptor,
+    uint32_t               binding,
+    uint32_t               arrayElement,
+    VkSampler              sampler);
+
 void WriteDescriptor(
     VulkanRenderer*       pRenderer,
     void*                 pDescriptorBufferStartAddress,
@@ -491,6 +530,13 @@ void PushGraphicsDescriptor(
     uint32_t            binding,
     VkDescriptorType    descriptorType,
     const VulkanBuffer* pBuffer);
+
+// Descriptors
+void CreateAndUpdateDescriptorSet(
+    VulkanRenderer*                            pRenderer,
+    std::vector<VkDescriptorSetLayoutBinding>& layoutBindings,
+    std::vector<VkWriteDescriptorSet>&         writeDescriptorSets,
+    Descriptors*                               pDescriptors);
 
 // Loaded funtions
 extern PFN_vkCreateRayTracingPipelinesKHR             fn_vkCreateRayTracingPipelinesKHR;

@@ -1019,6 +1019,28 @@ VkResult TransitionImageLayout(
     return VK_SUCCESS;
 }
 
+VulkanImageDescriptor::VulkanImageDescriptor(size_t count)
+{
+    imageInfo.resize(count);
+    for (auto& info : imageInfo)
+    {
+        info.imageView   = VK_NULL_HANDLE;
+        info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        info.sampler     = VK_NULL_HANDLE;
+    }
+
+    writeDescriptorSet.sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writeDescriptorSet.pNext            = nullptr;
+    writeDescriptorSet.dstSet           = VK_NULL_HANDLE;
+    writeDescriptorSet.dstBinding       = 0;
+    writeDescriptorSet.dstArrayElement  = 0;
+    writeDescriptorSet.descriptorCount  = 0;
+    writeDescriptorSet.descriptorType   = static_cast<VkDescriptorType>(0);
+    writeDescriptorSet.pImageInfo       = nullptr;
+    writeDescriptorSet.pBufferInfo      = nullptr;
+    writeDescriptorSet.pTexelBufferView = nullptr;
+}
+
 VkResult CreateBuffer(
     VulkanRenderer*    pRenderer,
     VkBufferUsageFlags usageFlags,
@@ -3240,6 +3262,33 @@ HRESULT CompileHLSL(
     return S_OK;
 }
 
+void CreateDescriptor(
+    VulkanRenderer*         pRenderer,
+    VulkanBufferDescriptor* pBufferDescriptor,
+    uint32_t                binding,
+    uint32_t                arrayElement,
+    VkDescriptorType        descriptorType,
+    const VulkanBuffer*     pBuffer)
+{
+    assert(pBufferDescriptor);
+
+    pBufferDescriptor->layoutBinding                 = {};
+    pBufferDescriptor->layoutBinding.descriptorType  = descriptorType;
+    pBufferDescriptor->layoutBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    pBufferDescriptor->layoutBinding.binding         = binding;
+    pBufferDescriptor->layoutBinding.descriptorCount = 1;
+
+    pBufferDescriptor->bufferInfo.buffer = pBuffer->Buffer;
+    pBufferDescriptor->bufferInfo.offset = 0;
+    pBufferDescriptor->bufferInfo.range  = VK_WHOLE_SIZE;
+
+    pBufferDescriptor->writeDescriptorSet                 = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    pBufferDescriptor->writeDescriptorSet.descriptorType  = descriptorType;
+    pBufferDescriptor->writeDescriptorSet.dstBinding      = binding;
+    pBufferDescriptor->writeDescriptorSet.pBufferInfo     = &pBufferDescriptor->bufferInfo;
+    pBufferDescriptor->writeDescriptorSet.descriptorCount = 1;
+}
+
 void WriteDescriptor(
     VulkanRenderer*       pRenderer,
     void*                 pDescriptorBufferStartAddress,
@@ -3348,6 +3397,34 @@ void WriteDescriptor(
         pDescriptor);      // pDescriptor
 }
 
+void CreateDescriptor(
+    VulkanRenderer*        pRenderer,
+    VulkanImageDescriptor* pImageDescriptor,
+    uint32_t               binding,
+    uint32_t               arrayElement,
+    VkDescriptorType       descriptorType,
+    VkImageView            imageView,
+    VkImageLayout          imageLayout)
+{
+    assert(pImageDescriptor);
+
+    pImageDescriptor->layoutBinding                 = {};
+    pImageDescriptor->layoutBinding.descriptorType  = descriptorType;
+    pImageDescriptor->layoutBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    pImageDescriptor->layoutBinding.binding         = binding;
+    pImageDescriptor->layoutBinding.descriptorCount = static_cast<uint32_t>(pImageDescriptor->imageInfo.size());
+
+    pImageDescriptor->imageInfo[arrayElement].imageView   = imageView;
+    pImageDescriptor->imageInfo[arrayElement].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    pImageDescriptor->writeDescriptorSet                 = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    pImageDescriptor->writeDescriptorSet.dstSet          = VK_NULL_HANDLE;
+    pImageDescriptor->writeDescriptorSet.descriptorType  = descriptorType;
+    pImageDescriptor->writeDescriptorSet.dstBinding      = binding;
+    pImageDescriptor->writeDescriptorSet.pImageInfo      = DataPtr(pImageDescriptor->imageInfo);
+    pImageDescriptor->writeDescriptorSet.descriptorCount = CountU32(pImageDescriptor->imageInfo);
+}
+
 void WriteDescriptor(
     VulkanRenderer*       pRenderer,
     void*                 pDescriptorBufferStartAddress,
@@ -3410,6 +3487,30 @@ void WriteDescriptor(
         &descriptorInfo,   // pDescriptorInfo
         descriptorSize,    // dataSize
         pDescriptor);      // pDescriptor
+}
+
+void CreateDescriptor(
+    VulkanRenderer*        pRenderer,
+    VulkanImageDescriptor* pImageDescriptor,
+    uint32_t               binding,
+    uint32_t               arrayElement,
+    VkSampler              sampler)
+{
+    assert(pImageDescriptor);
+
+    pImageDescriptor->layoutBinding                 = {};
+    pImageDescriptor->layoutBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
+    pImageDescriptor->layoutBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    pImageDescriptor->layoutBinding.binding         = binding;
+    pImageDescriptor->layoutBinding.descriptorCount = static_cast<uint32_t>(pImageDescriptor->imageInfo.size());
+
+    pImageDescriptor->imageInfo[arrayElement].sampler     = sampler;
+
+    pImageDescriptor->writeDescriptorSet                 = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    pImageDescriptor->writeDescriptorSet.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
+    pImageDescriptor->writeDescriptorSet.dstBinding      = binding;
+    pImageDescriptor->writeDescriptorSet.pImageInfo      = DataPtr(pImageDescriptor->imageInfo);
+    pImageDescriptor->writeDescriptorSet.descriptorCount = CountU32(pImageDescriptor->imageInfo);
 }
 
 void WriteDescriptor(
@@ -3485,6 +3586,66 @@ void PushGraphicsDescriptor(
         set,
         1,
         &write);
+}
+
+void CreateAndUpdateDescriptorSet(
+    VulkanRenderer*                            pRenderer,
+    std::vector<VkDescriptorSetLayoutBinding>& layoutBindings,
+    std::vector<VkWriteDescriptorSet>&         writeDescriptorSets,
+    Descriptors*                               pDescriptors)
+{
+    // Allocate the Descriptor Pool
+    std::map<VkDescriptorType, size_t> poolTypeCounts;
+    for (auto& writeDescriptor : writeDescriptorSets)
+    {
+        poolTypeCounts[writeDescriptor.descriptorType] += writeDescriptor.descriptorCount;
+    }
+
+    std::vector<VkDescriptorPoolSize> poolSizes;
+    poolSizes.resize(poolTypeCounts.size());
+
+    size_t sizeIndex = 0;
+    for (auto& typeCount : poolTypeCounts)
+    {
+        poolSizes[sizeIndex].type = typeCount.first;
+        poolSizes[sizeIndex].descriptorCount = static_cast<uint32_t>(typeCount.second);
+
+        sizeIndex++;
+    }
+
+    VkDescriptorPoolCreateInfo poolCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    poolCreateInfo.maxSets                    = 1;
+    poolCreateInfo.poolSizeCount              = CountU32(poolSizes);
+    poolCreateInfo.pPoolSizes                 = DataPtr(poolSizes);
+
+    VkResult vkRes = vkCreateDescriptorPool(pRenderer->Device, &poolCreateInfo, nullptr, &pDescriptors->DescriptorPool);
+    assert(vkRes == VK_SUCCESS);
+
+    // Setup the Descriptor set layout
+    VkDescriptorSetLayoutCreateInfo layoutCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    layoutCreateInfo.pBindings                       = DataPtr(layoutBindings);
+    layoutCreateInfo.bindingCount                    = CountU32(layoutBindings);
+
+    vkRes = vkCreateDescriptorSetLayout(pRenderer->Device, &layoutCreateInfo, nullptr, &pDescriptors->DescriptorSetLayout);
+    assert(vkRes == VK_SUCCESS);
+
+    // Setup the descriptor set
+    VkDescriptorSetAllocateInfo allocInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    allocInfo.descriptorPool              = pDescriptors->DescriptorPool;
+    allocInfo.pSetLayouts                 = &pDescriptors->DescriptorSetLayout;
+    allocInfo.descriptorSetCount          = 1;
+
+    vkRes = vkAllocateDescriptorSets(pRenderer->Device, &allocInfo, &pDescriptors->DescriptorSet);
+    assert(vkRes == VK_SUCCESS);
+
+    // Copy the newly create descriptor set into all the already created write descriptor sets
+    for (auto& writeDescriptor : writeDescriptorSets)
+    {
+        writeDescriptor.dstSet = pDescriptors->DescriptorSet;
+    }
+
+    // Update all descriptor sets
+    vkUpdateDescriptorSets(pRenderer->Device, CountU32(writeDescriptorSets), DataPtr(writeDescriptorSets), 0, nullptr);
 }
 
 uint32_t BytesPerPixel(VkFormat fmt)

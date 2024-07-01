@@ -23,7 +23,7 @@ using namespace glm;
         }                                            \
     }
 
-struct DrawParameters
+struct DrawInfo
 {
     uint32_t      materialIndex = 0;
     uint32_t      numIndices    = 0;
@@ -40,6 +40,11 @@ struct Camera
 {
    mat4 mvp;
    vec3 lightPosition;
+};
+
+struct DrawParameters
+{
+   uint MaterialIndex;
 };
 
 // =============================================================================
@@ -119,20 +124,6 @@ static uint32_t gWindowWidth  = 1280;
 static uint32_t gWindowHeight = 720;
 static bool     gEnableDebug  = true;
 
-
-void CreateGeometryBuffers(
-   VulkanRenderer*              pRenderer,
-   std::vector<DrawParameters>&       outDrawParams,
-   VulkanBuffer*                pCameraBuffer,
-   VulkanBuffer*                pMaterialBuffer,
-   VulkanBuffer*                pPositionBuffer,
-   VulkanBuffer*                pNormalBuffer,
-   vec3*                        pLightPosition);
-void  CreateDescriptors(
-    VulkanRenderer* pRenderer,
-    VulkanBuffer*   pCameraPropertiesBuffer,
-    VulkanBuffer*   pMaterials,
-    Descriptors*    pDescriptors);
 void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout *pLayout);
 void CreateShaderModules(
    VulkanRenderer*               pRenderer,
@@ -140,6 +131,19 @@ void CreateShaderModules(
    const std::vector<uint32_t>&  spirvFS,
    VkShaderModule*               pModuleVS,
    VkShaderModule*               pModuleFS);
+void CreateGeometryBuffers(
+   VulkanRenderer*              pRenderer,
+   std::vector<DrawInfo>&       outDrawParams,
+   VulkanBuffer*                pCameraBuffer,
+   VulkanBuffer*                pMaterialBuffer,
+   VulkanBuffer*                pPositionBuffer,
+   VulkanBuffer*                pNormalBuffer,
+   vec3*                        pLightPosition);
+void CreateDescriptors(
+    VulkanRenderer* pRenderer,
+    Descriptors*    pDescriptors,
+    VulkanBuffer*   pCameraBuffer,
+    VulkanBuffer*   pMaterialBuffer);
 
 // =============================================================================
 // main()
@@ -183,6 +187,15 @@ int main(int argc, char** argv)
     }
 
     // *************************************************************************
+    // Pipeline layout
+    //
+    // This is used for pipeline creation
+    //
+    // *************************************************************************
+    VulkanPipelineLayout pipelineLayout = {};
+    CreatePipelineLayout(renderer.get(), &pipelineLayout);
+
+    // *************************************************************************
     // Shader module
     // *************************************************************************
     VkShaderModule moduleVS = VK_NULL_HANDLE;
@@ -193,15 +206,6 @@ int main(int argc, char** argv)
        spirvFS,
        &moduleVS,
        &moduleFS);
-
-    // *************************************************************************
-    // Pipeline layout
-    //
-    // This is used for pipeline creation
-    //
-    // *************************************************************************
-    VulkanPipelineLayout pipelineLayout = {};
-    CreatePipelineLayout(renderer.get(), &pipelineLayout);
 
     // *************************************************************************
     // Graphics pipeline state object
@@ -219,7 +223,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Geometry data
     // *************************************************************************
-    std::vector<DrawParameters>  drawParams;
+    std::vector<DrawInfo>  drawParams;
     VulkanBuffer           cameraBuffer;
     VulkanBuffer           materialsBuffer;
     VulkanBuffer           positionBuffer;
@@ -238,7 +242,7 @@ int main(int argc, char** argv)
     // Descriptor heaps
     // *************************************************************************
     Descriptors descriptors;
-    CreateDescriptors(renderer.get(), &cameraBuffer, &materialsBuffer, &descriptors);
+    CreateDescriptors(renderer.get(), &descriptors, &cameraBuffer, &materialsBuffer);
 
     // *************************************************************************
     // Window
@@ -330,7 +334,7 @@ int main(int argc, char** argv)
     // Main loop
     // *************************************************************************
     VkClearValue clearValues[2];
-    clearValues[0].color = { {0.23f, 0.23f, 0.31f, 0} };
+    clearValues[0].color = { {0.0f, 0.0f, 0.2f, 1.0f } };
     clearValues[1].depthStencil = { 1.0f, 0 };
 
     while (window->PollEvents()) {
@@ -378,13 +382,14 @@ int main(int argc, char** argv)
 
            vkCmdBeginRendering(cmdBuf.CommandBuffer, &vkri);
 
-            mat4 modelMat = mat4(1);
-            mat4 viewMat  = glm::lookAt(vec3(0, 3, 5), vec3(0, 2.8f, 0), vec3(0, 1, 0));
-            mat4 projMat  = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
-            mat4 mvpMat   = projMat * viewMat * modelMat;
+           VkViewport viewport = { 0, static_cast<float>(gWindowHeight), static_cast<float>(gWindowWidth), -static_cast<float>(gWindowHeight), 0.0f, 1.0f };
+           vkCmdSetViewport(cmdBuf.CommandBuffer, 0, 1, &viewport);
 
-            pCameraParams->mvp           = mvpMat;
-            pCameraParams->lightPosition = lightPosition;
+           VkRect2D scissor = { 0, 0, gWindowWidth, gWindowHeight };
+           vkCmdSetScissor(cmdBuf.CommandBuffer, 0, 1, &scissor);
+
+           // Bind the VS/FS Graphics Pipeline
+           vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
            vkCmdBindDescriptorSets(
                cmdBuf.CommandBuffer,
@@ -401,14 +406,17 @@ int main(int argc, char** argv)
            VkDeviceSize offsets[] = { 0, 0 };
            vkCmdBindVertexBuffers(cmdBuf.CommandBuffer, 0, 2, vertexBuffers, offsets);
 
-           VkViewport viewport = { 0, static_cast<float>(gWindowHeight), static_cast<float>(gWindowWidth), -static_cast<float>(gWindowHeight), 0.0f, 1.0f };
-           vkCmdSetViewport(cmdBuf.CommandBuffer, 0, 1, &viewport);
+            mat4 modelMat = mat4(1);
+            mat4 viewMat  = glm::lookAt(vec3(0, 3, 5), vec3(0, 2.8f, 0), vec3(0, 1, 0));
+            mat4 projMat  = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+            mat4 mvpMat   = projMat * viewMat * modelMat;
 
-           VkRect2D scissor = { 0, 0, gWindowWidth, gWindowHeight };
-           vkCmdSetScissor(cmdBuf.CommandBuffer, 0, 1, &scissor);
+            int32 cameraOffsetInBytes     = 0;
+            int32 materialOffsetInBytes   = sizeof(Camera);
+            int32 materialsOffsetInBytes  = sizeof(Camera) + sizeof(Material);
 
-           // Bind the VS/FS Graphics Pipeline
-           vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+            pCameraParams->mvp            = mvpMat;
+            pCameraParams->lightPosition  = lightPosition;
 
             for (auto& draw : drawParams) {
                // Bind the index buffer for this draw
@@ -419,21 +427,22 @@ int main(int argc, char** argv)
                   pipelineLayout.PipelineLayout,
                   VK_SHADER_STAGE_FRAGMENT_BIT,
                   0,
-                  sizeof(uint32_t),
+                  sizeof(DrawParameters),
                   &draw.materialIndex);
 
                vkCmdDrawIndexed(cmdBuf.CommandBuffer, draw.numIndices, 1, 0, 0, 0);
             }
 
             vkCmdEndRendering(cmdBuf.CommandBuffer);
+
+            CmdTransitionImageLayout(
+               cmdBuf.CommandBuffer,
+               images[bufferIndex],
+               GREX_ALL_SUBRESOURCES,
+               VK_IMAGE_ASPECT_COLOR_BIT,
+               RESOURCE_STATE_RENDER_TARGET,
+               RESOURCE_STATE_PRESENT);
         }
-        CmdTransitionImageLayout(
-            cmdBuf.CommandBuffer,
-            images[bufferIndex],
-            GREX_ALL_SUBRESOURCES,
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            RESOURCE_STATE_RENDER_TARGET,
-            RESOURCE_STATE_PRESENT);
 
         CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));
 
@@ -455,165 +464,6 @@ int main(int argc, char** argv)
     return 0;
 }
 
-void CreateGeometryBuffers(
-   VulkanRenderer*        pRenderer,
-   std::vector<DrawParameters>& outDrawParams,
-   VulkanBuffer*          pCameraBuffer,
-   VulkanBuffer*          pMaterialBuffer,
-   VulkanBuffer*          pPositionBuffer,
-   VulkanBuffer*          pNormalBuffer,
-   vec3*                  pLightPosition)
-{
-   TriMesh mesh = TriMesh::CornellBox({ .enableVertexColors = true, .enableNormals = true });
-
-   uint32_t lightGroupIndex = mesh.GetGroupIndex("light");
-   assert((lightGroupIndex != UINT32_MAX) && "group index for 'light' failed");
-
-   *pLightPosition = mesh.GetGroup(lightGroupIndex).GetBounds().Center();
-
-   std::vector<Material> materials;
-   for (uint32_t materialIndex = 0; materialIndex < mesh.GetNumMaterials(); ++materialIndex) {
-      auto& matDesc = mesh.GetMaterial(materialIndex);
-
-      Material material     = {};
-      material.albedo       = matDesc.baseColor;
-      material.recieveLight = (matDesc.name != "white light") ? true : false;
-      materials.push_back(material);
-
-      auto triangles = mesh.GetTrianglesForMaterial(materialIndex);
-
-      DrawParameters params = {};
-      params.numIndices     = static_cast<uint32_t>(3 * triangles.size());
-      params.materialIndex  = materialIndex;
-
-      CHECK_CALL(CreateBuffer(
-         pRenderer,
-         SizeInBytes(triangles),
-         DataPtr(triangles),
-         VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-         VMA_MEMORY_USAGE_GPU_ONLY,
-         0,
-         &params.indexBuffer));
-
-      outDrawParams.push_back(params);
-   }
-
-   CHECK_CALL(CreateBuffer(
-      pRenderer,
-      Align<size_t>(sizeof(Camera), 256),
-      nullptr,
-      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-      0,
-      pCameraBuffer));
-
-   CHECK_CALL(CreateBuffer(
-      pRenderer,
-      SizeInBytes(materials),
-      DataPtr(materials),
-      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-      VMA_MEMORY_USAGE_GPU_ONLY,
-      0,
-      pMaterialBuffer));
-
-   CHECK_CALL(CreateBuffer(
-      pRenderer,
-      SizeInBytes(mesh.GetPositions()),
-      DataPtr(mesh.GetPositions()),
-      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-      VMA_MEMORY_USAGE_GPU_ONLY,
-      0,
-      pPositionBuffer));
-
-   CHECK_CALL(CreateBuffer(
-      pRenderer,
-      SizeInBytes(mesh.GetNormals()),
-      DataPtr(mesh.GetNormals()),
-      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-      VMA_MEMORY_USAGE_GPU_ONLY,
-      0,
-      pNormalBuffer));
-}
-
-void  CreateDescriptors(
-    VulkanRenderer* pRenderer,
-    VulkanBuffer*   pCameraPropertiesBuffer,
-    VulkanBuffer*   pMaterials,
-    Descriptors*    pDescriptors)
-{
-    uint32_t poolCount = 1;
-
-    // Allocate the Descriptor Pool
-    std::vector<VkDescriptorPoolSize> poolSizes = 
-    {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, poolCount},
-        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, poolCount}
-    };
-
-    uint32_t setCount  = 1;
-    VkDescriptorPoolCreateInfo poolCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-    poolCreateInfo.maxSets                    = setCount;
-    poolCreateInfo.poolSizeCount              = CountU32(poolSizes);
-    poolCreateInfo.pPoolSizes                 = DataPtr(poolSizes);
-
-    CHECK_CALL(vkCreateDescriptorPool(pRenderer->Device, &poolCreateInfo, nullptr, &pDescriptors->DescriptorPool));
-
-    // Setup the Descriptor set layout
-    VkDescriptorSetLayoutBinding cameraBinding{};
-    cameraBinding.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    cameraBinding.stageFlags      = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-    cameraBinding.binding         = 0;
-    cameraBinding.descriptorCount = 1;
-
-    VkDescriptorSetLayoutBinding materialStructureBinding{};
-    materialStructureBinding.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    materialStructureBinding.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
-    materialStructureBinding.binding         = 2;
-    materialStructureBinding.descriptorCount = 1;
-
-    std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding = {cameraBinding, materialStructureBinding};
-
-    VkDescriptorSetLayoutCreateInfo layoutCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-    layoutCreateInfo.pBindings                       = DataPtr(setLayoutBinding);
-    layoutCreateInfo.bindingCount                    = CountU32(setLayoutBinding);
-
-    CHECK_CALL(vkCreateDescriptorSetLayout(pRenderer->Device, &layoutCreateInfo, nullptr, &pDescriptors->DescriptorSetLayout));
-
-     // Setup the descriptor set 
-    VkDescriptorSetAllocateInfo allocInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-    allocInfo.descriptorPool              = pDescriptors->DescriptorPool;
-    allocInfo.pSetLayouts                 = &pDescriptors->DescriptorSetLayout;
-    allocInfo.descriptorSetCount          = 1;
-
-    CHECK_CALL(vkAllocateDescriptorSets(pRenderer->Device, &allocInfo, &pDescriptors->DescriptorSet));
-
-    VkDescriptorBufferInfo cameraBufferInfo{};
-    cameraBufferInfo.buffer = pCameraPropertiesBuffer->Buffer;
-    cameraBufferInfo.offset = 0;
-    cameraBufferInfo.range  = pCameraPropertiesBuffer->Size;
-
-    VkDescriptorBufferInfo materialBufferInfo{};
-    materialBufferInfo.buffer = pMaterials->Buffer;
-    materialBufferInfo.offset = 0;
-    materialBufferInfo.range  = pMaterials->Size;
-
-    VkWriteDescriptorSet cameraWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-    cameraWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
-    cameraWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    cameraWriteDescriptor.dstBinding           = 0;
-    cameraWriteDescriptor.pBufferInfo          = &cameraBufferInfo;
-    cameraWriteDescriptor.descriptorCount      = 1;
-
-    VkWriteDescriptorSet materialWriteDescriptor = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-    materialWriteDescriptor.dstSet               = pDescriptors->DescriptorSet;
-    materialWriteDescriptor.descriptorType       = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    materialWriteDescriptor.dstBinding           = 2;
-    materialWriteDescriptor.pBufferInfo          = &materialBufferInfo;
-    materialWriteDescriptor.descriptorCount      = 1;
-
-    std::vector<VkWriteDescriptorSet> writeDescriptorSets = {cameraWriteDescriptor, materialWriteDescriptor};
-    vkUpdateDescriptorSets(pRenderer->Device, CountU32(writeDescriptorSets), DataPtr(writeDescriptorSets), 0, nullptr);
-}
-
 void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
 {
    // Descriptor set layout
@@ -625,7 +475,7 @@ void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayo
          binding.binding                      = 0;
          binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
          binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
       // layout(binding=2) buffer MaterialStructuredBuffer
@@ -634,7 +484,7 @@ void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayo
          binding.binding                      = 2;
          binding.descriptorType               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
          binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_FRAGMENT_BIT;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
 
@@ -655,7 +505,7 @@ void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayo
       // layout(push_constants) uniform MaterialParameters MaterialParams;
       VkPushConstantRange push_constant    = {};
       push_constant.offset                 = 0;
-      push_constant.size                   = sizeof(uint32_t);
+      push_constant.size                   = sizeof(DrawParameters);
       push_constant.stageFlags             = VK_SHADER_STAGE_FRAGMENT_BIT;
 
       VkPipelineLayoutCreateInfo createInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
@@ -696,4 +546,124 @@ void CreateShaderModules(
 
       CHECK_CALL(vkCreateShaderModule(pRenderer->Device, &createInfo, nullptr, pModuleFS));
    }
+}
+
+void CreateGeometryBuffers(
+   VulkanRenderer*        pRenderer,
+   std::vector<DrawInfo>& outDrawParams,
+   VulkanBuffer*          pCameraBuffer,
+   VulkanBuffer*          pMaterialBuffer,
+   VulkanBuffer*          pPositionBuffer,
+   VulkanBuffer*          pNormalBuffer,
+   vec3*                  pLightPosition)
+{
+   TriMesh mesh = TriMesh::CornellBox({ .enableVertexColors = true, .enableNormals = true });
+
+   uint32_t lightGroupIndex = mesh.GetGroupIndex("light");
+   assert((lightGroupIndex != UINT32_MAX) && "group index for 'light' failed");
+
+   *pLightPosition = mesh.GetGroup(lightGroupIndex).GetBounds().Center();
+
+   std::vector<Material> materials;
+   for (uint32_t materialIndex = 0; materialIndex < mesh.GetNumMaterials(); ++materialIndex) {
+      auto& matDesc = mesh.GetMaterial(materialIndex);
+
+      Material material     = {};
+      material.albedo       = matDesc.baseColor;
+      material.recieveLight = (matDesc.name != "white light") ? true : false;
+      materials.push_back(material);
+
+      auto triangles = mesh.GetTrianglesForMaterial(materialIndex);
+
+      DrawInfo params = {};
+      params.numIndices     = static_cast<uint32_t>(3 * triangles.size());
+      params.materialIndex  = materialIndex;
+
+      CHECK_CALL(CreateBuffer(
+         pRenderer,
+         SizeInBytes(triangles),
+         DataPtr(triangles),
+         VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+         VMA_MEMORY_USAGE_GPU_ONLY,
+         0,
+         &params.indexBuffer));
+
+      outDrawParams.push_back(params);
+   }
+
+   CHECK_CALL(CreateBuffer(
+      pRenderer,
+      Align<size_t>(sizeof(Camera), 256),
+      nullptr,
+      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+      0,
+      pCameraBuffer));
+
+   CHECK_CALL(CreateBuffer(
+      pRenderer,
+      SizeInBytes(materials),
+      DataPtr(materials),
+      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+      VMA_MEMORY_USAGE_GPU_ONLY,
+      0,
+      pMaterialBuffer));
+
+   CHECK_CALL(CreateBuffer(
+      pRenderer,
+      SizeInBytes(mesh.GetPositions()),
+      DataPtr(mesh.GetPositions()),
+      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+      VMA_MEMORY_USAGE_GPU_ONLY,
+      0,
+      pPositionBuffer));
+
+   CHECK_CALL(CreateBuffer(
+      pRenderer,
+      SizeInBytes(mesh.GetNormals()),
+      DataPtr(mesh.GetNormals()),
+      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+      VMA_MEMORY_USAGE_GPU_ONLY,
+      0,
+      pNormalBuffer));
+}
+
+void CreateDescriptors(
+    VulkanRenderer* pRenderer,
+    Descriptors*    pDescriptors,
+    VulkanBuffer*   pCameraBuffer,
+    VulkanBuffer*   pMaterialBuffer)
+{
+    // layout(binding=0) uniform CameraProperties
+    VulkanBufferDescriptor cameraPropertiesDescriptor;
+    CreateDescriptor(
+        pRenderer,
+        &cameraPropertiesDescriptor,
+        0, // binding
+        0, // arrayElement
+        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        pCameraBuffer);
+
+    // layout(binding=2) buffer MaterialsStructuredBuffer
+    VulkanBufferDescriptor materialStructuredBufferDescriptor;
+    CreateDescriptor(
+        pRenderer,
+        &materialStructuredBufferDescriptor,
+        2, // binding
+        0, // arrayElement
+        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        pMaterialBuffer);
+
+    std::vector<VkDescriptorSetLayoutBinding> layoutBindings =
+    {
+        cameraPropertiesDescriptor.layoutBinding,
+        materialStructuredBufferDescriptor.layoutBinding,
+    };
+
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets =
+    {
+        cameraPropertiesDescriptor.writeDescriptorSet,
+        materialStructuredBufferDescriptor.writeDescriptorSet,
+    };
+
+    CreateAndUpdateDescriptorSet(pRenderer, layoutBindings, writeDescriptorSets, pDescriptors);
 }
