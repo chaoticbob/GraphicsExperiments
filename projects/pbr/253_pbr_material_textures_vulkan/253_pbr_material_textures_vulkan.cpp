@@ -144,14 +144,9 @@ void CreateMaterials(
     MaterialTextures&                outDefaultMaterialTextures,
     std::vector<MaterialTextures>&   outMaterialTexturesSets,
     std::vector<MaterialParameters>& outMaterialParametersSets);
-void CreateDescriptorBuffer(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout pDescriptorSetLayout,
-    VulkanBuffer*         pBuffer);
-void WritePBRDescriptors(
+void CreatePBRDescriptors(
     VulkanRenderer*                pRenderer,
-    VkDescriptorSetLayout          descriptorSetLayout,
-    VulkanBuffer*                  pDescriptorBuffer,
+    Descriptors*                   pDescriptors,
     VulkanBuffer*                  pSceneParamsBuffer,
     VulkanBuffer*                  pMaterialBuffer,
     std::vector<MaterialTextures>& materialTextureSets,
@@ -159,10 +154,9 @@ void WritePBRDescriptors(
     const VulkanImage*             pMultiscatterBRDFLUT,
     std::vector<VulkanImage>&      irrTextures,
     std::vector<VulkanImage>&      envTextures);
-void WriteEnvDescriptors(
+void CreateEnvDescriptors(
     VulkanRenderer*          pRenderer,
-    VkDescriptorSetLayout    descriptorSetLayout,
-    VulkanBuffer*            pDescriptorBuffer,
+    Descriptors*             pDescriptors,
     std::vector<VulkanImage> envTextures);
 
 void MouseMove(int x, int y, int buttons)
@@ -190,6 +184,7 @@ int main(int argc, char** argv)
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
     VulkanFeatures features = {};
+    features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
         return EXIT_FAILURE;
@@ -411,7 +406,7 @@ int main(int argc, char** argv)
         renderer.get(),
         SizeInBytes(materialParametersSets),
         DataPtr(materialParametersSets),
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         VMA_MEMORY_USAGE_CPU_TO_GPU,
         0,
         &materialBuffer));
@@ -419,13 +414,10 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Descriptor buffers
     // *************************************************************************
-    VulkanBuffer pbrDescriptorBuffer = {};
-    CreateDescriptorBuffer(renderer.get(), pbrPipelineLayout.DescriptorSetLayout, &pbrDescriptorBuffer);
-
-    WritePBRDescriptors(
+    Descriptors pbrDescriptors;
+    CreatePBRDescriptors(
         renderer.get(),
-        pbrPipelineLayout.DescriptorSetLayout,
-        &pbrDescriptorBuffer,
+        &pbrDescriptors,
         &pbrSceneParamsBuffer,
         &materialBuffer,
         materialTexturesSets,
@@ -434,13 +426,10 @@ int main(int argc, char** argv)
         irrTextures,
         envTextures);
 
-    VulkanBuffer envDescriptorBuffer = {};
-    CreateDescriptorBuffer(renderer.get(), envPipelineLayout.DescriptorSetLayout, &envDescriptorBuffer);
-
-    WriteEnvDescriptors(
+    Descriptors envDescriptors;
+    CreateEnvDescriptors(
         renderer.get(),
-        envPipelineLayout.DescriptorSetLayout,
-        &envDescriptorBuffer,
+        &envDescriptors,
         envTextures);
 
     // *************************************************************************
@@ -747,22 +736,15 @@ int main(int argc, char** argv)
 
             // Draw environment
             {
-                VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
-                descriptorBufferBindingInfo.pNext                            = nullptr;
-                descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &envDescriptorBuffer);
-                descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-                fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
-
-                uint32_t     bufferIndices           = 0;
-                VkDeviceSize descriptorBufferOffsets = 0;
-                fn_vkCmdSetDescriptorBufferOffsetsEXT(
+                vkCmdBindDescriptorSets(
                     cmdBuf.CommandBuffer,
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                     envPipelineLayout.PipelineLayout,
                     0, // firstSet
                     1, // setCount
-                    &bufferIndices,
-                    &descriptorBufferOffsets);
+                    &envDescriptors.DescriptorSet,
+                    0,
+                    nullptr);
 
                 // Bind the VS/FS Graphics Pipeline
                 vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, envPipelineState);
@@ -787,22 +769,15 @@ int main(int argc, char** argv)
 
             // Draw material models
             {
-                VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
-                descriptorBufferBindingInfo.pNext                            = nullptr;
-                descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &pbrDescriptorBuffer);
-                descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-                fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
-
-                uint32_t     bufferIndices           = 0;
-                VkDeviceSize descriptorBufferOffsets = 0;
-                fn_vkCmdSetDescriptorBufferOffsetsEXT(
+                vkCmdBindDescriptorSets(
                     cmdBuf.CommandBuffer,
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                     pbrPipelineLayout.PipelineLayout,
                     0, // firstSet
-                    1, // setCount
-                    &bufferIndices,
-                    &descriptorBufferOffsets);
+                    1, // setCOunt
+                    &pbrDescriptors.DescriptorSet,
+                    0,
+                    nullptr);
 
                 // Select which model to draw
                 const GeometryBuffers& geoBuffers = matGeoBuffers[gModelIndex];
@@ -1234,7 +1209,6 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
         }
 
         VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
         createInfo.bindingCount                    = CountU32(bindings);
         createInfo.pBindings                       = DataPtr(bindings);
 
@@ -1285,13 +1259,12 @@ void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* 
             VkDescriptorSetLayoutBinding binding = {};
             binding.binding                      = 32;
             binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-            binding.descriptorCount              = 16;
+            binding.descriptorCount              = gMaxIBLs;
             binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
             bindings.push_back(binding);
         }
 
         VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
         createInfo.bindingCount                    = CountU32(bindings);
         createInfo.pBindings                       = DataPtr(bindings);
 
@@ -1917,31 +1890,9 @@ void CreateMaterials(
     }
 }
 
-void CreateDescriptorBuffer(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pBuffer)
-{
-    VkDeviceSize size = 0;
-    fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
-
-    VkBufferUsageFlags usageFlags =
-        VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,  // pRenderer
-        size,       // srcSize
-        nullptr,    // pSrcData
-        usageFlags, // usageFlags
-        0,          // minAlignment
-        pBuffer));  // pBuffer
-}
-
-void WritePBRDescriptors(
+void CreatePBRDescriptors(
     VulkanRenderer*                pRenderer,
-    VkDescriptorSetLayout          descriptorSetLayout,
-    VulkanBuffer*                  pDescriptorBuffer,
+    Descriptors*                   pDescriptors,
     VulkanBuffer*                  pSceneParamsBuffer,
     VulkanBuffer*                  pMaterialBuffer,
     std::vector<MaterialTextures>& materialTextureSets,
@@ -1950,17 +1901,11 @@ void WritePBRDescriptors(
     std::vector<VulkanImage>&      irrTextures,
     std::vector<VulkanImage>&      envTextures)
 {
-    char* pDescriptorBufferStartAddress = nullptr;
-    CHECK_CALL(vmaMapMemory(
-        pRenderer->Allocator,
-        pDescriptorBuffer->Allocation,
-        reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
-
     // ConstantBuffer<SceneParameters>      SceneParams                                : register(b0);
-    WriteDescriptor(
+    VulkanBufferDescriptor sceneParamsDescriptor;
+    CreateDescriptor(
         pRenderer,
-        pDescriptorBufferStartAddress,
-        descriptorSetLayout,
+        &sceneParamsDescriptor,
         0, // binding
         0, // arrayElement
         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -1970,16 +1915,17 @@ void WritePBRDescriptors(
     // ConstantBuffer<DrawParameters>       DrawParams                                 : register(b1);
 
     // StructuredBuffer<MaterialParameters> MaterialParams                             : register(t2);
-    WriteDescriptor(
+    VulkanBufferDescriptor materialParamsDescriptor;
+    CreateDescriptor(
         pRenderer,
-        pDescriptorBufferStartAddress,
-        descriptorSetLayout,
+        &materialParamsDescriptor,
         2, // binding
         0, // arrayElement
         VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
         pMaterialBuffer);
 
     // Texture2D                            IBLIntegrationLUT                          : register(t3);
+    VulkanImageDescriptor iblIntegrationLUTDescriptor;
     {
         VkImageView imageView = VK_NULL_HANDLE;
         CHECK_CALL(CreateImageView(
@@ -1990,10 +1936,9 @@ void WritePBRDescriptors(
             GREX_ALL_SUBRESOURCES,
             &imageView));
 
-        WriteDescriptor(
+        CreateDescriptor(
             pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
+            &iblIntegrationLUTDescriptor,
             3, // binding
             0, // arrayElement
             VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -2002,6 +1947,7 @@ void WritePBRDescriptors(
     }
 
     // Texture2D                            IBLIntegrationMultiscatterLUT              : register(t4);
+	VulkanImageDescriptor iblIntegrationMultiscatterLUTDescriptor;
     {
         VkImageView imageView = VK_NULL_HANDLE;
         CHECK_CALL(CreateImageView(
@@ -2012,10 +1958,9 @@ void WritePBRDescriptors(
             GREX_ALL_SUBRESOURCES,
             &imageView));
 
-        WriteDescriptor(
+        CreateDescriptor(
             pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
+            &iblIntegrationMultiscatterLUTDescriptor,
             4, // binding
             0, // arrayElement
             VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -2024,6 +1969,7 @@ void WritePBRDescriptors(
     }
 
     // Texture2D                            IBLIrradianceMaps[32]                      : register(t16);
+	VulkanImageDescriptor iblIrradianceMapsDescriptor(32);
     {
         uint32_t arrayIndex = 0;
         for (auto& image : irrTextures)
@@ -2037,10 +1983,9 @@ void WritePBRDescriptors(
                 GREX_ALL_SUBRESOURCES,
                 &imageView));
 
-            WriteDescriptor(
+            CreateDescriptor(
                 pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
+                &iblIrradianceMapsDescriptor,
                 16,         // binding
                 arrayIndex, // arrayElement
                 VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -2052,6 +1997,7 @@ void WritePBRDescriptors(
     }
 
     // Texture2D                            IBLEnvironmentMaps[32]                     : register(t48);
+    VulkanImageDescriptor iblEnvironmentMapsDescriptor(32);
     {
         uint32_t arrayIndex = 0;
         for (auto& image : envTextures)
@@ -2065,10 +2011,9 @@ void WritePBRDescriptors(
                 GREX_ALL_SUBRESOURCES,
                 &imageView));
 
-            WriteDescriptor(
+            CreateDescriptor(
                 pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
+                &iblEnvironmentMapsDescriptor,
                 48,         // binding
                 arrayIndex, // arrayElement
                 VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -2080,6 +2025,7 @@ void WritePBRDescriptors(
     }
 
     // SamplerState                         IBLIntegrationSampler                      : register(s32);
+    VulkanImageDescriptor iblIntegrationSamplerDescriptor;
     {
         VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         samplerInfo.flags                   = 0;
@@ -2106,16 +2052,16 @@ void WritePBRDescriptors(
             nullptr,
             &iblIntegrationSampler));
 
-        WriteDescriptor(
+        CreateDescriptor(
             pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
+            &iblIntegrationSamplerDescriptor,
             32, // binding
             0,  // arrayElement
             iblIntegrationSampler);
     }
 
     // SamplerState                         IBLMapSampler                              : register(s33);
+    VulkanImageDescriptor iblMapSamplerDescriptor;
     {
         VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         samplerInfo.flags                   = 0;
@@ -2142,16 +2088,16 @@ void WritePBRDescriptors(
             nullptr,
             &iblMapSampler));
 
-        WriteDescriptor(
+        CreateDescriptor(
             pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
+            &iblMapSamplerDescriptor,
             33, // binding
             0,  // arrayElement
             iblMapSampler);
     }
 
     // Texture2D                            MaterialTextures[TOTAL_MATERIAL_TEXTURES]  : register(t100);
+    VulkanImageDescriptor materialTexturesDescriptor(TOTAL_MATERIAL_TEXTURES);
     {
         uint32_t arrayIndex = 0;
         for (auto& materialTextures : materialTextureSets)
@@ -2173,10 +2119,9 @@ void WritePBRDescriptors(
                     GREX_ALL_SUBRESOURCES,
                     &imageView));
 
-                WriteDescriptor(
+                CreateDescriptor(
                     pRenderer,
-                    pDescriptorBufferStartAddress,
-                    descriptorSetLayout,
+					&materialTexturesDescriptor,
                     100,        // binding
                     arrayIndex, // arrayElement
                     VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -2189,6 +2134,7 @@ void WritePBRDescriptors(
     }
 
     // SamplerState                         MaterialSampler                            : register(s34);
+    VulkanImageDescriptor materialSamplerDescriptor;
     {
         VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         samplerInfo.flags                   = 0;
@@ -2215,16 +2161,16 @@ void WritePBRDescriptors(
             nullptr,
             &materialSampler));
 
-        WriteDescriptor(
+        CreateDescriptor(
             pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
+            &materialSamplerDescriptor,
             34, // binding
             0,  // arrayElement
             materialSampler);
     }
 
     // SamplerState                         MaterialNormalMapSampler                   : register(s35);
+    VulkanImageDescriptor materialNormalMapSamplerDescriptor;
     {
         VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         samplerInfo.flags                   = 0;
@@ -2251,34 +2197,57 @@ void WritePBRDescriptors(
             nullptr,
             &materialNormalSampler));
 
-        WriteDescriptor(
+        CreateDescriptor(
             pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
+            &materialNormalMapSamplerDescriptor,
             35, // binding
             0,  // arrayElement
             materialNormalSampler);
     }
 
-    vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
+    {
+       sceneParamsDescriptor.layoutBinding,
+       materialParamsDescriptor.layoutBinding,
+       iblIntegrationLUTDescriptor.layoutBinding,
+       iblIntegrationMultiscatterLUTDescriptor.layoutBinding,
+       iblIrradianceMapsDescriptor.layoutBinding,
+       iblEnvironmentMapsDescriptor.layoutBinding,
+       iblIntegrationSamplerDescriptor.layoutBinding,
+       iblMapSamplerDescriptor.layoutBinding,
+       materialTexturesDescriptor.layoutBinding,
+       materialSamplerDescriptor.layoutBinding,
+       materialNormalMapSamplerDescriptor.layoutBinding,
+    };
+
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets =
+    {
+       sceneParamsDescriptor.writeDescriptorSet,
+       materialParamsDescriptor.writeDescriptorSet,
+       iblIntegrationLUTDescriptor.writeDescriptorSet,
+       iblIntegrationMultiscatterLUTDescriptor.writeDescriptorSet,
+       iblIrradianceMapsDescriptor.writeDescriptorSet,
+       iblEnvironmentMapsDescriptor.writeDescriptorSet,
+       iblIntegrationSamplerDescriptor.writeDescriptorSet,
+       iblMapSamplerDescriptor.writeDescriptorSet,
+       materialTexturesDescriptor.writeDescriptorSet,
+       materialSamplerDescriptor.writeDescriptorSet,
+       materialNormalMapSamplerDescriptor.writeDescriptorSet,
+    };
+
+    CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, pDescriptors);
 }
 
-void WriteEnvDescriptors(
+void CreateEnvDescriptors(
     VulkanRenderer*          pRenderer,
-    VkDescriptorSetLayout    descriptorSetLayout,
-    VulkanBuffer*            pDescriptorBuffer,
+    Descriptors*             pDescriptors,
     std::vector<VulkanImage> envTextures)
 {
-    char* pDescriptorBufferStartAddress = nullptr;
-    CHECK_CALL(vmaMapMemory(
-        pRenderer->Allocator,
-        pDescriptorBuffer->Allocation,
-        reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
-
     // DEFINE_AS_PUSH_CONSTANT
     // ConstantBuffer<SceneParameters> SceneParmas  : register(b0);
 
     // SamplerState                    Sampler0     : register(s1);
+    VulkanImageDescriptor sampler0Descriptor;
     {
         VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         samplerInfo.flags                   = 0;
@@ -2305,16 +2274,16 @@ void WriteEnvDescriptors(
             nullptr,
             &uWrapSampler));
 
-        WriteDescriptor(
+        CreateDescriptor(
             pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
+            &sampler0Descriptor,
             1, // binding
             0, // arrayElement
             uWrapSampler);
     }
 
     // Texture2D                       Textures[16] : register(t32);
+    VulkanImageDescriptor texturesDescriptor(gMaxIBLs);
     {
         uint32_t arrayIndex = 0;
         for (auto& image : envTextures)
@@ -2328,10 +2297,9 @@ void WriteEnvDescriptors(
                 GREX_ALL_SUBRESOURCES,
                 &imageView));
 
-            WriteDescriptor(
+            CreateDescriptor(
                 pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
+                &texturesDescriptor,
                 32,         // binding
                 arrayIndex, // arrayElement
                 VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -2342,5 +2310,17 @@ void WriteEnvDescriptors(
         }
     }
 
-    vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
+    {
+		sampler0Descriptor.layoutBinding,
+		texturesDescriptor.layoutBinding,
+    };
+
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets =
+    {
+	   sampler0Descriptor.writeDescriptorSet,
+	   texturesDescriptor.writeDescriptorSet,
+    };
+
+    CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, pDescriptors);
 }
