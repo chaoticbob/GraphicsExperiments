@@ -234,32 +234,18 @@ void CreateIBLTextures(
     std::vector<VulkanImage>& outIrradianceTextures,
     std::vector<VulkanImage>& outEnvironmentTextures,
     std::vector<uint32_t>&    outEnvNumLevels);
-void CreateDescriptorBuffer(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pBuffer);
-void WritePBRDescriptors(
+void CreatePBRDescriptors(
     VulkanRenderer*           pRenderer,
-    VkDescriptorSetLayout     descriptorSetLayout,
-    VulkanBuffer*             pDescriptorBuffer,
+    Descriptors*              pDescriptors,
     const VulkanBuffer*       pSceneParamsBuffer,
-    const VulkanBuffer*       pMaterialsBuffer,
+    const VulkanBuffer*       pMaterialParamsBuffer,
     const VulkanImage*        pBRDFLUT,
     std::vector<VulkanImage>& pIrradianceTexture,
     std::vector<VulkanImage>& pEnvTexture);
-void WriteEnvDescriptors(
+void CreateEnvDescriptors(
     VulkanRenderer*           pRenderer,
-    VkDescriptorSetLayout     descriptorSetLayout,
-    VulkanBuffer*             pDescriptorBuffer,
+    Descriptors*              pDescriptors,
     std::vector<VulkanImage>& envTextures);
-
-/*
-void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
-void CreateEnvironmentRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig);
-void CreateDescriptorHeap(
-    DxRenderer*            pRenderer,
-    ID3D12DescriptorHeap** ppHeap);
-    */
 
 void MouseMove(int x, int y, int buttons)
 {
@@ -286,6 +272,7 @@ int main(int argc, char** argv)
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
     VulkanFeatures features = {};
+    features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
         return EXIT_FAILURE;
@@ -453,7 +440,7 @@ int main(int argc, char** argv)
         renderer.get(),
         SizeInBytes(gMaterialParams),
         DataPtr(gMaterialParams),
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         VMA_MEMORY_USAGE_CPU_TO_GPU,
         0,
         &pbrMaterialParamsBuffer));
@@ -466,7 +453,7 @@ int main(int argc, char** argv)
         renderer.get(),
         Align<size_t>(sizeof(PBRSceneParameters), 256),
         nullptr,
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
         VMA_MEMORY_USAGE_CPU_TO_GPU,
         0,
         &pbrSceneParamsBuffer));
@@ -499,26 +486,21 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Descriptor buffers
     // *************************************************************************
-    VulkanBuffer pbrDescriptorBuffer = {};
-    CreateDescriptorBuffer(renderer.get(), pbrPipelineLayout.DescriptorSetLayout, &pbrDescriptorBuffer);
+    Descriptors pbrDescriptors;
 
-    WritePBRDescriptors(
+    CreatePBRDescriptors(
         renderer.get(),
-        pbrPipelineLayout.DescriptorSetLayout,
-        &pbrDescriptorBuffer,
+        &pbrDescriptors,
         &pbrSceneParamsBuffer,
         &pbrMaterialParamsBuffer,
         &brdfLUT,
         irrTextures,
         envTextures);
 
-    VulkanBuffer envDescriptorBuffer = {};
-    CreateDescriptorBuffer(renderer.get(), envPipelineLayout.DescriptorSetLayout, &envDescriptorBuffer);
-
-    WriteEnvDescriptors(
+    Descriptors envDescriptors;
+    CreateEnvDescriptors(
         renderer.get(),
-        envPipelineLayout.DescriptorSetLayout,
-        &envDescriptorBuffer,
+        &envDescriptors,
         envTextures);
 
     // *************************************************************************
@@ -950,22 +932,15 @@ int main(int argc, char** argv)
 
             // Draw environment
             {
-                VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
-                descriptorBufferBindingInfo.pNext                            = nullptr;
-                descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &envDescriptorBuffer);
-                descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-                fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
-
-                uint32_t     bufferIndices           = 0;
-                VkDeviceSize descriptorBufferOffsets = 0;
-                fn_vkCmdSetDescriptorBufferOffsetsEXT(
+                vkCmdBindDescriptorSets(
                     cmdBuf.CommandBuffer,
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                     envPipelineLayout.PipelineLayout,
                     0, // firstSet
                     1, // setCount
-                    &bufferIndices,
-                    &descriptorBufferOffsets);
+                    &envDescriptors.DescriptorSet,
+                    0,
+                    nullptr);
 
                 // Bind the VS/FS Graphics Pipeline
                 vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, envPipelineState);
@@ -994,22 +969,15 @@ int main(int argc, char** argv)
 
             // Draw sample spheres
             {
-                VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
-                descriptorBufferBindingInfo.pNext                            = nullptr;
-                descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &pbrDescriptorBuffer);
-                descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-                fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
-
-                uint32_t     bufferIndices           = 0;
-                VkDeviceSize descriptorBufferOffsets = 0;
-                fn_vkCmdSetDescriptorBufferOffsetsEXT(
+                vkCmdBindDescriptorSets(
                     cmdBuf.CommandBuffer,
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                     pbrPipelineLayout.PipelineLayout,
                     0, // firstSet
                     1, // setCount
-                    &bufferIndices,
-                    &descriptorBufferOffsets);
+                    &pbrDescriptors.DescriptorSet,
+                    0,
+                    nullptr);
 
                 // Select which model to draw
                 const GeometryBuffers& geoBuffers    = matGeoBuffers[gModelIndex];
@@ -1280,7 +1248,6 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
         }
 
         VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
         createInfo.bindingCount                    = CountU32(bindings);
         createInfo.pBindings                       = DataPtr(bindings);
 
@@ -1326,13 +1293,12 @@ void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* 
             VkDescriptorSetLayoutBinding binding = {};
             binding.binding                      = 32;
             binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-            binding.descriptorCount              = 16;
+            binding.descriptorCount              = gMaxIBLs;
             binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
             bindings.push_back(binding);
         }
 
         VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
         createInfo.bindingCount                    = CountU32(bindings);
         createInfo.pBindings                       = DataPtr(bindings);
 
@@ -1692,48 +1658,20 @@ void CreateIBLTextures(
     }
 }
 
-void CreateDescriptorBuffer(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pBuffer)
-{
-    VkDeviceSize size = 0;
-    fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
-
-    VkBufferUsageFlags usageFlags =
-        VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,  // pRenderer
-        size,       // srcSize
-        nullptr,    // pSrcData
-        usageFlags, // usageFlags
-        0,          // minAlignment
-        pBuffer));  // pBuffer
-}
-
-void WritePBRDescriptors(
+void CreatePBRDescriptors(
     VulkanRenderer*           pRenderer,
-    VkDescriptorSetLayout     descriptorSetLayout,
-    VulkanBuffer*             pDescriptorBuffer,
+    Descriptors*              pDescriptors,
     const VulkanBuffer*       pSceneParamsBuffer,
     const VulkanBuffer*       pMaterialsBuffer,
     const VulkanImage*        pBRDFLUT,
     std::vector<VulkanImage>& irradianceTextures,
     std::vector<VulkanImage>& envTextures)
 {
-    char* pDescriptorBufferStartAddress = nullptr;
-    CHECK_CALL(vmaMapMemory(
-        pRenderer->Allocator,
-        pDescriptorBuffer->Allocation,
-        reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
-
     // ConstantBuffer<SceneParameters>    SceneParams           : register(b0);
-    WriteDescriptor(
+    VulkanBufferDescriptor sceneParamsDescriptor;
+    CreateDescriptor(
         pRenderer,
-        pDescriptorBufferStartAddress,
-        descriptorSetLayout,
+        &sceneParamsDescriptor,
         0, // binding
         0, // arrayElement
         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -1743,10 +1681,10 @@ void WritePBRDescriptors(
     // ConstantBuffer<DrawParameters>     DrawParams            : register(b1);
 
     // ConstantBuffer<MaterialParameters> MaterialParams        : register(b2);
-    WriteDescriptor(
+    VulkanBufferDescriptor materialParamsDescriptor;
+    CreateDescriptor(
         pRenderer,
-        pDescriptorBufferStartAddress,
-        descriptorSetLayout,
+        &materialParamsDescriptor,
         2, // binding
         0, // arrayElement
         VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -1754,6 +1692,7 @@ void WritePBRDescriptors(
 
     // Samplers are setup in the immutable samplers in the DescriptorSetLayout
     // SamplerState                       IBLIntegrationSampler : register(s4);
+    VulkanImageDescriptor iblIntegrationSamplerDescriptor;
     {
         VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         samplerInfo.flags                   = 0;
@@ -1780,16 +1719,16 @@ void WritePBRDescriptors(
             nullptr,
             &clampedSampler));
 
-        WriteDescriptor(
+        CreateDescriptor(
             pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
+            &iblIntegrationSamplerDescriptor,
             4, // binding
             0, // arrayElement
             clampedSampler);
     }
 
     // SamplerState                         UWrapSampler       : register(s5);
+    VulkanImageDescriptor uWrapSamplerDescriptor;
     {
         VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         samplerInfo.flags                   = 0;
@@ -1816,16 +1755,16 @@ void WritePBRDescriptors(
             nullptr,
             &uWrapSampler));
 
-        WriteDescriptor(
+        CreateDescriptor(
             pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
+            &uWrapSamplerDescriptor,
             5, // binding
             0, // arrayElement
             uWrapSampler);
     }
 
     // Texture2D                            BRDFLUT            : register(t10);
+    VulkanImageDescriptor brdfLUTDescriptor;
     {
         VkImageView imageView = VK_NULL_HANDLE;
         CHECK_CALL(CreateImageView(
@@ -1836,10 +1775,9 @@ void WritePBRDescriptors(
             GREX_ALL_SUBRESOURCES,
             &imageView));
 
-        WriteDescriptor(
+        CreateDescriptor(
             pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
+            &brdfLUTDescriptor,
             10, // binding
             0,  // arrayElement
             VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -1848,6 +1786,7 @@ void WritePBRDescriptors(
     }
 
     // Texture2D                            IrradianceMap[32]  : register(t16);
+    VulkanImageDescriptor irradianceMapDescriptor(32);
     {
         uint32_t arrayElement = 0;
         for (auto& irradianceTexture : irradianceTextures)
@@ -1861,10 +1800,9 @@ void WritePBRDescriptors(
                 GREX_ALL_SUBRESOURCES,
                 &imageView));
 
-            WriteDescriptor(
+            CreateDescriptor(
                 pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
+                &irradianceMapDescriptor,
                 16,           // binding
                 arrayElement, // arrayElement
                 VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -1876,6 +1814,7 @@ void WritePBRDescriptors(
     }
 
     // Texture2D                            EnvironmentMap[32] : register(t48);
+    VulkanImageDescriptor environmentMapDescriptor(32);
     {
         uint32_t arrayElement = 0;
         for (auto& envTexture : envTextures)
@@ -1889,10 +1828,9 @@ void WritePBRDescriptors(
                 GREX_ALL_SUBRESOURCES,
                 &imageView));
 
-            WriteDescriptor(
+            CreateDescriptor(
                 pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
+                &environmentMapDescriptor,
                 48,           // binding
                 arrayElement, // arrayElement
                 VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -1903,25 +1841,41 @@ void WritePBRDescriptors(
         }
     }
 
-    vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
+    {
+        sceneParamsDescriptor.layoutBinding,
+        materialParamsDescriptor.layoutBinding,
+        iblIntegrationSamplerDescriptor.layoutBinding,
+        uWrapSamplerDescriptor.layoutBinding,
+        brdfLUTDescriptor.layoutBinding,
+        irradianceMapDescriptor.layoutBinding,
+        environmentMapDescriptor.layoutBinding
+    };
+
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets =
+    {
+        sceneParamsDescriptor.writeDescriptorSet,
+        materialParamsDescriptor.writeDescriptorSet,
+        iblIntegrationSamplerDescriptor.writeDescriptorSet,
+        uWrapSamplerDescriptor.writeDescriptorSet,
+        brdfLUTDescriptor.writeDescriptorSet,
+        irradianceMapDescriptor.writeDescriptorSet,
+        environmentMapDescriptor.writeDescriptorSet
+    };
+
+    CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, pDescriptors);
 }
 
-void WriteEnvDescriptors(
+void CreateEnvDescriptors(
     VulkanRenderer*           pRenderer,
-    VkDescriptorSetLayout     descriptorSetLayout,
-    VulkanBuffer*             pDescriptorBuffer,
+    Descriptors*              pDescriptors,
     std::vector<VulkanImage>& envTextures)
 {
-    char* pDescriptorBufferStartAddress = nullptr;
-    CHECK_CALL(vmaMapMemory(
-        pRenderer->Allocator,
-        pDescriptorBuffer->Allocation,
-        reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
-
     // set via push constants
     // ConstantBuffer<SceneParameters> SceneParams       : register(b0);
 
     // SamplerState                    IBLMapSampler     : register(s1);
+    VulkanImageDescriptor iblMapSamplerDescriptor;
     {
         VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         samplerInfo.flags                   = 0;
@@ -1948,16 +1902,16 @@ void WriteEnvDescriptors(
             nullptr,
             &uWrapSampler));
 
-        WriteDescriptor(
+        CreateDescriptor(
             pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
+            &iblMapSamplerDescriptor,
             1, // binding
             0, // arrayElement
             uWrapSampler);
     }
 
     // Texture2D                       IBLEnvironmentMap : register(t2);
+    VulkanImageDescriptor iblEnvironmentMapDescriptor(gMaxIBLs);
     {
         uint32_t arrayElement = 0;
         for (auto& envTexture : envTextures)
@@ -1971,10 +1925,9 @@ void WriteEnvDescriptors(
                 GREX_ALL_SUBRESOURCES,
                 &imageView));
 
-            WriteDescriptor(
+            CreateDescriptor(
                 pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
+                &iblEnvironmentMapDescriptor,
                 32,           // binding
                 arrayElement, // arrayElement
                 VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -1985,180 +1938,18 @@ void WriteEnvDescriptors(
         }
     }
 
-    vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
+    {
+        iblMapSamplerDescriptor.layoutBinding,
+        iblEnvironmentMapDescriptor.layoutBinding,
+    };
+
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets =
+    {
+       iblMapSamplerDescriptor.writeDescriptorSet,
+       iblEnvironmentMapDescriptor.writeDescriptorSet,
+    };
+
+    CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, pDescriptors);
 }
 
-/*
-void CreatePBRRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
-{
-    // BRDFLUT (t10)
-    D3D12_DESCRIPTOR_RANGE range1            = {};
-    range1.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    range1.NumDescriptors                    = 1;
-    range1.BaseShaderRegister                = 10;
-    range1.RegisterSpace                     = 0;
-    range1.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-    // IrradianceMap (t16)
-    D3D12_DESCRIPTOR_RANGE range2            = {};
-    range2.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    range2.NumDescriptors                    = gMaxIBLs;
-    range2.BaseShaderRegister                = 16;
-    range2.RegisterSpace                     = 0;
-    range2.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-    // EnvironmentMap (t32)
-    D3D12_DESCRIPTOR_RANGE range3            = {};
-    range3.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    range3.NumDescriptors                    = gMaxIBLs;
-    range3.BaseShaderRegister                = 48;
-    range3.RegisterSpace                     = 0;
-    range3.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-    D3D12_ROOT_PARAMETER rootParameters[6] = {};
-    // SceneParams (b0)
-    rootParameters[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
-    rootParameters[0].Descriptor.ShaderRegister = 0;
-    rootParameters[0].Descriptor.RegisterSpace  = 0;
-    rootParameters[0].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // DrawParams (b1)
-    rootParameters[1].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    rootParameters[1].Constants.Num32BitValues = 36;
-    rootParameters[1].Constants.ShaderRegister = 1;
-    rootParameters[1].Constants.RegisterSpace  = 0;
-    rootParameters[1].ShaderVisibility         = D3D12_SHADER_VISIBILITY_ALL;
-    // MaterialParams (t2)
-    rootParameters[2].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    rootParameters[2].Descriptor.ShaderRegister = 2;
-    rootParameters[2].Descriptor.RegisterSpace  = 0;
-    rootParameters[2].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
-    // BRDFLUT (t10)
-    rootParameters[3].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[3].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[3].DescriptorTable.pDescriptorRanges   = &range1;
-    rootParameters[3].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-    // IrradianceMap (t16)
-    rootParameters[4].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[4].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[4].DescriptorTable.pDescriptorRanges   = &range2;
-    rootParameters[4].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-    // EnvironmentMap (t32)
-    rootParameters[5].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[5].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[5].DescriptorTable.pDescriptorRanges   = &range3;
-    rootParameters[5].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {};
-    // ClampedSampler (s4)
-    staticSamplers[0].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSamplers[0].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[0].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[0].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[0].MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
-    staticSamplers[0].MaxAnisotropy    = 0;
-    staticSamplers[0].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    staticSamplers[0].MinLOD           = 0;
-    staticSamplers[0].MaxLOD           = 1;
-    staticSamplers[0].ShaderRegister   = 4;
-    staticSamplers[0].RegisterSpace    = 0;
-    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    // UWrapSampler (s5)
-    staticSamplers[1].Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSamplers[1].AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[1].AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSamplers[1].MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
-    staticSamplers[1].MaxAnisotropy    = 0;
-    staticSamplers[1].ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    staticSamplers[1].MinLOD           = 0;
-    staticSamplers[1].MaxLOD           = D3D12_FLOAT32_MAX;
-    staticSamplers[1].ShaderRegister   = 5;
-    staticSamplers[1].RegisterSpace    = 0;
-    staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-    D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-    rootSigDesc.NumParameters             = 6;
-    rootSigDesc.pParameters               = rootParameters;
-    rootSigDesc.NumStaticSamplers         = 2;
-    rootSigDesc.pStaticSamplers           = staticSamplers;
-    rootSigDesc.Flags                     = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-    ComPtr<ID3DBlob> blob;
-    ComPtr<ID3DBlob> error;
-    CHECK_CALL(D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error));
-    CHECK_CALL(pRenderer->Device->CreateRootSignature(
-        0,                         // nodeMask
-        blob->GetBufferPointer(),  // pBloblWithRootSignature
-        blob->GetBufferSize(),     // blobLengthInBytes
-        IID_PPV_ARGS(ppRootSig))); // riid, ppvRootSignature
-}
-
-void CreateEnvironmentRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
-{
-    // Textures (t32)
-    D3D12_DESCRIPTOR_RANGE range            = {};
-    range.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    range.NumDescriptors                    = gMaxIBLs;
-    range.BaseShaderRegister                = 32;
-    range.RegisterSpace                     = 0;
-    range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-    D3D12_ROOT_PARAMETER rootParameters[4] = {};
-    // SceneParams (b0)
-    rootParameters[0].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    rootParameters[0].Constants.Num32BitValues = 17;
-    rootParameters[0].Constants.ShaderRegister = 0;
-    rootParameters[0].Constants.RegisterSpace  = 0;
-    rootParameters[0].ShaderVisibility         = D3D12_SHADER_VISIBILITY_ALL;
-    // Textures (t32)
-    rootParameters[1].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[1].DescriptorTable.pDescriptorRanges   = &range;
-    rootParameters[1].ShaderVisibility                    = D3D12_SHADER_VISIBILITY_ALL;
-
-    D3D12_STATIC_SAMPLER_DESC staticSampler = {};
-    // Sampler0 (s1)
-    staticSampler.Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSampler.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSampler.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSampler.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    staticSampler.MipLODBias       = D3D12_DEFAULT_MIP_LOD_BIAS;
-    staticSampler.MaxAnisotropy    = 0;
-    staticSampler.ComparisonFunc   = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    staticSampler.MinLOD           = 0;
-    staticSampler.MaxLOD           = 1;
-    staticSampler.ShaderRegister   = 1;
-    staticSampler.RegisterSpace    = 0;
-    staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-    D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-    rootSigDesc.NumParameters             = 2;
-    rootSigDesc.pParameters               = rootParameters;
-    rootSigDesc.NumStaticSamplers         = 1;
-    rootSigDesc.pStaticSamplers           = &staticSampler;
-    rootSigDesc.Flags                     = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-    ComPtr<ID3DBlob> blob;
-    ComPtr<ID3DBlob> error;
-    CHECK_CALL(D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error));
-    CHECK_CALL(pRenderer->Device->CreateRootSignature(
-        0,                         // nodeMask
-        blob->GetBufferPointer(),  // pBloblWithRootSignature
-        blob->GetBufferSize(),     // blobLengthInBytes
-        IID_PPV_ARGS(ppRootSig))); // riid, ppvRootSignature
-}
-
-void CreateDescriptorHeap(
-    DxRenderer*            pRenderer,
-    ID3D12DescriptorHeap** ppHeap)
-{
-    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-    desc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    desc.NumDescriptors             = 256;
-    desc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-
-    CHECK_CALL(pRenderer->Device->CreateDescriptorHeap(
-        &desc,
-        IID_PPV_ARGS(ppHeap)));
-}
-*/
