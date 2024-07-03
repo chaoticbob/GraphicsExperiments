@@ -141,7 +141,7 @@ void CreateGeometryBuffers(
    vec3*                        pLightPosition);
 void CreateDescriptors(
     VulkanRenderer* pRenderer,
-    Descriptors*    pDescriptors,
+    VulkanDescriptorSet*    pDescriptors,
     VulkanBuffer*   pCameraBuffer,
     VulkanBuffer*   pMaterialBuffer);
 
@@ -241,7 +241,7 @@ int main(int argc, char** argv)
    // *************************************************************************
     // Descriptor heaps
     // *************************************************************************
-    Descriptors descriptors;
+    VulkanDescriptorSet descriptors;
     CreateDescriptors(renderer.get(), &descriptors, &cameraBuffer, &materialsBuffer);
 
     // *************************************************************************
@@ -629,7 +629,7 @@ void CreateGeometryBuffers(
 
 void CreateDescriptors(
     VulkanRenderer* pRenderer,
-    Descriptors*    pDescriptors,
+    VulkanDescriptorSet*    pDescriptors,
     VulkanBuffer*   pCameraBuffer,
     VulkanBuffer*   pMaterialBuffer)
 {

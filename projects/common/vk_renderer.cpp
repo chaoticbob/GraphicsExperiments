@@ -3592,7 +3592,7 @@ void CreateAndUpdateDescriptorSet(
     VulkanRenderer*                            pRenderer,
     std::vector<VkDescriptorSetLayoutBinding>& layoutBindings,
     std::vector<VkWriteDescriptorSet>&         writeDescriptorSets,
-    Descriptors*                               pDescriptors)
+    VulkanDescriptorSet*                               pDescriptors)
 {
     // Allocate the Descriptor Pool
     std::map<VkDescriptorType, size_t> poolTypeCounts;

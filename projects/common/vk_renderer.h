@@ -119,7 +119,7 @@ struct CommandObjects
 };
 
 // Descriptor container for convenience
-struct Descriptors
+struct VulkanDescriptorSet
 {
     VkDescriptorPool      DescriptorPool;
     VkDescriptorSet       DescriptorSet;
@@ -536,7 +536,7 @@ void CreateAndUpdateDescriptorSet(
     VulkanRenderer*                            pRenderer,
     std::vector<VkDescriptorSetLayoutBinding>& layoutBindings,
     std::vector<VkWriteDescriptorSet>&         writeDescriptorSets,
-    Descriptors*                               pDescriptors);
+    VulkanDescriptorSet*                               pDescriptors);
 
 // Loaded funtions
 extern PFN_vkCreateRayTracingPipelinesKHR             fn_vkCreateRayTracingPipelinesKHR;
