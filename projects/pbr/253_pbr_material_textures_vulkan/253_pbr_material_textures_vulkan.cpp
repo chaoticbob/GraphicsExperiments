@@ -146,7 +146,7 @@ void CreateMaterials(
     std::vector<MaterialParameters>& outMaterialParametersSets);
 void CreatePBRDescriptors(
     VulkanRenderer*                pRenderer,
-    Descriptors*                   pDescriptors,
+    VulkanDescriptorSet*           pDescriptors,
     VulkanBuffer*                  pSceneParamsBuffer,
     VulkanBuffer*                  pMaterialBuffer,
     std::vector<MaterialTextures>& materialTextureSets,
@@ -156,7 +156,7 @@ void CreatePBRDescriptors(
     std::vector<VulkanImage>&      envTextures);
 void CreateEnvDescriptors(
     VulkanRenderer*          pRenderer,
-    Descriptors*             pDescriptors,
+    VulkanDescriptorSet*     pDescriptors,
     std::vector<VulkanImage> envTextures);
 
 void MouseMove(int x, int y, int buttons)
@@ -414,7 +414,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Descriptor buffers
     // *************************************************************************
-    Descriptors pbrDescriptors;
+    VulkanDescriptorSet pbrDescriptors;
     CreatePBRDescriptors(
         renderer.get(),
         &pbrDescriptors,
@@ -426,7 +426,7 @@ int main(int argc, char** argv)
         irrTextures,
         envTextures);
 
-    Descriptors envDescriptors;
+    VulkanDescriptorSet envDescriptors;
     CreateEnvDescriptors(
         renderer.get(),
         &envDescriptors,
@@ -1892,7 +1892,7 @@ void CreateMaterials(
 
 void CreatePBRDescriptors(
     VulkanRenderer*                pRenderer,
-    Descriptors*                   pDescriptors,
+    VulkanDescriptorSet*           pDescriptors,
     VulkanBuffer*                  pSceneParamsBuffer,
     VulkanBuffer*                  pMaterialBuffer,
     std::vector<MaterialTextures>& materialTextureSets,
@@ -2240,7 +2240,7 @@ void CreatePBRDescriptors(
 
 void CreateEnvDescriptors(
     VulkanRenderer*          pRenderer,
-    Descriptors*             pDescriptors,
+    VulkanDescriptorSet*     pDescriptors,
     std::vector<VulkanImage> envTextures)
 {
     // DEFINE_AS_PUSH_CONSTANT
