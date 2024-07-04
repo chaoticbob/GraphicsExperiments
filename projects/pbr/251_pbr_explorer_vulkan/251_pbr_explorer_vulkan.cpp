@@ -236,7 +236,7 @@ void CreateIBLTextures(
     std::vector<uint32_t>&    outEnvNumLevels);
 void CreatePBRDescriptors(
     VulkanRenderer*           pRenderer,
-    Descriptors*              pDescriptors,
+    VulkanDescriptorSet*              pDescriptors,
     const VulkanBuffer*       pSceneParamsBuffer,
     const VulkanBuffer*       pMaterialParamsBuffer,
     const VulkanImage*        pBRDFLUT,
@@ -244,7 +244,7 @@ void CreatePBRDescriptors(
     std::vector<VulkanImage>& pEnvTexture);
 void CreateEnvDescriptors(
     VulkanRenderer*           pRenderer,
-    Descriptors*              pDescriptors,
+    VulkanDescriptorSet*              pDescriptors,
     std::vector<VulkanImage>& envTextures);
 
 void MouseMove(int x, int y, int buttons)
@@ -484,9 +484,9 @@ int main(int argc, char** argv)
     CreateIBLTextures(renderer.get(), &brdfLUT, irrTextures, envTextures, envNumLevels);
 
     // *************************************************************************
-    // Descriptor buffers
+    // Descriptor sets
     // *************************************************************************
-    Descriptors pbrDescriptors;
+    VulkanDescriptorSet pbrDescriptors;
 
     CreatePBRDescriptors(
         renderer.get(),
@@ -497,7 +497,7 @@ int main(int argc, char** argv)
         irrTextures,
         envTextures);
 
-    Descriptors envDescriptors;
+    VulkanDescriptorSet envDescriptors;
     CreateEnvDescriptors(
         renderer.get(),
         &envDescriptors,
@@ -1180,7 +1180,7 @@ int main(int argc, char** argv)
 
 void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
 {
-    // Descriptor set layout
+    // VulkanDescriptorSet set layout
     {
         std::vector<VkDescriptorSetLayoutBinding> bindings = {};
         // ConstantBuffer<SceneParameters>      SceneParams        : register(b0);
@@ -1278,7 +1278,7 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
 
 void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
 {
-    // Descriptor set layout
+    // VulkanDescriptorSet set layout
     {
         std::vector<VkDescriptorSetLayoutBinding> bindings = {};
         {
@@ -1660,7 +1660,7 @@ void CreateIBLTextures(
 
 void CreatePBRDescriptors(
     VulkanRenderer*           pRenderer,
-    Descriptors*              pDescriptors,
+    VulkanDescriptorSet*              pDescriptors,
     const VulkanBuffer*       pSceneParamsBuffer,
     const VulkanBuffer*       pMaterialsBuffer,
     const VulkanImage*        pBRDFLUT,
@@ -1868,7 +1868,7 @@ void CreatePBRDescriptors(
 
 void CreateEnvDescriptors(
     VulkanRenderer*           pRenderer,
-    Descriptors*              pDescriptors,
+    VulkanDescriptorSet*              pDescriptors,
     std::vector<VulkanImage>& envTextures)
 {
     // set via push constants
