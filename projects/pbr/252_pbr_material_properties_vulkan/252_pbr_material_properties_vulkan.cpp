@@ -123,13 +123,13 @@ void CreateIBLTextures(
     uint32_t*       EnvNumLevels,
     VulkanImage*    ppFurnaceTexture);
 void CreatePBRDescriptors(
-    VulkanRenderer*     pRenderer,
-    Descriptors*        pDescriptors,
-    const VulkanBuffer* pSceneParamsBuffer,
-    const VulkanImage*  pBRDFLUT,
-    const VulkanImage*  pMultiscatterBRDFLUT,
-    const VulkanImage*  pIrradianceTexture,
-    const VulkanImage*  pEnvTexture);
+    VulkanRenderer*      pRenderer,
+    VulkanDescriptorSet* pDescriptors,
+    const VulkanBuffer*  pSceneParamsBuffer,
+    const VulkanImage*   pBRDFLUT,
+    const VulkanImage*   pMultiscatterBRDFLUT,
+    const VulkanImage*   pIrradianceTexture,
+    const VulkanImage*   pEnvTexture);
 
 void MouseMove(int x, int y, int buttons)
 {
@@ -288,7 +288,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Descriptor buffers
     // *************************************************************************
-    Descriptors pbrDescriptor;
+    VulkanDescriptorSet pbrDescriptor;
     CreatePBRDescriptors(
         renderer.get(),
         &pbrDescriptor,
@@ -614,7 +614,7 @@ int main(int argc, char** argv)
             pPBRSceneParams->iblEnvironmentNumLevels = envNumLevels;
 
             // -----------------------------------------------------------------
-            // Descriptors
+            // VulkanDescriptorSet
             // -----------------------------------------------------------------
 
             vkCmdBindDescriptorSets(
@@ -1129,13 +1129,13 @@ void CreateIBLTextures(
 }
 
 void CreatePBRDescriptors(
-    VulkanRenderer*     pRenderer,
-    Descriptors*        pDescriptors,
-    const VulkanBuffer* pSceneParamsBuffer,
-    const VulkanImage*  pBRDFLUT,
-    const VulkanImage*  pMultiscatterBRDFLUT,
-    const VulkanImage*  pIrradianceTexture,
-    const VulkanImage*  pEnvTexture)
+    VulkanRenderer*      pRenderer,
+    VulkanDescriptorSet* pDescriptors,
+    const VulkanBuffer*  pSceneParamsBuffer,
+    const VulkanImage*   pBRDFLUT,
+    const VulkanImage*   pMultiscatterBRDFLUT,
+    const VulkanImage*   pIrradianceTexture,
+    const VulkanImage*   pEnvTexture)
 {
     // ConstantBuffer<SceneParameters>    SceneParams                   : register(b0);
     VulkanBufferDescriptor sceneParamsDescriptor;
