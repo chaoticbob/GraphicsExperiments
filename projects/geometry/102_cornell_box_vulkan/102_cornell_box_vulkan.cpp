@@ -139,16 +139,11 @@ void CreateGeometryBuffers(
    VulkanBuffer*                pPositionBuffer,
    VulkanBuffer*                pNormalBuffer,
    vec3*                        pLightPosition);
-void CreateDescriptorBuffer(
-   VulkanRenderer*              pRenderer,
-   VkDescriptorSetLayout        descriptorSetLayout,
-   VulkanBuffer*                pDescriptorBuffer);
-void WriteDescriptors(
-   VulkanRenderer*              pRenderer,
-   VkDescriptorSetLayout        descriptorSetLayout,
-   VulkanBuffer*                pDescriptorBuffer,
-   VulkanBuffer*                pCameraBuffer,
-   VulkanBuffer*                pMaterialBuffer);
+void CreateDescriptors(
+    VulkanRenderer* pRenderer,
+    VulkanDescriptorSet*    pDescriptors,
+    VulkanBuffer*   pCameraBuffer,
+    VulkanBuffer*   pMaterialBuffer);
 
 // =============================================================================
 // main()
@@ -157,7 +152,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    VulkanFeatures features = {};
+    VulkanFeatures features         = {};
+    features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features)) {
        return EXIT_FAILURE;
     }
@@ -243,22 +239,15 @@ int main(int argc, char** argv)
        &lightPosition);
 
    // *************************************************************************
-   // Descriptor heaps
-   // *************************************************************************
-   VulkanBuffer descriptorBuffer = {};
-   CreateDescriptorBuffer(renderer.get(), pipelineLayout.DescriptorSetLayout, &descriptorBuffer);
-
-   WriteDescriptors(
-      renderer.get(),
-      pipelineLayout.DescriptorSetLayout,
-      &descriptorBuffer,
-      &cameraBuffer,
-      &materialsBuffer);
+    // Descriptor heaps
+    // *************************************************************************
+    VulkanDescriptorSet descriptors;
+    CreateDescriptors(renderer.get(), &descriptors, &cameraBuffer, &materialsBuffer);
 
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "102_cornell_box_vulkan");
+    auto window = Window::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;
@@ -341,15 +330,6 @@ int main(int argc, char** argv)
     Camera* pCameraParams = nullptr;
     CHECK_CALL(vmaMapMemory(renderer->Allocator, cameraBuffer.Allocation, reinterpret_cast<void**>(&pCameraParams)));
 
-   // *************************************************************************
-   // Persistent map descriptor buffer
-   // *************************************************************************
-   char* pDescriptorBufferStartAddress = nullptr;
-   CHECK_CALL(vmaMapMemory(
-      renderer->Allocator,
-      descriptorBuffer.Allocation,
-      reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
-
     // *************************************************************************
     // Main loop
     // *************************************************************************
@@ -411,23 +391,15 @@ int main(int argc, char** argv)
            // Bind the VS/FS Graphics Pipeline
            vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-           VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT };
-           descriptorBufferBindingInfo.pNext                            = nullptr;
-           descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &descriptorBuffer);
-           descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-
-           fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
-
-           uint32_t     bufferIndices           = 0;
-           VkDeviceSize descriptorBufferOffsets = 0;
-           fn_vkCmdSetDescriptorBufferOffsetsEXT(
-              cmdBuf.CommandBuffer,
-              VK_PIPELINE_BIND_POINT_GRAPHICS,
-              pipelineLayout.PipelineLayout,
-              0, // firstSet
-              1, // setCount
-              &bufferIndices,
-              &descriptorBufferOffsets);
+           vkCmdBindDescriptorSets(
+               cmdBuf.CommandBuffer,
+               VK_PIPELINE_BIND_POINT_GRAPHICS,
+               pipelineLayout.PipelineLayout,
+               0, // firstSet
+               1, // setCount
+               &descriptors.DescriptorSet,
+               0,
+               nullptr);
 
            // Bind the Vertex Buffer
            VkBuffer vertexBuffers[] = { positionBuffer.Buffer, normalBuffer.Buffer };
@@ -503,7 +475,7 @@ void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayo
          binding.binding                      = 0;
          binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
          binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
       // layout(binding=2) buffer MaterialStructuredBuffer
@@ -512,7 +484,7 @@ void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayo
          binding.binding                      = 2;
          binding.descriptorType               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
          binding.descriptorCount              = 1;
-         binding.stageFlags                   = VK_SHADER_STAGE_FRAGMENT_BIT;
+         binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
          bindings.push_back(binding);
       }
 
@@ -655,58 +627,43 @@ void CreateGeometryBuffers(
       pNormalBuffer));
 }
 
-void CreateDescriptorBuffer(
-   VulkanRenderer*              pRenderer,
-   VkDescriptorSetLayout        descriptorSetLayout,
-   VulkanBuffer*                pDescriptorBuffer)
+void CreateDescriptors(
+    VulkanRenderer* pRenderer,
+    VulkanDescriptorSet*    pDescriptors,
+    VulkanBuffer*   pCameraBuffer,
+    VulkanBuffer*   pMaterialBuffer)
 {
-   VkDeviceSize size = 256;
-   fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
+    // layout(binding=0) uniform CameraProperties
+    VulkanBufferDescriptor cameraPropertiesDescriptor;
+    CreateDescriptor(
+        pRenderer,
+        &cameraPropertiesDescriptor,
+        0, // binding
+        0, // arrayElement
+        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        pCameraBuffer);
 
-   VkBufferUsageFlags usageFlags =
-      VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    // layout(binding=2) buffer MaterialsStructuredBuffer
+    VulkanBufferDescriptor materialStructuredBufferDescriptor;
+    CreateDescriptor(
+        pRenderer,
+        &materialStructuredBufferDescriptor,
+        2, // binding
+        0, // arrayElement
+        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        pMaterialBuffer);
 
-   CHECK_CALL(CreateBuffer(
-      pRenderer,           // pRenderer
-      size,                // srcSize
-      nullptr,             // pSrcData
-      usageFlags,          // usageFlags
-      0,                   // minAlignment
-      pDescriptorBuffer)); // pBuffer
-}
+    std::vector<VkDescriptorSetLayoutBinding> layoutBindings =
+    {
+        cameraPropertiesDescriptor.layoutBinding,
+        materialStructuredBufferDescriptor.layoutBinding,
+    };
 
-void WriteDescriptors(
-   VulkanRenderer*        pRenderer,
-   VkDescriptorSetLayout  descriptorSetLayout,
-   VulkanBuffer*          pDescriptorBuffer,
-   VulkanBuffer*          pCameraBuffer,
-   VulkanBuffer*          pMaterialBuffer)
-{
-   char* pDescriptorBufferStartAddress = nullptr;
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets =
+    {
+        cameraPropertiesDescriptor.writeDescriptorSet,
+        materialStructuredBufferDescriptor.writeDescriptorSet,
+    };
 
-   CHECK_CALL(vmaMapMemory(
-      pRenderer->Allocator,
-      pDescriptorBuffer->Allocation,
-      reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
-
-    WriteDescriptor(
-       pRenderer,
-       pDescriptorBufferStartAddress,
-       descriptorSetLayout,
-       0, // binding
-       0, // arrayElement
-       VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-       pCameraBuffer);
-
-    WriteDescriptor(
-       pRenderer,
-       pDescriptorBufferStartAddress,
-       descriptorSetLayout,
-       2, // binding
-       0, // arrayElement
-       VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-       pMaterialBuffer);
-
-    vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
+    CreateAndUpdateDescriptorSet(pRenderer, layoutBindings, writeDescriptorSets, pDescriptors);
 }
