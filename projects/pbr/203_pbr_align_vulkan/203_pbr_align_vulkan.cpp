@@ -101,16 +101,16 @@ void CreateIBLTextures(
     VulkanImage*    pEnvironmentTexture,
     uint32_t*       pEnvNumLevels);
 void CreatePBRDescriptors(
-    VulkanRenderer*                pRenderer,
-    Descriptors*                   pDescriptors,
-    VulkanBuffer*                  pSceneParamsBuffer,
-    const VulkanImage*             pBRDFLUT,
-    const VulkanImage*             pIrradianceTexture,
-    const VulkanImage*             pEnvTexture);
+    VulkanRenderer*      pRenderer,
+    VulkanDescriptorSet* pDescriptors,
+    VulkanBuffer*        pSceneParamsBuffer,
+    const VulkanImage*   pBRDFLUT,
+    const VulkanImage*   pIrradianceTexture,
+    const VulkanImage*   pEnvTexture);
 void CreateEnvDescriptors(
-    VulkanRenderer*       pRenderer,
-    Descriptors*          pDescriptors,
-    VulkanImage*          pEnvTexture);
+    VulkanRenderer*      pRenderer,
+    VulkanDescriptorSet* pDescriptors,
+    VulkanImage*         pEnvTexture);
 
 void MouseMove(int x, int y, int buttons)
 {
@@ -345,7 +345,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Descriptor buffers
     // *************************************************************************
-    Descriptors pbrDescriptors;
+    VulkanDescriptorSet pbrDescriptors;
     CreatePBRDescriptors(
         renderer.get(),
         &pbrDescriptors,
@@ -354,7 +354,7 @@ int main(int argc, char** argv)
         &irrTexture,
         &envTexture);
 
-    Descriptors envDescriptor;
+    VulkanDescriptorSet envDescriptor;
     CreateEnvDescriptors(
         renderer.get(),
         &envDescriptor,
@@ -1058,12 +1058,12 @@ void CreateIBLTextures(
 }
 
 void CreatePBRDescriptors(
-    VulkanRenderer*                pRenderer,
-    Descriptors*                   pDescriptors,
-    VulkanBuffer*                  pSceneParamsBuffer,
-    const VulkanImage*             pBRDFLUT,
-    const VulkanImage*             pIrradianceTexture,
-    const VulkanImage*             pEnvTexture)
+    VulkanRenderer*      pRenderer,
+    VulkanDescriptorSet* pDescriptors,
+    VulkanBuffer*        pSceneParamsBuffer,
+    const VulkanImage*   pBRDFLUT,
+    const VulkanImage*   pIrradianceTexture,
+    const VulkanImage*   pEnvTexture)
 {
     // ConstantBuffer<SceneParameters>    SceneParams           : register(b0);
     VulkanBufferDescriptor sceneParamsDescriptor;
@@ -1242,9 +1242,9 @@ void CreatePBRDescriptors(
 }
 
 void CreateEnvDescriptors(
-    VulkanRenderer* pRenderer,
-    Descriptors*    pDescriptors,
-    VulkanImage*    pEnvTexture)
+    VulkanRenderer*      pRenderer,
+    VulkanDescriptorSet* pDescriptors,
+    VulkanImage*         pEnvTexture)
 {
     // set via push constants
     // ConstantBuffer<SceneParameters> SceneParams       : register(b0);
