@@ -122,7 +122,7 @@ int main(int argc, char** argv)
     // Scene
     // *************************************************************************
     MtlFauxRender::SceneGraph graph = MtlFauxRender::SceneGraph(renderer.get());
-    if (!FauxRender::LoadGLTF(GetAssetPath("scenes/treasure_box_ktx2/treasure_box.gltf"), {}, &graph))
+    if (!FauxRender::LoadGLTF(GetAssetPath("scenes/treasure_box_png/treasure_box.gltf"), {}, &graph))
     {
         assert(false && "LoadGLTF failed");
         return EXIT_FAILURE;

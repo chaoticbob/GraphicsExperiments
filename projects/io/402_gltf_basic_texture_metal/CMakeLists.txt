@@ -48,5 +48,4 @@ target_link_libraries(
            ${FOUNDATION_LIBRARY}
            ${METAL_LIBRARY}
            ${METALKIT_LIBRARY}
-           ktx
 )
