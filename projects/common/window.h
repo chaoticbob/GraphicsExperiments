@@ -65,11 +65,11 @@ public:
     float       GetAspectRatio() const { return static_cast<float>(mWidth) / static_cast<float>(mHeight); }
 
 #if defined(WIN32)
-    HWND GetHWND() const;
+    HWND GetNativeWindowHandle() const;
 #endif
 
 #if defined(__APPLE__)
-    void* GetNativeWindow() const;
+    void* GetNativeWindowHandle() const;
 #endif
 
 #if defined(GREX_ENABLE_VULKAN)
