@@ -343,7 +343,7 @@ int main(int argc, char** argv)
     CreateIBLTextures(renderer.get(), &brdfLUT, &irrTexture, &envTexture, &envNumLevels);
 
     // *************************************************************************
-    // Descriptor buffers
+    // Descriptor sets
     // *************************************************************************
     VulkanDescriptorSet pbrDescriptors;
     CreatePBRDescriptors(
