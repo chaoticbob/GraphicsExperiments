@@ -244,7 +244,7 @@ int main(int argc, char** argv)
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "303_phong_textured_cube_vulkan");
     if (!window)
     {
-        assert(false && "Window::Create failed");
+        assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
 

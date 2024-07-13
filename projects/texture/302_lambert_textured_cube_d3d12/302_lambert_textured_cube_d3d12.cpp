@@ -203,7 +203,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "302_lambert_textured_cube_d3d12");
     if (!window) {
-        assert(false && "Window::Create failed");
+        assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
 

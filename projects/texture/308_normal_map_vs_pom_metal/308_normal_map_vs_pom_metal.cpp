@@ -240,10 +240,10 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "308_normal_map_vs_pom_metal");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "308_normal_map_vs_pom_metal");
     if (!window)
     {
-        assert(false && "Window::Create failed");
+        assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
     window->AddMouseMoveCallbacks(MouseMove);
@@ -268,7 +268,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     if (!window->InitImGuiForMetal(renderer.get()))
     {
-        assert(false && "Window::InitImGuiForMetal failed");
+        assert(false && "GrexWindow::InitImGuiForMetal failed");
         return EXIT_FAILURE;
     }
 

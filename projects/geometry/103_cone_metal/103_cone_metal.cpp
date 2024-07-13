@@ -169,9 +169,9 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "103_cone_metal");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "103_cone_metal");
     if (!window) {
-        assert(false && "Window::Create failed");
+        assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
 
