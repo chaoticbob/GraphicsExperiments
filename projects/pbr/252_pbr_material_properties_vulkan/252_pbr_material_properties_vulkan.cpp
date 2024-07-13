@@ -286,7 +286,7 @@ int main(int argc, char** argv)
         &furnaceTexture);
 
     // *************************************************************************
-    // Descriptor buffers
+    // Descriptor sets
     // *************************************************************************
     VulkanDescriptorSet pbrDescriptor;
     CreatePBRDescriptors(
