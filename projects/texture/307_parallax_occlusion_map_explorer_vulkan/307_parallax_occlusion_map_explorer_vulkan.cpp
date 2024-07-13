@@ -234,7 +234,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "307_parallax_occlusion_map_explorer_vulkan");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "307_parallax_occlusion_map_explorer_vulkan");
     if (!window)
     {
         assert(false && "Window::Create failed");

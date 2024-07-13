@@ -663,7 +663,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "005_basic_shadow_vulkan");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "005_basic_shadow_vulkan");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;

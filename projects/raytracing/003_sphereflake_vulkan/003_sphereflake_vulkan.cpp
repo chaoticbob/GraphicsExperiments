@@ -493,7 +493,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "003_sphereflake_vulkan");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "003_sphereflake_vulkan");
     if (!window)
     {
         assert(false && "Window::Create failed");

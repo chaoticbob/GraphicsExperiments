@@ -46,15 +46,15 @@ enum MouseButton
     MOUSE_BUTTON_RIGHT  = 0x4,
 };
 
-class Window
+class GrexWindow
 {
 private:
-    Window(uint32_t width, uint32_t height, const char* pTitle);
+    GrexWindow(uint32_t width, uint32_t height, const char* pTitle);
 
 public:
-    ~Window();
+    ~GrexWindow();
 
-    static std::unique_ptr<Window> Create(uint32_t width, uint32_t height, const char* pTitle);
+    static std::unique_ptr<GrexWindow> Create(uint32_t width, uint32_t height, const char* pTitle);
 
     uint32_t    GetWidth() const { return mWidth; }
     uint32_t    GetHeight() const { return mHeight; }

@@ -199,7 +199,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "301_textured_cube_vulkan");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "301_textured_cube_vulkan");
     if (!window)
     {
         assert(false && "Window::Create failed");

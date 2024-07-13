@@ -438,7 +438,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "002_basic_procedural_vulkan");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "002_basic_procedural_vulkan");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;

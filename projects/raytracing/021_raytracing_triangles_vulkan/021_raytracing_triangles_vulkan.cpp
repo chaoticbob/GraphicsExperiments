@@ -279,7 +279,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "021_raytracing_triangles_vulkan");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "021_raytracing_triangles_vulkan");
     if (!window)
     {
         assert(false && "Window::Create failed");

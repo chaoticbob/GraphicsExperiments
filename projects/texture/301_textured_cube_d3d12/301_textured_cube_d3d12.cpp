@@ -187,7 +187,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "301_textured_cube_d3d12");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "301_textured_cube_d3d12");
     if (!window) {
         assert(false && "Window::Create failed");
         return EXIT_FAILURE;

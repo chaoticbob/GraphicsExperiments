@@ -295,7 +295,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "402_gltf_basic_texture_vulkan");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "402_gltf_basic_texture_vulkan");
     if (!window)
     {
         assert(false && "Window::Create failed");

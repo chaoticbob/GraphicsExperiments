@@ -326,7 +326,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "308_normal_map_vs_pom_vulkan");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "308_normal_map_vs_pom_vulkan");
     if (!window)
     {
         assert(false && "Window::Create failed");
