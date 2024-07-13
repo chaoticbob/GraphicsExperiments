@@ -359,7 +359,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "201_pbr_spheres_vulkan");
     if (!window) {
-        assert(false && "Window::Create failed");
+        assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
     window->AddMouseMoveCallbacks(MouseMove);
@@ -386,7 +386,7 @@ int main(int argc, char** argv)
     // Imgui
     // *************************************************************************
     if (!window->InitImGuiForVulkan(renderer.get(), renderPass.RenderPass)) {
-        assert(false && "Window::InitImGuiForVulkan failed");
+        assert(false && "GrexWindow::InitImGuiForVulkan failed");
         return EXIT_FAILURE;
     }
 

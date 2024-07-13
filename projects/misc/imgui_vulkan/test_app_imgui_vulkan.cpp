@@ -73,9 +73,9 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "test_app_imgui_vulkan");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "test_app_imgui_vulkan");
     if (!window) {
-        assert(false && "Window::Create failed");
+        assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
 

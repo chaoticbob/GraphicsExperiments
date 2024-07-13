@@ -321,10 +321,10 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "gltf_d3d12");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "gltf_d3d12");
     if (!window)
     {
-        assert(false && "Window::Create failed");
+        assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
     window->AddMouseMoveCallbacks(MouseMove);

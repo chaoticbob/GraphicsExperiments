@@ -603,7 +603,7 @@ int main(int argc, char** argv)
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "031_raytracing_path_trace_pbr_vulkan");
     if (!window)
     {
-        assert(false && "Window::Create failed");
+        assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
     window->AddMouseMoveCallbacks(MouseMove);
@@ -660,7 +660,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     if (!window->InitImGuiForVulkan(renderer.get(), renderPass.RenderPass))
     {
-        assert(false && "Window::InitImGuiForD3D12 failed");
+        assert(false && "GrexWindow::InitImGuiForD3D12 failed");
         return EXIT_FAILURE;
     }
 

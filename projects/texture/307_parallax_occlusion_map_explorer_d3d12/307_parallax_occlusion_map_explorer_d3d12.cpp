@@ -192,7 +192,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "307_parallax_occlusion_map_explorer_d3d12");
     if (!window) {
-        assert(false && "Window::Create failed");
+        assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
     window->AddMouseMoveCallbacks(MouseMove);
@@ -209,7 +209,7 @@ int main(int argc, char** argv)
     // Imgui
     // *************************************************************************
     if (!window->InitImGuiForD3D12(renderer.get())) {
-        assert(false && "Window::InitImGuiForD3D12 failed");
+        assert(false && "GrexWindow::InitImGuiForD3D12 failed");
         return EXIT_FAILURE;
     }
 
