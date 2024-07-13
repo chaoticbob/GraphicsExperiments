@@ -38,5 +38,4 @@ target_link_libraries(
            dxgi
            dxguid
            dxcompiler
-           ktx
 )

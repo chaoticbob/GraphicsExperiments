@@ -42,7 +42,6 @@ target_link_libraries(
            glslang
            SPIRV
            dxcompiler
-           ktx
 )
 
 if(WIN32)

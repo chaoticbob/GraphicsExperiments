@@ -173,7 +173,7 @@ int main(int argc, char** argv)
     // Scene
     // *************************************************************************
     VkFauxRender::SceneGraph graph = VkFauxRender::SceneGraph(renderer.get(), &pipelineLayout);
-    if (!FauxRender::LoadGLTF(GetAssetPath("scenes/material_test_001_ktx2/material_test_001.gltf"), {}, &graph))
+    if (!FauxRender::LoadGLTF(GetAssetPath("scenes/material_test_001_png/material_test_001.gltf"), {}, &graph))
     {
         assert(false && "LoadGLTF failed");
         return EXIT_FAILURE;
