@@ -15,6 +15,11 @@
 
 #define DEFAULT_MIN_ALIGNMENT_SIZE 256
 
+#if !defined(_WIN32)
+template <typename T>
+using ComPtr = CComPtr<T>;
+#endif
+
 PFN_vkCreateRayTracingPipelinesKHR             fn_vkCreateRayTracingPipelinesKHR             = nullptr;
 PFN_vkGetRayTracingShaderGroupHandlesKHR       fn_vkGetRayTracingShaderGroupHandlesKHR       = nullptr;
 PFN_vkGetAccelerationStructureBuildSizesKHR    fn_vkGetAccelerationStructureBuildSizesKHR    = nullptr;
@@ -103,6 +108,12 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
             VK_KHR_SURFACE_EXTENSION_NAME,
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
             VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+#endif
+#if defined(VK_USE_PLATFORM_XCB_KHR)
+            VK_KHR_XCB_SURFACE_EXTENSION_NAME,
+#endif
+#if defined(VK_USE_PLATFORM_XLIB_KHR)
+            VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
 #endif
         };
 
@@ -392,9 +403,11 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
     return true;
 }
 
+#if defined(VK_USE_PLATFORM_WIN32_KHR)
 bool InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t height, uint32_t imageCount)
 {
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+    VkSurfaceKHR surface;
+
     {
         VkWin32SurfaceCreateInfoKHR vkci = {VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR};
         //
@@ -403,13 +416,22 @@ bool InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_
         vkci.hinstance = ::GetModuleHandle(nullptr);
         vkci.hwnd      = hwnd;
 
-        VkResult vkres = vkCreateWin32SurfaceKHR(pRenderer->Instance, &vkci, nullptr, &pRenderer->Surface);
+        VkResult vkres = vkCreateWin32SurfaceKHR(pRenderer->Instance, &vkci, nullptr, &urface);
         if (vkres != VK_SUCCESS) {
             assert(false && "vkCreateWin32SurfaceKHR failed");
             return false;
         }
     }
+
+    return InitSwapchain(pRenderer, surface, width, height, imageCount);
+}
 #endif
+
+bool InitSwapchain(VulkanRenderer* pRenderer, VkSurfaceKHR surface, uint32_t width, uint32_t height, uint32_t imageCount)
+{
+    assert(surface != VK_NULL_HANDLE);
+
+    pRenderer->Surface = surface;
 
     // Surface caps
     VkSurfaceCapabilitiesKHR surfaceCaps = {};

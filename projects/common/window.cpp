@@ -1,5 +1,6 @@
 #include "window.h"
 
+#include <cstring>
 #include <cassert>
 #include <fstream>
 
@@ -866,3 +867,19 @@ std::string LoadString(const fs::path& subPath)
 
     return str;
 }
+
+#if defined(GREX_ENABLE_VULKAN)
+VkSurfaceKHR GrexWindow::CreateVkSurface(VkInstance instance,
+                                         const VkAllocationCallbacks* allocator)
+{
+    VkSurfaceKHR surface;
+    VkResult result = glfwCreateWindowSurface(instance, mWindow, allocator, &surface);
+
+    if (result != VK_SUCCESS) {
+        GREX_LOG_ERROR("Failed to create VkSurface");
+        return VK_NULL_HANDLE;
+    }
+
+    return surface;
+}
+#endif

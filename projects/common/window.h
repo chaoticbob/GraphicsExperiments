@@ -3,13 +3,17 @@
 #include "config.h"
 #include "bitmap.h"
 
+#if defined(GREX_ENABLE_VULKAN) || defined(ENABLE_IMGUI_VULKAN)
+#    include "vk_renderer.h"
+#endif
+
 #if !defined(GLFW_INCLUDE_NONE)
 #    define GLFW_INCLUDE_NONE
 #endif
 #include <GLFW/glfw3.h>
 
 #if defined(__linux__)
-#    define GLFW_EXPOSE_NATIVE_X11
+//#    define GLFW_EXPOSE_NATIVE_X11
 #elif defined(__APPLE__)
 #    define GLFW_EXPOSE_NATIVE_COCOA
 #elif defined(WIN32)
@@ -28,7 +32,6 @@ namespace fs = std::filesystem;
 #endif // defined(ENABLE_IMGUI_D3D12)
 
 #if defined(ENABLE_IMGUI_VULKAN)
-#    include "vk_renderer.h"
 #    include "backends/imgui_impl_glfw.h"
 #    include "backends/imgui_impl_vulkan.h"
 #endif // defined(ENABLE_IMGUI_VULKAN)
@@ -67,6 +70,10 @@ public:
 
 #if defined(__APPLE__)
     void* GetNativeWindow() const;
+#endif
+
+#if defined(GREX_ENABLE_VULKAN)
+    VkSurfaceKHR CreateVkSurface(VkInstance instance, const VkAllocationCallbacks* allocator = nullptr);
 #endif
 
     bool PollEvents();
