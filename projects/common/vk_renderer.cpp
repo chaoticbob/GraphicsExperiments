@@ -416,7 +416,7 @@ bool InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_
         vkci.hinstance = ::GetModuleHandle(nullptr);
         vkci.hwnd      = hwnd;
 
-        VkResult vkres = vkCreateWin32SurfaceKHR(pRenderer->Instance, &vkci, nullptr, &urface);
+        VkResult vkres = vkCreateWin32SurfaceKHR(pRenderer->Instance, &vkci, nullptr, &surface);
         if (vkres != VK_SUCCESS) {
             assert(false && "vkCreateWin32SurfaceKHR failed");
             return false;

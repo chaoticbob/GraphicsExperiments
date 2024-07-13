@@ -73,6 +73,7 @@ public:
         glm::vec3 transformRotate    = glm::vec3(0);
         glm::vec3 transformScale     = glm::vec3(1);
 
+#if defined(__APPLE__) || defined(LINUX)
         // Clang and GCC seems to have a problem with not having a constructor here, resulting
         // in the following or similar error in 101_color_cube_metal:
         //
@@ -85,6 +86,7 @@ public:
         // https://stackoverflow.com/questions/43819314/default-member-initializer-needed-within-definition-of-enclosing-class-outside
 
         Options() {}
+#endif
     };
 
     // -------------------------------------------------------------------------
