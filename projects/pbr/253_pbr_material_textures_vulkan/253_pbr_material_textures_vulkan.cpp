@@ -412,7 +412,7 @@ int main(int argc, char** argv)
         &materialBuffer));
 
     // *************************************************************************
-    // Descriptor buffers
+    // Descriptor sets
     // *************************************************************************
     VulkanDescriptorSet pbrDescriptors;
     CreatePBRDescriptors(
