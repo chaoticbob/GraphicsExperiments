@@ -229,7 +229,7 @@ NS::Error* CreateBuffer(
     const void*    pSrcData,
     MetalBuffer*   pBuffer)
 {
-    return CreateBuffer(pRenderer, srcSize, pSrcData, MTL::ResourceStorageModeShared, pBuffer);
+    return CreateBuffer(pRenderer, srcSize, pSrcData, MTL::ResourceStorageModeManaged, pBuffer);
 
 /*
     pBuffer->Buffer = NS::TransferPtr(pRenderer->Device->newBuffer(srcSize, MTL::ResourceStorageModeManaged));
