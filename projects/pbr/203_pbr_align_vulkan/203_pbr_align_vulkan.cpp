@@ -10,19 +10,20 @@
 #include <glm/gtx/transform.hpp>
 using namespace glm;
 
-#define CHECK_CALL(FN)                               \
-    {                                                \
-        HRESULT hr = FN;                             \
-        if (FAILED(hr))                              \
-        {                                            \
-            std::stringstream ss;                    \
-            ss << "\n";                              \
-            ss << "*** FUNCTION CALL FAILED *** \n"; \
-            ss << "FUNCTION: " << #FN << "\n";       \
-            ss << "\n";                              \
-            GREX_LOG_ERROR(ss.str().c_str());        \
-            assert(false);                           \
-        }                                            \
+#define CHECK_CALL(FN)                                                 \
+    {                                                                  \
+        VkResult vkres = FN;                                           \
+        if (vkres != VK_SUCCESS)                                       \
+        {                                                              \
+            std::stringstream ss;                                      \
+            ss << "\n";                                                \
+            ss << "*** FUNCTION CALL FAILED *** \n";                   \
+            ss << "LOCATION: " << __FILE__ << ":" << __LINE__ << "\n"; \
+            ss << "FUNCTION: " << #FN << "\n";                         \
+            ss << "\n";                                                \
+            GREX_LOG_ERROR(ss.str().c_str());                          \
+            assert(false);                                             \
+        }                                                              \
     }
 
 struct Light
@@ -363,7 +364,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "203_pbr_align_vulkan");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
     if (!window)
     {
         assert(false && "Window::Create failed");
@@ -374,7 +375,14 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight()))
+    auto surface = window->CreateVkSurface(renderer->Instance);
+    if (!surface)
+    {
+        assert(false && "CreateVkSurface failed");
+        return EXIT_FAILURE;
+    }
+
+    if (!InitSwapchain(renderer.get(), surface, window->GetWidth(), window->GetHeight()))
     {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
@@ -900,7 +908,7 @@ void CreateMaterialSphereVertexBuffers(
     VulkanBuffer*   pPositionBuffer,
     VulkanBuffer*   pNormalBuffer)
 {
-    TriMesh mesh = TriMesh::Sphere(0.6f, 256, 256, {.enableNormals = true});
+    TriMesh mesh = TriMesh::Sphere(0.6f, 256, 256, TriMesh::Options().EnableNormals());
 
     *pNumIndices = 3 * mesh.GetNumTriangles();
 
@@ -939,7 +947,7 @@ void CreateEnvironmentVertexBuffers(
     VulkanBuffer*   pPositionBuffer,
     VulkanBuffer*   pTexCoordBuffer)
 {
-    TriMesh mesh = TriMesh::Sphere(100, 64, 64, {.enableTexCoords = true, .faceInside = true});
+    TriMesh mesh = TriMesh::Sphere(100, 64, 64, TriMesh::Options().EnableTexCoords().FaceInside());
 
     *pNumIndices = 3 * mesh.GetNumTriangles();
 
