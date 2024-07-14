@@ -432,7 +432,7 @@ void CreateGeometryBuffers(
     ID3D12Resource** ppTexCoordBuffer,
     ID3D12Resource** ppNormalBuffer)
 {
-    TriMesh mesh = TriMesh::Cube(vec3(1), false, {.enableTexCoords = true, .enableNormals = true});
+    TriMesh mesh = TriMesh::Cube(vec3(1), false, TriMesh::Options().EnableTexCoords().EnableNormals());
 
     CHECK_CALL(CreateBuffer(
         pRenderer,

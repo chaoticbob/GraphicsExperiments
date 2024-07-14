@@ -517,7 +517,7 @@ void CreateGeometryBuffers(
     ID3D12Resource** ppTangentBuffer,
     ID3D12Resource** ppBitangentBuffer)
 {
-    TriMesh::Options options = {.enableTexCoords = true, .enableNormals = true, .enableTangents = true};
+    TriMesh::Options options = TriMesh::Options().EnableTexCoords().EnableNormals().EnableTangents();
     TriMesh          mesh    = TriMesh::Cube(vec3(1), false, options);
 
     CHECK_CALL(CreateBuffer(

@@ -410,7 +410,7 @@ void CreateGeometryBuffers(
     ID3D12Resource** ppPositionBuffer,
     ID3D12Resource** ppTexCoordBuffer)
 {
-    TriMesh mesh = TriMesh::Cube(vec3(1), false, {.enableTexCoords = true});
+    TriMesh mesh = TriMesh::Cube(vec3(1), false, TriMesh::Options().EnableTexCoords());
 
     CHECK_CALL(CreateBuffer(
         pRenderer,

@@ -332,7 +332,7 @@ void CreateGeometryBuffers(
     ID3D12Resource** ppTBNVertexBuffer,
     uint32_t*        pNumTBNVertices)
 {
-    TriMesh mesh = TriMesh::Cone(1, 1, 32, {.enableVertexColors = true, .enableNormals = true, .enableTangents = true});
+    TriMesh mesh = TriMesh::Cone(1, 1, 32, TriMesh::Options().EnableVertexColors().EnableNormals().EnableTangents());
 
     CHECK_CALL(CreateBuffer(
         pRenderer,

@@ -674,7 +674,7 @@ void CreateGeometries(
 {
     // Cube
     {
-        TriMesh  mesh = TriMesh::Cube(glm::vec3(1), false, {.enableNormals = true});
+        TriMesh  mesh = TriMesh::Cube(glm::vec3(1), false, TriMesh::Options().EnableNormals());
         Geometry geo  = {};
 
         CHECK_CALL(CreateBuffer(
@@ -703,7 +703,7 @@ void CreateGeometries(
 
     // Sphere
     {
-        TriMesh  mesh = TriMesh::Sphere(0.5f, 16, 8, {.enableNormals = true});
+        TriMesh  mesh = TriMesh::Sphere(0.5f, 16, 8, TriMesh::Options().EnableNormals());
         Geometry geo  = {};
 
         CHECK_CALL(CreateBuffer(
@@ -732,7 +732,7 @@ void CreateGeometries(
 
     // Cone
     {
-        TriMesh  mesh = TriMesh::Cone(1.0f, 0.5f, 16, {.enableNormals = true});
+        TriMesh  mesh = TriMesh::Cone(1.0f, 0.5f, 16, TriMesh::Options().EnableNormals());
         Geometry geo  = {};
 
         CHECK_CALL(CreateBuffer(

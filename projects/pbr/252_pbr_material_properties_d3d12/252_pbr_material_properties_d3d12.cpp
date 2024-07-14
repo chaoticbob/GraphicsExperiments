@@ -831,7 +831,7 @@ void CreateMaterialSphereVertexBuffers(
     ID3D12Resource** ppTangentBuffer,
     ID3D12Resource** ppBitangetBuffer)
 {
-    TriMesh mesh = TriMesh::Sphere(0.42f, 256, 256, {.enableNormals = true, .enableTangents = true});
+    TriMesh mesh = TriMesh::Sphere(0.42f, 256, 256, TriMesh::Options().EnableNormals().EnableTangents());
 
     *pNumIndices = 3 * mesh.GetNumTriangles();
 
@@ -873,7 +873,7 @@ void CreateEnvironmentVertexBuffers(
     ID3D12Resource** ppPositionBuffer,
     ID3D12Resource** ppTexCoordBuffer)
 {
-    TriMesh mesh = TriMesh::Sphere(100, 64, 64, {.enableTexCoords = true, .faceInside = true});
+    TriMesh mesh = TriMesh::Sphere(100, 64, 64, TriMesh::Options().EnableTexCoords().FaceInside());
 
     *pNumIndices = 3 * mesh.GetNumTriangles();
 

@@ -1102,7 +1102,7 @@ void CreateGeometries(
 {
     // Sphere
     {
-        TriMesh mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
+        TriMesh mesh = TriMesh::Sphere(1.0f, 256, 256, TriMesh::Options().EnableNormals());
 
         Geometry& geo = outSphereGeometry;
 
@@ -1130,7 +1130,7 @@ void CreateGeometries(
 
     // Knob
     {
-        TriMesh::Options options  = {.enableNormals = true};
+        TriMesh::Options options  = TriMesh::Options().EnableNormals();
         options.applyTransform    = true;
         options.transformRotate.y = glm::radians(180.0f);
 
@@ -1167,7 +1167,7 @@ void CreateGeometries(
 
     // Monkey
     {
-        TriMesh::Options options = {.enableNormals = true};
+        TriMesh::Options options = TriMesh::Options().EnableNormals();
 
         TriMesh mesh;
         bool    res = TriMesh::LoadOBJ(GetAssetPath("models/monkey_lowres.obj").string(), "", options, &mesh);
@@ -1202,7 +1202,7 @@ void CreateGeometries(
 
     // Teapot
     {
-        TriMesh::Options options  = {.enableNormals = true};
+        TriMesh::Options options  = TriMesh::Options().EnableNormals();
         options.applyTransform    = true;
         options.transformRotate.y = glm::radians(160.0f);
 
@@ -1239,7 +1239,7 @@ void CreateGeometries(
 
     // Box
     {
-        TriMesh::Options options = {.enableNormals = true};
+        TriMesh::Options options = TriMesh::Options().EnableNormals();
 
         TriMesh mesh;
         bool    res = TriMesh::LoadOBJ(GetAssetPath("models/shelf.obj").string(), "", options, &mesh);

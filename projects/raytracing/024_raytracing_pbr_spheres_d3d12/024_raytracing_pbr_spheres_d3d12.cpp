@@ -826,7 +826,7 @@ void CreateGeometries(
     DxRenderer* pRenderer,
     Geometry&   outGeometry)
 {
-    TriMesh   mesh = TriMesh::Sphere(0.42f, 256, 256, {.enableNormals = true});
+    TriMesh   mesh = TriMesh::Sphere(0.42f, 256, 256, TriMesh::Options().EnableNormals());
     Geometry& geo  = outGeometry;
 
     CHECK_CALL(CreateBuffer(
