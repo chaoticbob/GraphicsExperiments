@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.5)
 
 project(307_parallax_occlusion_map_explorer_vulkan)
 
+set(TARGET_NAME ${PROJECT_NAME})
+
 add_executable(
     307_parallax_occlusion_map_explorer_vulkan
     307_parallax_occlusion_map_explorer_vulkan.cpp
@@ -27,6 +29,7 @@ target_compile_definitions(
     307_parallax_occlusion_map_explorer_vulkan
     PUBLIC TRIMESH_USE_MIKKTSPACE
            ENABLE_IMGUI_VULKAN
+		   GREX_ENABLE_VULKAN
 )
 
 target_include_directories(
@@ -59,5 +62,16 @@ if(WIN32)
     target_link_libraries(
         307_parallax_occlusion_map_explorer_vulkan
         PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
+    )
+elseif(LINUX)
+    target_compile_definitions(
+        ${TARGET_NAME}
+		PUBLIC VK_USE_PLATFORM_XCB_KHR
+    )
+
+    target_link_libraries(
+        ${TARGET_NAME}
+        PUBLIC "${VULKAN_LIBRARY_DIR}/libvulkan.so"
+        	   "${VULKAN_LIBRARY_DIR}/libdxcompiler.so"
     )
 endif()

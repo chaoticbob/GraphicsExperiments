@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.5)
 
 project(306_parallax_occlusion_map_vulkan)
 
+set(TARGET_NAME ${PROJECT_NAME})
+
 add_executable(
     306_parallax_occlusion_map_vulkan
     306_parallax_occlusion_map_vulkan.cpp
@@ -25,6 +27,7 @@ set_target_properties(306_parallax_occlusion_map_vulkan PROPERTIES FOLDER "textu
 target_compile_definitions(
     306_parallax_occlusion_map_vulkan
     PUBLIC TRIMESH_USE_MIKKTSPACE
+		GREX_ENABLE_VULKAN
 )
 
 target_include_directories(
@@ -56,5 +59,16 @@ if(WIN32)
     target_link_libraries(
         306_parallax_occlusion_map_vulkan
         PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
+    )
+elseif(LINUX)
+    target_compile_definitions(
+        ${TARGET_NAME}
+		PUBLIC VK_USE_PLATFORM_XCB_KHR
+    )
+
+    target_link_libraries(
+        ${TARGET_NAME}
+        PUBLIC "${VULKAN_LIBRARY_DIR}/libvulkan.so"
+        	   "${VULKAN_LIBRARY_DIR}/libdxcompiler.so"
     )
 endif()
