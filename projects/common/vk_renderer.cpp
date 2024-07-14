@@ -1130,6 +1130,8 @@ VkResult CreateBuffer(
     VkDeviceSize       minAlignment,
     VulkanBuffer*      pBuffer)
 {
+    assert((size > 0) && "Cannot create a buffer of size 0");
+
     if (IsNull(pBuffer)) {
         return VK_ERROR_INITIALIZATION_FAILED;
     }
