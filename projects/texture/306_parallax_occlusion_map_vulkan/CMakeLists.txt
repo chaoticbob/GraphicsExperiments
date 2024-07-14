@@ -27,7 +27,7 @@ set_target_properties(${TARGET_NAME} PROPERTIES FOLDER "texture")
 target_compile_definitions(
     ${TARGET_NAME}
     PUBLIC TRIMESH_USE_MIKKTSPACE
-		GREX_ENABLE_VULKAN
+           GREX_ENABLE_VULKAN
 )
 
 target_include_directories(
@@ -47,7 +47,6 @@ target_link_libraries(
     PUBLIC glfw
            glslang
            SPIRV
-           dxcompiler
 )
 
 if(WIN32)
@@ -59,16 +58,18 @@ if(WIN32)
     target_link_libraries(
         ${TARGET_NAME}
         PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
+               "${VULKAN_LIBRARY_DIR}/dxcompiler.lib"
     )
 elseif(LINUX)
     target_compile_definitions(
         ${TARGET_NAME}
-		PUBLIC VK_USE_PLATFORM_XCB_KHR
+        PUBLIC VK_USE_PLATFORM_XCB_KHR
     )
 
     target_link_libraries(
         ${TARGET_NAME}
         PUBLIC "${VULKAN_LIBRARY_DIR}/libvulkan.so"
-        	   "${VULKAN_LIBRARY_DIR}/libdxcompiler.so"
+               "${VULKAN_LIBRARY_DIR}/libdxcompiler.so"
     )
 endif()
+

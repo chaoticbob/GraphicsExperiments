@@ -2,6 +2,7 @@
 
 #include "vk_renderer.h"
 #include "tri_mesh.h"
+#include "bitmap.h"
 
 #include <glm/glm.hpp>
 #include <glm/matrix.hpp>
@@ -511,7 +512,7 @@ void CreateTextures(
 
     // Diffuse
     {
-        auto mipmap = MipmapRGBA8u::MipmapT(
+        auto mipmap = MipmapRGBA8u(
             LoadImage8u(dir / "diffuse.png"),
             BITMAP_SAMPLE_MODE_CLAMP,
             BITMAP_SAMPLE_MODE_CLAMP,
@@ -531,7 +532,7 @@ void CreateTextures(
 
     // Normal
     {
-        auto mipmap = MipmapRGBA8u::MipmapT(
+        auto mipmap = MipmapRGBA8u(
             LoadImage8u(dir / "normal_dx.png"),
             BITMAP_SAMPLE_MODE_CLAMP,
             BITMAP_SAMPLE_MODE_CLAMP,

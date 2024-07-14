@@ -50,7 +50,6 @@ target_link_libraries(
     PUBLIC glfw
            glslang
            SPIRV
-           dxcompiler
 )
 
 if(WIN32)
@@ -62,6 +61,7 @@ if(WIN32)
     target_link_libraries(
         ${TARGET_NAME}
         PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
+               "${VULKAN_LIBRARY_DIR}/dxcompiler.lib"
     )
 elseif(LINUX)
     target_compile_definitions(
@@ -75,3 +75,4 @@ elseif(LINUX)
         	   "${VULKAN_LIBRARY_DIR}/libdxcompiler.so"
     )
 endif()
+
