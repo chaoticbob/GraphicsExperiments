@@ -5,8 +5,8 @@ project(110_mesh_shader_triangle_vulkan)
 set(TARGET_NAME ${PROJECT_NAME})
 
 add_executable(
-    110_mesh_shader_triangle_vulkan
-    110_mesh_shader_triangle_vulkan.cpp
+    ${TARGET_NAME}
+    ${TARGET_NAME}.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.cpp
@@ -18,7 +18,7 @@ add_executable(
     ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/ResourceLimits.cpp
 )
 
-set_target_properties(110_mesh_shader_triangle_vulkan PROPERTIES FOLDER "geometry")
+set_target_properties(${TARGET_NAME} PROPERTIES FOLDER "geometry")
 
 target_compile_definitions(
     ${TARGET_NAME}
@@ -26,7 +26,7 @@ target_compile_definitions(
 )
 
 target_include_directories(
-    110_mesh_shader_triangle_vulkan
+    ${TARGET_NAME}
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
            ${GREX_THIRD_PARTY_DIR}/glslang # This needs to come before ${VULKAN_INCLUDE_DIR}
            ${VULKAN_INCLUDE_DIR}

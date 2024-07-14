@@ -5,8 +5,8 @@ project(405_gltf_full_material_test_vulkan)
 set(TARGET_NAME ${PROJECT_NAME})
 
 add_executable(
-    405_gltf_full_material_test_vulkan
-    405_gltf_full_material_test_vulkan.cpp
+    ${TARGET_NAME}
+    ${TARGET_NAME}.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.cpp
@@ -24,7 +24,7 @@ add_executable(
     ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/ResourceLimits.cpp
 )
 
-set_target_properties(405_gltf_full_material_test_vulkan PROPERTIES FOLDER "io")
+set_target_properties(${TARGET_NAME} PROPERTIES FOLDER "io")
 
 target_compile_definitions(
     ${TARGET_NAME}
@@ -32,7 +32,7 @@ target_compile_definitions(
 )
 
 target_include_directories(
-    405_gltf_full_material_test_vulkan
+    ${TARGET_NAME}
     PUBLIC  ${GREX_PROJECTS_COMMON_DIR}
         ${GREX_THIRD_PARTY_DIR}/glm # This needs to come before ${VULKAN_INCLUDE_DIR}
         ${GREX_THIRD_PARTY_DIR}/glslang # This needs to come before ${VULKAN_INCLUDE_DIR}
@@ -44,7 +44,7 @@ target_include_directories(
 )
 
 target_link_libraries(
-    405_gltf_full_material_test_vulkan
+    ${TARGET_NAME}
     PUBLIC glfw
            glslang
            SPIRV
@@ -53,12 +53,12 @@ target_link_libraries(
 
 if(WIN32)
     target_compile_definitions(
-        405_gltf_full_material_test_vulkan
+        ${TARGET_NAME}
         PUBLIC VK_USE_PLATFORM_WIN32_KHR
     )
 
     target_link_libraries(
-        405_gltf_full_material_test_vulkan
+        ${TARGET_NAME}
         PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
     )
 elseif(LINUX)

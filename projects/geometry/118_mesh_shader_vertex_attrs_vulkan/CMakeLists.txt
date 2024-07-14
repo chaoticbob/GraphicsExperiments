@@ -29,12 +29,12 @@ target_compile_definitions(
 )
 
 target_compile_definitions(
-	${PROJECT_NAME}
+	${TARGET_NAME}
 	PUBLIC ENABLE_IMGUI_VULKAN
 )
 
 target_include_directories(
-    ${PROJECT_NAME}
+    ${TARGET_NAME}
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
            ${GREX_THIRD_PARTY_DIR}/glslang # This needs to come before ${VULKAN_INCLUDE_DIR}
            ${VULKAN_INCLUDE_DIR}

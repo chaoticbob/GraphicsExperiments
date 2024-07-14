@@ -5,8 +5,8 @@ project(001_raytracing_basic_vulkan)
 set(TARGET_NAME ${PROJECT_NAME})
 
 add_executable(
-    001_raytracing_basic_vulkan
-    001_raytracing_basic_vulkan.cpp
+    ${TARGET_NAME}
+    ${TARGET_NAME}.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.cpp
@@ -16,7 +16,7 @@ add_executable(
     ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/ResourceLimits.cpp
 )
 
-set_target_properties(001_raytracing_basic_vulkan PROPERTIES FOLDER "raytracing")
+set_target_properties(${TARGET_NAME} PROPERTIES FOLDER "raytracing")
 
 target_compile_definitions(
     ${TARGET_NAME}
@@ -24,7 +24,7 @@ target_compile_definitions(
 )
 
 target_include_directories(
-    001_raytracing_basic_vulkan
+    ${TARGET_NAME}
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
            ${GREX_THIRD_PARTY_DIR}/glslang # This needs to come before ${VULKAN_INCLUDE_DIR}
            ${VULKAN_INCLUDE_DIR}
@@ -33,7 +33,7 @@ target_include_directories(
 )
 
 target_link_libraries(
-    001_raytracing_basic_vulkan
+    ${TARGET_NAME}
     PUBLIC glfw
            glslang
            SPIRV
@@ -42,12 +42,12 @@ target_link_libraries(
 
 if(WIN32)
     target_compile_definitions(
-        001_raytracing_basic_vulkan
+        ${TARGET_NAME}
         PUBLIC VK_USE_PLATFORM_WIN32_KHR
     )
 
     target_link_libraries(
-        001_raytracing_basic_vulkan
+        ${TARGET_NAME}
         PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
     )
 elseif(LINUX)
