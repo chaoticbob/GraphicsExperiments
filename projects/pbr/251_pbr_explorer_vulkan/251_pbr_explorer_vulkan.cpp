@@ -10,19 +10,20 @@
 #include <glm/gtx/transform.hpp>
 using namespace glm;
 
-#define CHECK_CALL(FN)                               \
-    {                                                \
-        HRESULT hr = FN;                             \
-        if (FAILED(hr))                              \
-        {                                            \
-            std::stringstream ss;                    \
-            ss << "\n";                              \
-            ss << "*** FUNCTION CALL FAILED *** \n"; \
-            ss << "FUNCTION: " << #FN << "\n";       \
-            ss << "\n";                              \
-            GREX_LOG_ERROR(ss.str().c_str());        \
-            assert(false);                           \
-        }                                            \
+#define CHECK_CALL(FN)                                                 \
+    {                                                                  \
+        VkResult vkres = FN;                                           \
+        if (vkres != VK_SUCCESS)                                       \
+        {                                                              \
+            std::stringstream ss;                                      \
+            ss << "\n";                                                \
+            ss << "*** FUNCTION CALL FAILED *** \n";                   \
+            ss << "LOCATION: " << __FILE__ << ":" << __LINE__ << "\n"; \
+            ss << "FUNCTION: " << #FN << "\n";                         \
+            ss << "\n";                                                \
+            GREX_LOG_ERROR(ss.str().c_str());                          \
+            assert(false);                                             \
+        }                                                              \
     }
 
 #define DISTRIBUTION_TROWBRIDGE_REITZ 0
@@ -506,7 +507,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "251_pbr_explorer_vulkan");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
     if (!window)
     {
         assert(false && "Window::Create failed");
@@ -517,7 +518,14 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight()))
+    auto surface = window->CreateVkSurface(renderer->Instance);
+    if (!surface)
+    {
+        assert(false && "CreateVkSurface failed");
+        return EXIT_FAILURE;
+    }
+
+    if (!InitSwapchain(renderer.get(), surface, window->GetWidth(), window->GetHeight()))
     {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
@@ -1327,7 +1335,8 @@ void CreateEnvironmentVertexBuffers(
     VulkanRenderer*  pRenderer,
     GeometryBuffers& outGeomtryBuffers)
 {
-    TriMesh mesh = TriMesh::Sphere(25, 64, 64, {.enableTexCoords = true, .faceInside = true});
+    TriMesh::Options options = {.enableTexCoords = true, .faceInside = true};
+    TriMesh mesh = TriMesh::Sphere(25, 64, 64, options);
 
     outGeomtryBuffers.numIndices = 3 * mesh.GetNumTriangles();
 
@@ -1365,7 +1374,8 @@ void CreateMaterialModels(
 {
     // Sphere
     {
-        TriMesh mesh = TriMesh::Sphere(1, 256, 256, {.enableNormals = true});
+        TriMesh::Options options = {.enableTexCoords = true};
+        TriMesh mesh = TriMesh::Sphere(1, 256, 256, options);
 
         GeometryBuffers buffers = {};
 
