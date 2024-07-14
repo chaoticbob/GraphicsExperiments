@@ -1948,7 +1948,7 @@ VkResult CreateDrawVertexColorPipeline(
     return vkres;
 }
 
-HRESULT CreateDrawNormalPipeline(
+VkResult CreateDrawNormalPipeline(
    VulkanRenderer*      pRenderer,
    VkPipelineLayout     pipelineLayout,
    VkShaderModule       vsShaderModule,
@@ -2119,7 +2119,7 @@ HRESULT CreateDrawNormalPipeline(
     return vkres;
 }
 
-HRESULT CreateDrawTexturePipeline(
+VkResult CreateDrawTexturePipeline(
     VulkanRenderer*    pRenderer,
     VkPipelineLayout   pipelineLayout,
     VkShaderModule     vsShaderModule,
@@ -2266,7 +2266,7 @@ HRESULT CreateDrawTexturePipeline(
     return vkres;
 }
 
-HRESULT CreateDrawBasicPipeline(
+VkResult CreateDrawBasicPipeline(
     VulkanRenderer*    pRenderer,
     VkPipelineLayout   pipelineLayout,
     VkShaderModule     vsShaderModule,
@@ -2418,7 +2418,7 @@ HRESULT CreateDrawBasicPipeline(
     return vkres;
 }
 
-HRESULT CreateGraphicsPipeline1(
+VkResult CreateGraphicsPipeline1(
    VulkanRenderer*      pRenderer,
    VkPipelineLayout     pipelineLayout,
    VkShaderModule       vsShaderModule,
@@ -2594,7 +2594,7 @@ HRESULT CreateGraphicsPipeline1(
     return vkres;
 }
 
-HRESULT CreateGraphicsPipeline2(
+VkResult CreateGraphicsPipeline2(
    VulkanRenderer* pRenderer,
    VkPipelineLayout     pipelineLayout,
    VkShaderModule       vsShaderModule,

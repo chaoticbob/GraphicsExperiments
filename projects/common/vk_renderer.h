@@ -363,7 +363,7 @@ VkResult CreateDrawVertexColorPipeline(
    VkPrimitiveTopology  topologyType = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
    uint32_t             pipelineFlags = 0);
 
-HRESULT CreateDrawNormalPipeline(
+VkResult CreateDrawNormalPipeline(
    VulkanRenderer*      pRenderer,
    VkPipelineLayout     pipelineLayout,
    VkShaderModule       vsShaderModule,
@@ -376,7 +376,7 @@ HRESULT CreateDrawNormalPipeline(
    const char*          vsEntryPoint = "main",
    const char*          fsEntryPoint = "main");
 
-HRESULT CreateDrawTexturePipeline(
+VkResult CreateDrawTexturePipeline(
     VulkanRenderer*    pRenderer,
     VkPipelineLayout   pipelineLayout,
     VkShaderModule     vsShaderModule,
@@ -388,7 +388,7 @@ HRESULT CreateDrawTexturePipeline(
     const char*        vsEntryPoint = "main",
     const char*        fsEntryPoint = "main");
 
-HRESULT CreateDrawBasicPipeline(
+VkResult CreateDrawBasicPipeline(
     VulkanRenderer*    pRenderer,
     VkPipelineLayout   pipelineLayout,
     VkShaderModule     vsShaderModule,
@@ -400,7 +400,7 @@ HRESULT CreateDrawBasicPipeline(
     const char*        vsEntryPoint = "main",
     const char*        fsEntryPoint = "main");
 
-HRESULT CreateGraphicsPipeline1(
+VkResult CreateGraphicsPipeline1(
    VulkanRenderer*      pRenderer,
    VkPipelineLayout     pipelineLayout,
    VkShaderModule       vsShaderModule,
@@ -410,7 +410,7 @@ HRESULT CreateGraphicsPipeline1(
    VkPipeline*          pPipeline,
    VkCullModeFlagBits   cullMode = VK_CULL_MODE_BACK_BIT);
 
-HRESULT CreateGraphicsPipeline2(
+VkResult CreateGraphicsPipeline2(
    VulkanRenderer*      pRenderer,
    VkPipelineLayout     pipelineLayout,
    VkShaderModule       vsShaderModule,
