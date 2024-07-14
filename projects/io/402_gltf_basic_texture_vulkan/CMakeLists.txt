@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.5)
 
 project(402_gltf_basic_texture_vulkan)
 
+set(TARGET_NAME ${PROJECT_NAME})
+
 add_executable(
     402_gltf_basic_texture_vulkan
     402_gltf_basic_texture_vulkan.cpp
@@ -23,6 +25,11 @@ add_executable(
 )
 
 set_target_properties(402_gltf_basic_texture_vulkan PROPERTIES FOLDER "io")
+
+target_compile_definitions(
+    ${TARGET_NAME}
+    PUBLIC GREX_ENABLE_VULKAN
+)
 
 target_include_directories(
     402_gltf_basic_texture_vulkan
@@ -53,5 +60,16 @@ if(WIN32)
     target_link_libraries(
         402_gltf_basic_texture_vulkan
         PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
+    )
+elseif(LINUX)
+    target_compile_definitions(
+        ${TARGET_NAME}
+		PUBLIC VK_USE_PLATFORM_XCB_KHR
+    )
+
+    target_link_libraries(
+        ${TARGET_NAME}
+        PUBLIC "${VULKAN_LIBRARY_DIR}/libvulkan.so"
+        	   "${VULKAN_LIBRARY_DIR}/libdxcompiler.so"
     )
 endif()
