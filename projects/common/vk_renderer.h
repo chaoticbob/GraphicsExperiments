@@ -127,9 +127,6 @@ struct VulkanDescriptorSet
 };
 
 bool     InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeatures& features, uint32_t apiVersion = VK_API_VERSION_1_3);
-#if defined(WIN32)
-bool     InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t height, uint32_t imageCount = 2);
-#endif
 bool     InitSwapchain(VulkanRenderer* pRenderer, VkSurfaceKHR surface, uint32_t width, uint32_t height, uint32_t imageCount = 2);
 bool     WaitForGpu(VulkanRenderer* pRenderer);
 bool     WaitForFence(VulkanRenderer* pRenderer, VkFence fence);

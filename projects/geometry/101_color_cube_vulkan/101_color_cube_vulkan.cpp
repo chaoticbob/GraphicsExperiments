@@ -194,7 +194,14 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight()))
+    auto surface = window->CreateVkSurface(renderer->Instance);
+    if (!surface)
+    {
+        assert(false && "CreateVkSurface failed");
+        return EXIT_FAILURE;
+    }
+
+    if (!InitSwapchain(renderer.get(), surface, window->GetWidth(), window->GetHeight()))
     {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
@@ -411,7 +418,7 @@ void CreateGeometryBuffers(
     VulkanBuffer*   pPositionBuffer,
     VulkanBuffer*   pVertexColorBuffer)
 {
-    TriMesh mesh = TriMesh::Cube(vec3(1), false, {.enableVertexColors = true});
+    TriMesh mesh = TriMesh::Cube(vec3(1), false, TriMesh::Options().EnableVertexColors());
 
     CHECK_CALL(CreateBuffer(
         pRenderer,

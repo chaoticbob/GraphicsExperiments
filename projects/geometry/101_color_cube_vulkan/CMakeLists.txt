@@ -18,6 +18,11 @@ add_executable(
 
 set_target_properties(101_color_cube_vulkan PROPERTIES FOLDER "geometry")
 
+target_compile_definitions(
+    101_color_cube_vulkan
+    PUBLIC GREX_ENABLE_VULKAN
+)
+
 target_include_directories(
     101_color_cube_vulkan
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
@@ -25,8 +30,8 @@ target_include_directories(
            ${VULKAN_INCLUDE_DIR}
            ${GREX_THIRD_PARTY_DIR}/VulkanMemoryAllocator/include
            ${GREX_THIRD_PARTY_DIR}/glm
-		   ${GREX_THIRD_PARTY_DIR}/tinyobjloader
-		   ${GREX_THIRD_PARTY_DIR}/stb
+	   ${GREX_THIRD_PARTY_DIR}/tinyobjloader
+	   ${GREX_THIRD_PARTY_DIR}/stb
 )
 
 target_link_libraries(
@@ -34,17 +39,28 @@ target_link_libraries(
     PUBLIC glfw
            glslang
            SPIRV
-		   dxcompiler
 )
 
 if(WIN32)
     target_compile_definitions(
-        101_color_cube_vulkan
+        101_color_cube_vulkayn
         PUBLIC VK_USE_PLATFORM_WIN32_KHR
     )
 
     target_link_libraries(
         101_color_cube_vulkan
-        PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
+        PUBLIC "${VULKAN_LIBRARYrDIR}/vulkan-1.lib"
+               "${VULKAN_LIBRARYrDIR}/dxcompiler.lib"
+    )
+elseif(LINUX)
+    target_compile_definitions(
+        101_color_cube_vulkan
+        PUBLIC VK_USE_PLATFORM_XCB_KHR
+    )
+
+    target_link_libraries(
+        101_color_cube_vulkan
+        PUBLIC "${VULKAN_LIBRARY_DIR}/libvulkan.so"
+               "${VULKAN_LIBRARY_DIR}/libdxcompiler.so"
     )
 endif()

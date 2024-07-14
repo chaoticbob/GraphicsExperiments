@@ -73,18 +73,24 @@ public:
         glm::vec3 transformRotate    = glm::vec3(0);
         glm::vec3 transformScale     = glm::vec3(1);
 
-        // Clang and GCC seems to have a problem with not having a constructor here, resulting
-        // in the following or similar error in 101_color_cube_metal:
-        //
-        //   Default member initializer for 'enableVertexColors' needed within defintion
-        //   of enclosing 'TriMesh' outside of member functions.
-        //
-        // The web seems to indicate that CLANG can have a problem with this kind of
-        // thing, so I just added a default constructor here to get past it
-        //
-        // https://stackoverflow.com/questions/43819314/default-member-initializer-needed-within-definition-of-enclosing-class-outside
+        // ---------------------------------------------------------------------
 
         Options() {}
+
+        // clang-format off
+        Options& EnableVertexColors(bool             value = false) { enableVertexColors = value; return *this; }
+        Options& EnableTexCoords   (bool             value = false) { enableTexCoords    = value; return *this; }
+        Options& EnableNormals     (bool             value = false) { enableNormals      = value; return *this; }
+        Options& EnableTangents    (bool             value = false) { enableTangents     = value; return *this; }
+        Options& Center            (const glm::vec3& value        ) { center             = value; return *this; }
+        Options& TexCoordScale     (const glm::vec2& value        ) { texCoordScale      = value; return *this; }
+        Options& FaceInside        (bool             value = false) { faceInside         = value; return *this; }
+        Options& InvertTexCoordsV  (bool             value = false) { invertTexCoordsV   = value; return *this; }
+        Options& ApplyTransform    (bool             value = false) { applyTransform     = value; return *this; }
+        Options& TransformTranslate(const glm::vec3& value        ) { transformTranslate = value; return *this; }
+        Options& TransformRotate   (const glm::vec3& value        ) { transformRotate    = value; return *this; }
+        Options& TransformScale    (const glm::vec3& value        ) { transformScale     = value; return *this; }
+        // clang-format on
     };
 
     // -------------------------------------------------------------------------
