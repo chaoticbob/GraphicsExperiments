@@ -78,18 +78,18 @@ public:
         Options() {}
 
         // clang-format off
-        Options& EnableVertexColors(bool             value = false) { enableVertexColors = value; return *this; }
-        Options& EnableTexCoords   (bool             value = false) { enableTexCoords    = value; return *this; }
-        Options& EnableNormals     (bool             value = false) { enableNormals      = value; return *this; }
-        Options& EnableTangents    (bool             value = false) { enableTangents     = value; return *this; }
-        Options& Center            (const glm::vec3& value        ) { center             = value; return *this; }
-        Options& TexCoordScale     (const glm::vec2& value        ) { texCoordScale      = value; return *this; }
-        Options& FaceInside        (bool             value = false) { faceInside         = value; return *this; }
-        Options& InvertTexCoordsV  (bool             value = false) { invertTexCoordsV   = value; return *this; }
-        Options& ApplyTransform    (bool             value = false) { applyTransform     = value; return *this; }
-        Options& TransformTranslate(const glm::vec3& value        ) { transformTranslate = value; return *this; }
-        Options& TransformRotate   (const glm::vec3& value        ) { transformRotate    = value; return *this; }
-        Options& TransformScale    (const glm::vec3& value        ) { transformScale     = value; return *this; }
+        Options& EnableVertexColors(bool             value = true) { enableVertexColors = value; return *this; }
+        Options& EnableTexCoords   (bool             value = true) { enableTexCoords    = value; return *this; }
+        Options& EnableNormals     (bool             value = true) { enableNormals      = value; return *this; }
+        Options& EnableTangents    (bool             value = true) { enableTangents     = value; return *this; }
+        Options& Center            (const glm::vec3& value       ) { center             = value; return *this; }
+        Options& TexCoordScale     (const glm::vec2& value       ) { texCoordScale      = value; return *this; }
+        Options& FaceInside        (bool             value = true) { faceInside         = value; return *this; }
+        Options& InvertTexCoordsV  (bool             value = true) { invertTexCoordsV   = value; return *this; }
+        Options& ApplyTransform    (bool             value = true) { applyTransform     = value; return *this; }
+        Options& TransformTranslate(const glm::vec3& value       ) { transformTranslate = value; return *this; }
+        Options& TransformRotate   (const glm::vec3& value       ) { transformRotate    = value; return *this; }
+        Options& TransformScale    (const glm::vec3& value       ) { transformScale     = value; return *this; }
         // clang-format on
     };
 

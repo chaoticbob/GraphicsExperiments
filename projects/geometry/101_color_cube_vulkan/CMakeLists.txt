@@ -30,8 +30,8 @@ target_include_directories(
            ${VULKAN_INCLUDE_DIR}
            ${GREX_THIRD_PARTY_DIR}/VulkanMemoryAllocator/include
            ${GREX_THIRD_PARTY_DIR}/glm
-	   ${GREX_THIRD_PARTY_DIR}/tinyobjloader
-	   ${GREX_THIRD_PARTY_DIR}/stb
+           ${GREX_THIRD_PARTY_DIR}/tinyobjloader
+           ${GREX_THIRD_PARTY_DIR}/stb
 )
 
 target_link_libraries(
@@ -43,14 +43,14 @@ target_link_libraries(
 
 if(WIN32)
     target_compile_definitions(
-        101_color_cube_vulkayn
+        101_color_cube_vulkan
         PUBLIC VK_USE_PLATFORM_WIN32_KHR
     )
 
     target_link_libraries(
         101_color_cube_vulkan
-        PUBLIC "${VULKAN_LIBRARYrDIR}/vulkan-1.lib"
-               "${VULKAN_LIBRARYrDIR}/dxcompiler.lib"
+        PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
+               "${VULKAN_LIBRARY_DIR}/dxcompiler.lib"
     )
 elseif(LINUX)
     target_compile_definitions(
