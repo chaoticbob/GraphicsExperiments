@@ -373,14 +373,14 @@ int main(int argc, char** argv)
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
     if (!window)
     {
-        assert(false && "Window::Create failed");
+        assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
 
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT))
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT))
     {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
@@ -391,7 +391,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     if (!window->InitImGuiForD3D12(renderer.get()))
     {
-        assert(false && "Window::InitImGuiForD3D12 failed");
+        assert(false && "GrexWindow::InitImGuiForD3D12 failed");
         return EXIT_FAILURE;
     }
 

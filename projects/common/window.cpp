@@ -677,14 +677,14 @@ void GrexWindow::ImGuiRenderDrawData(MetalRenderer* pRenderer, MTL::CommandBuffe
 // Platform functions
 // =============================================================================
 #if defined(WIN32)
-HWND GrexWindow::GetHWND() const
+HWND GrexWindow::GetNativeWindowHandle() const
 {
     return glfwGetWin32Window(mWindow);
 }
 #endif
 
 #if defined(__APPLE__)
-void* GrexWindow::GetNativeWindow() const
+void* GrexWindow::GetNativeWindowHandle() const
 {
    return glfwGetCocoaWindow(mWindow);
 }

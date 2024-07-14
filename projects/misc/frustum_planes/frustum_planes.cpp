@@ -149,10 +149,10 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "frustum_planes");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "frustum_planes");
     if (!window)
     {
-        assert(false && "Window::Create failed");
+        assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
 
@@ -161,7 +161,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight()))
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight()))
     {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
@@ -179,7 +179,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     if (!window->InitImGuiForD3D12(renderer.get()))
     {
-        assert(false && "Window::InitImGuiForD3D12 failed");
+        assert(false && "GrexWindow::InitImGuiForD3D12 failed");
         return EXIT_FAILURE;
     }
 

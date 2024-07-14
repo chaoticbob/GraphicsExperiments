@@ -336,9 +336,9 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = Window::Create(gWindowWidth, gWindowHeight, "252_pbr_material_properties_metal");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "252_pbr_material_properties_metal");
     if (!window) {
-        assert(false && "Window::Create failed");
+        assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
     window->AddMouseMoveCallbacks(MouseMove);
@@ -351,7 +351,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindow(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT)) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT)) {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -363,7 +363,7 @@ int main(int argc, char** argv)
     // Imgui
     // *************************************************************************
     if (!window->InitImGuiForMetal(renderer.get())) {
-        assert(false && "Window::InitImGuiForMetal failed");
+        assert(false && "GrexWindow::InitImGuiForMetal failed");
         return EXIT_FAILURE;
     }
 

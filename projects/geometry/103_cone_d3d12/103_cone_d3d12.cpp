@@ -167,14 +167,14 @@ int main(int argc, char** argv)
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "103_cone_d3d12");
     if (!window) {
-        assert(false && "Window::Create failed");
+        assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
 
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT)) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT)) {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }

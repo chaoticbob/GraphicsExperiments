@@ -576,8 +576,9 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
-    if (!window) {
-        assert(false && "Window::Create failed");
+    if (!window)
+	{
+        assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
     window->AddMouseMoveCallbacks(MouseMove);
@@ -652,7 +653,7 @@ int main(int argc, char** argv)
     // Imgui
     // *************************************************************************
     if (!window->InitImGuiForVulkan(renderer.get(), renderPass.RenderPass)) {
-        assert(false && "Window::InitImGuiForD3D12 failed");
+        assert(false && "GrexWindow::InitImGuiForD3D12 failed");
         return EXIT_FAILURE;
     }
 
