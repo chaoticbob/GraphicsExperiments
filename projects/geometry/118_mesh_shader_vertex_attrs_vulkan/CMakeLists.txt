@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.5)
 
 project(118_mesh_shader_vertex_attrs_vulkan)
 
+set(TARGET_NAME ${PROJECT_NAME})
+
 add_executable(
     ${PROJECT_NAME}
     ${PROJECT_NAME}.cpp
@@ -21,6 +23,10 @@ add_executable(
 
 set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER "geometry")
 
+target_compile_definitions(
+    ${TARGET_NAME}
+    PUBLIC GREX_ENABLE_VULKAN
+)
 
 target_compile_definitions(
 	${PROJECT_NAME}
@@ -40,22 +46,34 @@ target_include_directories(
 )
 
 target_link_libraries(
-    ${PROJECT_NAME}
+    ${TARGET_NAME}
     PUBLIC glfw
            glslang
            SPIRV
-		   dxcompiler
            meshoptimizer
 )
 
 if(WIN32)
     target_compile_definitions(
-        ${PROJECT_NAME}
+        ${TARGET_NAME}
         PUBLIC VK_USE_PLATFORM_WIN32_KHR
     )
 
     target_link_libraries(
-        ${PROJECT_NAME}
+        ${TARGET_NAME}
         PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
+               "${VULKAN_LIBRARY_DIR}/dxcompiler.lib"
+    )
+elseif(LINUX)
+    target_compile_definitions(
+        ${TARGET_NAME}
+        PUBLIC VK_USE_PLATFORM_XCB_KHR
+    )
+
+    target_link_libraries(
+        ${TARGET_NAME}
+        PUBLIC "${VULKAN_LIBRARY_DIR}/libvulkan.so"
+               "${VULKAN_LIBRARY_DIR}/libdxcompiler.so"
     )
 endif()
+

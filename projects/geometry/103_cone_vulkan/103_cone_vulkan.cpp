@@ -203,7 +203,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "103_cone_vulkan");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
     if (!window)
     {
         assert(false && "Window::Create failed");
@@ -213,7 +213,14 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetHWND(), window->GetWidth(), window->GetHeight()))
+    auto surface = window->CreateVkSurface(renderer->Instance);
+    if (!surface)
+    {
+        assert(false && "CreateVkSurface failed");
+        return EXIT_FAILURE;
+    }
+
+    if (!InitSwapchain(renderer.get(), surface, window->GetWidth(), window->GetHeight()))
     {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
@@ -446,7 +453,7 @@ void CreateGeometryBuffers(
     VulkanBuffer*   pTBNVertexBuffer,
     uint32_t*       pNumTBNVertices)
 {
-    TriMesh mesh = TriMesh::Cone(1, 1, 32, {.enableVertexColors = true, .enableNormals = true, .enableTangents = true});
+    TriMesh mesh = TriMesh::Cone(1, 1, 32, TriMesh::Options().EnableVertexColors().EnableNormals().EnableTangents());
 
     CHECK_CALL(CreateBuffer(
         pRenderer,

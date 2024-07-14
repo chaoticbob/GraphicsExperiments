@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.5)
 
 project(110_mesh_shader_triangle_vulkan)
 
+set(TARGET_NAME ${PROJECT_NAME})
+
 add_executable(
     110_mesh_shader_triangle_vulkan
     110_mesh_shader_triangle_vulkan.cpp
@@ -18,6 +20,11 @@ add_executable(
 
 set_target_properties(110_mesh_shader_triangle_vulkan PROPERTIES FOLDER "geometry")
 
+target_compile_definitions(
+    ${TARGET_NAME}
+    PUBLIC GREX_ENABLE_VULKAN
+)
+
 target_include_directories(
     110_mesh_shader_triangle_vulkan
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
@@ -30,35 +37,32 @@ target_include_directories(
 )
 
 target_link_libraries(
-    110_mesh_shader_triangle_vulkan
+    ${TARGET_NAME}
     PUBLIC glfw
            glslang
            SPIRV
-		   dxcompiler
-)
-
-target_compile_definitions(
-    110_mesh_shader_triangle_vulkan
-    PUBLIC GREX_ENABLE_VULKAN
 )
 
 if(WIN32)
     target_compile_definitions(
-        110_mesh_shader_triangle_vulkan
+        ${TARGET_NAME}
         PUBLIC VK_USE_PLATFORM_WIN32_KHR
     )
 
     target_link_libraries(
-        110_mesh_shader_triangle_vulkan
+        ${TARGET_NAME}
         PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
+               "${VULKAN_LIBRARY_DIR}/dxcompiler.lib"
     )
 elseif(LINUX)
     target_compile_definitions(
-        110_mesh_shader_triangle_vulkan
+        ${TARGET_NAME}
         PUBLIC VK_USE_PLATFORM_XCB_KHR
     )
+
     target_link_libraries(
-        110_mesh_shader_triangle_vulkan
-        PUBLIC vulkan
+        ${TARGET_NAME}
+        PUBLIC "${VULKAN_LIBRARY_DIR}/libvulkan.so"
+               "${VULKAN_LIBRARY_DIR}/libdxcompiler.so"
     )
 endif()
