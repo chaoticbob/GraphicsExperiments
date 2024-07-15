@@ -365,7 +365,7 @@ void CreateGeometryBuffers(
     ID3D12Resource**             normalBuffer,
     vec3*                        pLightPosition)
 {
-    TriMesh mesh = TriMesh::CornellBox({.enableVertexColors = true, .enableNormals = true});
+    TriMesh mesh = TriMesh::CornellBox(TriMesh::Options().EnableVertexColors().EnableNormals());
 
     uint32_t lightGroupIndex = mesh.GetGroupIndex("light");
     assert((lightGroupIndex != UINT32_MAX) && "group index for 'light' failed");

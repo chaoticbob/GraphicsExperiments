@@ -290,7 +290,7 @@ void CreateGeometryBuffers(
     ID3D12Resource** ppPositionBuffer,
     ID3D12Resource** ppVertexColorBuffer)
 {
-    TriMesh mesh = TriMesh::Cube(vec3(1), false, {.enableVertexColors = true});
+    TriMesh mesh = TriMesh::Cube(vec3(1), false, TriMesh::Options().EnableVertexColors());
 
     CHECK_CALL(CreateBuffer(
         pRenderer,

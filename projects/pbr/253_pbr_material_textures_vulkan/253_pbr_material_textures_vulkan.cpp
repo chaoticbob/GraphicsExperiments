@@ -12,19 +12,20 @@ using namespace glm;
 
 #include <fstream>
 
-#define CHECK_CALL(FN)                               \
-    {                                                \
-        HRESULT hr = FN;                             \
-        if (FAILED(hr))                              \
-        {                                            \
-            std::stringstream ss;                    \
-            ss << "\n";                              \
-            ss << "*** FUNCTION CALL FAILED *** \n"; \
-            ss << "FUNCTION: " << #FN << "\n";       \
-            ss << "\n";                              \
-            GREX_LOG_ERROR(ss.str().c_str());        \
-            assert(false);                           \
-        }                                            \
+#define CHECK_CALL(FN)                                                 \
+    {                                                                  \
+        VkResult vkres = FN;                                           \
+        if (vkres != VK_SUCCESS)                                       \
+        {                                                              \
+            std::stringstream ss;                                      \
+            ss << "\n";                                                \
+            ss << "*** FUNCTION CALL FAILED *** \n";                   \
+            ss << "LOCATION: " << __FILE__ << ":" << __LINE__ << "\n"; \
+            ss << "FUNCTION: " << #FN << "\n";                         \
+            ss << "\n";                                                \
+            GREX_LOG_ERROR(ss.str().c_str());                          \
+            assert(false);                                             \
+        }                                                              \
     }
 
 #define MATERIAL_TEXTURE_STRIDE 4
@@ -435,7 +436,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "253_pbr_material_textures_vulkan");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
     if (!window)
     {
         assert(false && "GrexWindow::Create failed");
@@ -446,7 +447,14 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight()))
+    auto surface = window->CreateVkSurface(renderer->Instance);
+    if (!surface)
+    {
+        assert(false && "CreateVkSurface failed");
+        return EXIT_FAILURE;
+    }
+
+    if (!InitSwapchain(renderer.get(), surface, window->GetWidth(), window->GetHeight()))
     {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
@@ -1293,7 +1301,7 @@ void CreateEnvironmentVertexBuffers(
     VulkanRenderer*  pRenderer,
     GeometryBuffers& outGeomtryBuffers)
 {
-    TriMesh mesh = TriMesh::Sphere(25, 64, 64, {.enableTexCoords = true, .faceInside = true});
+    TriMesh mesh = TriMesh::Sphere(25, 64, 64, TriMesh::Options().EnableTexCoords().FaceInside());
 
     outGeomtryBuffers.numIndices = 3 * mesh.GetNumTriangles();
 
@@ -1331,9 +1339,7 @@ void CreateMaterialModels(
 {
     // Sphere
     {
-        TriMesh::Options options = {.enableTexCoords = true, .enableNormals = true, .enableTangents = true};
-
-        TriMesh mesh = TriMesh::Sphere(1, 256, 256, options);
+        TriMesh mesh = TriMesh::Sphere(1, 256, 256, TriMesh::Options().EnableTexCoords().EnableNormals().EnableTangents());
 
         GeometryBuffers buffers = {};
 
@@ -1553,7 +1559,7 @@ void CreateMaterialModels(
 
     // Cube
     {
-        TriMesh mesh = TriMesh::Cube(vec3(2), false, {.enableTexCoords = true, .enableNormals = true, .enableTangents = true});
+        TriMesh mesh = TriMesh::Cube(vec3(2), false, TriMesh::Options().EnableTexCoords().EnableNormals().EnableTangents());
 
         GeometryBuffers buffers = {};
 

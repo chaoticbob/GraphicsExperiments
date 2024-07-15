@@ -1,6 +1,7 @@
 #include "faux_render.h"
 #include "cgltf.h"
 
+#include <cstring>
 #include <unordered_map>
 
 namespace FauxRender

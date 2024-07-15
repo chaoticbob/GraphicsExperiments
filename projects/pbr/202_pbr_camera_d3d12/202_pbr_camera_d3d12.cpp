@@ -1059,7 +1059,7 @@ void CreateEnvironmentVertexBuffers(
     ID3D12Resource** ppPositionBuffer,
     ID3D12Resource** ppTexCoordBuffer)
 {
-    TriMesh mesh = TriMesh::Sphere(100, 64, 64, {.enableTexCoords = true, .faceInside = true});
+    TriMesh mesh = TriMesh::Sphere(100, 64, 64, TriMesh::Options().EnableTexCoords().FaceInside());
 
     *pNumIndices = 3 * mesh.GetNumTriangles();
 

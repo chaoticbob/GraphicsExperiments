@@ -7,19 +7,20 @@
 #include <glm/matrix.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#define CHECK_CALL(FN)                               \
-    {                                                \
-        HRESULT hr = FN;                             \
-        if (FAILED(hr))                              \
-        {                                            \
-            std::stringstream ss;                    \
-            ss << "\n";                              \
-            ss << "*** FUNCTION CALL FAILED *** \n"; \
-            ss << "FUNCTION: " << #FN << "\n";       \
-            ss << "\n";                              \
-            GREX_LOG_ERROR(ss.str().c_str());        \
-            assert(false);                           \
-        }                                            \
+#define CHECK_CALL(FN)                                                 \
+    {                                                                  \
+        VkResult vkres = FN;                                           \
+        if (vkres != VK_SUCCESS)                                       \
+        {                                                              \
+            std::stringstream ss;                                      \
+            ss << "\n";                                                \
+            ss << "*** FUNCTION CALL FAILED *** \n";                   \
+            ss << "LOCATION: " << __FILE__ << ":" << __LINE__ << "\n"; \
+            ss << "FUNCTION: " << #FN << "\n";                         \
+            ss << "\n";                                                \
+            GREX_LOG_ERROR(ss.str().c_str());                          \
+            assert(false);                                             \
+        }                                                              \
     }
 
 // =============================================================================
@@ -303,7 +304,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "022_raytracing_multi_geo_vulkan");
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
     if (!window)
     {
         assert(false && "GrexWindow::Create failed");
@@ -313,7 +314,14 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight()))
+    auto surface = window->CreateVkSurface(renderer->Instance);
+    if (!surface)
+    {
+        assert(false && "CreateVkSurface failed");
+        return EXIT_FAILURE;
+    }
+
+    if (!InitSwapchain(renderer.get(), surface, window->GetWidth(), window->GetHeight()))
     {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
@@ -776,7 +784,7 @@ void CreateGeometries(
 
     // Cube
     {
-        TriMesh  mesh = TriMesh::Cube(glm::vec3(1), false, {.enableNormals = true});
+        TriMesh  mesh = TriMesh::Cube(glm::vec3(1), false, TriMesh::Options().EnableNormals());
         Geometry geo  = {};
 
         CHECK_CALL(CreateBuffer(
@@ -811,7 +819,7 @@ void CreateGeometries(
 
     // Sphere
     {
-        TriMesh  mesh = TriMesh::Sphere(0.5f, 16, 8, {.enableNormals = true});
+        TriMesh  mesh = TriMesh::Sphere(0.5f, 16, 8, TriMesh::Options().EnableNormals());
         Geometry geo  = {};
 
         CHECK_CALL(CreateBuffer(
@@ -846,7 +854,7 @@ void CreateGeometries(
 
     // Cone
     {
-        TriMesh  mesh = TriMesh::Cone(1.0f, 0.5f, 16, {.enableNormals = true});
+        TriMesh  mesh = TriMesh::Cone(1.0f, 0.5f, 16, TriMesh::Options().EnableNormals());
         Geometry geo  = {};
 
         CHECK_CALL(CreateBuffer(

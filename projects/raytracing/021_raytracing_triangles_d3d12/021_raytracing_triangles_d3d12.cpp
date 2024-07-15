@@ -637,7 +637,7 @@ void CreateGeometry(
     ID3D12Resource** ppPositionBuffer,
     ID3D12Resource** ppNormalBuffer)
 {
-    TriMesh mesh = TriMesh::Sphere(1.0f, 16, 8, {.enableNormals = true});
+    TriMesh mesh = TriMesh::Sphere(1.0f, 16, 8, TriMesh::Options().EnableNormals());
 
     CHECK_CALL(CreateBuffer(
         pRenderer,

@@ -869,8 +869,7 @@ std::string LoadString(const fs::path& subPath)
 }
 
 #if defined(GREX_ENABLE_VULKAN)
-VkSurfaceKHR GrexWindow::CreateVkSurface(VkInstance instance,
-                                         const VkAllocationCallbacks* allocator)
+VkSurfaceKHR GrexWindow::CreateVkSurface(VkInstance instance, const VkAllocationCallbacks* allocator)
 {
     VkSurfaceKHR surface;
     VkResult result = glfwCreateWindowSurface(instance, mWindow, allocator, &surface);

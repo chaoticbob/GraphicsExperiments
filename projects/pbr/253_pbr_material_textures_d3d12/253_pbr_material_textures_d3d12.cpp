@@ -1149,7 +1149,7 @@ void CreateEnvironmentVertexBuffers(
     DxRenderer*      pRenderer,
     GeometryBuffers& outGeomtryBuffers)
 {
-    TriMesh mesh = TriMesh::Sphere(25, 64, 64, {.enableTexCoords = true, .faceInside = true});
+    TriMesh mesh = TriMesh::Sphere(25, 64, 64, TriMesh::Options().EnableTexCoords().FaceInside());
 
     outGeomtryBuffers.numIndices = 3 * mesh.GetNumTriangles();
 
@@ -1178,7 +1178,7 @@ void CreateMaterialModels(
 {
     // Sphere
     {
-        TriMesh::Options options = {.enableTexCoords = true, .enableNormals = true, .enableTangents = true};
+        TriMesh::Options options = TriMesh::Options().EnableTexCoords().EnableNormals().EnableTangents();
 
         TriMesh mesh = TriMesh::Sphere(1, 256, 256, options);
 
@@ -1344,7 +1344,7 @@ void CreateMaterialModels(
 
     // Cube
     {
-        TriMesh mesh = TriMesh::Cube(vec3(2), false, {.enableTexCoords = true, .enableNormals = true, .enableTangents = true});
+        TriMesh mesh = TriMesh::Cube(vec3(2), false, TriMesh::Options().EnableTexCoords().EnableNormals().EnableTangents());
 
         GeometryBuffers buffers = {};
 

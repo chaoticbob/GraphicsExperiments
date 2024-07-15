@@ -9,18 +9,20 @@
 #include <glm/gtc/matrix_transform.hpp>
 using glm::vec3;
 
-#define CHECK_CALL(FN)                               \
-    {                                                \
-        VkResult vkres = FN;                         \
-        if (vkres != VK_SUCCESS) {                   \
-            std::stringstream ss;                    \
-            ss << "\n";                              \
-            ss << "*** FUNCTION CALL FAILED *** \n"; \
-            ss << "FUNCTION: " << #FN << "\n";       \
-            ss << "\n";                              \
-            GREX_LOG_ERROR(ss.str().c_str());        \
-            assert(false);                           \
-        }                                            \
+#define CHECK_CALL(FN)                                                 \
+    {                                                                  \
+        VkResult vkres = FN;                                           \
+        if (vkres != VK_SUCCESS)                                       \
+        {                                                              \
+            std::stringstream ss;                                      \
+            ss << "\n";                                                \
+            ss << "*** FUNCTION CALL FAILED *** \n";                   \
+            ss << "LOCATION: " << __FILE__ << ":" << __LINE__ << "\n"; \
+            ss << "FUNCTION: " << #FN << "\n";                         \
+            ss << "\n";                                                \
+            GREX_LOG_ERROR(ss.str().c_str());                          \
+            assert(false);                                             \
+        }                                                              \
     }
 
 // =============================================================================
@@ -663,8 +665,9 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "005_basic_shadow_vulkan");
-    if (!window) {
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
+    if (!window)
+	{
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -672,7 +675,15 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight())) {
+    auto surface = window->CreateVkSurface(renderer->Instance);
+    if (!surface)
+    {
+        assert(false && "CreateVkSurface failed");
+        return EXIT_FAILURE;
+    }
+
+    if (!InitSwapchain(renderer.get(), surface, window->GetWidth(), window->GetHeight()))
+	{
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }

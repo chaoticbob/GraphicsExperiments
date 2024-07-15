@@ -221,7 +221,8 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
 
         std::vector<const char*> enabledExtensions = {
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-            VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME};
+            VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+            VK_EXT_ROBUSTNESS_2_EXTENSION_NAME};
 
         if (pRenderer->Features.EnableDescriptorBuffer)
         {
@@ -402,30 +403,6 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
 
     return true;
 }
-
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-bool InitSwapchain(VulkanRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t height, uint32_t imageCount)
-{
-    VkSurfaceKHR surface;
-
-    {
-        VkWin32SurfaceCreateInfoKHR vkci = {VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR};
-        //
-        vkci.pNext     = nullptr;
-        vkci.flags     = 0;
-        vkci.hinstance = ::GetModuleHandle(nullptr);
-        vkci.hwnd      = hwnd;
-
-        VkResult vkres = vkCreateWin32SurfaceKHR(pRenderer->Instance, &vkci, nullptr, &urface);
-        if (vkres != VK_SUCCESS) {
-            assert(false && "vkCreateWin32SurfaceKHR failed");
-            return false;
-        }
-    }
-
-    return InitSwapchain(pRenderer, surface, width, height, imageCount);
-}
-#endif
 
 bool InitSwapchain(VulkanRenderer* pRenderer, VkSurfaceKHR surface, uint32_t width, uint32_t height, uint32_t imageCount)
 {
@@ -1153,6 +1130,8 @@ VkResult CreateBuffer(
     VkDeviceSize       minAlignment,
     VulkanBuffer*      pBuffer)
 {
+    assert((size > 0) && "Cannot create a buffer of size 0");
+
     if (IsNull(pBuffer)) {
         return VK_ERROR_INITIALIZATION_FAILED;
     }
@@ -1969,7 +1948,7 @@ VkResult CreateDrawVertexColorPipeline(
     return vkres;
 }
 
-HRESULT CreateDrawNormalPipeline(
+VkResult CreateDrawNormalPipeline(
    VulkanRenderer*      pRenderer,
    VkPipelineLayout     pipelineLayout,
    VkShaderModule       vsShaderModule,
@@ -2140,7 +2119,7 @@ HRESULT CreateDrawNormalPipeline(
     return vkres;
 }
 
-HRESULT CreateDrawTexturePipeline(
+VkResult CreateDrawTexturePipeline(
     VulkanRenderer*    pRenderer,
     VkPipelineLayout   pipelineLayout,
     VkShaderModule     vsShaderModule,
@@ -2287,7 +2266,7 @@ HRESULT CreateDrawTexturePipeline(
     return vkres;
 }
 
-HRESULT CreateDrawBasicPipeline(
+VkResult CreateDrawBasicPipeline(
     VulkanRenderer*    pRenderer,
     VkPipelineLayout   pipelineLayout,
     VkShaderModule     vsShaderModule,
@@ -2439,7 +2418,7 @@ HRESULT CreateDrawBasicPipeline(
     return vkres;
 }
 
-HRESULT CreateGraphicsPipeline1(
+VkResult CreateGraphicsPipeline1(
    VulkanRenderer*      pRenderer,
    VkPipelineLayout     pipelineLayout,
    VkShaderModule       vsShaderModule,
@@ -2615,7 +2594,7 @@ HRESULT CreateGraphicsPipeline1(
     return vkres;
 }
 
-HRESULT CreateGraphicsPipeline2(
+VkResult CreateGraphicsPipeline2(
    VulkanRenderer* pRenderer,
    VkPipelineLayout     pipelineLayout,
    VkShaderModule       vsShaderModule,

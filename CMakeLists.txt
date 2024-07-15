@@ -6,17 +6,17 @@ project(GraphicsExperiments)
 # Options
 # ------------------------------------------------------------------------------
 if (APPLE)
-	option(GREX_ENABLE_D3D12  "Build DirectX 12 projects" OFF)
-	option(GREX_ENABLE_METAL  "Build Metal projects" ON)
-	option(GREX_ENABLE_VULKAN "Build Vulkan projects" OFF)
+    option(GREX_ENABLE_D3D12  "Build DirectX 12 projects" OFF)
+    option(GREX_ENABLE_METAL  "Build Metal projects" ON)
+    option(GREX_ENABLE_VULKAN "Build Vulkan projects" OFF)
 elseif (LINUX)
-	option(GREX_ENABLE_D3D12  "Build DirectX 12 projects" OFF)
-	option(GREX_ENABLE_METAL  "Build Metal projects" OFF)
-	option(GREX_ENABLE_VULKAN "Build Vulkan projects" ON)
+    option(GREX_ENABLE_D3D12  "Build DirectX 12 projects" OFF)
+    option(GREX_ENABLE_METAL  "Build Metal projects" OFF)
+    option(GREX_ENABLE_VULKAN "Build Vulkan projects" ON)
 else()
-	option(GREX_ENABLE_D3D12  "Build DirectX 12 projects" ON)
-	option(GREX_ENABLE_METAL  "Build Metal projects" OFF)
-	option(GREX_ENABLE_VULKAN "Build Vulkan projects" ON)
+    option(GREX_ENABLE_D3D12  "Build DirectX 12 projects" ON)
+    option(GREX_ENABLE_METAL  "Build Metal projects" OFF)
+    option(GREX_ENABLE_VULKAN "Build Vulkan projects" ON)
 endif()
 
 
@@ -118,13 +118,13 @@ if ((NOT VULKAN_INCLUDE_DIR) AND (NOT APPLE))
 endif()
     
 if (VULKAN_INCLUDE_DIR)
-	# Convert paths to something CMake can use
-	file(TO_CMAKE_PATH "${VULKAN_INCLUDE_DIR}" VULKAN_INCLUDE_DIR)
-	file(TO_CMAKE_PATH "${VULKAN_LIBRARY_DIR}" VULKAN_LIBRARY_DIR)
+    # Convert paths to something CMake can use
+    file(TO_CMAKE_PATH "${VULKAN_INCLUDE_DIR}" VULKAN_INCLUDE_DIR)
+    file(TO_CMAKE_PATH "${VULKAN_LIBRARY_DIR}" VULKAN_LIBRARY_DIR)
 
-	message("Found Vulkan:")
-	message("  Vulkan include directory: ${VULKAN_INCLUDE_DIR}")
-	message("  Vulkan library directory: ${VULKAN_LIBRARY_DIR}")
+    message("Found Vulkan:")
+    message("  Vulkan include directory: ${VULKAN_INCLUDE_DIR}")
+    message("  Vulkan library directory: ${VULKAN_LIBRARY_DIR}")
 endif()
 
 # ------------------------------------------------------------------------------

@@ -824,7 +824,7 @@ void CreateGeometries(
 {
     // Sphere
     {
-        TriMesh mesh = TriMesh::Sphere(1.0f, 256, 256, {.enableNormals = true});
+        TriMesh mesh = TriMesh::Sphere(1.0f, 256, 256, TriMesh::Options().EnableNormals());
 
         Geometry& geo = outSphereGeometry;
 
@@ -852,7 +852,7 @@ void CreateGeometries(
 
     // Box
     {
-        TriMesh   mesh = TriMesh::Cube(glm::vec3(15, 1, 4.5f), false, {.enableNormals = true});
+        TriMesh   mesh = TriMesh::Cube(glm::vec3(15, 1, 4.5f), false, TriMesh::Options().EnableNormals());
         Geometry& geo  = outBoxGeometryy;
 
         CHECK_CALL(CreateBuffer(

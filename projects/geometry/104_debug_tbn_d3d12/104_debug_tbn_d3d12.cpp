@@ -407,7 +407,7 @@ void CreateGeometryBuffers(
     DxRenderer*            pRenderer,
     std::vector<Geometry>& outGeometries)
 {
-    TriMesh::Options options = {.enableVertexColors = true, .enableTexCoords = true,  .enableNormals = true, .enableTangents = true};
+    TriMesh::Options options = TriMesh::Options().EnableVertexColors().EnableTexCoords().EnableNormals().EnableTangents();
 
     std::vector<TriMesh> meshes;
     meshes.push_back(TriMesh::Sphere(1.0f, 16, 16, options));

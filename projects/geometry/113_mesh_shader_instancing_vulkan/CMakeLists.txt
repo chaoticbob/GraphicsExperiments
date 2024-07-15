@@ -2,9 +2,11 @@ cmake_minimum_required(VERSION 3.5)
 
 project(113_mesh_shader_instancing_vulkan)
 
+set(TARGET_NAME ${PROJECT_NAME})
+
 add_executable(
-    113_mesh_shader_instancing_vulkan
-    113_mesh_shader_instancing_vulkan.cpp
+    ${TARGET_NAME}
+    ${TARGET_NAME}.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.cpp
@@ -19,15 +21,20 @@ add_executable(
     ${IMGUI_VULKAN_FILES}
 )
 
-set_target_properties(113_mesh_shader_instancing_vulkan PROPERTIES FOLDER "geometry")
+set_target_properties(${TARGET_NAME} PROPERTIES FOLDER "geometry")
 
 target_compile_definitions(
-	113_mesh_shader_instancing_vulkan
+    ${TARGET_NAME}
+    PUBLIC GREX_ENABLE_VULKAN
+)
+
+target_compile_definitions(
+	${TARGET_NAME}
 	PUBLIC ENABLE_IMGUI_VULKAN
 )
 
 target_include_directories(
-    113_mesh_shader_instancing_vulkan
+    ${TARGET_NAME}
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
            ${GREX_THIRD_PARTY_DIR}/glslang # This needs to come before ${VULKAN_INCLUDE_DIR}
            ${VULKAN_INCLUDE_DIR}
@@ -39,22 +46,33 @@ target_include_directories(
 )
 
 target_link_libraries(
-    113_mesh_shader_instancing_vulkan
+    ${TARGET_NAME}
     PUBLIC glfw
            glslang
            SPIRV
-		   dxcompiler
            meshoptimizer
 )
 
 if(WIN32)
     target_compile_definitions(
-        113_mesh_shader_instancing_vulkan
+        ${TARGET_NAME}
         PUBLIC VK_USE_PLATFORM_WIN32_KHR
     )
 
     target_link_libraries(
-        113_mesh_shader_instancing_vulkan
+        ${TARGET_NAME}
         PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
+               "${VULKAN_LIBRARY_DIR}/dxcompiler.lib"
+    )
+elseif(LINUX)
+    target_compile_definitions(
+        ${TARGET_NAME}
+        PUBLIC VK_USE_PLATFORM_XCB_KHR
+    )
+
+    target_link_libraries(
+        ${TARGET_NAME}
+        PUBLIC "${VULKAN_LIBRARY_DIR}/libvulkan.so"
+               "${VULKAN_LIBRARY_DIR}/libdxcompiler.so"
     )
 endif()

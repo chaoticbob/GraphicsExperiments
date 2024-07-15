@@ -685,7 +685,7 @@ void CreateGeometryBuffers(
     DxRenderer*            pRenderer,
     std::vector<Geometry>& outGeometries)
 {
-    TriMesh::Options options = {.enableTexCoords = true, .enableNormals = true, .enableTangents = true};
+    TriMesh::Options options = TriMesh::Options().EnableTexCoords().EnableNormals().EnableTangents();
 
     std::vector<TriMesh> meshes;
     // Cube
