@@ -6,6 +6,10 @@
 #include "glslang/Include/glslang_c_interface.h"
 #include "glslang/Public/resource_limits_c.h"
 
+#if defined(GREX_ENABLE_SLANG)
+#include "slang.h"
+#endif
+
 #define VK_KHR_VALIDATION_LAYER_NAME "VK_LAYER_KHRONOS_validation"
 
 #define VK_QUEUE_MASK_ALL_TYPES (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT)
@@ -3262,6 +3266,99 @@ HRESULT CompileHLSL(
 
     return S_OK;
 }
+
+#if defined(GREX_ENABLE_SLANG)
+CompileResult CompileSlang(
+    const std::string&     shaderSource,
+    const std::string&     entryPoint,
+    const std::string&     profile,
+    const CompilerOptions& options,
+    std::vector<uint32_t>* pSPIRV,
+    std::string*           pErrorMsg)
+{
+    ComPtr<slang::IGlobalSession> slangGlobalSession;
+    if (SLANG_FAILED(slang::createGlobalSession(&slangGlobalSession)))
+    {
+        return COMPILE_ERROR_INTERNAL_COMPILER_ERROR;
+    }
+
+    slang::TargetDesc targetDesc = {};
+    targetDesc.format            = SLANG_SPIRV;
+    targetDesc.profile           = slangGlobalSession->findProfile(profile.c_str());
+    targetDesc.flags             = SLANG_TARGET_FLAG_GENERATE_SPIRV_DIRECTLY;
+
+    slang::SessionDesc sessionDesc      = {};
+    sessionDesc.targets                 = &targetDesc;
+    sessionDesc.targetCount             = 1;
+    sessionDesc.defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR;
+
+    ComPtr<slang::ISession> session;
+    if (SLANG_FAILED(slangGlobalSession->createSession(sessionDesc, &session)))
+    {
+        return COMPILE_ERROR_INTERNAL_COMPILER_ERROR;
+    }
+
+    slang::IModule* pSlangModule = nullptr;
+    {
+        ComPtr<slang::IBlob> diagBlob;
+
+        pSlangModule = session->loadModuleFromSourceString("grex-module", nullptr, shaderSource.c_str(), &diagBlob);
+        if (pSlangModule == nullptr)
+        {
+            return COMPILE_ERROR_INTERNAL_COMPILER_ERROR;
+        }
+    }
+
+    ComPtr<slang::IEntryPoint> slangEntryPoint;
+    if (SLANG_FAILED(pSlangModule->findEntryPointByName(entryPoint.c_str(), &slangEntryPoint)))
+    {
+        return COMPILE_ERROR_INTERNAL_COMPILER_ERROR;
+    }
+
+    std::vector<slang::IComponentType*> componentTypes;
+    componentTypes.push_back(pSlangModule);
+    componentTypes.push_back(slangEntryPoint.Get());
+
+    ComPtr<slang::IComponentType> composedProgram;
+    {
+        ComPtr<slang::IBlob> diagBlob;
+
+        auto slangRes = session->createCompositeComponentType(
+            componentTypes.data(),
+            componentTypes.size(),
+            &composedProgram,
+            &diagBlob);
+        if (SLANG_FAILED(slangRes))
+        {
+            return COMPILE_ERROR_COMPILE_FAILED;
+        }
+    }
+
+    ComPtr<slang::IBlob> spirvCode;
+    {
+        ComPtr<slang::IBlob> diagBlob;
+
+        auto slangRes = composedProgram->getEntryPointCode(
+            0, // entryPointIndex,
+            0, // targetIndex,
+            &spirvCode,
+            &diagBlob);
+        if (SLANG_FAILED(slangRes))
+        {
+            return COMPILE_ERROR_LINK_FAILED;
+        }
+    }
+
+    const char* pBuffer    = static_cast<const char*>(spirvCode->getBufferPointer());
+    size_t      bufferSize = static_cast<size_t>(spirvCode->getBufferSize());
+    size_t      wordCount  = bufferSize / 4;
+
+    pSPIRV->resize(wordCount);
+    memcpy(pSPIRV->data(), pBuffer, bufferSize);
+
+    return COMPILE_SUCCESS;
+}
+#endif
 
 void CreateDescriptor(
     VulkanRenderer*         pRenderer,

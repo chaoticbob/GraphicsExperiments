@@ -28,6 +28,36 @@ using namespace glm;
 // =============================================================================
 // Shader code
 // =============================================================================
+#if defined(GREX_ENABLE_SLANG)
+const char* gShaders = R"(
+struct CameraProperties {
+    float4x4 MVP;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<CameraProperties> Cam;
+
+struct VSOutput {
+    float4 PositionCS : SV_POSITION;
+    float3 Color      : COLOR;
+};
+
+[shader("vertex")]
+VSOutput vsmain(float3 PositionOS : POSITION, float3 Color : COLOR0)
+{
+    VSOutput output = (VSOutput)0;
+    output.PositionCS = mul(Cam.MVP, float4(PositionOS, 1));
+    output.Color = Color;
+    return output;
+}
+
+[shader("pixel")]
+float4 psmain(VSOutput input) : SV_TARGET
+{
+    return float4(input.Color, 1);   
+}
+)";
+#else
 const char* gShaderVS = R"(
 #version 460
 
@@ -60,6 +90,7 @@ void main()
 	FragColor = vec4(vertexColor, 1.0f);
 }
 )";
+#endif
 
 // =============================================================================
 // Globals
@@ -103,7 +134,28 @@ int main(int argc, char** argv)
     std::vector<uint32_t> spirvVS;
     std::vector<uint32_t> spirvFS;
     {
-        std::string   errorMsg;
+        std::string errorMsg;
+#if defined(GREX_ENABLE_SLANG)
+        CompileResult res = CompileSlang(gShaders, "vsmain", "vs_6_0", {}, &spirvVS, &errorMsg);
+        if (res != COMPILE_SUCCESS)
+        {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (VS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            return EXIT_FAILURE;
+        }
+
+        res = CompileSlang(gShaders, "psmain", "ps_6_0", {}, &spirvFS, &errorMsg);
+        if (res != COMPILE_SUCCESS)
+        {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (FS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            return EXIT_FAILURE;
+        }
+#else
         CompileResult res = CompileGLSL(gShaderVS, VK_SHADER_STAGE_VERTEX_BIT, {}, &spirvVS, &errorMsg);
         if (res != COMPILE_SUCCESS)
         {
@@ -119,10 +171,11 @@ int main(int argc, char** argv)
         {
             std::stringstream ss;
             ss << "\n"
-               << "Shader compiler error (VS): " << errorMsg << "\n";
+               << "Shader compiler error (FS): " << errorMsg << "\n";
             GREX_LOG_ERROR(ss.str().c_str());
             return EXIT_FAILURE;
         }
+#endif
     }
 
     // *************************************************************************
