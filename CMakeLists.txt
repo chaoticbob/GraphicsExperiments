@@ -19,7 +19,7 @@ else()
     option(GREX_ENABLE_VULKAN "Build Vulkan projects" ON)
 endif()
 
-
+option(GREX_ENABLE_SLANG          "Build Slang version of Vulkan projects" OFF)
 option(GREX_ENABLE_MISC_PROJECTS  "Build misc projects" OFF)
 
 # ------------------------------------------------------------------------------
@@ -125,6 +125,26 @@ if (VULKAN_INCLUDE_DIR)
     message("Found Vulkan:")
     message("  Vulkan include directory: ${VULKAN_INCLUDE_DIR}")
     message("  Vulkan library directory: ${VULKAN_LIBRARY_DIR}")
+endif()
+
+# ------------------------------------------------------------------------------
+# Slang
+# ------------------------------------------------------------------------------
+if (GREX_ENABLE_SLANG)
+    if (NOT SLANG_DIR)
+        message(FATAL_ERROR "GREX_ENABLE_SLANG requires -DSLANG_DIR=<path to Slang>")
+    endif()
+
+    set(SLANG_INCLUDE_DIR "${SLANG_DIR}/include")
+    set(SLANG_LIBRARY_DIR "${SLANG_DIR}/lib")
+
+    if (NOT EXISTS "${SLANG_DIR}/include/slang.h")
+        message(FATAL_ERROR "Could not find slang.h at ${SLANG_DIR}/include/slang.h")
+    endif()
+
+    message("Found Slang:")
+    message("  Slang include directory: ${SLANG_INCLUDE_DIR}")
+    message("  Slang library directory: ${SLANG_LIBRARY_DIR}")
 endif()
 
 # ------------------------------------------------------------------------------
