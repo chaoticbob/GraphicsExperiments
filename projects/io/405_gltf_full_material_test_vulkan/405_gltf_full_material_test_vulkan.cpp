@@ -79,8 +79,8 @@ void CreateShaderModules(
     VkShaderModule*              pModuleVS,
     VkShaderModule*              pModuleFS);
 void CreatePipelineLayout(
-    VulkanRenderer*           pRenderer,
-    VulkanPipelineLayout*     pLayout);
+    VulkanRenderer*       pRenderer,
+    VulkanPipelineLayout* pLayout);
 void CreateIBLTextures(
     VulkanRenderer*           pRenderer,
     VulkanImage*              pBRDFLUT,
@@ -220,7 +220,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     {
         void*         pDescriptorBufferStartAddress = nullptr;
-        VulkanBuffer* descriptorBuffer = &static_cast<VkFauxRender::SceneGraph*>(&graph)->DescriptorBuffer;
+        VulkanBuffer* descriptorBuffer              = &static_cast<VkFauxRender::SceneGraph*>(&graph)->DescriptorBuffer;
 
         vmaMapMemory(renderer->Allocator, descriptorBuffer->Allocation, &pDescriptorBufferStartAddress);
 
@@ -323,7 +323,7 @@ int main(int argc, char** argv)
                     VK_IMAGE_LAYOUT_GENERAL);
             }
 
-            // IBL Map Sampler 
+            // IBL Map Sampler
             {
                 VkSamplerCreateInfo iblMapSampler     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
                 iblMapSampler.flags                   = 0;
@@ -359,7 +359,7 @@ int main(int argc, char** argv)
                     repeatSampler);
             }
 
-            // IBL Integration Sampler 
+            // IBL Integration Sampler
             {
                 VkSamplerCreateInfo iblMapSampler     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
                 iblMapSampler.flags                   = 0;
@@ -425,7 +425,7 @@ int main(int argc, char** argv)
 
         // Material Samplers
         {
-           // Clamped
+            // Clamped
             {
                 VkSamplerCreateInfo clampedSamplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
                 clampedSamplerInfo.flags                   = 0;
@@ -461,8 +461,8 @@ int main(int argc, char** argv)
                     clampedSampler);
             }
 
-           // Repeat
-           {
+            // Repeat
+            {
                 VkSamplerCreateInfo repeatSamplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
                 repeatSamplerInfo.flags                   = 0;
                 repeatSamplerInfo.magFilter               = VK_FILTER_LINEAR;
@@ -495,7 +495,7 @@ int main(int argc, char** argv)
                     MATERIAL_SAMPLER_START_REGISTER, // binding
                     1,                               // arrayElement
                     repeatSampler);
-           }
+            }
         }
 
         vmaUnmapMemory(renderer->Allocator, descriptorBuffer->Allocation);
@@ -537,7 +537,8 @@ int main(int argc, char** argv)
     {
         CHECK_CALL(GetSwapchainImages(renderer.get(), images));
 
-        for (auto& image : images) {
+        for (auto& image : images)
+        {
             // Create swap chain images
             VkImageViewCreateInfo createInfo           = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
             createInfo.image                           = image;
@@ -561,7 +562,8 @@ int main(int argc, char** argv)
         std::vector<VulkanImage> depthImages;
         depthImages.resize(images.size());
 
-        for (int depthIndex = 0; depthIndex < imageCount; depthIndex++) {
+        for (int depthIndex = 0; depthIndex < imageCount; depthIndex++)
+        {
             // Create depth images
             CHECK_CALL(CreateDSV(renderer.get(), window->GetWidth(), window->GetHeight(), &depthImages[depthIndex]));
 
@@ -603,7 +605,8 @@ int main(int argc, char** argv)
     while (window->PollEvents())
     {
         UINT bufferIndex = 0;
-        if (AcquireNextImage(renderer.get(), &bufferIndex)) {
+        if (AcquireNextImage(renderer.get(), &bufferIndex))
+        {
             assert(false && "AcquireNextImage failed");
             break;
         }
@@ -660,13 +663,15 @@ int main(int argc, char** argv)
         CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
 
         // Wait for the GPU to finish the work
-        if (!WaitForGpu(renderer.get())) {
+        if (!WaitForGpu(renderer.get()))
+        {
             assert(false && "WaitForGpu failed");
             break;
         }
 
         // Present
-        if (!SwapchainPresent(renderer.get(), bufferIndex)) {
+        if (!SwapchainPresent(renderer.get(), bufferIndex))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -702,14 +707,14 @@ void CreateShaderModules(
 }
 
 void CreatePipelineLayout(
-    VulkanRenderer*           pRenderer,
-    VulkanPipelineLayout*     pLayout)
+    VulkanRenderer*       pRenderer,
+    VulkanPipelineLayout* pLayout)
 {
     // Descriptor set layout
     {
         std::vector<VkDescriptorSetLayoutBinding> bindings = {};
 
-        //ConstantBuffer<SceneData>      Scene                                   : register(SCENE_REGISTER);                     // Scene constants
+        // ConstantBuffer<SceneData>      Scene                                   : register(SCENE_REGISTER);                     // Scene constants
         {
             VkDescriptorSetLayoutBinding binding = {};
             binding.binding                      = SCENE_REGISTER;

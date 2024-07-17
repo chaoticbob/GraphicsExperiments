@@ -12,7 +12,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -102,7 +103,8 @@ static float sTargetAngleY = 0;
 
 void MouseDown(int x, int y, int buttons)
 {
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         sPrevX = x;
         sPrevY = y;
     }
@@ -110,7 +112,8 @@ void MouseDown(int x, int y, int buttons)
 
 void MouseMove(int x, int y, int buttons)
 {
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         int dx = x - sPrevX;
         int dy = y - sPrevY;
 
@@ -129,7 +132,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
 
-    if (!InitDx(renderer.get(), gEnableDebug)) {
+    if (!InitDx(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -141,7 +145,8 @@ int main(int argc, char** argv)
     {
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(gShaders, "vsmain", "vs_6_0", &dxilVS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
@@ -151,7 +156,8 @@ int main(int argc, char** argv)
         }
 
         hr = CompileHLSL(gShaders, "psmain", "ps_6_0", &dxilPS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (PS): " << errorMsg << "\n";
@@ -205,7 +211,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "104_debug_tbn_d3d12");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -216,7 +223,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT)) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -224,7 +232,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForD3D12(renderer.get())) {
+    if (!window->InitImGuiForD3D12(renderer.get()))
+    {
         assert(false && "GrexWindow::InitImGuiForD3D12 failed");
         return EXIT_FAILURE;
     }
@@ -254,20 +263,26 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         window->ImGuiNewFrameD3D12();
 
-        if (ImGui::Begin("Scene")) {
+        if (ImGui::Begin("Scene"))
+        {
             static const char* currentModelNames = gModelNames[gModelIndex].c_str();
 
-            if (ImGui::BeginCombo("Model", currentModelNames)) {
-                for (size_t i = 0; i < gModelNames.size(); ++i) {
+            if (ImGui::BeginCombo("Model", currentModelNames))
+            {
+                for (size_t i = 0; i < gModelNames.size(); ++i)
+                {
                     bool isSelected = (currentModelNames == gModelNames[i]);
-                    if (ImGui::Selectable(gModelNames[i].c_str(), isSelected)) {
+                    if (ImGui::Selectable(gModelNames[i].c_str(), isSelected))
+                    {
                         currentModelNames = gModelNames[i].c_str();
                         gModelIndex       = static_cast<uint32_t>(i);
                     }
-                    if (isSelected) {
+                    if (isSelected)
+                    {
                         ImGui::SetItemDefaultFocus();
                     }
                 }
@@ -364,13 +379,15 @@ int main(int argc, char** argv)
         ID3D12CommandList* pList = commandList.Get();
         renderer->Queue->ExecuteCommandLists(1, &pList);
 
-        if (!WaitForGpu(renderer.get())) {
+        if (!WaitForGpu(renderer.get()))
+        {
             assert(false && "WaitForGpu failed");
             break;
         }
 
         // Present
-        if (!SwapchainPresent(renderer.get())) {
+        if (!SwapchainPresent(renderer.get()))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -416,7 +433,7 @@ void CreateGeometryBuffers(
     // Teapot
     {
         TriMesh mesh;
-        bool res = TriMesh::LoadOBJ(GetAssetPath("models/teapot.obj").string(), "", options, &mesh);
+        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/teapot.obj").string(), "", options, &mesh);
         assert(res && "OBJ load failed");
         mesh.ScaleToFit();
         meshes.push_back(mesh);
@@ -425,7 +442,7 @@ void CreateGeometryBuffers(
     // Knob
     {
         TriMesh mesh;
-        bool res = TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh);
+        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh);
         assert(res && "OBJ load failed");
         mesh.ScaleToFit();
         meshes.push_back(mesh);
@@ -434,7 +451,7 @@ void CreateGeometryBuffers(
     // Sphere
     {
         TriMesh mesh;
-        bool res = TriMesh::LoadOBJ(GetAssetPath("models/sphere.obj").string(), "", options, &mesh);
+        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/sphere.obj").string(), "", options, &mesh);
         assert(res && "OBJ load failed");
         mesh.ScaleToFit();
         meshes.push_back(mesh);
@@ -443,13 +460,14 @@ void CreateGeometryBuffers(
     // Torus
     {
         TriMesh mesh;
-        bool res = TriMesh::LoadOBJ(GetAssetPath("models/torus.obj").string(), "", options, &mesh);
+        bool    res = TriMesh::LoadOBJ(GetAssetPath("models/torus.obj").string(), "", options, &mesh);
         assert(res && "OBJ load failed");
         mesh.ScaleToFit();
         meshes.push_back(mesh);
     }
 
-    for (uint32_t i = 0; i < meshes.size(); ++i) {
+    for (uint32_t i = 0; i < meshes.size(); ++i)
+    {
         auto& mesh = meshes[i];
 
         Geometry geo = {};

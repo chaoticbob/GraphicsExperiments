@@ -13,7 +13,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                                                               \
     {                                                                                \
         NS::Error* pError = FN;                                                      \
-        if (pError != nullptr) {                                                     \
+        if (pError != nullptr)                                                       \
+        {                                                                            \
             std::stringstream ss;                                                    \
             ss << "\n";                                                              \
             ss << "*** FUNCTION CALL FAILED *** \n";                                 \
@@ -122,7 +123,8 @@ void MouseMove(int x, int y, int buttons)
     static int prevX = x;
     static int prevY = y;
 
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         int dx = x - prevX;
         int dy = y - prevY;
 
@@ -140,7 +142,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<MetalRenderer> renderer = std::make_unique<MetalRenderer>();
 
-    if (!InitMetal(renderer.get(), gEnableDebug)) {
+    if (!InitMetal(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -153,7 +156,8 @@ int main(int argc, char** argv)
     NS::Error*  pError = nullptr;
     {
         std::string shaderSource = LoadString("projects/252_pbr_material_properties/shaders.metal");
-        if (shaderSource.empty()) {
+        if (shaderSource.empty())
+        {
             assert(false && "no shader source");
             return EXIT_FAILURE;
         }
@@ -163,7 +167,8 @@ int main(int argc, char** argv)
             nullptr,
             &pError));
 
-        if (library.get() == nullptr) {
+        if (library.get() == nullptr)
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << pError->localizedDescription()->utf8String() << "\n";
@@ -173,13 +178,15 @@ int main(int argc, char** argv)
         }
 
         pbrVsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("vsmain", NS::UTF8StringEncoding)));
-        if (pbrVsShader.Function.get() == nullptr) {
+        if (pbrVsShader.Function.get() == nullptr)
+        {
             assert(false && "VS Shader MTL::Library::newFunction() failed");
             return EXIT_FAILURE;
         }
 
         pbrFsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("psmain", NS::UTF8StringEncoding)));
-        if (pbrFsShader.Function.get() == nullptr) {
+        if (pbrFsShader.Function.get() == nullptr)
+        {
             assert(false && "FS Shader MTL::Library::newFunction() failed");
             return EXIT_FAILURE;
         }
@@ -190,7 +197,8 @@ int main(int argc, char** argv)
     MetalShader drawTextureFsShader;
     {
         std::string shaderSource = LoadString("projects/252_pbr_material_properties/drawtexture.metal");
-        if (shaderSource.empty()) {
+        if (shaderSource.empty())
+        {
             assert(false && "no shader source");
             return EXIT_FAILURE;
         }
@@ -200,7 +208,8 @@ int main(int argc, char** argv)
             nullptr,
             &pError));
 
-        if (library.get() == nullptr) {
+        if (library.get() == nullptr)
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << pError->localizedDescription()->utf8String() << "\n";
@@ -210,13 +219,15 @@ int main(int argc, char** argv)
         }
 
         drawTextureVsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("vsmain", NS::UTF8StringEncoding)));
-        if (drawTextureVsShader.Function.get() == nullptr) {
+        if (drawTextureVsShader.Function.get() == nullptr)
+        {
             assert(false && "VS Shader MTL::Library::newFunction() failed");
             return EXIT_FAILURE;
         }
 
         drawTextureFsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("psmain", NS::UTF8StringEncoding)));
-        if (drawTextureFsShader.Function.get() == nullptr) {
+        if (drawTextureFsShader.Function.get() == nullptr)
+        {
             assert(false && "FS Shader MTL::Library::newFunction() failed");
             return EXIT_FAILURE;
         }
@@ -337,7 +348,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "252_pbr_material_properties_metal");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -351,7 +363,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT)) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -362,7 +375,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForMetal(renderer.get())) {
+    if (!window->InitImGuiForMetal(renderer.get()))
+    {
         assert(false && "GrexWindow::InitImGuiForMetal failed");
         return EXIT_FAILURE;
     }
@@ -378,21 +392,25 @@ int main(int argc, char** argv)
     MTL::ClearColor clearColor(0.23f, 0.23f, 0.31f, 0);
     uint32_t        frameIndex = 0;
 
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         window->ImGuiNewFrameMetal(pRenderPassDescriptor);
 
-        if (ImGui::Begin("Scene")) {
+        if (ImGui::Begin("Scene"))
+        {
             ImGui::Checkbox("Mutilscatter", reinterpret_cast<bool*>(&sceneParams.multiscatter));
             ImGui::Checkbox("Furnace", reinterpret_cast<bool*>(&sceneParams.furnace));
         }
         ImGui::End();
 
         MTL::Texture* descriptorTexture;
-        if (sceneParams.furnace) {
+        if (sceneParams.furnace)
+        {
             descriptorTexture                   = furnaceTexture.Texture.get();
             sceneParams.iblEnvironmentNumLevels = 1;
         }
-        else {
+        else
+        {
             descriptorTexture                   = envTexture.Texture.get();
             sceneParams.iblEnvironmentNumLevels = envNumLevels;
         }
@@ -425,11 +443,14 @@ int main(int argc, char** argv)
         pBlitEncoder->copyFromTexture(materialTemplateTexture.Texture.get(), pDrawable->texture());
 
         // If furnace is enabled, clear out all the render targets by drawing the white texture to each viewport location
-        if (sceneParams.furnace) {
+        if (sceneParams.furnace)
+        {
             uint32_t cellY = gCellRenderStartY;
-            for (uint32_t yi = 0; yi < 7; ++yi) {
+            for (uint32_t yi = 0; yi < 7; ++yi)
+            {
                 uint32_t cellX = gCellRenderStartX;
-                for (uint32_t xi = 0; xi < 11; ++xi) {
+                for (uint32_t xi = 0; xi < 11; ++xi)
+                {
                     MTL::Origin sourceOrigin(0, 0, 0);
                     MTL::Size   sourceSize(gCellRenderResX, gCellRenderResY, 1);
                     MTL::Origin destOrigin(cellX, cellY, 0);
@@ -517,10 +538,12 @@ int main(int argc, char** argv)
         const float clearColor[4] = {1, 1, 1, 1};
         uint32_t    cellY         = gCellRenderStartY;
         float       dt            = 1.0f / 10;
-        for (uint32_t yi = 0; yi < 7; ++yi) {
+        for (uint32_t yi = 0; yi < 7; ++yi)
+        {
             uint32_t cellX = gCellRenderStartX;
             float    t     = 0;
-            for (uint32_t xi = 0; xi < 11; ++xi) {
+            for (uint32_t xi = 0; xi < 11; ++xi)
+            {
                 MTL::ScissorRect cellRect = {};
                 cellRect.x                = cellX;
                 cellRect.y                = cellY;
@@ -551,53 +574,68 @@ int main(int argc, char** argv)
                 materialParams.clearCoat          = 0;
                 materialParams.clearCoatRoughness = 0;
 
-                switch (yi) {
+                switch (yi)
+                {
                     default: break;
-                    case ROW_METALLIC: {
+                    case ROW_METALLIC:
+                    {
                         materialParams.baseColor = F0_MetalChromium;
                         materialParams.metallic  = t;
                         materialParams.roughness = 0;
-                    } break;
+                    }
+                    break;
 
-                    case ROW_ROUGHNESS_NON_METALLIC: {
+                    case ROW_ROUGHNESS_NON_METALLIC:
+                    {
                         materialParams.baseColor = vec3(0, 0, 0.75f);
                         materialParams.roughness = std::max(0.045f, t);
-                    } break;
+                    }
+                    break;
 
-                    case ROW_ROUGHNESS_METALLIC: {
+                    case ROW_ROUGHNESS_METALLIC:
+                    {
                         materialParams.baseColor = sceneParams.furnace ? vec3(1) : F0_MetalGold;
                         materialParams.roughness = std::max(0.045f, t);
                         materialParams.metallic  = 1.0;
-                    } break;
+                    }
+                    break;
 
-                    case ROW_REFLECTANCE: {
+                    case ROW_REFLECTANCE:
+                    {
                         materialParams.baseColor   = vec3(0.75f, 0, 0);
                         materialParams.roughness   = 0.2f;
                         materialParams.metallic    = 0;
                         materialParams.reflectance = t;
-                    } break;
+                    }
+                    break;
 
-                    case ROW_CLEAR_COAT: {
+                    case ROW_CLEAR_COAT:
+                    {
                         materialParams.baseColor = vec3(0.75f, 0, 0);
                         materialParams.roughness = 0.8f;
                         materialParams.metallic  = 1.0f;
                         materialParams.clearCoat = t;
-                    } break;
+                    }
+                    break;
 
-                    case ROW_CLEAR_COAT_ROUGHNESS: {
+                    case ROW_CLEAR_COAT_ROUGHNESS:
+                    {
                         materialParams.baseColor          = vec3(0.75f, 0, 0);
                         materialParams.roughness          = 0.8f;
                         materialParams.metallic           = 1.0f;
                         materialParams.clearCoat          = 1;
                         materialParams.clearCoatRoughness = std::max(0.045f, t);
-                    } break;
+                    }
+                    break;
 
-                    case ROW_ANISOTROPY: {
+                    case ROW_ANISOTROPY:
+                    {
                         materialParams.baseColor  = F0_MetalZinc;
                         materialParams.roughness  = 0.45f;
                         materialParams.metallic   = 1.0f;
                         materialParams.anisotropy = t;
-                    } break;
+                    }
+                    break;
                 }
 
                 glm::mat4 modelMat = glm::mat4(1);
@@ -729,7 +767,8 @@ void CreateIBLTextures(
     // BRDF LUT
     {
         auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut.hdr"));
-        if (bitmap.Empty()) {
+        if (bitmap.Empty())
+        {
             assert(false && "Load image failed");
             return;
         }
@@ -747,7 +786,8 @@ void CreateIBLTextures(
     // Multiscatter BRDF LUT
     {
         auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut_ms.hdr"));
-        if (bitmap.Empty()) {
+        if (bitmap.Empty())
+        {
             assert(false && "Load image failed");
             return;
         }
@@ -766,7 +806,8 @@ void CreateIBLTextures(
     auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
 
     IBLMaps ibl = {};
-    if (!LoadIBLMaps32f(iblFile, &ibl)) {
+    if (!LoadIBLMaps32f(iblFile, &ibl))
+    {
         GREX_LOG_ERROR("failed to load: " << iblFile);
         return;
     }
@@ -794,7 +835,8 @@ void CreateIBLTextures(
         uint32_t               levelOffset = 0;
         uint32_t               levelWidth  = ibl.baseWidth;
         uint32_t               levelHeight = ibl.baseHeight;
-        for (uint32_t i = 0; i < ibl.numLevels; ++i) {
+        for (uint32_t i = 0; i < ibl.numLevels; ++i)
+        {
             MipOffset mipOffset = {};
             mipOffset.Offset    = levelOffset;
             mipOffset.RowStride = rowStride;

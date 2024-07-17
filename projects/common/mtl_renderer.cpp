@@ -208,15 +208,19 @@ NS::Error* CreateBuffer(
 {
     pBuffer->Buffer = NS::TransferPtr(pRenderer->Device->newBuffer(srcSize, storageMode));
 
-    if (pBuffer->Buffer.get() != nullptr) {
-       if (pSrcData != nullptr) {
-          memcpy(pBuffer->Buffer->contents(), pSrcData, srcSize);
-          if (storageMode == MTL::ResourceStorageModeManaged) {
-            pBuffer->Buffer->didModifyRange(NS::Range::Make(0, pBuffer->Buffer->length()));
-          }
-       }
+    if (pBuffer->Buffer.get() != nullptr)
+    {
+        if (pSrcData != nullptr)
+        {
+            memcpy(pBuffer->Buffer->contents(), pSrcData, srcSize);
+            if (storageMode == MTL::ResourceStorageModeManaged)
+            {
+                pBuffer->Buffer->didModifyRange(NS::Range::Make(0, pBuffer->Buffer->length()));
+            }
+        }
     }
-    else {
+    else
+    {
         assert(false && "CreateBuffer() - MTL::Device::newBuffer() failed");
     }
 
@@ -231,24 +235,24 @@ NS::Error* CreateBuffer(
 {
     return CreateBuffer(pRenderer, srcSize, pSrcData, MTL::ResourceStorageModeManaged, pBuffer);
 
-/*
-    pBuffer->Buffer = NS::TransferPtr(pRenderer->Device->newBuffer(srcSize, MTL::ResourceStorageModeManaged));
+    /*
+        pBuffer->Buffer = NS::TransferPtr(pRenderer->Device->newBuffer(srcSize, MTL::ResourceStorageModeManaged));
 
-    if (pBuffer->Buffer.get() != nullptr)
-    {
-        if (pSrcData != nullptr)
+        if (pBuffer->Buffer.get() != nullptr)
         {
-            memcpy(pBuffer->Buffer->contents(), pSrcData, srcSize);
-            pBuffer->Buffer->didModifyRange(NS::Range::Make(0, pBuffer->Buffer->length()));
+            if (pSrcData != nullptr)
+            {
+                memcpy(pBuffer->Buffer->contents(), pSrcData, srcSize);
+                pBuffer->Buffer->didModifyRange(NS::Range::Make(0, pBuffer->Buffer->length()));
+            }
         }
-    }
-    else
-    {
-        assert(false && "CreateBuffer() - MTL::Device::newBuffer() failed");
-    }
+        else
+        {
+            assert(false && "CreateBuffer() - MTL::Device::newBuffer() failed");
+        }
 
-    return nullptr;
-*/
+        return nullptr;
+    */
 }
 
 NS::Error* CreateBuffer(
@@ -292,7 +296,7 @@ NS::Error* CreateTexture(
     pTextureDesc->setHeight(height);
     pTextureDesc->setPixelFormat(format);
     pTextureDesc->setTextureType(MTL::TextureType2D);
-    //pTextureDesc->setStorageMode(MTL::StorageModeManaged);
+    // pTextureDesc->setStorageMode(MTL::StorageModeManaged);
     pTextureDesc->setStorageMode(MTL::StorageModeShared);
     pTextureDesc->setUsage(MTL::ResourceUsageSample | MTL::ResourceUsageRead);
     pTextureDesc->setMipmapLevelCount(CountU32(mipOffsets));

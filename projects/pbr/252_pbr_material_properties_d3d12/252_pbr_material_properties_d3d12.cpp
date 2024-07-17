@@ -13,7 +13,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -127,7 +128,8 @@ void MouseMove(int x, int y, int buttons)
     static int prevX = x;
     static int prevY = y;
 
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         int dx = x - prevX;
         int dy = y - prevY;
 
@@ -145,7 +147,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
 
-    if (!InitDx(renderer.get(), gEnableDebug)) {
+    if (!InitDx(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -160,7 +163,8 @@ int main(int argc, char** argv)
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &dxilVS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
@@ -170,7 +174,8 @@ int main(int argc, char** argv)
         }
 
         hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &dxilPS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (PS): " << errorMsg << "\n";
@@ -184,14 +189,16 @@ int main(int argc, char** argv)
     std::vector<char> drawTextureDxilPS;
     {
         std::string shaderSource = LoadString("projects/252_pbr_material_properties/drawtexture.hlsl");
-        if (shaderSource.empty()) {
+        if (shaderSource.empty())
+        {
             assert(false && "no shader source");
             return EXIT_FAILURE;
         }
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &drawTextureDxilVS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
@@ -201,7 +208,8 @@ int main(int argc, char** argv)
         }
 
         hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &drawTextureDxilPS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (PS): " << errorMsg << "\n";
@@ -355,7 +363,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "252_pbr_material_properties_d3d12");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -364,7 +373,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT)) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -372,7 +382,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForD3D12(renderer.get())) {
+    if (!window->InitImGuiForD3D12(renderer.get()))
+    {
         assert(false && "GrexWindow::InitImGuiForD3D12 failed");
         return EXIT_FAILURE;
     }
@@ -408,10 +419,12 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         window->ImGuiNewFrameD3D12();
 
-        if (ImGui::Begin("Scene")) {
+        if (ImGui::Begin("Scene"))
+        {
             ImGui::Checkbox("Mutilscatter", reinterpret_cast<bool*>(&pSceneParams->multiscatter));
             ImGui::Checkbox("Furnace", reinterpret_cast<bool*>(&pSceneParams->furnace));
         }
@@ -423,7 +436,8 @@ int main(int argc, char** argv)
             D3D12_CPU_DESCRIPTOR_HANDLE descriptor = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
             descriptor.ptr += 2 * renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-            if (pSceneParams->furnace) {
+            if (pSceneParams->furnace)
+            {
                 CreateDescriptorTexture2D(renderer.get(), furnaceTexture.Get(), descriptor);
                 descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
@@ -431,7 +445,8 @@ int main(int argc, char** argv)
 
                 pSceneParams->iblEnvironmentNumLevels = 1;
             }
-            else {
+            else
+            {
                 CreateDescriptorTexture2D(renderer.get(), irrTexture.Get(), descriptor);
                 descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
@@ -556,17 +571,20 @@ int main(int argc, char** argv)
             const float clearColor[4] = {1, 1, 1, 1};
             uint32_t    cellY         = gCellRenderStartY;
             float       dt            = 1.0f / 10;
-            for (uint32_t yi = 0; yi < 7; ++yi) {
+            for (uint32_t yi = 0; yi < 7; ++yi)
+            {
                 uint32_t cellX = gCellRenderStartX;
                 float    t     = 0;
-                for (uint32_t xi = 0; xi < 11; ++xi) {
+                for (uint32_t xi = 0; xi < 11; ++xi)
+                {
                     D3D12_RECT cellRect = {};
                     cellRect.left       = cellX;
                     cellRect.top        = cellY;
                     cellRect.right      = (cellX + gCellRenderResX);
                     cellRect.bottom     = (cellY + gCellRenderResY);
 
-                    if (pSceneParams->furnace) {
+                    if (pSceneParams->furnace)
+                    {
                         commandList->ClearRenderTargetView(renderer->SwapchainRTVDescriptorHandles[bufferIndex], clearColor, 1, &cellRect);
                     }
                     commandList->ClearDepthStencilView(renderer->SwapchainDSVDescriptorHandles[bufferIndex], D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0xFF, 1, &cellRect);
@@ -595,53 +613,68 @@ int main(int argc, char** argv)
                     materialParams.clearCoat          = 0;
                     materialParams.clearCoatRoughness = 0;
 
-                    switch (yi) {
+                    switch (yi)
+                    {
                         default: break;
-                        case ROW_METALLIC: {
+                        case ROW_METALLIC:
+                        {
                             materialParams.baseColor = F0_MetalChromium;
                             materialParams.metallic  = t;
                             materialParams.roughness = 0;
-                        } break;
+                        }
+                        break;
 
-                        case ROW_ROUGHNESS_NON_METALLIC: {
+                        case ROW_ROUGHNESS_NON_METALLIC:
+                        {
                             materialParams.baseColor = vec3(0, 0, 0.75f);
                             materialParams.roughness = std::max(0.045f, t);
-                        } break;
+                        }
+                        break;
 
-                        case ROW_ROUGHNESS_METALLIC: {
+                        case ROW_ROUGHNESS_METALLIC:
+                        {
                             materialParams.baseColor = pSceneParams->furnace ? vec3(1) : F0_MetalGold;
                             materialParams.roughness = std::max(0.045f, t);
                             materialParams.metallic  = 1.0;
-                        } break;
+                        }
+                        break;
 
-                        case ROW_REFLECTANCE: {
+                        case ROW_REFLECTANCE:
+                        {
                             materialParams.baseColor   = vec3(0.75f, 0, 0);
                             materialParams.roughness   = 0.2f;
                             materialParams.metallic    = 0;
                             materialParams.reflectance = t;
-                        } break;
+                        }
+                        break;
 
-                        case ROW_CLEAR_COAT: {
+                        case ROW_CLEAR_COAT:
+                        {
                             materialParams.baseColor = vec3(0.75f, 0, 0);
                             materialParams.roughness = 0.8f;
                             materialParams.metallic  = 1.0f;
                             materialParams.clearCoat = t;
-                        } break;
+                        }
+                        break;
 
-                        case ROW_CLEAR_COAT_ROUGHNESS: {
+                        case ROW_CLEAR_COAT_ROUGHNESS:
+                        {
                             materialParams.baseColor          = vec3(0.75f, 0, 0);
                             materialParams.roughness          = 0.8f;
                             materialParams.metallic           = 1.0f;
                             materialParams.clearCoat          = 1;
                             materialParams.clearCoatRoughness = std::max(0.045f, t);
-                        } break;
+                        }
+                        break;
 
-                        case ROW_ANISOTROPY: {
+                        case ROW_ANISOTROPY:
+                        {
                             materialParams.baseColor  = F0_MetalZinc;
                             materialParams.roughness  = 0.45f;
                             materialParams.metallic   = 1.0f;
                             materialParams.anisotropy = t;
-                        } break;
+                        }
+                        break;
                     }
 
                     glm::mat4 modelMat = glm::mat4(1);
@@ -673,13 +706,15 @@ int main(int argc, char** argv)
         ID3D12CommandList* pList = commandList.Get();
         renderer->Queue->ExecuteCommandLists(1, &pList);
 
-        if (!WaitForGpu(renderer.get())) {
+        if (!WaitForGpu(renderer.get()))
+        {
             assert(false && "WaitForGpu failed");
             break;
         }
 
         // Present
-        if (!SwapchainPresent(renderer.get())) {
+        if (!SwapchainPresent(renderer.get()))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -908,7 +943,8 @@ void CreateIBLTextures(
     // BRDF LUT
     {
         auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut.hdr"));
-        if (bitmap.Empty()) {
+        if (bitmap.Empty())
+        {
             assert(false && "Load image failed");
             return;
         }
@@ -927,7 +963,8 @@ void CreateIBLTextures(
     // Multiscatter BRDF LUT
     {
         auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut_ms.hdr"));
-        if (bitmap.Empty()) {
+        if (bitmap.Empty())
+        {
             assert(false && "Load image failed");
             return;
         }
@@ -947,7 +984,8 @@ void CreateIBLTextures(
     auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
 
     IBLMaps ibl = {};
-    if (!LoadIBLMaps32f(iblFile, &ibl)) {
+    if (!LoadIBLMaps32f(iblFile, &ibl))
+    {
         GREX_LOG_ERROR("failed to load: " << iblFile);
         return;
     }
@@ -975,7 +1013,8 @@ void CreateIBLTextures(
         uint32_t               levelOffset = 0;
         uint32_t               levelWidth  = ibl.baseWidth;
         uint32_t               levelHeight = ibl.baseHeight;
-        for (uint32_t i = 0; i < ibl.numLevels; ++i) {
+        for (uint32_t i = 0; i < ibl.numLevels; ++i)
+        {
             MipOffset mipOffset = {};
             mipOffset.Offset    = levelOffset;
             mipOffset.RowStride = rowStride;

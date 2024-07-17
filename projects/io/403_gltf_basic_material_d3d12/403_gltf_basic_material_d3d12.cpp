@@ -316,7 +316,6 @@ int main(int argc, char** argv)
             // Pipeline
             commandList->SetPipelineState(pipelineState.Get());
 
-
             // Material samplers
             {
                 commandList->SetGraphicsRootDescriptorTable(
@@ -491,4 +490,3 @@ void CreateDescriptorHeaps(DxRenderer* pRenderer, ID3D12DescriptorHeap** ppCBVSR
         &desc,
         IID_PPV_ARGS(ppSamplerHeap)));
 }
-

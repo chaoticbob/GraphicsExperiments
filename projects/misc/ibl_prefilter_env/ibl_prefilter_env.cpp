@@ -37,14 +37,17 @@ float catan2(float y, float x)
 {
     float absx = abs(x);
     float absy = abs(y);
-    if ((absx < catan2_epsilon) && (absy < catan2_epsilon)) {
+    if ((absx < catan2_epsilon) && (absy < catan2_epsilon))
+    {
         return catan2_NAN;
     }
-    else if ((absx > 0) && (absy == 0.0)) {
+    else if ((absx > 0) && (absy == 0.0))
+    {
         return 0.0f;
     }
     float s = 1.5f * 3.141592f;
-    if (y >= 0) {
+    if (y >= 0)
+    {
         s = 3.141592f / 2.0f;
     }
     return s - atan(x / y);
@@ -63,17 +66,21 @@ float2 CartesianToSpherical(float3 pos)
     float absX = abs(pos.x);
     float absZ = abs(pos.z);
     // Handle pos pointing straight up or straight down
-    if ((absX < 0.00001) && (absZ <= 0.00001f)) {
+    if ((absX < 0.00001) && (absZ <= 0.00001f))
+    {
         // Pointing straight up
-        if (pos.y > 0) {
+        if (pos.y > 0)
+        {
             return float2(0, 0);
         }
         // Pointing straight down
-        else if (pos.y < 0) {
+        else if (pos.y < 0)
+        {
             return float2(0, 3.141592f);
         }
         // Something went terribly wrong
-        else {
+        else
+        {
             return float2(catan2_NAN, catan2_NAN);
         }
     }
@@ -146,7 +153,8 @@ float3 PrefilterEnvMap(float Roughness, float3 R, pcg32* pRandom)
     float  TotalWeight      = 0;
 
     const uint NumSamples = 2048;
-    for (uint i = 0; i < NumSamples; i++) {
+    for (uint i = 0; i < NumSamples; i++)
+    {
         float  u  = pRandom->nextFloat();
         float  v  = pRandom->nextFloat();
         float2 Xi = float2(u, v);
@@ -154,7 +162,8 @@ float3 PrefilterEnvMap(float Roughness, float3 R, pcg32* pRandom)
         float3 H   = ImportanceSampleGGX(Xi, Roughness, N);
         float3 L   = 2 * dot(V, H) * H - V;
         float  NoL = saturate(dot(N, L));
-        if (NoL > 0) {
+        if (NoL > 0)
+        {
             //
             // Original HLSL code:
             //    PrefilteredColor += EnvMap.SampleLevel(EnvMapSampler, L, 0).rgb * NoL;
@@ -230,13 +239,15 @@ int GetNextScanline()
     std::lock_guard<std::mutex> lock(gScanlineMutex);
 
     int scanline = -1;
-    if (!gScanlines.empty()) {
+    if (!gScanlines.empty())
+    {
         scanline = gScanlines.back();
         gScanlines.pop_back();
 
         // Print every 32 scanlines
         size_t n = gResY - gScanlines.size();
-        if (((n % 32) == 0) || (n == 0) || (n == gResY)) {
+        if (((n % 32) == 0) || (n == 0) || (n == gResY))
+        {
             float percent = n / static_cast<float>(gResY) * 100.0f;
             std::cout << "Procssing level " << gCurrentLevel << "/" << (gNumLevels - 1) << ": " << std::fixed << std::setw(4) << std::setprecision(2) << percent << "% complete" << std::endl;
         }
@@ -251,10 +262,12 @@ void ProcessScanlineEnvironmentMap()
     pcg32*   pRandom     = &gRandoms[threadIndex];
 
     int y = GetNextScanline();
-    while (y != -1) {
+    while (y != -1)
+    {
         float4* pPixels = reinterpret_cast<float4*>(gTarget->GetPixels(0, y + gTargetYOffset));
 
-        for (int x = 0; x < gResX; ++x) {
+        for (int x = 0; x < gResX; ++x)
+        {
             float  theta  = (x * gDu) * 2 * PI;
             float  phi    = (y * gDv) * PI * 0.99999f;
             float3 R      = glm::normalize(SphericalToCartesian(theta, phi));
@@ -276,10 +289,12 @@ void ProcessScanlineIrradiance()
     pcg32*   pRandom     = &gRandoms[threadIndex];
 
     int y = GetNextScanline();
-    while (y != -1) {
+    while (y != -1)
+    {
         float4* pPixels = reinterpret_cast<float4*>(gTarget->GetPixels(0, y + gTargetYOffset));
 
-        for (int x = 0; x < gResX; ++x) {
+        for (int x = 0; x < gResX; ++x)
+        {
             // Get normal direction at (x, y)
             float  u     = saturate((x + 0.5f) / static_cast<float>(gResX));
             float  v     = saturate((y + 0.5f) / static_cast<float>(gResY));
@@ -289,7 +304,8 @@ void ProcessScanlineIrradiance()
 
             float4 pixel        = float4(0);
             float  totalSamples = 0;
-            for (uint32_t i = 0; i < kNumSamples; ++i) {
+            for (uint32_t i = 0; i < kNumSamples; ++i)
+            {
                 // NOTE: Hammersley is not used here because it can causes artifacting
                 //       on the poles. The artifact looks like a pinch at the poles.
                 //
@@ -311,7 +327,7 @@ void ProcessScanlineIrradiance()
                 // based on Lambert. This produces a much nicer result than
                 // without it.
                 //
-                //value *= NoL;
+                // value *= NoL;
 
                 // Accumulate!
                 pixel.r += value.r;
@@ -337,16 +353,19 @@ void ProcessScanlineIrradiance()
 
 int main(int argc, char** argv)
 {
-    if (argc < 3) {
+    if (argc < 3)
+    {
         std::cout << "error: ibl_prefilter_env requires two arguments:" << std::endl;
         std::cout << "   ibl_prefilter_env <input file> <output dir>" << std::endl;
         return EXIT_FAILURE;
     }
 
     bool irrOnly = false;
-    for (int i = 3; i < argc; ++i) {
+    for (int i = 3; i < argc; ++i)
+    {
         std::string arg = argv[i];
-        if (arg == "--irr-only") {
+        if (arg == "--irr-only")
+        {
             irrOnly = true;
         }
     }
@@ -364,7 +383,8 @@ int main(int argc, char** argv)
     std::filesystem::path iblFilePath            = (outputDir / baseFileName).replace_extension("ibl");
 
     BitmapRGBA32f sourceImage = {};
-    if (!BitmapRGBA32f::Load(inputFilePath, &sourceImage)) {
+    if (!BitmapRGBA32f::Load(inputFilePath, &sourceImage))
+    {
         std::cout << "error: failed to load " << inputFilePath << std::endl;
         return EXIT_FAILURE;
     }
@@ -382,7 +402,8 @@ int main(int argc, char** argv)
         gGaussianKernel     = GaussianKernel(kernelSize);
 
         gRandoms.resize(gNumThreads);
-        for (int i = 0; i < gNumThreads; ++i) {
+        for (int i = 0; i < gNumThreads; ++i)
+        {
             gRandoms[i].seed(0xDEADBEEF + i);
         }
 
@@ -401,22 +422,26 @@ int main(int argc, char** argv)
         gNumLevels        = 2; // Use 2 so that 1/1 gets printed
 
         // Queue scanlines
-        for (int i = 0; i < gResY; ++i) {
+        for (int i = 0; i < gResY; ++i)
+        {
             gScanlines.push_back(gResY - i - 1);
         }
 
         // Launch threads to process scanlines
         std::vector<std::unique_ptr<std::thread>> threads;
-        for (int i = 0; i < gNumThreads; ++i) {
+        for (int i = 0; i < gNumThreads; ++i)
+        {
             auto thread = std::make_unique<std::thread>(&ProcessScanlineIrradiance);
             threads.push_back(std::move(thread));
         }
         // Wait to threads complete
-        for (auto& thread : threads) {
+        for (auto& thread : threads)
+        {
             thread->join();
         }
 
-        if (!target.Empty()) {
+        if (!target.Empty())
+        {
             BitmapRGBA32f blurred = BitmapRGBA32f(target.GetWidth(), target.GetHeight());
 
             // Kernel for image convolution sampling to smooth out the noise
@@ -424,8 +449,10 @@ int main(int argc, char** argv)
             kernelSize      = 2 * radius + 1;
             gGaussianKernel = GaussianKernel(kernelSize);
 
-            for (uint32_t i = 0; i < blurred.GetHeight(); ++i) {
-                for (uint32_t j = 0; j < blurred.GetWidth(); ++j) {
+            for (uint32_t i = 0; i < blurred.GetHeight(); ++i)
+            {
+                for (uint32_t j = 0; j < blurred.GetWidth(); ++j)
+                {
                     float x     = (j + 0.5f);
                     float y     = (i + 0.5f);
                     auto  pixel = target.GetGaussianSample(x, y, gGaussianKernel, BITMAP_SAMPLE_MODE_WRAP, BITMAP_SAMPLE_MODE_CLAMP);
@@ -433,14 +460,16 @@ int main(int argc, char** argv)
                 }
             }
 
-            if (!BitmapRGBA32f::Save(irradianceMapFilePath, &blurred)) {
+            if (!BitmapRGBA32f::Save(irradianceMapFilePath, &blurred))
+            {
                 std::cout << "error: failed to write " << irradianceMapFilePath << std::endl;
             }
 
             std::cout << "Successfully wrote " << irradianceMapFilePath << std::endl;
         }
 
-        if (irrOnly) {
+        if (irrOnly)
+        {
             return EXIT_SUCCESS;
         }
     }
@@ -462,19 +491,22 @@ int main(int argc, char** argv)
         {
             int width  = gEnvironmentMap.GetWidth();
             int height = gEnvironmentMap.GetHeight();
-            while (1) {
+            while (1)
+            {
                 width >>= 1;
                 height >>= 1;
                 //
                 // We don't need process anything under 4 pixels
                 //
-                if ((width < 4) || (height < 4)) {
+                if ((width < 4) || (height < 4))
+                {
                     break;
                 }
                 //
                 // We don't need more than 7 levels
                 //
-                if (gNumLevels >= 7) {
+                if (gNumLevels >= 7)
+                {
                     break;
                 }
                 ++gNumLevels;
@@ -482,7 +514,8 @@ int main(int argc, char** argv)
                 outputHeight += height;
             }
         }
-        if (gNumLevels == 0) {
+        if (gNumLevels == 0)
+        {
             std::cout << "error: invalid number of mip levels" << std::endl;
             return EXIT_FAILURE;
         }
@@ -496,7 +529,8 @@ int main(int argc, char** argv)
         // float deltaRoughness = 1.0f / static_cast<float>(2.0f * gNumLevels);
         float deltaRoughness = 1.0f / static_cast<float>(1.44f * gNumLevels);
 
-        for (uint32_t level = 0; level < gNumLevels; ++level) {
+        for (uint32_t level = 0; level < gNumLevels; ++level)
+        {
             gCurrentLevel = level;
 
             gDu = 1.0f / static_cast<float>(gResX - 1);
@@ -507,7 +541,8 @@ int main(int argc, char** argv)
             std::cout << "level=" << level << ", roughness=" << std::setw(2) << std::setprecision(6) << std::fixed << gRoughness << std::endl;
 
             // Queue scanlines
-            for (int i = 0; i < gResY; ++i) {
+            for (int i = 0; i < gResY; ++i)
+            {
                 gScanlines.push_back(i);
             }
 
@@ -516,12 +551,14 @@ int main(int argc, char** argv)
 
             // Launch threads to process scanlines
             std::vector<std::unique_ptr<std::thread>> threads;
-            for (int i = 0; i < gNumThreads; ++i) {
+            for (int i = 0; i < gNumThreads; ++i)
+            {
                 auto thread = std::make_unique<std::thread>(&ProcessScanlineEnvironmentMap);
                 threads.push_back(std::move(thread));
             }
             // Wait to complete
-            for (auto& thread : threads) {
+            for (auto& thread : threads)
+            {
                 thread->join();
             }
 
@@ -547,8 +584,10 @@ int main(int argc, char** argv)
             gResY >>= 1;
         }
 
-        if (!target.Empty()) {
-            if (!BitmapRGBA32f::Save(environmentMapFilePath, &target)) {
+        if (!target.Empty())
+        {
+            if (!BitmapRGBA32f::Save(environmentMapFilePath, &target))
+            {
                 std::cout << "error: failed to write " << environmentMapFilePath << std::endl;
             }
 

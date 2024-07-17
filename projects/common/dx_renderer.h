@@ -3,9 +3,9 @@
 #include "config.h"
 
 #if defined(GREX_USE_D3DX12)
-#    include "directx/d3dx12.h"
+#include "directx/d3dx12.h"
 #else
-#    include <d3d12.h>
+#include <d3d12.h>
 #endif
 
 #include <dxgidebug.h>

@@ -13,7 +13,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -123,7 +124,8 @@ void MouseMove(int x, int y, int buttons)
     static int prevX = x;
     static int prevY = y;
 
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         int dx = x - prevX;
         int dy = y - prevY;
 
@@ -141,7 +143,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
 
-    if (!InitDx(renderer.get(), gEnableDebug)) {
+    if (!InitDx(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -156,7 +159,8 @@ int main(int argc, char** argv)
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &dxilVS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
@@ -166,7 +170,8 @@ int main(int argc, char** argv)
         }
 
         hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &dxilPS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (PS): " << errorMsg << "\n";
@@ -180,14 +185,16 @@ int main(int argc, char** argv)
     std::vector<char> drawTextureDxilPS;
     {
         std::string shaderSource = LoadString("projects/202_pbr_camera/drawtexture.hlsl");
-        if (shaderSource.empty()) {
+        if (shaderSource.empty())
+        {
             assert(false && "no shader source");
             return EXIT_FAILURE;
         }
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &drawTextureDxilVS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
@@ -197,7 +204,8 @@ int main(int argc, char** argv)
         }
 
         hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &drawTextureDxilPS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (PS): " << errorMsg << "\n";
@@ -270,12 +278,14 @@ int main(int argc, char** argv)
         options.invertTexCoordsV = true;
 
         mesh = std::make_unique<TriMesh>(options);
-        if (!mesh) {
+        if (!mesh)
+        {
             assert(false && "allocated mesh failed");
             return EXIT_FAILURE;
         }
 
-        if (!TriMesh::LoadOBJ(GetAssetPath(modelFile).string(), GetAssetPath(modelDir).string(), options, mesh.get())) {
+        if (!TriMesh::LoadOBJ(GetAssetPath(modelFile).string(), GetAssetPath(modelDir).string(), options, mesh.get()))
+        {
             assert(false && "OBJ load failed");
             return EXIT_FAILURE;
         }
@@ -333,7 +343,8 @@ int main(int argc, char** argv)
         descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
         // Material textures
-        for (auto& materialTextures : materialTexturesSets) {
+        for (auto& materialTextures : materialTexturesSets)
+        {
             // Albedo
             CreateDescriptorTexture2D(renderer.get(), materialTextures.baseColorTexture.Get(), descriptor);
             descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -381,7 +392,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "202_pbr_camera_d3d12");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -390,7 +402,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT)) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -398,7 +411,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForD3D12(renderer.get())) {
+    if (!window->InitImGuiForD3D12(renderer.get()))
+    {
         assert(false && "GrexWindow::InitImGuiForD3D12 failed");
         return EXIT_FAILURE;
     }
@@ -434,10 +448,12 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         window->ImGuiNewFrameD3D12();
 
-        if (ImGui::Begin("Scene")) {
+        if (ImGui::Begin("Scene"))
+        {
             ImGui::SliderInt("Number of Lights", reinterpret_cast<int*>(&gNumLights), 0, 4);
         }
         ImGui::End();
@@ -585,7 +601,8 @@ int main(int argc, char** argv)
                 // Pipeline state
                 commandList->SetPipelineState(pbrPipelineState.Get());
 
-                for (auto& draw : cameraDrawParams) {
+                for (auto& draw : cameraDrawParams)
+                {
                     // Index buffer
                     D3D12_INDEX_BUFFER_VIEW ibv = {};
                     ibv.BufferLocation          = draw.indexBuffer->GetGPUVirtualAddress();
@@ -612,13 +629,15 @@ int main(int argc, char** argv)
         ID3D12CommandList* pList = commandList.Get();
         renderer->Queue->ExecuteCommandLists(1, &pList);
 
-        if (!WaitForGpu(renderer.get())) {
+        if (!WaitForGpu(renderer.get()))
+        {
             assert(false && "WaitForGpu failed");
             break;
         }
 
         // Present
-        if (!SwapchainPresent(renderer.get())) {
+        if (!SwapchainPresent(renderer.get()))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -809,21 +828,25 @@ void CreateCameraMaterials(
 
     // Materials
     std::vector<MaterialParameters> materialParamsList;
-    for (uint32_t materialIndex = 0; materialIndex < pMesh->GetNumMaterials(); ++materialIndex) {
+    for (uint32_t materialIndex = 0; materialIndex < pMesh->GetNumMaterials(); ++materialIndex)
+    {
         auto& material = pMesh->GetMaterial(materialIndex);
 
         // Material params
         MaterialParameters materialParams = {};
-        if (material.name == "LensMaterial") {
+        if (material.name == "LensMaterial")
+        {
             materialParams.UseGeometricNormal = 1;
         }
         materialParamsList.push_back(materialParams);
 
         // Material textures
         MaterialTextures materialTextures = outDefaultMaterialTextures;
-        if (!material.albedoTexture.empty()) {
+        if (!material.albedoTexture.empty())
+        {
             BitmapRGBA8u bitmap = LoadImage8u(textureDir / material.albedoTexture);
-            if (bitmap.GetSizeInBytes() == 0) {
+            if (bitmap.GetSizeInBytes() == 0)
+            {
                 assert(false && "texture load (albedo) false");
             }
             CHECK_CALL(CreateTexture(
@@ -835,9 +858,11 @@ void CreateCameraMaterials(
                 bitmap.GetPixels(),
                 &materialTextures.baseColorTexture));
         }
-        if (!material.normalTexture.empty()) {
+        if (!material.normalTexture.empty())
+        {
             BitmapRGBA8u bitmap = LoadImage8u(textureDir / material.normalTexture);
-            if (bitmap.GetSizeInBytes() == 0) {
+            if (bitmap.GetSizeInBytes() == 0)
+            {
                 assert(false && "texture load (normal) false");
             }
             CHECK_CALL(CreateTexture(
@@ -849,9 +874,11 @@ void CreateCameraMaterials(
                 bitmap.GetPixels(),
                 &materialTextures.normalTexture));
         }
-        if (!material.roughnessTexture.empty()) {
+        if (!material.roughnessTexture.empty())
+        {
             BitmapRGBA8u bitmap = LoadImage8u(textureDir / material.roughnessTexture);
-            if (bitmap.GetSizeInBytes() == 0) {
+            if (bitmap.GetSizeInBytes() == 0)
+            {
                 assert(false && "texture load (roughness) false");
             }
             CHECK_CALL(CreateTexture(
@@ -863,9 +890,11 @@ void CreateCameraMaterials(
                 bitmap.GetPixels(),
                 &materialTextures.roughnessTexture));
         }
-        if (!material.metalnessTexture.empty()) {
+        if (!material.metalnessTexture.empty())
+        {
             BitmapRGBA8u bitmap = LoadImage8u(textureDir / material.metalnessTexture);
-            if (bitmap.GetSizeInBytes() == 0) {
+            if (bitmap.GetSizeInBytes() == 0)
+            {
                 assert(false && "texture load (metalness) false");
             }
             CHECK_CALL(CreateTexture(
@@ -877,9 +906,11 @@ void CreateCameraMaterials(
                 bitmap.GetPixels(),
                 &materialTextures.metallicTexture));
         }
-        if (!material.aoTexture.empty()) {
+        if (!material.aoTexture.empty())
+        {
             BitmapRGBA8u bitmap = LoadImage8u(textureDir / material.aoTexture);
-            if (bitmap.GetSizeInBytes() == 0) {
+            if (bitmap.GetSizeInBytes() == 0)
+            {
                 assert(false && "texture load (ambient occlusion) false");
             }
             CHECK_CALL(CreateTexture(
@@ -912,7 +943,8 @@ void CreateIBLTextures(
     // BRDF LUT
     {
         auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut.hdr"));
-        if (bitmap.Empty()) {
+        if (bitmap.Empty())
+        {
             assert(false && "Load image failed");
             return;
         }
@@ -932,7 +964,8 @@ void CreateIBLTextures(
     auto iblFile = GetAssetPath("IBL/palermo_square_4k.ibl");
 
     IBLMaps ibl = {};
-    if (!LoadIBLMaps32f(iblFile, &ibl)) {
+    if (!LoadIBLMaps32f(iblFile, &ibl))
+    {
         GREX_LOG_ERROR("failed to load: " << iblFile);
         return;
     }
@@ -960,7 +993,8 @@ void CreateIBLTextures(
         uint32_t               levelOffset = 0;
         uint32_t               levelWidth  = ibl.baseWidth;
         uint32_t               levelHeight = ibl.baseHeight;
-        for (uint32_t i = 0; i < ibl.numLevels; ++i) {
+        for (uint32_t i = 0; i < ibl.numLevels; ++i)
+        {
             MipOffset mipOffset = {};
             mipOffset.Offset    = levelOffset;
             mipOffset.RowStride = rowStride;
@@ -1005,7 +1039,8 @@ void CreateCameraVertexBuffers(
     VertexBuffers&               outVertexBuffers)
 {
     // Group draws based on material indices
-    for (uint32_t materialIndex = 0; materialIndex < pMesh->GetNumMaterials(); ++materialIndex) {
+    for (uint32_t materialIndex = 0; materialIndex < pMesh->GetNumMaterials(); ++materialIndex)
+    {
         auto triangles = pMesh->GetTrianglesForMaterial(materialIndex);
 
         DrawParameters params = {};

@@ -13,7 +13,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                                                               \
     {                                                                                \
         NS::Error* pError = FN;                                                      \
-        if (pError != nullptr) {                                                     \
+        if (pError != nullptr)                                                       \
+        {                                                                            \
             std::stringstream ss;                                                    \
             ss << "\n";                                                              \
             ss << "*** FUNCTION CALL FAILED *** \n";                                 \
@@ -92,7 +93,8 @@ void MouseMove(int x, int y, int buttons)
     static int prevX = x;
     static int prevY = y;
 
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         int dx = x - prevX;
         int dy = y - prevY;
 
@@ -110,7 +112,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<MetalRenderer> renderer = std::make_unique<MetalRenderer>();
 
-    if (!InitMetal(renderer.get(), gEnableDebug)) {
+    if (!InitMetal(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -123,7 +126,8 @@ int main(int argc, char** argv)
     NS::Error*  pError = nullptr;
     {
         std::string shaderSource = LoadString("projects/203_pbr_align/shaders.metal");
-        if (shaderSource.empty()) {
+        if (shaderSource.empty())
+        {
             assert(false && "no shader source");
             return EXIT_FAILURE;
         }
@@ -133,7 +137,8 @@ int main(int argc, char** argv)
             nullptr,
             &pError));
 
-        if (library.get() == nullptr) {
+        if (library.get() == nullptr)
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << pError->localizedDescription()->utf8String() << "\n";
@@ -143,13 +148,15 @@ int main(int argc, char** argv)
         }
 
         pbrVsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("vsmain", NS::UTF8StringEncoding)));
-        if (pbrVsShader.Function.get() == nullptr) {
+        if (pbrVsShader.Function.get() == nullptr)
+        {
             assert(false && "VS Shader MTL::Library::newFunction() failed");
             return EXIT_FAILURE;
         }
 
         pbrFsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("psmain", NS::UTF8StringEncoding)));
-        if (pbrFsShader.Function.get() == nullptr) {
+        if (pbrFsShader.Function.get() == nullptr)
+        {
             assert(false && "FS Shader MTL::Library::newFunction() failed");
             return EXIT_FAILURE;
         }
@@ -160,7 +167,8 @@ int main(int argc, char** argv)
     MetalShader drawTextureFsShader;
     {
         std::string shaderSource = LoadString("projects/203_pbr_align/drawtexture.metal");
-        if (shaderSource.empty()) {
+        if (shaderSource.empty())
+        {
             assert(false && "no shader source");
             return EXIT_FAILURE;
         }
@@ -170,7 +178,8 @@ int main(int argc, char** argv)
             nullptr,
             &pError));
 
-        if (library.get() == nullptr) {
+        if (library.get() == nullptr)
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << pError->localizedDescription()->utf8String() << "\n";
@@ -180,13 +189,15 @@ int main(int argc, char** argv)
         }
 
         drawTextureVsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("vsmain", NS::UTF8StringEncoding)));
-        if (drawTextureVsShader.Function.get() == nullptr) {
+        if (drawTextureVsShader.Function.get() == nullptr)
+        {
             assert(false && "VS Shader MTL::Library::newFunction() failed");
             return EXIT_FAILURE;
         }
 
         drawTextureFsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("psmain", NS::UTF8StringEncoding)));
-        if (drawTextureFsShader.Function.get() == nullptr) {
+        if (drawTextureFsShader.Function.get() == nullptr)
+        {
             assert(false && "FS Shader MTL::Library::newFunction() failed");
             return EXIT_FAILURE;
         }
@@ -261,7 +272,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "203_pbr_align_metal");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -275,7 +287,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT)) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -283,7 +296,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForMetal(renderer.get())) {
+    if (!window->InitImGuiForMetal(renderer.get()))
+    {
         assert(false && "GrexWindow::InitImGuiForMetal failed");
         return EXIT_FAILURE;
     }
@@ -294,10 +308,12 @@ int main(int argc, char** argv)
     MTL::ClearColor clearColor(0.23f, 0.23f, 0.31f, 0);
     uint32_t        frameIndex = 0;
 
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         window->ImGuiNewFrameMetal(pRenderPassDescriptor);
 
-        if (ImGui::Begin("Scene")) {
+        if (ImGui::Begin("Scene"))
+        {
             ImGui::SliderInt("Number of Lights", reinterpret_cast<int*>(&gNumLights), 0, 4);
         }
         ImGui::End();
@@ -326,23 +342,23 @@ int main(int argc, char** argv)
 
         MTL::CommandBuffer*        pCommandBuffer = renderer->Queue->commandBuffer();
         MTL::RenderCommandEncoder* pRenderEncoder = pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
-       
-       /*
-       MTL::Viewport viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1 };
-       pRenderEncoder->setViewport(viewport);
-       MTL::ScissorRect scissor = { 0, 0, gWindowWidth, gWindowHeight };
-       pRenderEncoder->setScissorRect(scissor);
-        */
-       
+
+        /*
+        MTL::Viewport viewport = {0, 0, static_cast<float>(gWindowWidth), static_cast<float>(gWindowHeight), 0, 1 };
+        pRenderEncoder->setViewport(viewport);
+        MTL::ScissorRect scissor = { 0, 0, gWindowWidth, gWindowHeight };
+        pRenderEncoder->setScissorRect(scissor);
+         */
+
         // Smooth out the rotation on Y
         gAngle += (gTargetAngle - gAngle) * 0.1f;
 
-            // Camera matrices
-            mat4 transformEyeMat     = glm::rotate(glm::radians(-gAngle), vec3(0, 1, 0));
-            vec3 startingEyePosition = vec3(0, 0, 4);
-            vec3 eyePosition         = transformEyeMat * vec4(startingEyePosition, 1);
-            mat4 viewMat             = glm::lookAt(eyePosition, vec3(0, 0, 0), vec3(0, 1, 0));
-            mat4 projMat             = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+        // Camera matrices
+        mat4 transformEyeMat     = glm::rotate(glm::radians(-gAngle), vec3(0, 1, 0));
+        vec3 startingEyePosition = vec3(0, 0, 4);
+        vec3 eyePosition         = transformEyeMat * vec4(startingEyePosition, 1);
+        mat4 viewMat             = glm::lookAt(eyePosition, vec3(0, 0, 0), vec3(0, 1, 0));
+        mat4 projMat             = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
 
         // Set constant buffer values
         SceneParameters sceneParams         = {};
@@ -631,7 +647,8 @@ void CreateIBLTextures(
     // BRDF LUT
     {
         auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut.hdr"));
-        if (bitmap.Empty()) {
+        if (bitmap.Empty())
+        {
             assert(false && "Load image failed");
             return;
         }
@@ -650,7 +667,8 @@ void CreateIBLTextures(
     auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
 
     IBLMaps ibl = {};
-    if (!LoadIBLMaps32f(iblFile, &ibl)) {
+    if (!LoadIBLMaps32f(iblFile, &ibl))
+    {
         GREX_LOG_ERROR("failed to load: " << iblFile);
         return;
     }
@@ -678,7 +696,8 @@ void CreateIBLTextures(
         uint32_t               levelOffset = 0;
         uint32_t               levelWidth  = ibl.baseWidth;
         uint32_t               levelHeight = ibl.baseHeight;
-        for (uint32_t i = 0; i < ibl.numLevels; ++i) {
+        for (uint32_t i = 0; i < ibl.numLevels; ++i)
+        {
             MipOffset mipOffset = {};
             mipOffset.Offset    = levelOffset;
             mipOffset.RowStride = rowStride;

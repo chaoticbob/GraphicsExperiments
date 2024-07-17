@@ -74,7 +74,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "test_app_imgui_vulkan");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -88,7 +89,8 @@ int main(int argc, char** argv)
     window->AddKeyDownCallbacks(KeyDown);
     window->AddKeyUpCallbacks(KeyUp);
 
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
     }
 
     return 0;

@@ -21,7 +21,8 @@ using float3 = glm::vec3;
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -146,7 +147,8 @@ void MouseMove(int x, int y, int buttons)
     static int prevX = x;
     static int prevY = y;
 
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         int dx = x - prevX;
         int dy = y - prevY;
 
@@ -167,7 +169,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
 
-    if (!InitDx(renderer.get(), gEnableDebug)) {
+    if (!InitDx(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -175,7 +178,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "sampling_vis");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -185,7 +189,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight())) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight()))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -200,7 +205,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForD3D12(renderer.get())) {
+    if (!window->InitImGuiForD3D12(renderer.get()))
+    {
         assert(false && "GrexWindow::InitImGuiForD3D12 failed");
         return EXIT_FAILURE;
     }
@@ -238,12 +244,14 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         window->ImGuiNewFrameD3D12();
 
         std::string exePath = GetExecutablePath().filename().string();
 
-        if (ImGui::Begin("Params")) {
+        if (ImGui::Begin("Params"))
+        {
             ImGui::DragInt("Num Samples", reinterpret_cast<int*>(&gNumSamples), 1, 1, 8192);
 
             ImGui::Separator();
@@ -251,28 +259,36 @@ int main(int argc, char** argv)
             static const char* currentSequenceName   = gSequenceNames[gSequenceIndex].c_str();
             static const char* currentHemisphereName = gHemisphereNames[gHemisphereIndex].c_str();
 
-            if (ImGui::BeginCombo("Sequence Fn", currentSequenceName)) {
-                for (size_t i = 0; i < gSequenceNames.size(); ++i) {
+            if (ImGui::BeginCombo("Sequence Fn", currentSequenceName))
+            {
+                for (size_t i = 0; i < gSequenceNames.size(); ++i)
+                {
                     bool isSelected = (currentSequenceName == gSequenceNames[i]);
-                    if (ImGui::Selectable(gSequenceNames[i].c_str(), isSelected)) {
+                    if (ImGui::Selectable(gSequenceNames[i].c_str(), isSelected))
+                    {
                         currentSequenceName = gSequenceNames[i].c_str();
                         gSequenceIndex      = static_cast<uint32_t>(i);
                     }
-                    if (isSelected) {
+                    if (isSelected)
+                    {
                         ImGui::SetItemDefaultFocus();
                     }
                 }
                 ImGui::EndCombo();
             }
 
-            if (ImGui::BeginCombo("Hemisphere Fn", currentHemisphereName)) {
-                for (size_t i = 0; i < gHemisphereNames.size(); ++i) {
+            if (ImGui::BeginCombo("Hemisphere Fn", currentHemisphereName))
+            {
+                for (size_t i = 0; i < gHemisphereNames.size(); ++i)
+                {
                     bool isSelected = (currentHemisphereName == gHemisphereNames[i]);
-                    if (ImGui::Selectable(gHemisphereNames[i].c_str(), isSelected)) {
+                    if (ImGui::Selectable(gHemisphereNames[i].c_str(), isSelected))
+                    {
                         currentHemisphereName = gHemisphereNames[i].c_str();
                         gHemisphereIndex      = static_cast<uint32_t>(i);
                     }
-                    if (isSelected) {
+                    if (isSelected)
+                    {
                         ImGui::SetItemDefaultFocus();
                     }
                 }
@@ -292,50 +308,62 @@ int main(int argc, char** argv)
         // ---------------------------------------------------------------------
         bool generateHemisphere = false;
 
-        if (gNumSamples != gGenNumSamples) {
+        if (gNumSamples != gGenNumSamples)
+        {
             gGenNumSamples     = gNumSamples;
             generateHemisphere = true;
         }
 
-        if (gSequenceIndex != gGenSequenceIndex) {
+        if (gSequenceIndex != gGenSequenceIndex)
+        {
             gGenSequenceIndex = gSequenceIndex;
 
-            switch (gSequenceIndex) {
+            switch (gSequenceIndex)
+            {
                 default: break;
 
-                case SEQUENCE_NAME_UNIFORM: {
+                case SEQUENCE_NAME_UNIFORM:
+                {
                     gGenSamples2DFn    = std::bind(GenerateSamples2DUniform, std::placeholders::_1, std::placeholders::_2);
                     generateHemisphere = true;
-                } break;
-                case SEQUENCE_NAME_HAMMERSLEY: {
+                }
+                break;
+                case SEQUENCE_NAME_HAMMERSLEY:
+                {
                     gGenSamples2DFn    = std::bind(GenerateSamples2DHammersley, std::placeholders::_1, std::placeholders::_2);
                     generateHemisphere = true;
-                } break;
-                case SEQUENCE_NAME_CMJ: {
+                }
+                break;
+                case SEQUENCE_NAME_CMJ:
+                {
                     gGenSamples2DFn    = std::bind(GenerateSamples2DCMJ, std::placeholders::_1, std::placeholders::_2);
                     generateHemisphere = true;
-                } break;
+                }
+                break;
             }
         }
 
-        if (gHemisphereIndex != gGenHemisphereIndex) {
+        if (gHemisphereIndex != gGenHemisphereIndex)
+        {
             gGenHemisphereIndex = gHemisphereIndex;
             generateHemisphere  = true;
         }
 
-        if ((gHemisphereIndex == HEMISPHERE_NAME_IMPORTANCE_GGX) && (fabs(gGGXRoughness - gGenGGXRoughness) > 0.00001f)) {
+        if ((gHemisphereIndex == HEMISPHERE_NAME_IMPORTANCE_GGX) && (fabs(gGGXRoughness - gGenGGXRoughness) > 0.00001f))
+        {
             gGenGGXRoughness   = gGGXRoughness;
             generateHemisphere = true;
         }
 
-        if (fabs(gSampleDrawScale - gGenSampleDrawScale) > 0.00001f) {
+        if (fabs(gSampleDrawScale - gGenSampleDrawScale) > 0.00001f)
+        {
             gGenSampleDrawScale = gSampleDrawScale;
             generateHemisphere  = true;
         }
 
-        //if (generateHemisphere) {
-        //    CreateHemisphereGeo(renderer.get(), gGenNumSamples, gGenSampleDrawScale, hemisphereGeo);
-        //}
+        // if (generateHemisphere) {
+        //     CreateHemisphereGeo(renderer.get(), gGenNumSamples, gGenSampleDrawScale, hemisphereGeo);
+        // }
 
         // ---------------------------------------------------------------------
 
@@ -413,13 +441,15 @@ int main(int argc, char** argv)
             ID3D12CommandList* pList = commandList.Get();
             renderer->Queue->ExecuteCommandLists(1, &pList);
 
-            if (!WaitForGpu(renderer.get())) {
+            if (!WaitForGpu(renderer.get()))
+            {
                 assert(false && "WaitForGpu failed");
                 break;
             }
         }
 
-        if (!SwapchainPresent(renderer.get())) {
+        if (!SwapchainPresent(renderer.get()))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -453,24 +483,32 @@ void DrawSamples(DxDrawContext* pCtx, uint32_t numSamples, float drawScale)
     vec3 N = vec3(0, 1, 0);
 
     std::vector<float3> samples;
-    switch (gGenHemisphereIndex) {
+    switch (gGenHemisphereIndex)
+    {
         default: break;
 
-        case HEMISPHERE_NAME_UNIFORM: {
+        case HEMISPHERE_NAME_UNIFORM:
+        {
             samples = GenerateSamplesHemisphereUniform(N, numSamples, gGenSamples2DFn);
-        } break;
+        }
+        break;
 
-        case HEMISPHERE_NAME_COS_WEIGHTED: {
+        case HEMISPHERE_NAME_COS_WEIGHTED:
+        {
             samples = GenerateSamplesHemisphereCosineWeighted(N, numSamples, gGenSamples2DFn);
-        } break;
+        }
+        break;
 
-        case HEMISPHERE_NAME_IMPORTANCE_GGX: {
+        case HEMISPHERE_NAME_IMPORTANCE_GGX:
+        {
             samples = GenerateSamplesHemisphereImportanceGGX(N, gGGXRoughness, numSamples, gGenSamples2DFn);
-        } break;
+        }
+        break;
     }
 
     pCtx->BeginTriangles();
-    for (auto& center : samples) {
+    for (auto& center : samples)
+    {
         float3 W  = glm::normalize(center);
         float3 up = (abs(W.y) < 0.9999f) ? float3(0, 1, 0) : float3(0, 0, -1);
         float3 U  = (abs(W.y) < 0.9999f) ? glm::normalize(glm::cross(up, float3(0, 0, 1))) : float3(1, 0, 0);
@@ -484,7 +522,8 @@ void DrawSamples(DxDrawContext* pCtx, uint32_t numSamples, float drawScale)
             W.x, W.y, W.z);
         // clang-format on
 
-        for (auto vtx : squareVertices) {
+        for (auto vtx : squareVertices)
+        {
             float3 P = (drawScale * vtx.pos);
             P        = M * P;
             P += center;

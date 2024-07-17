@@ -740,7 +740,8 @@ int main(int argc, char** argv)
         CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
         {
             // Reset query pool - this needs to happen outside of render pass
-            if (queryPool != VK_NULL_HANDLE) {
+            if (queryPool != VK_NULL_HANDLE)
+            {
                 vkCmdResetQueryPool(cmdBuf.CommandBuffer, queryPool, 0, 1);
             }
 

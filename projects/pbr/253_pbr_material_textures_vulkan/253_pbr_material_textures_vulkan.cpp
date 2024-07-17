@@ -184,7 +184,7 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    VulkanFeatures features = {};
+    VulkanFeatures features         = {};
     features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
@@ -1953,7 +1953,7 @@ void CreatePBRDescriptors(
     }
 
     // Texture2D                            IBLIntegrationMultiscatterLUT              : register(t4);
-	VulkanImageDescriptor iblIntegrationMultiscatterLUTDescriptor;
+    VulkanImageDescriptor iblIntegrationMultiscatterLUTDescriptor;
     {
         VkImageView imageView = VK_NULL_HANDLE;
         CHECK_CALL(CreateImageView(
@@ -1975,7 +1975,7 @@ void CreatePBRDescriptors(
     }
 
     // Texture2D                            IBLIrradianceMaps[32]                      : register(t16);
-	VulkanImageDescriptor iblIrradianceMapsDescriptor(32);
+    VulkanImageDescriptor iblIrradianceMapsDescriptor(32);
     {
         uint32_t arrayIndex = 0;
         for (auto& image : irrTextures)
@@ -2127,7 +2127,7 @@ void CreatePBRDescriptors(
 
                 CreateDescriptor(
                     pRenderer,
-					&materialTexturesDescriptor,
+                    &materialTexturesDescriptor,
                     100,        // binding
                     arrayIndex, // arrayElement
                     VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -2212,34 +2212,34 @@ void CreatePBRDescriptors(
     }
 
     std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
-    {
-       sceneParamsDescriptor.layoutBinding,
-       materialParamsDescriptor.layoutBinding,
-       iblIntegrationLUTDescriptor.layoutBinding,
-       iblIntegrationMultiscatterLUTDescriptor.layoutBinding,
-       iblIrradianceMapsDescriptor.layoutBinding,
-       iblEnvironmentMapsDescriptor.layoutBinding,
-       iblIntegrationSamplerDescriptor.layoutBinding,
-       iblMapSamplerDescriptor.layoutBinding,
-       materialTexturesDescriptor.layoutBinding,
-       materialSamplerDescriptor.layoutBinding,
-       materialNormalMapSamplerDescriptor.layoutBinding,
-    };
+        {
+            sceneParamsDescriptor.layoutBinding,
+            materialParamsDescriptor.layoutBinding,
+            iblIntegrationLUTDescriptor.layoutBinding,
+            iblIntegrationMultiscatterLUTDescriptor.layoutBinding,
+            iblIrradianceMapsDescriptor.layoutBinding,
+            iblEnvironmentMapsDescriptor.layoutBinding,
+            iblIntegrationSamplerDescriptor.layoutBinding,
+            iblMapSamplerDescriptor.layoutBinding,
+            materialTexturesDescriptor.layoutBinding,
+            materialSamplerDescriptor.layoutBinding,
+            materialNormalMapSamplerDescriptor.layoutBinding,
+        };
 
     std::vector<VkWriteDescriptorSet> writeDescriptorSets =
-    {
-       sceneParamsDescriptor.writeDescriptorSet,
-       materialParamsDescriptor.writeDescriptorSet,
-       iblIntegrationLUTDescriptor.writeDescriptorSet,
-       iblIntegrationMultiscatterLUTDescriptor.writeDescriptorSet,
-       iblIrradianceMapsDescriptor.writeDescriptorSet,
-       iblEnvironmentMapsDescriptor.writeDescriptorSet,
-       iblIntegrationSamplerDescriptor.writeDescriptorSet,
-       iblMapSamplerDescriptor.writeDescriptorSet,
-       materialTexturesDescriptor.writeDescriptorSet,
-       materialSamplerDescriptor.writeDescriptorSet,
-       materialNormalMapSamplerDescriptor.writeDescriptorSet,
-    };
+        {
+            sceneParamsDescriptor.writeDescriptorSet,
+            materialParamsDescriptor.writeDescriptorSet,
+            iblIntegrationLUTDescriptor.writeDescriptorSet,
+            iblIntegrationMultiscatterLUTDescriptor.writeDescriptorSet,
+            iblIrradianceMapsDescriptor.writeDescriptorSet,
+            iblEnvironmentMapsDescriptor.writeDescriptorSet,
+            iblIntegrationSamplerDescriptor.writeDescriptorSet,
+            iblMapSamplerDescriptor.writeDescriptorSet,
+            materialTexturesDescriptor.writeDescriptorSet,
+            materialSamplerDescriptor.writeDescriptorSet,
+            materialNormalMapSamplerDescriptor.writeDescriptorSet,
+        };
 
     CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, pDescriptors);
 }
@@ -2317,16 +2317,16 @@ void CreateEnvDescriptors(
     }
 
     std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
-    {
-		sampler0Descriptor.layoutBinding,
-		texturesDescriptor.layoutBinding,
-    };
+        {
+            sampler0Descriptor.layoutBinding,
+            texturesDescriptor.layoutBinding,
+        };
 
     std::vector<VkWriteDescriptorSet> writeDescriptorSets =
-    {
-	   sampler0Descriptor.writeDescriptorSet,
-	   texturesDescriptor.writeDescriptorSet,
-    };
+        {
+            sampler0Descriptor.writeDescriptorSet,
+            texturesDescriptor.writeDescriptorSet,
+        };
 
     CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, pDescriptors);
 }

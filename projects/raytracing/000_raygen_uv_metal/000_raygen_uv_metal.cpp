@@ -11,7 +11,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                                                               \
     {                                                                                \
         NS::Error* pError = FN;                                                      \
-        if (pError != nullptr) {                                                     \
+        if (pError != nullptr)                                                       \
+        {                                                                            \
             std::stringstream ss;                                                    \
             ss << "\n";                                                              \
             ss << "*** FUNCTION CALL FAILED *** \n";                                 \
@@ -87,20 +88,22 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<MetalRenderer> renderer = std::make_unique<MetalRenderer>();
 
-    if (!InitMetal(renderer.get(), gEnableDebug)) {
+    if (!InitMetal(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
     // *************************************************************************
     // Compile shaders
     // *************************************************************************
-    NS::Error*  pError  = nullptr;
-    auto        library = NS::TransferPtr(renderer->Device->newLibrary(
+    NS::Error* pError  = nullptr;
+    auto       library = NS::TransferPtr(renderer->Device->newLibrary(
         NS::String::string(gShaders, NS::UTF8StringEncoding),
         nullptr,
         &pError));
 
-    if (library.get() == nullptr) {
+    if (library.get() == nullptr)
+    {
         std::stringstream ss;
         ss << "\n"
            << "Shader compiler error (VS): " << pError->localizedDescription()->utf8String() << "\n";
@@ -111,25 +114,28 @@ int main(int argc, char** argv)
 
     MetalShader rayTraceShader;
     rayTraceShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("MyRayGen", NS::UTF8StringEncoding)));
-    if (rayTraceShader.Function.get() == nullptr) {
+    if (rayTraceShader.Function.get() == nullptr)
+    {
         assert(false && "VS Shader MTL::Library::newFunction() failed for raygen");
         return EXIT_FAILURE;
     }
-    
+
     MetalShader vsShader;
     vsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("vsmain", NS::UTF8StringEncoding)));
-    if (vsShader.Function.get() == nullptr) {
+    if (vsShader.Function.get() == nullptr)
+    {
         assert(false && "VS Shader MTL::Library::newFunction() failed for vertex shader");
         return EXIT_FAILURE;
     }
-    
+
     MetalShader psShader;
     psShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("psmain", NS::UTF8StringEncoding)));
-    if (psShader.Function.get() == nullptr) {
+    if (psShader.Function.get() == nullptr)
+    {
         assert(false && "VS Shader MTL::Library::newFunction() failed for fragment shader");
         return EXIT_FAILURE;
     }
-    
+
     // *************************************************************************
     // Ray trace pipeline
     // *************************************************************************
@@ -138,7 +144,7 @@ int main(int argc, char** argv)
         NS::Error* error;
         rayTracePipeline = NS::TransferPtr(renderer->Device->newComputePipelineState(rayTraceShader.Function.get(), &error));
     }
-    
+
     // *************************************************************************
     // Copy pipeline
     // *************************************************************************
@@ -148,11 +154,11 @@ int main(int argc, char** argv)
         pipelineDesc->setVertexFunction(vsShader.Function.get());
         pipelineDesc->setFragmentFunction(psShader.Function.get());
         pipelineDesc->colorAttachments()->object(0)->setPixelFormat(GREX_DEFAULT_RTV_FORMAT);
-        
+
         NS::Error* error;
         copyPipeline = NS::TransferPtr(renderer->Device->newRenderPipelineState(pipelineDesc.get(), &error));
     }
-    
+
     // *************************************************************************
     // Ray trace ouput texture
     // *************************************************************************
@@ -170,21 +176,22 @@ int main(int argc, char** argv)
     // Render Pass Description
     // *************************************************************************
     MTL::RenderPassDescriptor* pRenderPassDescriptor = MTL::RenderPassDescriptor::renderPassDescriptor();
-    
+
     // *************************************************************************
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "000_raygen_uv_metal");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
 
-
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, MTL::PixelFormatDepth32Float)) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, MTL::PixelFormatDepth32Float))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -195,43 +202,43 @@ int main(int argc, char** argv)
     MTL::ClearColor clearColor(0.23f, 0.23f, 0.31f, 0);
     uint32_t        frameIndex = 0;
 
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         CA::MetalDrawable* pDrawable = renderer->pSwapchain->nextDrawable();
         assert(pDrawable != nullptr);
-        
+
         MTL::CommandBuffer* pCommandBuffer = renderer->Queue->commandBuffer();
-        
+
         MTL::ComputeCommandEncoder* pComputeEncoder = pCommandBuffer->computeCommandEncoder();
         pComputeEncoder->setComputePipelineState(rayTracePipeline.get());
         pComputeEncoder->setTexture(outputTex.Texture.get(), 0);
         {
             MTL::Size threadsPerThreadgroup = {8, 8, 1};
-            MTL::Size threadsPerGrid = {
-                (gWindowWidth  + threadsPerThreadgroup.width  - 1) / threadsPerThreadgroup.width,
+            MTL::Size threadsPerGrid        = {
+                (gWindowWidth + threadsPerThreadgroup.width - 1) / threadsPerThreadgroup.width,
                 (gWindowHeight + threadsPerThreadgroup.height - 1) / threadsPerThreadgroup.height,
                 1};
-            
+
             pComputeEncoder->dispatchThreadgroups(threadsPerGrid, threadsPerThreadgroup);
         }
         pComputeEncoder->endEncoding();
-        
+
         auto colorTargetDesc = NS::TransferPtr(MTL::RenderPassColorAttachmentDescriptor::alloc()->init());
         colorTargetDesc->setClearColor(clearColor);
         colorTargetDesc->setTexture(pDrawable->texture());
         colorTargetDesc->setLoadAction(MTL::LoadActionClear);
         colorTargetDesc->setStoreAction(MTL::StoreActionStore);
         pRenderPassDescriptor->colorAttachments()->setObject(colorTargetDesc.get(), 0);
-        
+
         MTL::RenderCommandEncoder* pRenderEncoder = pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
         pRenderEncoder->setRenderPipelineState(copyPipeline.get());
         pRenderEncoder->setFragmentTexture(outputTex.Texture.get(), 0);
         pRenderEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::Integer(0), 6);
         pRenderEncoder->endEncoding();
-        
+
         pCommandBuffer->presentDrawable(pDrawable);
         pCommandBuffer->commit();
     }
 
     return 0;
 }
-

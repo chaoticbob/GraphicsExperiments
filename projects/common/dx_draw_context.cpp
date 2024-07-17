@@ -604,18 +604,21 @@ void DxDrawContext::FlushToCommandList(ID3D12GraphicsCommandList* pCmdList)
 
         switch (batch.pipelineConfig.bits.primitiveMode)
         {
-            default: {
+            default:
+            {
                 assert(false && "unknown primitive mode");
                 return;
             }
             break;
 
-            case PRIMITIVE_MODE_LINES: {
+            case PRIMITIVE_MODE_LINES:
+            {
                 pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
             }
             break;
 
-            case PRIMITIVE_MODE_TRIS: {
+            case PRIMITIVE_MODE_TRIS:
+            {
                 pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             }
             break;
@@ -844,7 +847,7 @@ void DxDrawContext::DrawWireBox(
         //
         this->Vertex(float3(P3));
         this->Vertex(float3(P0));
-        
+
         // Back rect
         this->Vertex(float3(P4));
         this->Vertex(float3(P5));
@@ -857,7 +860,7 @@ void DxDrawContext::DrawWireBox(
         //
         this->Vertex(float3(P7));
         this->Vertex(float3(P4));
-        
+
         // Front to back lines
         this->Vertex(float3(P0));
         this->Vertex(float3(P4));

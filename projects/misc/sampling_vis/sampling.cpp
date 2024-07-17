@@ -9,7 +9,8 @@ std::vector<float2> GenerateSamples2DUniform(uint32_t numSamples, uint32_t seed)
     pcg32 rng = pcg32(seed);
 
     std::vector<float2> samples;
-    for (uint32_t i = 0; i < numSamples; ++i) {
+    for (uint32_t i = 0; i < numSamples; ++i)
+    {
         float2 sample = float2(rng.nextFloat(), rng.nextFloat());
         samples.push_back(sample);
     }
@@ -20,7 +21,8 @@ std::vector<float2> GenerateSamples2DUniform(uint32_t numSamples, uint32_t seed)
 std::vector<float2> GenerateSamples2DHammersley(uint32_t numSamples, uint32_t seed)
 {
     std::vector<float2> samples;
-    for (uint32_t i = 0; i < numSamples; ++i) {
+    for (uint32_t i = 0; i < numSamples; ++i)
+    {
         float2 sample = Hammersley(i, numSamples);
         samples.push_back(sample);
     }
@@ -37,7 +39,8 @@ std::vector<float2> GenerateSamples2DCMJ(uint32_t numSamples, uint32_t seed)
     const uint32_t numSamplesY = numSamplesX;
 
     std::vector<float2> samples;
-    for (uint32_t i = 0; i < numSamples; ++i) {
+    for (uint32_t i = 0; i < numSamples; ++i)
+    {
         float2 sample = SampleCMJ2D(i, numSamplesX, numSamplesY, seed);
         samples.push_back(sample);
     }
@@ -53,7 +56,8 @@ std::vector<float3> GenerateSamplesHemisphereUniform(
     auto samples2D = genSamples2DFn(numSamples, seed);
 
     std::vector<float3> samples;
-    for (const auto& Xi : samples2D) {
+    for (const auto& Xi : samples2D)
+    {
         float m     = 1.0f;
         float phi   = 2.0f * kPi * Xi.x;
         float theta = acos(pow(1.0f - Xi.y, 1.0f / (1.0f + m)));
@@ -77,7 +81,8 @@ std::vector<float3> GenerateSamplesHemisphereCosineWeighted(
     auto samples2D = genSamples2DFn(numSamples, seed);
 
     std::vector<float3> samples;
-    for (const auto& Xi : samples2D) {
+    for (const auto& Xi : samples2D)
+    {
         float phi      = 2 * kPi * Xi.x;
         float cosTheta = cos(kPi / 2 * Xi.y);
         float sinTheta = sqrt(1 - cosTheta * cosTheta);
@@ -104,7 +109,8 @@ std::vector<float3> GenerateSamplesHemisphereImportanceGGX(
     auto samples2D = genSamples2DFn(numSamples, seed);
 
     std::vector<float3> samples;
-    for (const auto& Xi : samples2D) {
+    for (const auto& Xi : samples2D)
+    {
         float phi      = 2 * kPi * Xi.x;
         float cosTheta = sqrt((1 - Xi.y) / (1 + (a * a - 1) * Xi.y));
         float sinTheta = sqrt(1 - cosTheta * cosTheta);
@@ -129,7 +135,8 @@ std::vector<float3> GenerateSamplesHemisphereUniform(
     auto samples = GenerateSamplesHemisphereUniform(numSamples, genSamples2DFn, seed);
 
     const auto& N = direction;
-    for (auto& P : samples) {
+    for (auto& P : samples)
+    {
         float3 upVector = abs(N.y) < 0.999f ? float3(0, 1, 0) : float3(0, 0, -1);
         float3 tangentX = glm::normalize(glm::cross(upVector, N));
         float3 tangentY = glm::cross(N, tangentX);
@@ -149,7 +156,8 @@ std::vector<float3> GenerateSamplesHemisphereCosineWeighted(
     auto samples = GenerateSamplesHemisphereCosineWeighted(numSamples, genSamples2DFn, seed);
 
     const auto& N = direction;
-    for (auto& P : samples) {
+    for (auto& P : samples)
+    {
         float3 upVector = abs(N.y) < 0.999f ? float3(0, 1, 0) : float3(0, 0, -1);
         float3 tangentX = glm::normalize(glm::cross(upVector, N));
         float3 tangentY = glm::cross(N, tangentX);
@@ -170,7 +178,8 @@ std::vector<float3> GenerateSamplesHemisphereImportanceGGX(
     auto samples = GenerateSamplesHemisphereImportanceGGX(roughness, numSamples, genSamples2DFn, seed);
 
     const auto& N = direction;
-    for (auto& P : samples) {
+    for (auto& P : samples)
+    {
         float3 upVector = abs(N.y) < 0.999f ? float3(0, 1, 0) : float3(0, 0, -1);
         float3 tangentX = glm::normalize(glm::cross(upVector, N));
         float3 tangentY = glm::cross(N, tangentX);

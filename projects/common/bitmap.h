@@ -340,7 +340,8 @@ public:
     PixelT* GetPixels(uint32_t x = 0, uint32_t y = 0)
     {
         PixelT* pPixels = (mExternalStorage != nullptr) ? mExternalStorage : mStorage.data();
-        if (pPixels != nullptr) {
+        if (pPixels != nullptr)
+        {
             char* pAddress = reinterpret_cast<char*>(pPixels);
 
             size_t pixelStride = GetPixelStride();
@@ -355,7 +356,8 @@ public:
     const PixelT* GetPixels(uint32_t x = 0, uint32_t y = 0) const
     {
         const PixelT* pPixels = (mExternalStorage != nullptr) ? mExternalStorage : mStorage.data();
-        if (pPixels != nullptr) {
+        if (pPixels != nullptr)
+        {
             const char* pAddress = reinterpret_cast<const char*>(pPixels);
 
             size_t pixelStride = GetPixelStride();
@@ -377,7 +379,8 @@ public:
     void SetPixel(uint32_t x, uint32_t y, const PixelT& value)
     {
         auto pPixel = GetPixels(x, y);
-        if (pPixel == nullptr) {
+        if (pPixel == nullptr)
+        {
             return;
         }
 
@@ -389,9 +392,11 @@ public:
     void Fill(const PixelT& value)
     {
         char* pPtr = reinterpret_cast<char*>(GetPixels());
-        for (uint32_t row = 0; row < mHeight; ++row) {
+        for (uint32_t row = 0; row < mHeight; ++row)
+        {
             PixelT* pPixel = reinterpret_cast<PixelT*>(pPtr);
-            for (uint32_t col = 0; col < mWidth; ++col) {
+            for (uint32_t col = 0; col < mWidth; ++col)
+            {
                 *pPixel = value;
                 ++pPixel;
             }
@@ -407,7 +412,8 @@ public:
 
     void Resize(uint32_t width, uint32_t height)
     {
-        if (mExternalStorage != nullptr) {
+        if (mExternalStorage != nullptr)
+        {
             return;
         }
 
@@ -416,28 +422,36 @@ public:
         mRowStride = mWidth * PixelT::PixelStride;
 
         size_t n = mWidth * mHeight;
-        if (n > 0) {
+        if (n > 0)
+        {
             mStorage.resize(n);
         }
     }
 
     static int32_t CalcSampleCoordinate(int32_t x, int32_t res, BitmapSampleMode mode)
     {
-        switch (mode) {
+        switch (mode)
+        {
             default: break;
-            case BITMAP_SAMPLE_MODE_WRAP: {
-                if (x < 0) {
+            case BITMAP_SAMPLE_MODE_WRAP:
+            {
+                if (x < 0)
+                {
                     int32_t r = abs(x % res);
                     x         = (res - r);
                 }
-                else if (x >= res) {
+                else if (x >= res)
+                {
                     x = x % res;
                 }
-            } break;
-            case BITMAP_SAMPLE_MODE_CLAMP: {
+            }
+            break;
+            case BITMAP_SAMPLE_MODE_CLAMP:
+            {
                 x = std::max<int32_t>(x, 0);
                 x = std::min<int32_t>(x, (res - 1));
-            } break;
+            }
+            break;
         }
         return x;
     }
@@ -452,13 +466,16 @@ public:
         bool   outOfBoundsX = (x < 0) || (x >= static_cast<int32_t>(mWidth));
         bool   outOfBoundsY = (y < 0) || (y >= static_cast<int32_t>(mHeight));
         bool   outOfBounds  = outOfBoundsX || outOfBoundsY;
-        if (outOfBounds && ((modeU == BITMAP_SAMPLE_MODE_BORDER) || (modeV == BITMAP_SAMPLE_MODE_BORDER))) {
+        if (outOfBounds && ((modeU == BITMAP_SAMPLE_MODE_BORDER) || (modeV == BITMAP_SAMPLE_MODE_BORDER)))
+        {
             return pixel;
         }
-        if (outOfBoundsX) {
+        if (outOfBoundsX)
+        {
             x = CalcSampleCoordinate(x, mWidth, modeU);
         }
-        if (outOfBoundsY) {
+        if (outOfBoundsY)
+        {
             y = CalcSampleCoordinate(y, mHeight, modeV);
         }
         // Paranoid check bounds again
@@ -519,16 +536,20 @@ public:
         int32_t iy         = static_cast<int32_t>(floor(y));
 
         PixelT32f pixel32f = PixelT32f::Black();
-        for (int32_t i = 0; i < kernelSize; ++i) {
-            for (int32_t j = 0; j < kernelSize; ++j) {
+        for (int32_t i = 0; i < kernelSize; ++i)
+        {
+            for (int32_t j = 0; j < kernelSize; ++j)
+            {
                 uint32_t index = (i * kernelSize) + j;
 
                 int32_t sampleX = ix + (j - kernelSize / 2);
                 int32_t sampleY = iy + (i - kernelSize / 2);
-                if (((sampleX < 0) || (sampleX >= static_cast<int32_t>(mWidth))) && (modeU == BITMAP_SAMPLE_MODE_CLAMP)) {
+                if (((sampleX < 0) || (sampleX >= static_cast<int32_t>(mWidth))) && (modeU == BITMAP_SAMPLE_MODE_CLAMP))
+                {
                     continue;
                 }
-                if (((sampleY < 0) || (sampleY >= static_cast<int32_t>(mHeight))) && (modeU == BITMAP_SAMPLE_MODE_CLAMP)) {
+                if (((sampleY < 0) || (sampleY >= static_cast<int32_t>(mHeight))) && (modeU == BITMAP_SAMPLE_MODE_CLAMP))
+                {
                     continue;
                 }
 
@@ -655,7 +676,8 @@ public:
     {
         uint32_t newWidth  = static_cast<uint32_t>((mWidth * std::max<float>(0, xScale)));
         uint32_t newHeight = static_cast<uint32_t>((mHeight * std::max<float>(0, yScale)));
-        if ((newWidth == 0) || (newHeight == 0)) {
+        if ((newWidth == 0) || (newHeight == 0))
+        {
             return {};
         }
 
@@ -717,7 +739,8 @@ public:
     {
         uint32_t newWidth  = static_cast<uint32_t>((mWidth * std::max<float>(0, xScale)));
         uint32_t newHeight = static_cast<uint32_t>((mHeight * std::max<float>(0, yScale)));
-        if ((newWidth == 0) || (newHeight == 0)) {
+        if ((newWidth == 0) || (newHeight == 0))
+        {
             return {};
         }
 
@@ -729,7 +752,8 @@ public:
 
     BitmapRGBA32f CopyFrom(uint32_t x, uint32_t y, uint32_t width, uint32_t height) const
     {
-        if ((width == 0) || (height == 0)) {
+        if ((width == 0) || (height == 0))
+        {
             return {};
         }
 
@@ -771,22 +795,26 @@ inline std::vector<float> GaussianKernel(uint32_t kernelSize, float sigma = 0)
 {
     const float kPi = 3.14159265359f;
 
-    if (kernelSize == 0) {
+    if (kernelSize == 0)
+    {
         return {};
     }
 
     std::vector<float> kernel(kernelSize * kernelSize);
     std::fill(kernel.begin(), kernel.end(), 0.0f);
 
-    if (sigma <= 0.0f) {
+    if (sigma <= 0.0f)
+    {
         sigma = 0.3f * (((kernelSize - 1.0f) * 0.5f) - 1) + 0.8f;
     }
 
     float mean  = kernelSize / 2.0f;
     float delta = kernelSize / static_cast<float>(kernelSize - 1);
     float sum   = 0.0f;
-    for (uint32_t i = 0; i < kernelSize; i++) {
-        for (uint32_t j = 0; j < kernelSize; j++) {
+    for (uint32_t i = 0; i < kernelSize; i++)
+    {
+        for (uint32_t j = 0; j < kernelSize; j++)
+        {
             uint32_t index    = (i * kernelSize) + j;
             float    x        = -mean + j * delta;
             float    y        = -mean + i * delta;
@@ -799,7 +827,8 @@ inline std::vector<float> GaussianKernel(uint32_t kernelSize, float sigma = 0)
         }
     }
 
-    for (uint32_t i = 0; i < kernel.size(); ++i) {
+    for (uint32_t i = 0; i < kernel.size(); ++i)
+    {
         kernel[i] /= sum;
     }
 
@@ -826,10 +855,12 @@ inline MipmapAreaInfo CalculateMipmapInfo(uint32_t width, uint32_t height, uint3
     // No mips with dimension less than 4
     width >>= 1;
     height >>= 1;
-    while ((width > 4) && (height > 0)) {
+    while ((width > 4) && (height > 0))
+    {
         ++info.numLevels;
         info.fullHeight += height;
-        if ((maxNumLevels > 0) && (info.numLevels >= maxNumLevels)) {
+        if ((maxNumLevels > 0) && (info.numLevels >= maxNumLevels))
+        {
             break;
         }
         width >>= 1;
@@ -862,7 +893,8 @@ public:
         BitmapSampleMode  modeV      = BITMAP_SAMPLE_MODE_CLAMP,
         BitmapFilterMode  filterMode = BITMAP_FILTER_MODE_NEAREST)
     {
-        if (mip0.Empty()) {
+        if (mip0.Empty())
+        {
             return;
         }
 
@@ -879,7 +911,8 @@ public:
             uint32_t rowStride = mStorage.GetRowStride();
             char*    pStorage  = reinterpret_cast<char*>(mStorage.GetPixels());
             uint32_t offset    = 0;
-            for (uint32_t level = 0; level < areaInfo.numLevels; ++level) {
+            for (uint32_t level = 0; level < areaInfo.numLevels; ++level)
+            {
                 // Create current mip
                 MipBitmapT mip = MipBitmapT(width, height, rowStride, pStorage + offset);
                 mMips.push_back(mip);
@@ -898,7 +931,8 @@ public:
         mip0.CopyTo(0, 0, mip0.GetWidth(), mip0.GetHeight(), mMips[0]);
 
         // Build mips
-        for (uint32_t level = 1; level < areaInfo.numLevels; ++level) {
+        for (uint32_t level = 1; level < areaInfo.numLevels; ++level)
+        {
             uint32_t prevLevel = level - 1;
             mMips[prevLevel].ScaleTo(
                 modeU,
@@ -915,7 +949,8 @@ public:
 
     const MipBitmapT& GetMip(uint32_t level) const
     {
-        if (level >= mMips.size()) {
+        if (level >= mMips.size())
+        {
             assert(false && "level exceeds available mips");
         }
         return mMips[level];
@@ -924,7 +959,8 @@ public:
     std::vector<MipOffset> GetMipOffsets() const
     {
         std::vector<MipOffset> mipOffsets;
-        for (auto& offset : mOffsets) {
+        for (auto& offset : mOffsets)
+        {
             MipOffset mipOffset = {};
             mipOffset.Offset    = offset;
             mipOffset.RowStride = mStorage.GetRowStride();
@@ -935,7 +971,8 @@ public:
 
     uint32_t GetWidth(uint32_t level) const
     {
-        if (level >= mMips.size()) {
+        if (level >= mMips.size())
+        {
             assert(false && "level exceeds available mips");
         }
         return mMips[level].GetWidth();
@@ -943,7 +980,8 @@ public:
 
     uint32_t GetHeight(uint32_t level) const
     {
-        if (level >= mMips.size()) {
+        if (level >= mMips.size())
+        {
             assert(false && "level exceeds available mips");
         }
         return mMips[level].GetWidth();

@@ -430,7 +430,8 @@ int main(int argc, char** argv)
     {
         std::string   errorMsg;
         CompileResult res = CompileGLSL(gShaderRGEN, VK_SHADER_STAGE_RAYGEN_BIT_KHR, {}, &spirvRGEN, &errorMsg);
-        if (res != COMPILE_SUCCESS) {
+        if (res != COMPILE_SUCCESS)
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (RGEN): " << errorMsg << "\n";
@@ -439,7 +440,8 @@ int main(int argc, char** argv)
         }
 
         res = CompileGLSL(gShaderMISS, VK_SHADER_STAGE_MISS_BIT_KHR, {}, &spirvMISS, &errorMsg);
-        if (res != COMPILE_SUCCESS) {
+        if (res != COMPILE_SUCCESS)
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (MISS): " << errorMsg << "\n";
@@ -448,7 +450,8 @@ int main(int argc, char** argv)
         }
 
         res = CompileGLSL(gShaderShadowMISS, VK_SHADER_STAGE_MISS_BIT_KHR, {}, &spirvShadowMISS, &errorMsg);
-        if (res != COMPILE_SUCCESS) {
+        if (res != COMPILE_SUCCESS)
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (shadow MISS): " << errorMsg << "\n";
@@ -457,7 +460,8 @@ int main(int argc, char** argv)
         }
 
         res = CompileGLSL(gShaderCHIT, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, {}, &spirvCHIT, &errorMsg);
-        if (res != COMPILE_SUCCESS) {
+        if (res != COMPILE_SUCCESS)
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (CHIT): " << errorMsg << "\n";
@@ -466,7 +470,8 @@ int main(int argc, char** argv)
         }
 
         res = CompileGLSL(gShaderRINT, VK_SHADER_STAGE_INTERSECTION_BIT_KHR, {}, &spirvRINT, &errorMsg);
-        if (res != COMPILE_SUCCESS) {
+        if (res != COMPILE_SUCCESS)
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (RINT): " << errorMsg << "\n";
@@ -667,7 +672,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
     if (!window)
-	{
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -683,7 +688,7 @@ int main(int argc, char** argv)
     }
 
     if (!InitSwapchain(renderer.get(), surface, window->GetWidth(), window->GetHeight()))
-	{
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -696,7 +701,8 @@ int main(int argc, char** argv)
         std::vector<VkImage> images;
         CHECK_CALL(GetSwapchainImages(renderer.get(), images));
 
-        for (auto& image : images) {
+        for (auto& image : images)
+        {
             VkImageViewCreateInfo createInfo           = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
             createInfo.image                           = image;
             createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
@@ -726,9 +732,11 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         uint32_t imageIndex = 0;
-        if (AcquireNextImage(renderer.get(), &imageIndex)) {
+        if (AcquireNextImage(renderer.get(), &imageIndex))
+        {
             assert(false && "AcquireNextImage failed");
             break;
         }
@@ -825,11 +833,13 @@ int main(int argc, char** argv)
         CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
 
         // Wait for the GPU to finish the work
-        if (!WaitForGpu(renderer.get())) {
+        if (!WaitForGpu(renderer.get()))
+        {
             assert(false && "WaitForGpu failed");
         }
 
-        if (!SwapchainPresent(renderer.get(), imageIndex)) {
+        if (!SwapchainPresent(renderer.get(), imageIndex))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -1211,14 +1221,14 @@ void CreateShaderBindingTables(
             CHECK_CALL(vmaMapMemory(pRenderer->Allocator, pMissSBT->Allocation, reinterpret_cast<void**>(&pData)));
 
             // gShaderMISS
-            // 
+            //
             // Corresponds to traceRayEXT function call with missIndex=0 (lighting) in MyClosestHitShader
             //
             memcpy(pData, pShaderGroupHandleMISS, groupHandleSize);
             pData += alignedGroupHandleSize;
 
             // gShaderShadowMISS
-            // 
+            //
             // Corresponds to traceRayEXT function call with missIndex=1 (shadow) in MyClosestHitShader
             //
             memcpy(pData, pShaderGroupHandleShadowMISS, groupHandleSize);
@@ -1400,7 +1410,8 @@ void CreateBLAS(
 
         CHECK_CALL(ExecuteCommandBuffer(pRenderer, &cmdBuf));
 
-        if (!WaitForGpu(pRenderer)) {
+        if (!WaitForGpu(pRenderer))
+        {
             assert(false && "WaitForGpu failed");
         }
     }
@@ -1560,7 +1571,8 @@ void CreateTLAS(VulkanRenderer* pRenderer, VkAccelerationStructureKHR blas, Vulk
 
         CHECK_CALL(ExecuteCommandBuffer(pRenderer, &cmdBuf));
 
-        if (!WaitForGpu(pRenderer)) {
+        if (!WaitForGpu(pRenderer))
+        {
             assert(false && "WaitForGpu failed");
         }
     }

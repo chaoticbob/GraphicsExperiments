@@ -177,9 +177,9 @@ const std::vector<std::string> gModelNames = {
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth      = 1920;
-static uint32_t gWindowHeight     = 1080;
-static bool     gEnableDebug      = true;
+static uint32_t gWindowWidth  = 1920;
+static uint32_t gWindowHeight = 1080;
+static bool     gEnableDebug  = true;
 
 static LPCWSTR gVSShaderName = L"vsmain";
 static LPCWSTR gPSShaderName = L"psmain";
@@ -237,7 +237,7 @@ void CreateIBLTextures(
     std::vector<uint32_t>&    outEnvNumLevels);
 void CreatePBRDescriptors(
     VulkanRenderer*           pRenderer,
-    VulkanDescriptorSet*              pDescriptors,
+    VulkanDescriptorSet*      pDescriptors,
     const VulkanBuffer*       pSceneParamsBuffer,
     const VulkanBuffer*       pMaterialParamsBuffer,
     const VulkanImage*        pBRDFLUT,
@@ -245,7 +245,7 @@ void CreatePBRDescriptors(
     std::vector<VulkanImage>& pEnvTexture);
 void CreateEnvDescriptors(
     VulkanRenderer*           pRenderer,
-    VulkanDescriptorSet*              pDescriptors,
+    VulkanDescriptorSet*      pDescriptors,
     std::vector<VulkanImage>& envTextures);
 
 void MouseMove(int x, int y, int buttons)
@@ -272,7 +272,7 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    VulkanFeatures features = {};
+    VulkanFeatures features         = {};
     features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
@@ -1668,7 +1668,7 @@ void CreateIBLTextures(
 
 void CreatePBRDescriptors(
     VulkanRenderer*           pRenderer,
-    VulkanDescriptorSet*              pDescriptors,
+    VulkanDescriptorSet*      pDescriptors,
     const VulkanBuffer*       pSceneParamsBuffer,
     const VulkanBuffer*       pMaterialsBuffer,
     const VulkanImage*        pBRDFLUT,
@@ -1850,33 +1850,31 @@ void CreatePBRDescriptors(
     }
 
     std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
-    {
-        sceneParamsDescriptor.layoutBinding,
-        materialParamsDescriptor.layoutBinding,
-        iblIntegrationSamplerDescriptor.layoutBinding,
-        uWrapSamplerDescriptor.layoutBinding,
-        brdfLUTDescriptor.layoutBinding,
-        irradianceMapDescriptor.layoutBinding,
-        environmentMapDescriptor.layoutBinding
-    };
+        {
+            sceneParamsDescriptor.layoutBinding,
+            materialParamsDescriptor.layoutBinding,
+            iblIntegrationSamplerDescriptor.layoutBinding,
+            uWrapSamplerDescriptor.layoutBinding,
+            brdfLUTDescriptor.layoutBinding,
+            irradianceMapDescriptor.layoutBinding,
+            environmentMapDescriptor.layoutBinding};
 
     std::vector<VkWriteDescriptorSet> writeDescriptorSets =
-    {
-        sceneParamsDescriptor.writeDescriptorSet,
-        materialParamsDescriptor.writeDescriptorSet,
-        iblIntegrationSamplerDescriptor.writeDescriptorSet,
-        uWrapSamplerDescriptor.writeDescriptorSet,
-        brdfLUTDescriptor.writeDescriptorSet,
-        irradianceMapDescriptor.writeDescriptorSet,
-        environmentMapDescriptor.writeDescriptorSet
-    };
+        {
+            sceneParamsDescriptor.writeDescriptorSet,
+            materialParamsDescriptor.writeDescriptorSet,
+            iblIntegrationSamplerDescriptor.writeDescriptorSet,
+            uWrapSamplerDescriptor.writeDescriptorSet,
+            brdfLUTDescriptor.writeDescriptorSet,
+            irradianceMapDescriptor.writeDescriptorSet,
+            environmentMapDescriptor.writeDescriptorSet};
 
     CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, pDescriptors);
 }
 
 void CreateEnvDescriptors(
     VulkanRenderer*           pRenderer,
-    VulkanDescriptorSet*              pDescriptors,
+    VulkanDescriptorSet*      pDescriptors,
     std::vector<VulkanImage>& envTextures)
 {
     // set via push constants
@@ -1947,17 +1945,16 @@ void CreateEnvDescriptors(
     }
 
     std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
-    {
-        iblMapSamplerDescriptor.layoutBinding,
-        iblEnvironmentMapDescriptor.layoutBinding,
-    };
+        {
+            iblMapSamplerDescriptor.layoutBinding,
+            iblEnvironmentMapDescriptor.layoutBinding,
+        };
 
     std::vector<VkWriteDescriptorSet> writeDescriptorSets =
-    {
-       iblMapSamplerDescriptor.writeDescriptorSet,
-       iblEnvironmentMapDescriptor.writeDescriptorSet,
-    };
+        {
+            iblMapSamplerDescriptor.writeDescriptorSet,
+            iblEnvironmentMapDescriptor.writeDescriptorSet,
+        };
 
     CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, pDescriptors);
 }
-

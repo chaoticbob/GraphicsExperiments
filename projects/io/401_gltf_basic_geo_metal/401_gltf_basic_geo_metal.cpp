@@ -323,17 +323,17 @@ int main(int argc, char** argv)
         pRenderEncoder->setRenderPipelineState(renderPipelineState.State.get());
         pRenderEncoder->setDepthStencilState(depthStencilState.State.get());
 
-       for (size_t i = 0; i < materialImagesTextures.size(); ++i)
-       {
-          pRenderEncoder->useResource(materialImagesTextures[i], MTL::ResourceUsageRead);
-       }
+        for (size_t i = 0; i < materialImagesTextures.size(); ++i)
+        {
+            pRenderEncoder->useResource(materialImagesTextures[i], MTL::ResourceUsageRead);
+        }
         pRenderEncoder->setVertexBuffer(pMaterialImagesArgBuffer, 0, MATERIAL_IMAGES_START_REGISTER);
         pRenderEncoder->setFragmentBuffer(pMaterialImagesArgBuffer, 0, MATERIAL_IMAGES_START_REGISTER);
 
-       for (size_t i = 0; i < materialSamplerStates.size(); ++i)
-       {
-          // pRenderEncoder->useResource(materialSamplerStates[i], MTL::ResourceUsageSample);
-       }
+        for (size_t i = 0; i < materialSamplerStates.size(); ++i)
+        {
+            // pRenderEncoder->useResource(materialSamplerStates[i], MTL::ResourceUsageSample);
+        }
         pRenderEncoder->setVertexBuffer(pMaterialSamplersArgBuffer, 0, MATERIAL_SAMPLER_START_REGISTER);
         pRenderEncoder->setFragmentBuffer(pMaterialSamplersArgBuffer, 0, MATERIAL_SAMPLER_START_REGISTER);
 

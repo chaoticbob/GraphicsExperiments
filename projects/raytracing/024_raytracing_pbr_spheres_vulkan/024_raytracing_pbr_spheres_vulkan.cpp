@@ -28,9 +28,9 @@ using namespace glm;
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth      = 1280;
-static uint32_t gWindowHeight     = 1024;
-static bool     gEnableDebug      = true;
+static uint32_t gWindowWidth  = 1280;
+static uint32_t gWindowHeight = 1024;
+static bool     gEnableDebug  = true;
 
 static const char* gHitGroupName         = "MyHitGroup";
 static const char* gRayGenShaderName     = "MyRaygenShader";

@@ -48,8 +48,10 @@ LineMesh LineMesh::AxisGridXZ(const glm::vec2& size, uint32_t xSegs, uint32_t zS
     LineMesh mesh;
 
     // X lines
-    for (uint32_t i = 0; i < xLines; ++i) {
-        if (i == (zSegs / 2)) {
+    for (uint32_t i = 0; i < xLines; ++i)
+    {
+        if (i == (zSegs / 2))
+        {
             continue;
         }
 
@@ -58,7 +60,8 @@ LineMesh LineMesh::AxisGridXZ(const glm::vec2& size, uint32_t xSegs, uint32_t zS
         glm::vec3 P1    = glm::vec3(x, 0, z1);
         glm::vec3 color = glm::vec3(0.5f);
 
-        if ((i == 0) || (i == (xLines - 1))) {
+        if ((i == 0) || (i == (xLines - 1)))
+        {
             color = glm::vec3(0.6f);
         }
 
@@ -66,8 +69,10 @@ LineMesh LineMesh::AxisGridXZ(const glm::vec2& size, uint32_t xSegs, uint32_t zS
     }
 
     // Z lines
-    for (uint32_t i = 0; i < zLines; ++i) {
-        if (i == (zSegs / 2)) {
+    for (uint32_t i = 0; i < zLines; ++i)
+    {
+        if (i == (zSegs / 2))
+        {
             continue;
         }
 
@@ -76,7 +81,8 @@ LineMesh LineMesh::AxisGridXZ(const glm::vec2& size, uint32_t xSegs, uint32_t zS
         glm::vec3 P1    = glm::vec3(x1, 0, z);
         glm::vec3 color = glm::vec3(0.5f);
 
-        if ((i == 0) || (i == (zLines - 1))) {
+        if ((i == 0) || (i == (zLines - 1)))
+        {
             color = glm::vec3(0.6f);
         }
 
@@ -110,7 +116,7 @@ LineMesh LineMesh::AxisGridXZ(const glm::vec2& size, uint32_t xSegs, uint32_t zS
 
         P0 = glm::vec3(x - (0.05f * size.x), 1.15f * x1, 0);
         mesh.AddLine({P0, color}, {P1, color});
- 
+
         P0 = glm::vec3(x + (0.05f * size.x), 1.15f * x1, 0);
         mesh.AddLine({P0, color}, {P1, color});
     }
@@ -126,7 +132,7 @@ LineMesh LineMesh::AxisGridXZ(const glm::vec2& size, uint32_t xSegs, uint32_t zS
 
         P0 = glm::vec3(x - (0.05f * size.x), 0, 1.15f * z1);
         mesh.AddLine({P0, color}, {P1, color});
- 
+
         P0 = glm::vec3(x + (0.05f * size.x), 0, 1.15f * z1);
         mesh.AddLine({P0, color}, {P1, color});
     }
