@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.25)
 
 project(101_color_cube_vulkan)
 
@@ -66,4 +66,3 @@ elseif(LINUX)
                "${VULKAN_LIBRARY_DIR}/libdxcompiler.so"
     )
 endif()
-
