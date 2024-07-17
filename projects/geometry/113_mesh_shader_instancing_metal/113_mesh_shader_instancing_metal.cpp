@@ -12,11 +12,11 @@ using namespace glm;
 
 #include "meshoptimizer.h"
 
-
 #define CHECK_CALL(FN)                                                               \
     {                                                                                \
         NS::Error* pError = FN;                                                      \
-        if (pError != nullptr) {                                                     \
+        if (pError != nullptr)                                                       \
+        {                                                                            \
             std::stringstream ss;                                                    \
             ss << "\n";                                                              \
             ss << "*** FUNCTION CALL FAILED *** \n";                                 \
@@ -42,7 +42,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<MetalRenderer> renderer = std::make_unique<MetalRenderer>();
 
-    if (!InitMetal(renderer.get(), gEnableDebug)) {
+    if (!InitMetal(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -52,10 +53,11 @@ int main(int argc, char** argv)
     MetalShader osShader;
     MetalShader msShader;
     MetalShader fsShader;
-    NS::Error*  pError  = nullptr;
+    NS::Error*  pError = nullptr;
     {
         std::string shaderSource = LoadString("projects/113_mesh_shader_instancing/shaders.metal");
-        if (shaderSource.empty()) {
+        if (shaderSource.empty())
+        {
             assert(false && "no shader source");
             return EXIT_FAILURE;
         }
@@ -65,7 +67,8 @@ int main(int argc, char** argv)
             nullptr,
             &pError));
 
-        if (library.get() == nullptr) {
+        if (library.get() == nullptr)
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error: " << pError->localizedDescription()->utf8String() << "\n";
@@ -75,24 +78,27 @@ int main(int argc, char** argv)
         }
 
         osShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("objectMain", NS::UTF8StringEncoding)));
-        if (osShader.Function.get() == nullptr) {
+        if (osShader.Function.get() == nullptr)
+        {
             assert(false && "OS MTL::Library::newFunction() failed");
             return EXIT_FAILURE;
         }
 
         msShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("meshMain", NS::UTF8StringEncoding)));
-        if (msShader.Function.get() == nullptr) {
+        if (msShader.Function.get() == nullptr)
+        {
             assert(false && "MS MTL::Library::newFunction() failed");
             return EXIT_FAILURE;
         }
 
         fsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("fragmentMain", NS::UTF8StringEncoding)));
-        if (fsShader.Function.get() == nullptr) {
+        if (fsShader.Function.get() == nullptr)
+        {
             assert(false && "FS MTL::Library::newFunction() failed");
             return EXIT_FAILURE;
         }
     }
-    
+
     // *************************************************************************
     // Make them meshlets!
     // **************************************************************************
@@ -108,9 +114,9 @@ int main(int argc, char** argv)
         {
             assert(false && "failed to load model");
         }
-        
+
         meshBounds = mesh.GetBounds();
-        positions = mesh.GetPositions();
+        positions  = mesh.GetPositions();
 
         const size_t kMaxVertices  = 64;
         const size_t kMaxTriangles = 124;
@@ -141,7 +147,7 @@ int main(int argc, char** argv)
         meshlets.resize(meshletCount);
     }
 
-    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to 
+    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to
     // make it easier to unpack on the GPU.
     //
     std::vector<uint32_t> meshletTrianglesU32;
@@ -169,7 +175,7 @@ int main(int argc, char** argv)
         // Update triangle offset for current meshlet
         m.triangle_offset = triangleOffset;
     }
-    
+
     MetalBuffer positionBuffer;
     MetalBuffer meshletBuffer;
     MetalBuffer meshletVerticesBuffer;
@@ -190,51 +196,57 @@ int main(int argc, char** argv)
         // Render pipeline state
         {
             auto desc = NS::TransferPtr(MTL::MeshRenderPipelineDescriptor::alloc()->init());
-            if (!desc) {
+            if (!desc)
+            {
                 assert(false && "MTL::MeshRenderPipelineDescriptor::alloc::init() failed");
-                return EXIT_FAILURE;        
+                return EXIT_FAILURE;
             }
-            
+
             desc->setObjectFunction(osShader.Function.get());
             desc->setMeshFunction(msShader.Function.get());
             desc->setFragmentFunction(fsShader.Function.get());
             desc->colorAttachments()->object(0)->setPixelFormat(GREX_DEFAULT_RTV_FORMAT);
             desc->setDepthAttachmentPixelFormat(GREX_DEFAULT_DSV_FORMAT);
 
-            NS::Error* pError           = nullptr;
+            NS::Error* pError         = nullptr;
             renderPipelineState.State = NS::TransferPtr(renderer->Device->newRenderPipelineState(desc.get(), MTL::PipelineOptionNone, nullptr, &pError));
-            if (renderPipelineState.State.get() == nullptr) {
+            if (renderPipelineState.State.get() == nullptr)
+            {
                 assert(false && "MTL::Device::newRenderPipelineState() failed");
                 return EXIT_FAILURE;
             }
         }
-        
+
         // Depth stencil state
         {
             auto desc = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
-            if (!desc) {
+            if (!desc)
+            {
                 assert(false && "MTL::DepthStencilDescriptor::alloc::init() failed");
-                return EXIT_FAILURE;        
+                return EXIT_FAILURE;
             }
 
-            if (desc.get() != nullptr) {
+            if (desc.get() != nullptr)
+            {
                 desc->setDepthCompareFunction(MTL::CompareFunctionLess);
                 desc->setDepthWriteEnabled(true);
 
                 depthStencilState.State = NS::TransferPtr(renderer->Device->newDepthStencilState(desc.get()));
-                if (depthStencilState.State.get() == nullptr) {
+                if (depthStencilState.State.get() == nullptr)
+                {
                     assert(false && "MTL::Device::newDepthStencilState() failed");
                     return EXIT_FAILURE;
                 }
             }
         }
     }
-    
+
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight,  GREX_BASE_FILE_NAME());
-    if (!window) {
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -247,15 +259,16 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, MTL::PixelFormatDepth32Float)) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, MTL::PixelFormatDepth32Float))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
-    
+
     // *************************************************************************
     // Counter statistics - revisit later!
     // *************************************************************************
-    
+
     // *************************************************************************
     // Instances
     // *************************************************************************
@@ -272,7 +285,8 @@ int main(int argc, char** argv)
     MTL::ClearColor clearColor(0.23f, 0.23f, 0.31f, 0);
     uint32_t        frameIndex = 0;
 
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         // ---------------------------------------------------------------------
 
         // Update instance transforms
@@ -304,7 +318,7 @@ int main(int argc, char** argv)
         memcpy(instancesBuffer.Buffer->contents(), DataPtr(instances), SizeInBytes(instances));
 
         // ---------------------------------------------------------------------
-        
+
         CA::MetalDrawable* pDrawable = renderer->pSwapchain->nextDrawable();
         assert(pDrawable != nullptr);
 
@@ -333,15 +347,16 @@ int main(int argc, char** argv)
         PerspCamera camera = PerspCamera(45.0f, window->GetAspectRatio(), 0.1f, 1000.0f);
         camera.LookAt(vec3(0, 0.7f, 3.0f), vec3(0, 0.105f, 0));
 
-        mat4 VP = camera.GetViewProjectionMatrix();
+        mat4     VP            = camera.GetViewProjectionMatrix();
         uint32_t instanceCount = static_cast<uint32_t>(instances.size());
-        uint32_t meshletCount = static_cast<uint32_t>(meshlets.size());
+        uint32_t meshletCount  = static_cast<uint32_t>(meshlets.size());
 
         //
         // Use a struct since metalcpp doesn't seem to expose a
         // variant of set*Bytes with an offset currently.
         //
-        struct SceneProperties {
+        struct SceneProperties
+        {
             mat4 CameraVP;
             uint InstanceCount;
             uint MeshletCount;
@@ -358,10 +373,9 @@ int main(int argc, char** argv)
         pRenderEncoder->setMeshBuffer(instancesBuffer.Buffer.get(), 0, 5);
 
         // Object function uses 32 for thread group size
-		uint32_t threadGroupCountX = ((meshletCount * instanceCount) / 32) + 1;
+        uint32_t threadGroupCountX = ((meshletCount * instanceCount) / 32) + 1;
 
         pRenderEncoder->drawMeshThreadgroups(MTL::Size(threadGroupCountX, 1, 1), MTL::Size(32, 1, 1), MTL::Size(128, 1, 1));
-
 
         pRenderEncoder->endEncoding();
 

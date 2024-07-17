@@ -12,7 +12,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                                                               \
     {                                                                                \
         NS::Error* pError = FN;                                                      \
-        if (pError != nullptr) {                                                     \
+        if (pError != nullptr)                                                       \
+        {                                                                            \
             std::stringstream ss;                                                    \
             ss << "\n";                                                              \
             ss << "*** FUNCTION CALL FAILED *** \n";                                 \
@@ -107,7 +108,8 @@ static float sTargetAngleY = 0;
 
 void MouseDown(int x, int y, int buttons)
 {
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         sPrevX = x;
         sPrevY = y;
     }
@@ -115,7 +117,8 @@ void MouseDown(int x, int y, int buttons)
 
 void MouseMove(int x, int y, int buttons)
 {
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         int dx = x - sPrevX;
         int dy = y - sPrevY;
 
@@ -134,7 +137,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<MetalRenderer> renderer = std::make_unique<MetalRenderer>();
 
-    if (!InitMetal(renderer.get(), gEnableDebug)) {
+    if (!InitMetal(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -149,7 +153,8 @@ int main(int argc, char** argv)
         nullptr,
         &pError));
 
-    if (library.get() == nullptr) {
+    if (library.get() == nullptr)
+    {
         std::stringstream ss;
         ss << "\n"
            << "Shader compiler error (VS): " << pError->localizedDescription()->utf8String() << "\n";
@@ -159,13 +164,15 @@ int main(int argc, char** argv)
     }
 
     vsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("vertexMain", NS::UTF8StringEncoding)));
-    if (vsShader.Function.get() == nullptr) {
+    if (vsShader.Function.get() == nullptr)
+    {
         assert(false && "VS Shader MTL::Library::newFunction() failed");
         return EXIT_FAILURE;
     }
 
     fsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("fragmentMain", NS::UTF8StringEncoding)));
-    if (fsShader.Function.get() == nullptr) {
+    if (fsShader.Function.get() == nullptr)
+    {
         assert(false && "FS Shader MTL::Library::newFunction() failed");
         return EXIT_FAILURE;
     }
@@ -209,7 +216,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "104_debug_tbn_metal");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -225,7 +233,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT)) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -233,7 +242,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForMetal(renderer.get())) {
+    if (!window->InitImGuiForMetal(renderer.get()))
+    {
         assert(false && "GrexWindow::InitImGuiForMetal failed");
         return EXIT_FAILURE;
     }
@@ -247,20 +257,26 @@ int main(int argc, char** argv)
     ImGuiIO& io                = ImGui::GetIO();
     io.DisplayFramebufferScale = ImVec2(1, 1);
 
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         window->ImGuiNewFrameMetal(pRenderPassDescriptor);
 
-        if (ImGui::Begin("Scene")) {
+        if (ImGui::Begin("Scene"))
+        {
             static const char* currentModelNames = gModelNames[gModelIndex].c_str();
 
-            if (ImGui::BeginCombo("Model", currentModelNames)) {
-                for (size_t i = 0; i < gModelNames.size(); ++i) {
+            if (ImGui::BeginCombo("Model", currentModelNames))
+            {
+                for (size_t i = 0; i < gModelNames.size(); ++i)
+                {
                     bool isSelected = (currentModelNames == gModelNames[i]);
-                    if (ImGui::Selectable(gModelNames[i].c_str(), isSelected)) {
+                    if (ImGui::Selectable(gModelNames[i].c_str(), isSelected))
+                    {
                         currentModelNames = gModelNames[i].c_str();
                         gModelIndex       = static_cast<uint32_t>(i);
                     }
-                    if (isSelected) {
+                    if (isSelected)
+                    {
                         ImGui::SetItemDefaultFocus();
                     }
                 }
@@ -395,7 +411,8 @@ void CreateGeometryBuffers(
         meshes.push_back(mesh);
     }
 
-    for (uint32_t i = 0; i < meshes.size(); ++i) {
+    for (uint32_t i = 0; i < meshes.size(); ++i)
+    {
         auto& mesh = meshes[i];
 
         Geometry geo = {};

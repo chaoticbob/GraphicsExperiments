@@ -5,7 +5,8 @@
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -92,7 +93,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
 
-    if (!InitDx(renderer.get(), gEnableDebug)) {
+    if (!InitDx(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -100,7 +102,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "test_app_imgui_d3d12");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -117,7 +120,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight())) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight()))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -132,7 +136,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForD3D12(renderer.get())) {
+    if (!window->InitImGuiForD3D12(renderer.get()))
+    {
         assert(false && "GrexWindow::InitImGuiForD3D12 failed");
         return EXIT_FAILURE;
     }
@@ -162,12 +167,14 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         window->ImGuiNewFrameD3D12();
 
         std::string exePath = GetExecutablePath().filename().string();
 
-        if (ImGui::Begin("Debug Info")) {
+        if (ImGui::Begin("Debug Info"))
+        {
             ImGui::Columns(2);
 
             // Exe Path
@@ -224,13 +231,15 @@ int main(int argc, char** argv)
             ID3D12CommandList* pList = commandList.Get();
             renderer->Queue->ExecuteCommandLists(1, &pList);
 
-            if (!WaitForGpu(renderer.get())) {
+            if (!WaitForGpu(renderer.get()))
+            {
                 assert(false && "WaitForGpu failed");
                 break;
             }
         }
 
-        if (!SwapchainPresent(renderer.get())) {
+        if (!SwapchainPresent(renderer.get()))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }

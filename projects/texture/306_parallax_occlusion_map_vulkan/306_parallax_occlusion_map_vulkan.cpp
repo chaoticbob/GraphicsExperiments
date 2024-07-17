@@ -28,9 +28,9 @@ using namespace glm;
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth      = 1920;
-static uint32_t gWindowHeight     = 1080;
-static bool     gEnableDebug      = true;
+static uint32_t gWindowWidth  = 1920;
+static uint32_t gWindowHeight = 1080;
+static bool     gEnableDebug  = true;
 
 static float gTargetAngleX = 0.0f;
 static float gAngleX       = 0.0f;
@@ -756,7 +756,7 @@ void CreateGeometryBuffers(
     VulkanBuffer*   pTangentBuffer,
     VulkanBuffer*   pBitangentBuffer)
 {
-    TriMesh          mesh    = TriMesh::Cube(vec3(1), false, TriMesh::Options().EnableTexCoords().EnableNormals().EnableTangents());
+    TriMesh mesh = TriMesh::Cube(vec3(1), false, TriMesh::Options().EnableTexCoords().EnableNormals().EnableTangents());
 
     *pNumIndices = mesh.GetNumIndices();
 

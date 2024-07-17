@@ -4,20 +4,20 @@
 #include "bitmap.h"
 
 #if defined(GREX_ENABLE_VULKAN) || defined(ENABLE_IMGUI_VULKAN)
-#    include "vk_renderer.h"
+#include "vk_renderer.h"
 #endif
 
 #if !defined(GLFW_INCLUDE_NONE)
-#    define GLFW_INCLUDE_NONE
+#define GLFW_INCLUDE_NONE
 #endif
 #include <GLFW/glfw3.h>
 
 #if defined(__linux__)
-//#    define GLFW_EXPOSE_NATIVE_X11
+// #    define GLFW_EXPOSE_NATIVE_X11
 #elif defined(__APPLE__)
-#    define GLFW_EXPOSE_NATIVE_COCOA
+#define GLFW_EXPOSE_NATIVE_COCOA
 #elif defined(WIN32)
-#    define GLFW_EXPOSE_NATIVE_WIN32
+#define GLFW_EXPOSE_NATIVE_WIN32
 #endif
 #include <GLFW/glfw3native.h>
 
@@ -26,20 +26,20 @@
 namespace fs = std::filesystem;
 
 #if defined(ENABLE_IMGUI_D3D12)
-#    include "dx_renderer.h"
-#    include "backends/imgui_impl_glfw.h"
-#    include "backends/imgui_impl_dx12.h"
+#include "dx_renderer.h"
+#include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_dx12.h"
 #endif // defined(ENABLE_IMGUI_D3D12)
 
 #if defined(ENABLE_IMGUI_VULKAN)
-#    include "backends/imgui_impl_glfw.h"
-#    include "backends/imgui_impl_vulkan.h"
+#include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_vulkan.h"
 #endif // defined(ENABLE_IMGUI_VULKAN)
 
 #if defined(ENABLE_IMGUI_METAL)
-#    include "mtl_renderer.h"
-#    include "backends/imgui_impl_glfw.h"
-#    include "backends/imgui_impl_metal.h"
+#include "mtl_renderer.h"
+#include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_metal.h"
 #endif // defined(ENABLE_IMGUI_METAL)
 
 enum MouseButton

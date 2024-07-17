@@ -71,7 +71,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     auto source = LoadString("projects/021_raytracing_triangles/shaders.metal");
     assert((!source.empty()) && "no shader source!");
-    
+
     NS::Error* pError  = nullptr;
     auto       library = NS::TransferPtr(renderer->Device->newLibrary(
         NS::String::string(source.c_str(), NS::UTF8StringEncoding),
@@ -137,7 +137,7 @@ int main(int argc, char** argv)
         NS::Error* error;
         copyPipeline = NS::TransferPtr(renderer->Device->newRenderPipelineState(pipelineDesc.get(), &error));
     }
-    
+
     // *************************************************************************
     // Create geometry
     // *************************************************************************
@@ -228,24 +228,24 @@ int main(int argc, char** argv)
         pComputeEncoder->setBuffer(indexBuffer.Buffer.get(), 0, 2);
         pComputeEncoder->setBuffer(normalBuffer.Buffer.get(), 0, 3);
         pComputeEncoder->setTexture(outputTex.Texture.get(), 0);
-        
+
         // Add a useResource() call for every BLAS used by the TLAS
         for (int blasIndex = 0; blasIndex < blasBuffer.size(); blasIndex++)
         {
             pComputeEncoder->useResource(blasBuffer[blasIndex].AS.get(), MTL::ResourceUsageRead);
         }
-        
+
         struct Camera
         {
             glm::mat4 viewInverse;
             glm::mat4 projInverse;
         };
 
-        Camera camera      = {};
-        
+        Camera camera = {};
+
         camera.projInverse = glm::inverse(glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 512.0f));
         camera.viewInverse = glm::inverse(glm::translate(glm::mat4(1), glm::vec3(0.0f, 0.0f, -2.5f)));
-        
+
         pComputeEncoder->setBytes(&camera, sizeof(Camera), 1);
 
         {
@@ -290,16 +290,16 @@ void CreateBLAS(
     NS::AutoreleasePool* pPoolAllocator = NS::AutoreleasePool::alloc()->init();
 
     MTL::AccelerationStructureTriangleGeometryDescriptor* triGeoDesc = MTL::AccelerationStructureTriangleGeometryDescriptor::alloc()->init();
-    
+
     triGeoDesc->setIndexType(MTL::IndexTypeUInt32);
     triGeoDesc->setIndexBuffer(pIndexBuffer->Buffer.get());
-    
+
     triGeoDesc->setVertexBuffer(pPositionBuffer->Buffer.get());
     triGeoDesc->setVertexFormat(MTL::AttributeFormatFloat3);
     triGeoDesc->setVertexStride(12);
-    triGeoDesc->setTriangleCount(indexCount/3);
+    triGeoDesc->setTriangleCount(indexCount / 3);
 
-    auto asDesc = NS::TransferPtr(MTL::PrimitiveAccelerationStructureDescriptor::alloc()->init());
+    auto asDesc          = NS::TransferPtr(MTL::PrimitiveAccelerationStructureDescriptor::alloc()->init());
     auto triGeoDescArray = NS::TransferPtr(NS::Array::array((NS::Object**)&triGeoDesc, 1));
     asDesc->setGeometryDescriptors(triGeoDescArray.get());
 
@@ -395,8 +395,8 @@ void CreateGeometry(
     MetalBuffer*   pNormalBuffer)
 {
     TriMesh::Options options;
-    options.enableNormals   = true;
- 
+    options.enableNormals = true;
+
     TriMesh mesh = TriMesh::Sphere(1.0f, 16, 8, options);
 
     CHECK_CALL(CreateBuffer(

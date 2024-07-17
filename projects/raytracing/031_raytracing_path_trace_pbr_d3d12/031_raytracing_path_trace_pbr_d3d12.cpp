@@ -12,7 +12,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -184,7 +185,8 @@ void MouseMove(int x, int y, int buttons)
     static int prevX = x;
     static int prevY = y;
 
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         int dx = x - prevX;
         int dy = y - prevY;
 
@@ -204,7 +206,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
 
-    if (!InitDx(renderer.get(), gEnableDebug)) {
+    if (!InitDx(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -213,7 +216,8 @@ int main(int argc, char** argv)
     CHECK_CALL(renderer->Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5)));
 
     bool isRayTracingSupported = (options5.RaytracingTier == D3D12_RAYTRACING_TIER_1_1);
-    if (!isRayTracingSupported) {
+    if (!isRayTracingSupported)
+    {
         assert(false && "Required ray tracing tier not supported");
         return EXIT_FAILURE;
     }
@@ -228,7 +232,8 @@ int main(int argc, char** argv)
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(source, "", "lib_6_5", &rayTraceDxil, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (raytracing): " << errorMsg << "\n";
@@ -242,7 +247,8 @@ int main(int argc, char** argv)
     {
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(gClearRayGenSamplesShader, "csmain", "cs_6_5", &clearRayGenDxil, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (clear ray gen): " << errorMsg << "\n";
@@ -312,7 +318,8 @@ int main(int argc, char** argv)
         ComPtr<ID3DBlob> blob;
         ComPtr<ID3DBlob> error;
         HRESULT          hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::string errorMsg = std::string(reinterpret_cast<const char*>(error->GetBufferPointer()), error->GetBufferSize());
 
             std::stringstream ss;
@@ -455,7 +462,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "031_raytracing_path_trace_pbr_d3d12");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -464,7 +472,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight())) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight()))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -472,7 +481,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForD3D12(renderer.get())) {
+    if (!window->InitImGuiForD3D12(renderer.get()))
+    {
         assert(false && "GrexWindow::InitImGuiForD3D12 failed");
         return EXIT_FAILURE;
     }
@@ -514,21 +524,27 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         window->ImGuiNewFrameD3D12();
 
-        if (ImGui::Begin("Scene")) {
+        if (ImGui::Begin("Scene"))
+        {
             ImGui::SliderInt("Max Samples Per Pixel", reinterpret_cast<int*>(&gMaxSamples), 1, 16384);
 
             static const char* currentIBLName = gIBLNames[0].c_str();
-            if (ImGui::BeginCombo("IBL", currentIBLName)) {
-                for (size_t i = 0; i < gIBLNames.size(); ++i) {
+            if (ImGui::BeginCombo("IBL", currentIBLName))
+            {
+                for (size_t i = 0; i < gIBLNames.size(); ++i)
+                {
                     bool isSelected = (currentIBLName == gIBLNames[i]);
-                    if (ImGui::Selectable(gIBLNames[i].c_str(), isSelected)) {
+                    if (ImGui::Selectable(gIBLNames[i].c_str(), isSelected))
+                    {
                         currentIBLName = gIBLNames[i].c_str();
                         gIBLIndex      = static_cast<uint32_t>(i);
                     }
-                    if (isSelected) {
+                    if (isSelected)
+                    {
                         ImGui::SetItemDefaultFocus();
                     }
                 }
@@ -545,7 +561,8 @@ int main(int argc, char** argv)
             ImGui::Separator();
 
             static float elapsedTime = 0;
-            if (sampleCount < gMaxSamples) {
+            if (sampleCount < gMaxSamples)
+            {
                 float currentTime = static_cast<float>(glfwGetTime());
                 elapsedTime       = currentTime - rayGenStartTime;
             }
@@ -559,12 +576,14 @@ int main(int argc, char** argv)
         CHECK_CALL(commandAllocator->Reset());
         CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
 
-        if (gCurrentMaxSamples != gMaxSamples) {
+        if (gCurrentMaxSamples != gMaxSamples)
+        {
             gCurrentMaxSamples  = gMaxSamples;
             gResetRayGenSamples = true;
         }
 
-        if (gCurrentIBLIndex != gIBLIndex) {
+        if (gCurrentIBLIndex != gIBLIndex)
+        {
             gCurrentIBLIndex    = gIBLIndex;
             gResetRayGenSamples = true;
         }
@@ -572,7 +591,8 @@ int main(int argc, char** argv)
         // Smooth out the rotation on Y
         gAngle += (gTargetAngle - gAngle) * 0.25f;
         // Keep resetting until the angle is somewhat stable
-        if (fabs(gTargetAngle - gAngle) > 0.1f) {
+        if (fabs(gTargetAngle - gAngle) > 0.1f)
+        {
             gResetRayGenSamples = true;
         }
 
@@ -591,7 +611,8 @@ int main(int argc, char** argv)
         pSceneParams->MaxSamples              = gCurrentMaxSamples;
 
         // Reset ray gen samples
-        if (gResetRayGenSamples) {
+        if (gResetRayGenSamples)
+        {
             sampleCount     = 0;
             rayGenStartTime = static_cast<float>(glfwGetTime());
 
@@ -658,7 +679,8 @@ int main(int argc, char** argv)
             ID3D12CommandList* pList = commandList.Get();
             renderer->Queue->ExecuteCommandLists(1, &pList);
 
-            if (!WaitForGpu(renderer.get())) {
+            if (!WaitForGpu(renderer.get()))
+            {
                 assert(false && "WaitForGpu failed");
                 break;
             }
@@ -693,7 +715,8 @@ int main(int argc, char** argv)
             ID3D12CommandList* pList = commandList.Get();
             renderer->Queue->ExecuteCommandLists(1, &pList);
 
-            if (!WaitForGpu(renderer.get())) {
+            if (!WaitForGpu(renderer.get()))
+            {
                 assert(false && "WaitForGpu failed");
                 break;
             }
@@ -734,7 +757,8 @@ int main(int argc, char** argv)
                 ID3D12CommandList* pList = commandList.Get();
                 renderer->Queue->ExecuteCommandLists(1, &pList);
 
-                if (!WaitForGpu(renderer.get())) {
+                if (!WaitForGpu(renderer.get()))
+                {
                     assert(false && "WaitForGpu failed");
                     break;
                 }
@@ -742,11 +766,13 @@ int main(int argc, char** argv)
         }
 
         // Update sample count
-        if (sampleCount < gMaxSamples) {
+        if (sampleCount < gMaxSamples)
+        {
             ++sampleCount;
         }
 
-        if (!SwapchainPresent(renderer.get())) {
+        if (!SwapchainPresent(renderer.get()))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -841,7 +867,8 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     ComPtr<ID3DBlob> blob;
     ComPtr<ID3DBlob> error;
     HRESULT          hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         std::string errorMsg = std::string(reinterpret_cast<const char*>(error->GetBufferPointer()), error->GetBufferSize());
 
         std::stringstream ss;
@@ -1136,7 +1163,8 @@ void CreateGeometries(
 
         TriMesh mesh;
         bool    res = TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh);
-        if (!res) {
+        if (!res)
+        {
             assert(false && "failed to load model");
         }
         mesh.ScaleToFit(1.25f);
@@ -1171,7 +1199,8 @@ void CreateGeometries(
 
         TriMesh mesh;
         bool    res = TriMesh::LoadOBJ(GetAssetPath("models/monkey_lowres.obj").string(), "", options, &mesh);
-        if (!res) {
+        if (!res)
+        {
             assert(false && "failed to load model");
         }
         mesh.ScaleToFit(1.20f);
@@ -1208,7 +1237,8 @@ void CreateGeometries(
 
         TriMesh mesh;
         bool    res = TriMesh::LoadOBJ(GetAssetPath("models/teapot.obj").string(), "", options, &mesh);
-        if (!res) {
+        if (!res)
+        {
             assert(false && "failed to load model");
         }
         mesh.ScaleToFit(1.5f);
@@ -1243,7 +1273,8 @@ void CreateGeometries(
 
         TriMesh mesh;
         bool    res = TriMesh::LoadOBJ(GetAssetPath("models/shelf.obj").string(), "", options, &mesh);
-        if (!res) {
+        if (!res)
+        {
             assert(false && "failed to load model");
         }
 
@@ -1289,7 +1320,8 @@ void CreateBLASes(
     std::vector<ID3D12Resource**> BLASes     = {ppSphereBLAS, ppKnobBLAS, ppMonkeyBLAS, ppTeapotBLAS, ppBoxBLAS};
 
     uint32_t n = static_cast<uint32_t>(geometries.size());
-    for (uint32_t i = 0; i < n; ++i) {
+    for (uint32_t i = 0; i < n; ++i)
+    {
         auto pGeometry = geometries[i];
         auto ppBLAS    = BLASes[i];
 
@@ -1935,14 +1967,18 @@ void CreateIBLTextures(
     std::vector<std::filesystem::path> iblFiles;
     {
         auto iblDirs = GetEveryAssetPath("IBL");
-        for (auto& dir : iblDirs) {
-            for (auto& entry : std::filesystem::directory_iterator(dir)) {
-                if (!entry.is_regular_file()) {
+        for (auto& dir : iblDirs)
+        {
+            for (auto& entry : std::filesystem::directory_iterator(dir))
+            {
+                if (!entry.is_regular_file())
+                {
                     continue;
                 }
                 auto path = entry.path();
                 auto ext  = path.extension();
-                if (ext == ".ibl") {
+                if (ext == ".ibl")
+                {
                     path = std::filesystem::relative(path, dir.parent_path());
                     iblFiles.push_back(path);
                 }
@@ -1951,11 +1987,13 @@ void CreateIBLTextures(
     }
 
     size_t maxEntries = std::min<size_t>(kMaxIBLs, iblFiles.size());
-    for (size_t i = 0; i < maxEntries; ++i) {
+    for (size_t i = 0; i < maxEntries; ++i)
+    {
         std::filesystem::path iblFile = iblFiles[i];
 
         IBLMaps ibl = {};
-        if (!LoadIBLMaps32f(iblFile, &ibl)) {
+        if (!LoadIBLMaps32f(iblFile, &ibl))
+        {
             GREX_LOG_ERROR("failed to load: " << iblFile);
             return;
         }
@@ -1973,7 +2011,8 @@ void CreateIBLTextures(
             uint32_t               levelOffset = 0;
             uint32_t               levelWidth  = ibl.baseWidth;
             uint32_t               levelHeight = ibl.baseHeight;
-            for (uint32_t i = 0; i < ibl.numLevels; ++i) {
+            for (uint32_t i = 0; i < ibl.numLevels; ++i)
+            {
                 MipOffset mipOffset = {};
                 mipOffset.Offset    = levelOffset;
                 mipOffset.RowStride = rowStride;
@@ -2081,7 +2120,8 @@ void WriteDescriptors(
         uint32_t normalBufferOffset   = kGeoBuffersOffset + kNormalBufferIndex * kBuffersStride;
 
         // Spheres
-        for (uint32_t i = 0; i < kNumInstances; ++i) {
+        for (uint32_t i = 0; i < kNumInstances; ++i)
+        {
             D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
 
             // Index buffer (t20)
@@ -2101,7 +2141,8 @@ void WriteDescriptors(
         }
 
         // Knob
-        for (uint32_t i = 0; i < kNumInstances; ++i) {
+        for (uint32_t i = 0; i < kNumInstances; ++i)
+        {
             D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
 
             // Index buffer (t20)
@@ -2121,7 +2162,8 @@ void WriteDescriptors(
         }
 
         // Monkey
-        for (uint32_t i = 0; i < kNumInstances; ++i) {
+        for (uint32_t i = 0; i < kNumInstances; ++i)
+        {
             D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
 
             // Index buffer (t20)
@@ -2141,7 +2183,8 @@ void WriteDescriptors(
         }
 
         // Teapot
-        for (uint32_t i = 0; i < kNumInstances; ++i) {
+        for (uint32_t i = 0; i < kNumInstances; ++i)
+        {
             D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
 
             // Index buffer (t20)
@@ -2183,7 +2226,8 @@ void WriteDescriptors(
     }
 
     // IBL Textures
-    for (uint32_t i = 0; i < iblTextures.size(); ++i) {
+    for (uint32_t i = 0; i < iblTextures.size(); ++i)
+    {
         auto& iblTexture = iblTextures[i];
 
         D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {kBaseDescriptor.ptr + ((kIBLTextureOffset + i) * kIncrementSize)};

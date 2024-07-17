@@ -95,7 +95,7 @@ static bool     gEnableDebug  = true;
 
 struct Camera
 {
-    mat4 ModelMatrix;
+    mat4     ModelMatrix;
     mat4     ViewProjectionMatrix;
     vec3     EyePosition;
     uint32_t _pad0;

@@ -401,7 +401,7 @@ int main(int argc, char** argv)
             commandList->SetGraphicsRootSignature(rootSig.Get());
             // Pipeline
             commandList->SetPipelineState(pipelineState.Get());
-            
+
             // Scene
             {
                 uint32_t iblEnvironmentNumLevels = envTextures[0]->GetDesc().MipLevels;

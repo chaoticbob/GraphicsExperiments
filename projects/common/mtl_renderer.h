@@ -30,7 +30,7 @@ bool InitMetal(MetalRenderer* pRenderer, bool enableDebug);
 bool InitSwapchain(MetalRenderer* pRenderer, void* pCocoaWindow, uint32_t width, uint32_t height, uint32_t bufferCount = 2, MTL::PixelFormat dsvFormat = MTL::PixelFormatInvalid);
 
 MTL::PixelFormat ToMTLFormat(GREXFormat format);
-MTL::IndexType ToMTLIndexType(GREXFormat format);
+MTL::IndexType   ToMTLIndexType(GREXFormat format);
 
 struct MetalBuffer
 {
@@ -59,7 +59,7 @@ struct MetalShader
 
 struct MetalAS
 {
-   NS::SharedPtr<MTL::AccelerationStructure> AS;
+    NS::SharedPtr<MTL::AccelerationStructure> AS;
 };
 
 NS::Error* CreateBuffer(
@@ -100,11 +100,11 @@ NS::Error* CreateTexture(
     MetalTexture*    pResource);
 
 NS::Error* CreateRWTexture(
-    MetalRenderer*                pRenderer,
-    uint32_t                      width,
-    uint32_t                      height,
-    MTL::PixelFormat              format,
-    MetalTexture*                 pResource);
+    MetalRenderer*   pRenderer,
+    uint32_t         width,
+    uint32_t         height,
+    MTL::PixelFormat format,
+    MetalTexture*    pResource);
 
 NS::Error* CreateAccelerationStructure(
     MetalRenderer*                        pRenderer,
@@ -130,7 +130,7 @@ NS::Error* CreateDrawNormalPipeline(
     MTL::PixelFormat          dsvFormat,
     MetalPipelineRenderState* pPipeline,
     MetalDepthStencilState*   pDepthStencilState,
-	bool                      enableTangents = false);
+    bool                      enableTangents = false);
 
 NS::Error* CreateDrawTexturePipeline(
     MetalRenderer*            pRenderer,

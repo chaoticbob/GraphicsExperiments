@@ -163,7 +163,7 @@ int main(int argc, char** argv)
         meshlets.resize(meshletCount);
     }
 
-    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to 
+    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to
     // make it easier to unpack on the GPU.
     //
     std::vector<uint32_t> meshletTrianglesU32;
@@ -461,9 +461,9 @@ int main(int argc, char** argv)
             PerspCamera camera = PerspCamera(45.0f, window->GetAspectRatio(), 0.1f, 1000.0f);
             camera.LookAt(vec3(0, 0.7f, 3.0f), vec3(0, 0.105f, 0));
 
-            mat4 VP = camera.GetViewProjectionMatrix();
+            mat4     VP            = camera.GetViewProjectionMatrix();
             uint32_t instanceCount = static_cast<uint32_t>(instances.size());
-            uint32_t meshletCount = static_cast<uint32_t>(meshlets.size());
+            uint32_t meshletCount  = static_cast<uint32_t>(meshlets.size());
 
             commandList->SetGraphicsRoot32BitConstants(0, 16, &VP, 0);
             commandList->SetGraphicsRoot32BitConstants(0, 1, &instanceCount, 16);

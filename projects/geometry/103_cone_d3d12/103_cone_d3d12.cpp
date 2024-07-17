@@ -12,7 +12,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -80,7 +81,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
 
-    if (!InitDx(renderer.get(), gEnableDebug)) {
+    if (!InitDx(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -92,7 +94,8 @@ int main(int argc, char** argv)
     {
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(gShaders, "vsmain", "vs_6_0", &dxilVS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
@@ -102,7 +105,8 @@ int main(int argc, char** argv)
         }
 
         hr = CompileHLSL(gShaders, "psmain", "ps_6_0", &dxilPS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (PS): " << errorMsg << "\n";
@@ -166,7 +170,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "103_cone_d3d12");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -174,7 +179,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT)) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -204,7 +210,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
 
         ComPtr<ID3D12Resource> swapchainBuffer;
@@ -226,11 +233,11 @@ int main(int argc, char** argv)
             commandList->ClearRenderTargetView(renderer->SwapchainRTVDescriptorHandles[bufferIndex], clearColor, 0, nullptr);
             commandList->ClearDepthStencilView(renderer->SwapchainDSVDescriptorHandles[bufferIndex], D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0xFF, 0, nullptr);
 
-            float t = static_cast<float>(glfwGetTime());
-            mat4 modelMat = glm::rotate(t, vec3(1, 0, 0)); 
-            mat4 viewMat = glm::lookAt(vec3(0, 1, 2), vec3(0, 0, 0), vec3(0, 1, 0));
-            mat4 projMat = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
-            mat4 mvpMat  = projMat * viewMat * modelMat;
+            float t        = static_cast<float>(glfwGetTime());
+            mat4  modelMat = glm::rotate(t, vec3(1, 0, 0));
+            mat4  viewMat  = glm::lookAt(vec3(0, 1, 2), vec3(0, 0, 0), vec3(0, 1, 0));
+            mat4  projMat  = glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 10000.0f);
+            mat4  mvpMat   = projMat * viewMat * modelMat;
 
             commandList->SetGraphicsRootSignature(rootSig.Get());
             commandList->SetGraphicsRoot32BitConstants(0, 16, &mvpMat, 0);
@@ -284,13 +291,15 @@ int main(int argc, char** argv)
         ID3D12CommandList* pList = commandList.Get();
         renderer->Queue->ExecuteCommandLists(1, &pList);
 
-        if (!WaitForGpu(renderer.get())) {
+        if (!WaitForGpu(renderer.get()))
+        {
             assert(false && "WaitForGpu failed");
             break;
         }
 
         // Present
-        if (!SwapchainPresent(renderer.get())) {
+        if (!SwapchainPresent(renderer.get()))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }

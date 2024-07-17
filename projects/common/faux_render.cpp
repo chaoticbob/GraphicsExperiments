@@ -637,18 +637,21 @@ static bool LoadGLTFMesh(
             // Determine attribute
             switch (gltfAttr.type)
             {
-                default: {
+                default:
+                {
                     assert(false && "unsupported attribute type");
                 }
                 break;
 
-                case cgltf_attribute_type_position: {
+                case cgltf_attribute_type_position:
+                {
                     pTargetBufferView = &targetBatch.PositionBufferView;
                     // assert((dstFormat != GREX_FORMAT_UNKNOWN) && "invalid position attribute format");
                 }
                 break;
 
-                case cgltf_attribute_type_normal: {
+                case cgltf_attribute_type_normal:
+                {
                     if (loadOptions.EnableNormals)
                     {
                         pTargetBufferView = &targetBatch.NormalBufferView;
@@ -657,7 +660,8 @@ static bool LoadGLTFMesh(
                 }
                 break;
 
-                case cgltf_attribute_type_tangent: {
+                case cgltf_attribute_type_tangent:
+                {
                     if (loadOptions.EnableTangents)
                     {
                         pTargetBufferView = &targetBatch.TangentBufferView;
@@ -666,7 +670,8 @@ static bool LoadGLTFMesh(
                 }
                 break;
 
-                case cgltf_attribute_type_texcoord: {
+                case cgltf_attribute_type_texcoord:
+                {
                     if (loadOptions.EnableTexCoords)
                     {
                         pTargetBufferView = &targetBatch.TexCoordBufferView;
@@ -675,7 +680,8 @@ static bool LoadGLTFMesh(
                 }
                 break;
 
-                case cgltf_attribute_type_color: {
+                case cgltf_attribute_type_color:
+                {
                     if (loadOptions.EnableVertexColors)
                     {
                         pTargetBufferView = &targetBatch.VertexColorBufferView;
@@ -939,8 +945,8 @@ static bool LoadGLTFImage(
     // KTX image data
     if (gltfMimeType == "image/ktx2")
     {
-		// We no longer support the KTX file format
-		return false;
+        // We no longer support the KTX file format
+        return false;
     }
     // PNG, JPG, etc image data
     else
@@ -1304,7 +1310,8 @@ static bool LoadGLTFNode(LoaderInternals* pInternals, const cgltf_data* pGltfDat
     {
         default: assert(false && "unrecognized target node type"); break;
 
-        case SCENE_NODE_TYPE_GEOMETRY: {
+        case SCENE_NODE_TYPE_GEOMETRY:
+        {
             FauxRender::Mesh* pTargetMesh = nullptr;
             // Look to see if there's a corresponding FauxRender::Mesh for the GLTF mesh
             auto it = pInternals->MeshMap.find(pGltfNode->mesh);
@@ -1337,7 +1344,8 @@ static bool LoadGLTFNode(LoaderInternals* pInternals, const cgltf_data* pGltfDat
         }
         break;
 
-        case SCENE_NODE_TYPE_CAMERA: {
+        case SCENE_NODE_TYPE_CAMERA:
+        {
             if (pGltfNode->camera->type == cgltf_camera_type_perspective)
             {
                 auto& gltfCamera = pGltfNode->camera->data.perspective;

@@ -706,7 +706,7 @@ void CreateGeometryBuffers(
     VulkanBuffer*   pTangentBuffer,
     VulkanBuffer*   pBitangentBuffer)
 {
-    TriMesh          mesh    = TriMesh::Cube(vec3(1), false, TriMesh::Options().EnableTexCoords().EnableNormals().EnableTangents());
+    TriMesh mesh = TriMesh::Cube(vec3(1), false, TriMesh::Options().EnableTexCoords().EnableNormals().EnableTangents());
 
     *pNumIndices = mesh.GetNumIndices();
 

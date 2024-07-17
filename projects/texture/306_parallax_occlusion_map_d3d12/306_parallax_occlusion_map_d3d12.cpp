@@ -12,7 +12,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -66,10 +67,12 @@ void MouseMove(int x, int y, int buttons)
     int dx = x - prevX;
     int dy = y - prevY;
 
-    if (buttons & MOUSE_BUTTON_RIGHT) {
+    if (buttons & MOUSE_BUTTON_RIGHT)
+    {
         gTargetAngleX += 0.25f * dy;
     }
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         gTargetAngleY += 0.25f * dx;
     }
 
@@ -84,7 +87,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
 
-    if (!InitDx(renderer.get(), gEnableDebug)) {
+    if (!InitDx(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -98,7 +102,8 @@ int main(int argc, char** argv)
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &dxilVS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
@@ -108,7 +113,8 @@ int main(int argc, char** argv)
         }
 
         hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &dxilPS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (PS): " << errorMsg << "\n";
@@ -221,7 +227,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "306_parallax_occlusion_map_d3d12");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -230,7 +237,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT)) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -260,7 +268,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
 
         ComPtr<ID3D12Resource> swapchainBuffer;
@@ -353,13 +362,15 @@ int main(int argc, char** argv)
         ID3D12CommandList* pList = commandList.Get();
         renderer->Queue->ExecuteCommandLists(1, &pList);
 
-        if (!WaitForGpu(renderer.get())) {
+        if (!WaitForGpu(renderer.get()))
+        {
             assert(false && "WaitForGpu failed");
             break;
         }
 
         // Present
-        if (!SwapchainPresent(renderer.get())) {
+        if (!SwapchainPresent(renderer.get()))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -405,7 +416,8 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     ComPtr<ID3DBlob> blob;
     ComPtr<ID3DBlob> error;
     HRESULT          hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         std::string errorMsg = std::string(static_cast<const char*>(error->GetBufferPointer()), error->GetBufferSize());
         assert(false && "D3D12SerializeRootSignature failed");
     }

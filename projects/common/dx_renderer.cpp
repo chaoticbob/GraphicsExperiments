@@ -19,12 +19,14 @@ DxRenderer::DxRenderer()
 
 DxRenderer::~DxRenderer()
 {
-    if (SwapchainWaitEventHandle != nullptr) {
+    if (SwapchainWaitEventHandle != nullptr)
+    {
         CloseHandle(SwapchainWaitEventHandle);
         SwapchainWaitEventHandle = nullptr;
     }
 
-    if (DeviceWaitEventHandle != nullptr) {
+    if (DeviceWaitEventHandle != nullptr)
+    {
         CloseHandle(DeviceWaitEventHandle);
         DeviceWaitEventHandle = nullptr;
     }
@@ -32,18 +34,21 @@ DxRenderer::~DxRenderer()
 
 bool InitDx(DxRenderer* pRenderer, bool enableDebug)
 {
-    if (IsNull(pRenderer)) {
+    if (IsNull(pRenderer))
+    {
         return false;
     }
 
     pRenderer->DebugEnabled = enableDebug;
 
     // Debug
-    if (pRenderer->DebugEnabled) {
+    if (pRenderer->DebugEnabled)
+    {
         // Get DXGI debug interface
         ComPtr<IDXGIDebug1> dxgiDebug;
         HRESULT             hr = DXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiDebug));
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             assert(false && "DXGIGetDebugInterface1(DXGIDebug) failed");
             return false;
         }
@@ -51,7 +56,8 @@ bool InitDx(DxRenderer* pRenderer, bool enableDebug)
         ComPtr<IDXGIInfoQueue> dxgiInfoQueue;
         // Get DXGI info queue
         hr = DXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiInfoQueue));
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             assert(false && "DXGIGetDebugInterface1(DXGIInfoQueue) failed");
             return false;
         }
@@ -63,7 +69,8 @@ bool InitDx(DxRenderer* pRenderer, bool enableDebug)
         // Get D3D12 debug interface
         ComPtr<ID3D12Debug> d3d12Debug;
         hr = D3D12GetDebugInterface(IID_PPV_ARGS(&d3d12Debug));
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             assert(false && "D3D12GetDebugInterface failed");
             return false;
         }
@@ -75,7 +82,8 @@ bool InitDx(DxRenderer* pRenderer, bool enableDebug)
     {
         UINT    flags = pRenderer->DebugEnabled ? DXGI_CREATE_FACTORY_DEBUG : 0;
         HRESULT hr    = CreateDXGIFactory2(flags, IID_PPV_ARGS(&pRenderer->Factory));
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             assert(false && "DXGI factory creation failed");
             return false;
         }
@@ -86,29 +94,34 @@ bool InitDx(DxRenderer* pRenderer, bool enableDebug)
         std::vector<IDXGIAdapter1*> adapters;
         UINT                        adapterIndex       = 0;
         IDXGIAdapter1*              pEnumeratedAdapter = nullptr;
-        while (pRenderer->Factory->EnumAdapters1(adapterIndex, &pEnumeratedAdapter) != DXGI_ERROR_NOT_FOUND) {
+        while (pRenderer->Factory->EnumAdapters1(adapterIndex, &pEnumeratedAdapter) != DXGI_ERROR_NOT_FOUND)
+        {
             DXGI_ADAPTER_DESC1 desc = {};
             HRESULT            hr   = pEnumeratedAdapter->GetDesc1(&desc);
-            if (FAILED(hr)) {
+            if (FAILED(hr))
+            {
                 assert(false && "IDXGIAdapter1::GetDesc1 failed");
                 return false;
             }
 
             // Filter out remote and software adapters
-            if (desc.Flags == DXGI_ADAPTER_FLAG_NONE) {
+            if (desc.Flags == DXGI_ADAPTER_FLAG_NONE)
+            {
                 adapters.push_back(pEnumeratedAdapter);
             }
 
             ++adapterIndex;
         }
 
-        if (adapters.empty()) {
+        if (adapters.empty())
+        {
             assert(false && "No adapters found");
             return false;
         }
 
         HRESULT hr = adapters[0]->QueryInterface(IID_PPV_ARGS(&pRenderer->Adapter));
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             assert(false && "IDXGIAdapter1::QueryInterface failed");
             return false;
         }
@@ -123,17 +136,20 @@ bool InitDx(DxRenderer* pRenderer, bool enableDebug)
             pRenderer->Adapter.Get(),
             D3D_FEATURE_LEVEL_12_1,
             IID_PPV_ARGS(&pRenderer->Device));
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             assert(false && "D3D12CreateDevice failed");
             return false;
         }
 
         char description[128];
         memset(description, 0, 128);
-        for (size_t i = 0; i < 128; ++i) {
+        for (size_t i = 0; i < 128; ++i)
+        {
             WCHAR c        = desc.Description[i];
             description[i] = static_cast<char>(c);
-            if (c == 0) {
+            if (c == 0)
+            {
                 break;
             }
         }
@@ -147,7 +163,8 @@ bool InitDx(DxRenderer* pRenderer, bool enableDebug)
             pRenderer->DeviceFenceValue,
             D3D12_FENCE_FLAG_NONE,
             IID_PPV_ARGS(&pRenderer->DeviceFence));
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             assert(false && "ID3D12::CreateFence failed");
             return false;
         }
@@ -156,7 +173,8 @@ bool InitDx(DxRenderer* pRenderer, bool enableDebug)
     // Wait event
     DWORD eventFlags                 = 0;
     pRenderer->DeviceWaitEventHandle = CreateEventEx(NULL, NULL, eventFlags, EVENT_ALL_ACCESS);
-    if (pRenderer->DeviceWaitEventHandle == INVALID_HANDLE_VALUE) {
+    if (pRenderer->DeviceWaitEventHandle == INVALID_HANDLE_VALUE)
+    {
         return false;
     }
 
@@ -168,7 +186,8 @@ bool InitDx(DxRenderer* pRenderer, bool enableDebug)
         desc.Flags                    = D3D12_COMMAND_QUEUE_FLAG_NONE;
 
         HRESULT hr = pRenderer->Device->CreateCommandQueue(&desc, IID_PPV_ARGS(&pRenderer->Queue));
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             assert(false && "ID3D12Device::CreateCommandQueue failed");
             return false;
         }
@@ -182,7 +201,8 @@ bool InitDx(DxRenderer* pRenderer, bool enableDebug)
         desc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 
         HRESULT hr = pRenderer->Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pRenderer->ImGuiFontDescriptorHeap));
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             assert(false && "ID3D12Device::CreateDescriptorHeap failed");
             return false;
         }
@@ -205,7 +225,8 @@ bool HasMeshShaderPipelineStats(DxRenderer* pRenderer)
 
 bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t height, uint32_t bufferCount, DXGI_FORMAT dsvFormat)
 {
-    if (IsNull(pRenderer)) {
+    if (IsNull(pRenderer))
+    {
         return false;
     }
 
@@ -234,13 +255,15 @@ bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t he
         nullptr,                // pFullscreenDesc
         nullptr,                // pRestrictToOuput
         &pSwapchain);           // ppSwapchain
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         assert(false && "IDXGIFactory::CreateSwapChain failed");
         return false;
     }
 
     hr = pSwapchain->QueryInterface(IID_PPV_ARGS(&pRenderer->Swapchain));
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         assert(false && "IDXGISwapChain1::QueryInterface failed");
         return false;
     }
@@ -250,7 +273,8 @@ bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t he
         DXGI_SWAP_CHAIN_DESC1 postCreateDesc = {};
 
         hr = pRenderer->Swapchain->GetDesc1(&postCreateDesc);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             assert(false && "IDXGISwapChain1::GetDesc1 failed");
             return false;
         }
@@ -266,17 +290,20 @@ bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t he
         desc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 
         hr = pRenderer->Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pRenderer->SwapchainRTVDescriptorHeap));
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             assert(false && "ID3D12Device::CreateDescriptorHeap failed");
             return false;
         }
 
         D3D12_CPU_DESCRIPTOR_HANDLE rtv = pRenderer->SwapchainRTVDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-        for (UINT i = 0; i < pRenderer->SwapchainBufferCount; ++i) {
+        for (UINT i = 0; i < pRenderer->SwapchainBufferCount; ++i)
+        {
             ID3D12Resource* pSwapchainBuffer = nullptr;
 
             hr = pRenderer->Swapchain->GetBuffer(i, IID_PPV_ARGS(&pSwapchainBuffer));
-            if (FAILED(hr)) {
+            if (FAILED(hr))
+            {
                 assert(false && "IDXGISwapChain1::GetBuffer failed");
                 return false;
             }
@@ -293,9 +320,11 @@ bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t he
     }
 
     // Create DSV stuff
-    if (pRenderer->SwapchainDSVFormat != DXGI_FORMAT_UNKNOWN) {
+    if (pRenderer->SwapchainDSVFormat != DXGI_FORMAT_UNKNOWN)
+    {
         // Buffers
-        for (UINT i = 0; i < pRenderer->SwapchainBufferCount; ++i) {
+        for (UINT i = 0; i < pRenderer->SwapchainBufferCount; ++i)
+        {
             D3D12_HEAP_PROPERTIES heapProperties = {};
             heapProperties.Type                  = D3D12_HEAP_TYPE_DEFAULT;
 
@@ -324,7 +353,8 @@ bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t he
                 D3D12_RESOURCE_STATE_DEPTH_WRITE,
                 &optimizedClearValue,
                 IID_PPV_ARGS(&dsvBuffer));
-            if (FAILED(hr)) {
+            if (FAILED(hr))
+            {
                 assert(false && "ID3D12Device::CreateCommittedResource (DSV buffer) failed");
                 return false;
             }
@@ -340,13 +370,15 @@ bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t he
             desc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 
             hr = pRenderer->Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pRenderer->SwapchainDSVDescriptorHeap));
-            if (FAILED(hr)) {
+            if (FAILED(hr))
+            {
                 assert(false && "ID3D12Device::CreateDescriptorHeap failed");
                 return false;
             }
 
             D3D12_CPU_DESCRIPTOR_HANDLE dsv = pRenderer->SwapchainDSVDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-            for (UINT i = 0; i < pRenderer->SwapchainBufferCount; ++i) {
+            for (UINT i = 0; i < pRenderer->SwapchainBufferCount; ++i)
+            {
                 ID3D12Resource* pDSVBuffer = pRenderer->SwapchainDSVBuffers[i].Get();
 
                 D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
@@ -366,7 +398,8 @@ bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t he
         pRenderer->SwapchainFenceValue,
         D3D12_FENCE_FLAG_NONE,
         IID_PPV_ARGS(&pRenderer->SwapchainFence));
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         assert(false && "ID3D12Device::CreateFence failed");
         return false;
     }
@@ -374,7 +407,8 @@ bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t he
     // Wait event
     DWORD eventFlags                    = 0;
     pRenderer->SwapchainWaitEventHandle = CreateEventEx(NULL, NULL, eventFlags, EVENT_ALL_ACCESS);
-    if (pRenderer->SwapchainWaitEventHandle == INVALID_HANDLE_VALUE) {
+    if (pRenderer->SwapchainWaitEventHandle == INVALID_HANDLE_VALUE)
+    {
         return false;
     }
 
@@ -383,7 +417,8 @@ bool InitSwapchain(DxRenderer* pRenderer, HWND hwnd, uint32_t width, uint32_t he
 
 bool WaitForGpu(DxRenderer* pRenderer)
 {
-    if (IsNull(pRenderer)) {
+    if (IsNull(pRenderer))
+    {
         return false;
     }
 
@@ -391,7 +426,8 @@ bool WaitForGpu(DxRenderer* pRenderer)
     HRESULT hr = pRenderer->Queue->Signal(
         pRenderer->DeviceFence.Get(),
         pRenderer->DeviceFenceValue);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         assert(false && "ID3D12Fence::Signal failed");
         return false;
     }
@@ -399,13 +435,15 @@ bool WaitForGpu(DxRenderer* pRenderer)
     hr = pRenderer->DeviceFence->SetEventOnCompletion(
         pRenderer->DeviceFenceValue,
         pRenderer->DeviceWaitEventHandle);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         assert(false && "ID3D12Fence::SetEventOnCompletion failed");
         return false;
     }
 
     DWORD res = WaitForSingleObjectEx(pRenderer->DeviceWaitEventHandle, INFINITE, false);
-    if (res != WAIT_OBJECT_0) {
+    if (res != WAIT_OBJECT_0)
+    {
         assert(false && "WaitForSingleObjectEx failed");
         return false;
     }
@@ -415,12 +453,14 @@ bool WaitForGpu(DxRenderer* pRenderer)
 
 bool SwapchainPresent(DxRenderer* pRenderer)
 {
-    if (IsNull(pRenderer)) {
+    if (IsNull(pRenderer))
+    {
         return false;
     }
 
     HRESULT hr = pRenderer->Swapchain->Present(0, 0);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         assert(false && "IDXGISwapChain::Present failed");
         return false;
     }
@@ -429,7 +469,8 @@ bool SwapchainPresent(DxRenderer* pRenderer)
     hr = pRenderer->Queue->Signal(
         pRenderer->SwapchainFence.Get(),
         pRenderer->SwapchainFenceValue);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         assert(false && "ID3D12Fence::Signal failed");
         return false;
     }
@@ -437,13 +478,15 @@ bool SwapchainPresent(DxRenderer* pRenderer)
     hr = pRenderer->SwapchainFence->SetEventOnCompletion(
         pRenderer->SwapchainFenceValue,
         pRenderer->SwapchainWaitEventHandle);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         assert(false && "ID3D12Fence::SetEventOnCompletion failed");
         return false;
     }
 
     DWORD res = WaitForSingleObjectEx(pRenderer->SwapchainWaitEventHandle, INFINITE, false);
-    if (res != WAIT_OBJECT_0) {
+    if (res != WAIT_OBJECT_0)
+    {
         assert(false && "WaitForSingleObjectEx failed");
         return false;
     }
@@ -479,14 +522,17 @@ DXGI_FORMAT ToDxFormat(GREXFormat format)
 
 HRESULT CreateBuffer(DxRenderer* pRenderer, size_t size, D3D12_HEAP_TYPE heapType, ID3D12Resource** ppResource)
 {
-    if (IsNull(pRenderer)) {
+    if (IsNull(pRenderer))
+    {
         return E_UNEXPECTED;
     }
-    if (IsNull(ppResource)) {
+    if (IsNull(ppResource))
+    {
         return E_UNEXPECTED;
     }
 
-    switch (heapType) {
+    switch (heapType)
+    {
         default: return E_INVALIDARG;
         case D3D12_HEAP_TYPE_DEFAULT:
         case D3D12_HEAP_TYPE_UPLOAD:
@@ -512,13 +558,14 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t size, D3D12_HEAP_TYPE heapTyp
     D3D12_RESOURCE_STATES initialResourceState = (heapType == D3D12_HEAP_TYPE_UPLOAD) ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_COMMON;
 
     HRESULT hr = pRenderer->Device->CreateCommittedResource(
-        &heapProperties,             // pHeapProperties
-        D3D12_HEAP_FLAG_NONE,        // HeapFlags
-        &desc,                       // pDesc
-        initialResourceState,        // InitialResourceState
-        nullptr,                     // pOptimizedClearValues
-        IID_PPV_ARGS(ppResource));   // riidResource, ppvResouce
-    if (FAILED(hr)) {
+        &heapProperties,           // pHeapProperties
+        D3D12_HEAP_FLAG_NONE,      // HeapFlags
+        &desc,                     // pDesc
+        initialResourceState,      // InitialResourceState
+        nullptr,                   // pOptimizedClearValues
+        IID_PPV_ARGS(ppResource)); // riidResource, ppvResouce
+    if (FAILED(hr))
+    {
         return hr;
     }
 
@@ -527,13 +574,15 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t size, D3D12_HEAP_TYPE heapTyp
 
 HRESULT CreateBuffer(DxRenderer* pRenderer, ID3D12Resource* pSrcBuffer, D3D12_HEAP_TYPE heapType, ID3D12Resource** ppResource)
 {
-    if (IsNull(pSrcBuffer)) {
+    if (IsNull(pSrcBuffer))
+    {
         return E_UNEXPECTED;
     }
 
-    UINT64 srcSize = pSrcBuffer->GetDesc().Width;
-    HRESULT hr = CreateBuffer(pRenderer, static_cast<uint32_t>(srcSize), heapType, ppResource);
-    if (FAILED(hr)) {
+    UINT64  srcSize = pSrcBuffer->GetDesc().Width;
+    HRESULT hr      = CreateBuffer(pRenderer, static_cast<uint32_t>(srcSize), heapType, ppResource);
+    if (FAILED(hr))
+    {
         return hr;
     }
 
@@ -541,23 +590,27 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, ID3D12Resource* pSrcBuffer, D3D12_HE
     {
         ComPtr<ID3D12CommandAllocator> cmdAllocator;
         hr = pRenderer->Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAllocator));
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             return hr;
         }
 
         ComPtr<ID3D12GraphicsCommandList> cmdList;
         hr = pRenderer->Device->CreateCommandList1(0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(&cmdList));
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             return hr;
         }
 
         hr = cmdAllocator->Reset();
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             return hr;
         }
 
         hr = cmdList->Reset(cmdAllocator.Get(), nullptr);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             return hr;
         }
 
@@ -571,16 +624,18 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, ID3D12Resource* pSrcBuffer, D3D12_HE
                 srcSize);      // NumBytes
         }
         hr = cmdList->Close();
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             return hr;
-        } 
+        }
 
         ID3D12CommandList* pList = cmdList.Get();
         pRenderer->Queue->ExecuteCommandLists(1, &pList);
 
-        if (!WaitForGpu(pRenderer)) {
+        if (!WaitForGpu(pRenderer))
+        {
             return E_FAIL;
-        }    
+        }
     }
 
     return S_OK;
@@ -588,16 +643,19 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, ID3D12Resource* pSrcBuffer, D3D12_HE
 
 HRESULT CreateBuffer(DxRenderer* pRenderer, size_t bufferSize, size_t srcSize, const void* pSrcData, D3D12_HEAP_TYPE heapType, ID3D12Resource** ppResource)
 {
-    if (srcSize > bufferSize) {
+    if (srcSize > bufferSize)
+    {
         return E_INVALIDARG;
     }
 
     HRESULT hr = CreateBuffer(pRenderer, bufferSize, heapType, ppResource);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         return hr;
     }
 
-    if (!IsNull(pSrcData)) {
+    if (!IsNull(pSrcData))
+    {
         // Target buffer pointer - assume output resource
         ID3D12Resource* pTargetBuffer = (*ppResource);
 
@@ -605,9 +663,11 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t bufferSize, size_t srcSize, c
         // the target buffer pointer
         //
         ComPtr<ID3D12Resource> stagingBuffer;
-        if (heapType == D3D12_HEAP_TYPE_DEFAULT) {
+        if (heapType == D3D12_HEAP_TYPE_DEFAULT)
+        {
             HRESULT hr = CreateBuffer(pRenderer, srcSize, D3D12_HEAP_TYPE_UPLOAD, &stagingBuffer);
-            if (FAILED(hr)) {
+            if (FAILED(hr))
+            {
                 return hr;
             }
 
@@ -618,7 +678,8 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t bufferSize, size_t srcSize, c
         {
             void* pData = nullptr;
             hr          = pTargetBuffer->Map(0, nullptr, &pData);
-            if (FAILED(hr)) {
+            if (FAILED(hr))
+            {
                 return hr;
             }
 
@@ -628,26 +689,31 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t bufferSize, size_t srcSize, c
         }
 
         // Copy from pTargetBuffer to ppResource if heap type is DEFAULT
-        if (heapType == D3D12_HEAP_TYPE_DEFAULT) {
+        if (heapType == D3D12_HEAP_TYPE_DEFAULT)
+        {
             ComPtr<ID3D12CommandAllocator> cmdAllocator;
             hr = pRenderer->Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAllocator));
-            if (FAILED(hr)) {
+            if (FAILED(hr))
+            {
                 return hr;
             }
 
             ComPtr<ID3D12GraphicsCommandList> cmdList;
             hr = pRenderer->Device->CreateCommandList1(0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(&cmdList));
-            if (FAILED(hr)) {
+            if (FAILED(hr))
+            {
                 return hr;
             }
 
             hr = cmdAllocator->Reset();
-            if (FAILED(hr)) {
+            if (FAILED(hr))
+            {
                 return hr;
             }
 
             hr = cmdList->Reset(cmdAllocator.Get(), nullptr);
-            if (FAILED(hr)) {
+            if (FAILED(hr))
+            {
                 return hr;
             }
 
@@ -661,14 +727,16 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t bufferSize, size_t srcSize, c
                     static_cast<UINT64>(srcSize)); // NumBytes
             }
             hr = cmdList->Close();
-            if (FAILED(hr)) {
+            if (FAILED(hr))
+            {
                 return hr;
             }
 
             ID3D12CommandList* pList = cmdList.Get();
             pRenderer->Queue->ExecuteCommandLists(1, &pList);
 
-            if (!WaitForGpu(pRenderer)) {
+            if (!WaitForGpu(pRenderer))
+            {
                 return E_FAIL;
             }
         }
@@ -682,7 +750,8 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData
     const size_t bufferSize = srcSize;
 
     HRESULT hr = CreateBuffer(pRenderer, bufferSize, srcSize, pSrcData, heapType, ppResource);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         return hr;
     }
     return S_OK;
@@ -691,7 +760,8 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData
 HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData, ID3D12Resource** ppResource)
 {
     HRESULT hr = CreateBuffer(pRenderer, srcSize, pSrcData, D3D12_HEAP_TYPE_UPLOAD, ppResource);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         return hr;
     }
     return S_OK;
@@ -719,7 +789,8 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData
 
 HRESULT CreateBuffer(DxRenderer* pRenderer, size_t srcSize, const void* pSrcData, size_t minAlignment, ID3D12Resource** ppResource)
 {
-    if (minAlignment > 0) {
+    if (minAlignment > 0)
+    {
         srcSize = Align<size_t>(srcSize, minAlignment);
     }
 
@@ -732,18 +803,21 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t rowStride, size_t numRows, co
     size_t alignedBufferSize = alignedRowStride * numRows;
 
     HRESULT hr = CreateBuffer(pRenderer, alignedBufferSize, nullptr, ppResource);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         return hr;
     }
 
     char* pDstRow = nullptr;
     hr            = (*ppResource)->Map(0, nullptr, reinterpret_cast<void**>(&pDstRow));
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         return hr;
     }
 
     const char* pSrcRow = static_cast<const char*>(pSrcData);
-    for (size_t i = 0; i < numRows; ++i) {
+    for (size_t i = 0; i < numRows; ++i)
+    {
         memcpy(pDstRow, pSrcRow, rowStride);
         pSrcRow += rowStride;
         pDstRow += alignedRowStride;
@@ -756,10 +830,12 @@ HRESULT CreateBuffer(DxRenderer* pRenderer, size_t rowStride, size_t numRows, co
 
 HRESULT CreateUAVBuffer(DxRenderer* pRenderer, size_t size, D3D12_RESOURCE_STATES initialResourceState, ID3D12Resource** ppResource)
 {
-    if (IsNull(pRenderer)) {
+    if (IsNull(pRenderer))
+    {
         return E_UNEXPECTED;
     }
-    if (IsNull(ppResource)) {
+    if (IsNull(ppResource))
+    {
         return E_UNEXPECTED;
     }
 
@@ -785,7 +861,8 @@ HRESULT CreateUAVBuffer(DxRenderer* pRenderer, size_t size, D3D12_RESOURCE_STATE
         initialResourceState,      // InitialResourceState
         nullptr,                   // pOptimizedClearValues
         IID_PPV_ARGS(ppResource)); // riidResource, ppvResouce
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         return hr;
     }
 
@@ -801,13 +878,16 @@ HRESULT CreateTexture(
     uint32_t         numArrayLayers,
     ID3D12Resource** ppResource)
 {
-    if (IsNull(pRenderer)) {
+    if (IsNull(pRenderer))
+    {
         return E_UNEXPECTED;
     }
-    if (IsNull(ppResource)) {
+    if (IsNull(ppResource))
+    {
         return E_UNEXPECTED;
     }
-    if ((format == DXGI_FORMAT_UNKNOWN) || IsVideo(format)) {
+    if ((format == DXGI_FORMAT_UNKNOWN) || IsVideo(format))
+    {
         return E_INVALIDARG;
     }
 
@@ -833,7 +913,8 @@ HRESULT CreateTexture(
         D3D12_RESOURCE_STATE_COPY_DEST, // InitialResourceState
         nullptr,                        // pOptimizedClearValues
         IID_PPV_ARGS(ppResource));      // riidResource, ppvResouce
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         return hr;
     }
 
@@ -860,33 +941,40 @@ HRESULT CreateTexture(
         numMipLevels,
         1, // numArrayLayers
         ppResource);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         return hr;
     }
 
-    if (!IsNull(pSrcData)) {
+    if (!IsNull(pSrcData))
+    {
         ComPtr<ID3D12Resource> stagingBuffer;
-        if (IsCompressed(format)) {
+        if (IsCompressed(format))
+        {
             hr = CreateBuffer(pRenderer, srcSizeBytes, pSrcData, &stagingBuffer);
-            if (FAILED(hr)) {
+            if (FAILED(hr))
+            {
                 assert(false && "create staging buffer failed");
                 return hr;
             }
         }
-        else {
+        else
+        {
             const uint32_t rowStride = width * PixelStride(format);
             // Calculate the total number of rows for all mip maps
             uint32_t numRows = 0;
             {
                 uint32_t mipHeight = height;
-                for (UINT level = 0; level < numMipLevels; ++level) {
+                for (UINT level = 0; level < numMipLevels; ++level)
+                {
                     numRows += mipHeight;
                     mipHeight >>= 1;
                 }
             }
 
             hr = CreateBuffer(pRenderer, rowStride, numRows, pSrcData, &stagingBuffer);
-            if (FAILED(hr)) {
+            if (FAILED(hr))
+            {
                 assert(false && "create staging buffer failed");
                 return hr;
             }
@@ -894,26 +982,30 @@ HRESULT CreateTexture(
 
         ComPtr<ID3D12CommandAllocator> cmdAllocator;
         hr = pRenderer->Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAllocator));
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             assert(false && "create staging command allocator failed");
             return hr;
         }
 
         ComPtr<ID3D12GraphicsCommandList> cmdList;
         hr = pRenderer->Device->CreateCommandList1(0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(&cmdList));
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             assert(false && "create staging command list failed");
             return hr;
         }
 
         hr = cmdAllocator->Reset();
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             assert(false && "reset command allocator failed");
             return hr;
         }
 
         hr = cmdList->Reset(cmdAllocator.Get(), nullptr);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             assert(false && "reset command list failed");
             return hr;
         }
@@ -922,10 +1014,12 @@ HRESULT CreateTexture(
         {
             uint32_t levelWidth  = width;
             uint32_t levelHeight = height;
-            for (UINT level = 0; level < numMipLevels; ++level) {
-                const auto&    mipOffset    = mipOffsets[level];
-                uint32_t mipRowStride = Align<uint32_t>(mipOffset.RowStride, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-                if (IsCompressed(format)) {
+            for (UINT level = 0; level < numMipLevels; ++level)
+            {
+                const auto& mipOffset    = mipOffsets[level];
+                uint32_t    mipRowStride = Align<uint32_t>(mipOffset.RowStride, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+                if (IsCompressed(format))
+                {
                     //
                     // This is hack based on values returned by GetCopyableFootprints().
                     //
@@ -964,7 +1058,8 @@ HRESULT CreateTexture(
             }
         }
         hr = cmdList->Close();
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             assert(false && "close command list failed");
             return hr;
         }
@@ -972,7 +1067,8 @@ HRESULT CreateTexture(
         ID3D12CommandList* pList = cmdList.Get();
         pRenderer->Queue->ExecuteCommandLists(1, &pList);
 
-        if (!WaitForGpu(pRenderer)) {
+        if (!WaitForGpu(pRenderer))
+        {
             assert(false && "WaitForGpu failed");
             return false;
         }
@@ -1143,7 +1239,8 @@ HRESULT CreateDrawVertexColorPipeline(
     desc.Flags                                            = D3D12_PIPELINE_STATE_FLAG_NONE;
 
     HRESULT hr = pRenderer->Device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(ppPipeline));
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         return hr;
     }
 
@@ -1238,7 +1335,8 @@ HRESULT CreateDrawVertexColorAndTexCoordPipeline(
     desc.Flags                                            = D3D12_PIPELINE_STATE_FLAG_NONE;
 
     HRESULT hr = pRenderer->Device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(ppPipeline));
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         return hr;
     }
 
@@ -1271,7 +1369,8 @@ HRESULT CreateDrawNormalPipeline(
     inputElementDesc[1].AlignedByteOffset        = D3D12_APPEND_ALIGNED_ELEMENT;
     inputElementDesc[1].InputSlotClass           = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
     inputElementDesc[1].InstanceDataStepRate     = 0;
-    if (enableTangents) {
+    if (enableTangents)
+    {
         inputElementDesc[2].SemanticName         = "TANGENT";
         inputElementDesc[2].SemanticIndex        = 0;
         inputElementDesc[2].Format               = DXGI_FORMAT_R32G32B32_FLOAT;
@@ -1340,7 +1439,8 @@ HRESULT CreateDrawNormalPipeline(
     desc.Flags                                            = D3D12_PIPELINE_STATE_FLAG_NONE;
 
     HRESULT hr = pRenderer->Device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(ppPipeline));
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         return hr;
     }
 
@@ -1425,7 +1525,8 @@ HRESULT CreateDrawTexturePipeline(
     desc.Flags                                            = D3D12_PIPELINE_STATE_FLAG_NONE;
 
     HRESULT hr = pRenderer->Device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(ppPipeline));
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         return hr;
     }
 
@@ -1517,7 +1618,8 @@ HRESULT CreateDrawBasicPipeline(
     desc.Flags                                            = D3D12_PIPELINE_STATE_FLAG_NONE;
 
     HRESULT hr = pRenderer->Device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(ppPipeline));
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         return hr;
     }
 
@@ -1630,7 +1732,8 @@ HRESULT CreateGraphicsPipeline1(
     desc.Flags                                            = D3D12_PIPELINE_STATE_FLAG_NONE;
 
     HRESULT hr = pRenderer->Device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(ppPipeline));
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         return hr;
     }
 
@@ -1735,7 +1838,8 @@ HRESULT CreateGraphicsPipeline2(
     desc.Flags                                            = D3D12_PIPELINE_STATE_FLAG_NONE;
 
     HRESULT hr = pRenderer->Device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(ppPipeline));
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         return hr;
     }
 
@@ -1744,15 +1848,15 @@ HRESULT CreateGraphicsPipeline2(
 
 #if defined(GREX_USE_D3DX12)
 HRESULT CreateMeshShaderPipeline(
-    DxRenderer*                   pRenderer,
-    ID3D12RootSignature*          pRootSig,
-    const std::vector<char>&      asShaderBytecode,
-    const std::vector<char>&      msShaderBytecode,
-    const std::vector<char>&      psShaderBytecode,
-    DXGI_FORMAT                   rtvFormat,
-    DXGI_FORMAT                   dsvFormat,
-    ID3D12PipelineState**         ppPipeline,
-    D3D12_CULL_MODE               cullMode)
+    DxRenderer*              pRenderer,
+    ID3D12RootSignature*     pRootSig,
+    const std::vector<char>& asShaderBytecode,
+    const std::vector<char>& msShaderBytecode,
+    const std::vector<char>& psShaderBytecode,
+    DXGI_FORMAT              rtvFormat,
+    DXGI_FORMAT              dsvFormat,
+    ID3D12PipelineState**    ppPipeline,
+    D3D12_CULL_MODE          cullMode)
 {
     D3DX12_MESH_SHADER_PIPELINE_STATE_DESC psoDesc           = {};
     psoDesc.pRootSignature                                   = pRootSig;
@@ -1809,22 +1913,23 @@ HRESULT CreateMeshShaderPipeline(
     steamDesc.pPipelineStateSubobjectStream    = &psoStream;
 
     HRESULT hr = pRenderer->Device->CreatePipelineState(&steamDesc, IID_PPV_ARGS(ppPipeline));
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         return hr;
     }
 
-    return S_OK; 
+    return S_OK;
 }
 
 HRESULT CreateMeshShaderPipeline(
-    DxRenderer*                   pRenderer,
-    ID3D12RootSignature*          pRootSig,
-    const std::vector<char>&      msShaderBytecode,
-    const std::vector<char>&      psShaderBytecode,
-    DXGI_FORMAT                   rtvFormat,
-    DXGI_FORMAT                   dsvFormat,
-    ID3D12PipelineState**         ppPipeline,
-    D3D12_CULL_MODE               cullMode)
+    DxRenderer*              pRenderer,
+    ID3D12RootSignature*     pRootSig,
+    const std::vector<char>& msShaderBytecode,
+    const std::vector<char>& psShaderBytecode,
+    DXGI_FORMAT              rtvFormat,
+    DXGI_FORMAT              dsvFormat,
+    ID3D12PipelineState**    ppPipeline,
+    D3D12_CULL_MODE          cullMode)
 {
     return CreateMeshShaderPipeline(
         pRenderer,
@@ -1842,7 +1947,8 @@ HRESULT CreateMeshShaderPipeline(
 static std::wstring AsciiToUTF16(const std::string& ascii)
 {
     std::wstring utf16;
-    for (auto& c : ascii) {
+    for (auto& c : ascii)
+    {
         utf16.push_back(static_cast<std::wstring::value_type>(c));
     }
     return utf16;
@@ -1856,22 +1962,26 @@ HRESULT CompileHLSL(
     std::string*       pErrorMsg)
 {
     // Check source
-    if (shaderSource.empty()) {
+    if (shaderSource.empty())
+    {
         assert(false && "no shader source");
         return E_INVALIDARG;
     }
     // Check entry point
-    if (entryPoint.empty() && (!profile.starts_with("lib_6_"))) {
+    if (entryPoint.empty() && (!profile.starts_with("lib_6_")))
+    {
         assert(false && "no entrypoint");
         return E_INVALIDARG;
     }
     // Check profile
-    if (profile.empty()) {
+    if (profile.empty())
+    {
         assert(false && "no profile");
         return E_INVALIDARG;
     }
     // Check output
-    if (IsNull(pDXIL)) {
+    if (IsNull(pDXIL))
+    {
         assert(false && "DXIL output arg is null");
         return E_INVALIDARG;
     }
@@ -1905,18 +2015,21 @@ HRESULT CompileHLSL(
         static_cast<UINT>(args.size()),
         nullptr,
         IID_PPV_ARGS(&result));
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         assert(false && "compile failed");
         return hr;
     }
 
     ComPtr<IDxcBlob> errors;
     hr = result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errors), nullptr);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         assert(false && "Get error output failed");
         return hr;
     }
-    if (errors && (errors->GetBufferSize() > 0) && !IsNull(pErrorMsg)) {
+    if (errors && (errors->GetBufferSize() > 0) && !IsNull(pErrorMsg))
+    {
         const char* pBuffer    = static_cast<const char*>(errors->GetBufferPointer());
         size_t      bufferSize = static_cast<size_t>(errors->GetBufferSize());
         *pErrorMsg             = std::string(pBuffer, pBuffer + bufferSize);
@@ -1930,7 +2043,8 @@ HRESULT CompileHLSL(
 
     ComPtr<IDxcBlob> shaderBinary;
     hr = result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shaderBinary), nullptr);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         assert(false && "Get compile output failed");
         return hr;
     }
@@ -1945,35 +2059,35 @@ HRESULT CompileHLSL(
 //
 // From: https://github.com/microsoft/DirectXTex/blob/main/DirectXTex/DirectXTex.inl#L53
 //
-bool IsCompressed(DXGI_FORMAT fmt) 
+bool IsCompressed(DXGI_FORMAT fmt)
 {
     switch (fmt)
     {
-    case DXGI_FORMAT_BC1_TYPELESS:
-    case DXGI_FORMAT_BC1_UNORM:
-    case DXGI_FORMAT_BC1_UNORM_SRGB:
-    case DXGI_FORMAT_BC2_TYPELESS:
-    case DXGI_FORMAT_BC2_UNORM:
-    case DXGI_FORMAT_BC2_UNORM_SRGB:
-    case DXGI_FORMAT_BC3_TYPELESS:
-    case DXGI_FORMAT_BC3_UNORM:
-    case DXGI_FORMAT_BC3_UNORM_SRGB:
-    case DXGI_FORMAT_BC4_TYPELESS:
-    case DXGI_FORMAT_BC4_UNORM:
-    case DXGI_FORMAT_BC4_SNORM:
-    case DXGI_FORMAT_BC5_TYPELESS:
-    case DXGI_FORMAT_BC5_UNORM:
-    case DXGI_FORMAT_BC5_SNORM:
-    case DXGI_FORMAT_BC6H_TYPELESS:
-    case DXGI_FORMAT_BC6H_UF16:
-    case DXGI_FORMAT_BC6H_SF16:
-    case DXGI_FORMAT_BC7_TYPELESS:
-    case DXGI_FORMAT_BC7_UNORM:
-    case DXGI_FORMAT_BC7_UNORM_SRGB:
-        return true;
+        case DXGI_FORMAT_BC1_TYPELESS:
+        case DXGI_FORMAT_BC1_UNORM:
+        case DXGI_FORMAT_BC1_UNORM_SRGB:
+        case DXGI_FORMAT_BC2_TYPELESS:
+        case DXGI_FORMAT_BC2_UNORM:
+        case DXGI_FORMAT_BC2_UNORM_SRGB:
+        case DXGI_FORMAT_BC3_TYPELESS:
+        case DXGI_FORMAT_BC3_UNORM:
+        case DXGI_FORMAT_BC3_UNORM_SRGB:
+        case DXGI_FORMAT_BC4_TYPELESS:
+        case DXGI_FORMAT_BC4_UNORM:
+        case DXGI_FORMAT_BC4_SNORM:
+        case DXGI_FORMAT_BC5_TYPELESS:
+        case DXGI_FORMAT_BC5_UNORM:
+        case DXGI_FORMAT_BC5_SNORM:
+        case DXGI_FORMAT_BC6H_TYPELESS:
+        case DXGI_FORMAT_BC6H_UF16:
+        case DXGI_FORMAT_BC6H_SF16:
+        case DXGI_FORMAT_BC7_TYPELESS:
+        case DXGI_FORMAT_BC7_UNORM:
+        case DXGI_FORMAT_BC7_UNORM_SRGB:
+            return true;
 
-    default:
-        return false;
+        default:
+            return false;
     }
 }
 
@@ -1982,7 +2096,8 @@ bool IsCompressed(DXGI_FORMAT fmt)
 //
 bool IsVideo(DXGI_FORMAT fmt)
 {
-    switch (static_cast<int>(fmt)) {
+    switch (static_cast<int>(fmt))
+    {
         case DXGI_FORMAT_AYUV:
         case DXGI_FORMAT_Y410:
         case DXGI_FORMAT_Y416:
@@ -2014,7 +2129,8 @@ bool IsVideo(DXGI_FORMAT fmt)
 //
 uint32_t BitsPerPixel(DXGI_FORMAT fmt)
 {
-    switch (static_cast<int>(fmt)) {
+    switch (static_cast<int>(fmt))
+    {
         case DXGI_FORMAT_R32G32B32A32_TYPELESS:
         case DXGI_FORMAT_R32G32B32A32_FLOAT:
         case DXGI_FORMAT_R32G32B32A32_UINT:
@@ -2157,18 +2273,21 @@ uint32_t BitsPerPixel(DXGI_FORMAT fmt)
 
 HRESULT CopyDataToBuffer(size_t dataSize, void* pData, ID3D12Resource* pBuffer)
 {
-    if ((dataSize == 0) || (pData == nullptr) || (pBuffer == nullptr)) {
+    if ((dataSize == 0) || (pData == nullptr) || (pBuffer == nullptr))
+    {
         return E_INVALIDARG;
     }
 
-    if (dataSize > pBuffer->GetDesc().Width) {
+    if (dataSize > pBuffer->GetDesc().Width)
+    {
         assert(false && "data size exceeds buffer size");
         return E_ABORT;
     }
 
     char*   pDst = nullptr;
     HRESULT hr   = pBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pDst));
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         return hr;
     }
 

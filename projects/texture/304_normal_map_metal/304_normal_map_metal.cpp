@@ -67,10 +67,12 @@ void MouseMove(int x, int y, int buttons)
     int dx = x - prevX;
     int dy = y - prevY;
 
-    if (buttons & MOUSE_BUTTON_RIGHT) {
+    if (buttons & MOUSE_BUTTON_RIGHT)
+    {
         gTargetAngleX += 0.25f * dy;
     }
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         gTargetAngleY += 0.25f * dx;
     }
 
@@ -93,7 +95,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Compile shaders
     // *************************************************************************
-	std::string shaderSource = LoadString("projects/304_normal_map/shaders.metal");
+    std::string shaderSource = LoadString("projects/304_normal_map/shaders.metal");
 
     MetalShader vsShader;
     MetalShader fsShader;
@@ -144,8 +146,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Texture
     // *************************************************************************
-	MetalTexture diffuseTexture;
-	MetalTexture normalTexture;
+    MetalTexture diffuseTexture;
+    MetalTexture normalTexture;
     CreateTextures(renderer.get(), &diffuseTexture, &normalTexture);
 
     // *************************************************************************
@@ -334,10 +336,10 @@ void CreateGeometryBuffers(
     MetalBuffer*   pBitangentBuffer)
 {
     TriMesh::Options options;
-    options.enableTexCoords  = true;
-    options.enableNormals    = true;
-    options.enableTangents   = true;
-    TriMesh mesh             = TriMesh::Cube(vec3(1), false, options);
+    options.enableTexCoords = true;
+    options.enableNormals   = true;
+    options.enableTangents  = true;
+    TriMesh mesh            = TriMesh::Cube(vec3(1), false, options);
 
     CHECK_CALL(CreateBuffer(
         pRenderer,

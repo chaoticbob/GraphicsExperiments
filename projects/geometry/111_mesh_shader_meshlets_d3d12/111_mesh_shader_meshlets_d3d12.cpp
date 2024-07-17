@@ -142,7 +142,7 @@ int main(int argc, char** argv)
         meshlets.resize(meshletCount);
     }
 
-    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to 
+    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to
     // make it easier to unpack on the GPU.
     //
     std::vector<uint32_t> meshletTrianglesU32;
@@ -333,7 +333,7 @@ int main(int argc, char** argv)
             PerspCamera camera = PerspCamera(60.0f, window->GetAspectRatio());
             camera.LookAt(vec3(0, 0.105f, 0.40f), vec3(0, 0.105f, 0));
 
-            mat4 R = glm::rotate(static_cast<float>(glfwGetTime()), glm::vec3(0, 1, 0));
+            mat4 R   = glm::rotate(static_cast<float>(glfwGetTime()), glm::vec3(0, 1, 0));
             mat4 MVP = camera.GetViewProjectionMatrix() * R;
 
             commandList->SetGraphicsRoot32BitConstants(0, 16, &MVP, 0);

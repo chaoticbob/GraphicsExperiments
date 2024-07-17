@@ -230,7 +230,7 @@ int main(int argc, char** argv)
     VulkanBuffer meshletTrianglesBuffer;
     {
         VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-        
+
         CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(positions), DataPtr(positions), usageFlags, 0, &positionBuffer));
         CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(texCoords), DataPtr(texCoords), usageFlags, 0, &texCoordsBuffer));
         CHECK_CALL(CreateBuffer(renderer.get(), SizeInBytes(normals), DataPtr(normals), usageFlags, 0, &normalsBuffer));

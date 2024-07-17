@@ -29,9 +29,9 @@ using namespace glm;
 // =============================================================================
 // Macros, enums, and constants
 // =============================================================================
-//const uint32_t kOutputResourcesOffset = 0;
-//const uint32_t kGeoBuffersOffset      = 20;
-//const uint32_t kIBLTextureOffset      = 3;
+// const uint32_t kOutputResourcesOffset = 0;
+// const uint32_t kGeoBuffersOffset      = 20;
+// const uint32_t kIBLTextureOffset      = 3;
 
 const uint32_t kGeometryArgBufferParamIndex = 6;
 
@@ -104,11 +104,11 @@ void CreateGeometries(
     Geometry&      outBoxGeometry);
 
 void CreateBLASes(
-    MetalRenderer*   pRenderer,
-    const Geometry&  sphereGeometry,
-    const Geometry&  boxGeometry,
-    MetalAS*         pSphereBLAS,
-    MetalAS*         pBoxBLAS);
+    MetalRenderer*  pRenderer,
+    const Geometry& sphereGeometry,
+    const Geometry& boxGeometry,
+    MetalAS*        pSphereBLAS,
+    MetalAS*        pBoxBLAS);
 
 void CreateTLAS(
     MetalRenderer*                   pRenderer,
@@ -117,7 +117,7 @@ void CreateTLAS(
     MetalAS*                         pTLAS,
     MetalBuffer*                     pInstanceBuffer,
     std::vector<MaterialParameters>& outMaterialParams);
-    
+
 void CreateIBLTextures(
     MetalRenderer* pRenderer,
     IBLTextures&   outIBLTextures);
@@ -161,13 +161,13 @@ int main(int argc, char** argv)
     // *************************************************************************
     auto source = LoadString("projects/030_raytracing_path_trace/shaders.metal");
     assert((!source.empty()) && "no shader source!");
-    
+
     auto compileOptions = NS::TransferPtr(MTL::CompileOptions::alloc()->init());
     compileOptions->setLanguageVersion(MTL::LanguageVersion3_1);
     compileOptions->setFastMathEnabled(false);
     compileOptions->setOptimizationLevel(MTL::LibraryOptimizationLevelDefault);
-    
-    NS::Error* pError  = nullptr;
+
+    NS::Error* pError = nullptr;
     //
     auto library = NS::TransferPtr(renderer->Device->newLibrary(
         NS::String::string(source.c_str(), NS::UTF8StringEncoding),
@@ -254,7 +254,7 @@ int main(int argc, char** argv)
         NS::Error* error;
         copyPipeline = NS::TransferPtr(renderer->Device->newRenderPipelineState(pipelineDesc.get(), &error));
     }
-        
+
     // *************************************************************************
     // Create geometry
     // *************************************************************************
@@ -263,7 +263,7 @@ int main(int argc, char** argv)
     CreateGeometries(
         renderer.get(),
         sphereGeometry,
-        boxGeometry);        
+        boxGeometry);
 
     // *************************************************************************
     // Geometry argument buffer
@@ -271,19 +271,20 @@ int main(int argc, char** argv)
     NS::SharedPtr<MTL::Buffer> geometryArgBuffer;
     {
         auto argEncoder = NS::TransferPtr(rayTraceShader.Function->newArgumentEncoder(kGeometryArgBufferParamIndex));
-        
+
         geometryArgBuffer = NS::TransferPtr(renderer->Device->newBuffer(argEncoder->encodedLength(), MTL::ResourceStorageModeManaged));
         argEncoder->setArgumentBuffer(geometryArgBuffer.get(), 0);
-        
-        for (uint i = 0; i < 4; ++i) {
-            argEncoder->setBuffer(sphereGeometry.indexBuffer.Buffer.get(),    0, 0 + i);
+
+        for (uint i = 0; i < 4; ++i)
+        {
+            argEncoder->setBuffer(sphereGeometry.indexBuffer.Buffer.get(), 0, 0 + i);
             argEncoder->setBuffer(sphereGeometry.positionBuffer.Buffer.get(), 0, 5 + i);
-            argEncoder->setBuffer(sphereGeometry.normalBuffer.Buffer.get(),   0, 10 + i);
+            argEncoder->setBuffer(sphereGeometry.normalBuffer.Buffer.get(), 0, 10 + i);
         }
-        argEncoder->setBuffer(boxGeometry.indexBuffer.Buffer.get(),    0, 0 + 4);
+        argEncoder->setBuffer(boxGeometry.indexBuffer.Buffer.get(), 0, 0 + 4);
         argEncoder->setBuffer(boxGeometry.positionBuffer.Buffer.get(), 0, 5 + 4);
-        argEncoder->setBuffer(boxGeometry.normalBuffer.Buffer.get(),   0, 10 + 4);
-        
+        argEncoder->setBuffer(boxGeometry.normalBuffer.Buffer.get(), 0, 10 + 4);
+
         geometryArgBuffer->didModifyRange(NS::Range::Make(0, geometryArgBuffer->length()));
     }
 
@@ -318,7 +319,7 @@ int main(int argc, char** argv)
         CHECK_CALL(CreateRWTexture(renderer.get(), gWindowWidth, gWindowHeight, MTL::PixelFormatRGBA8Unorm, &outputTexture));
         CHECK_CALL(CreateRWTexture(renderer.get(), gWindowWidth, gWindowHeight, MTL::PixelFormatRGBA32Float, &accumTexture));
     }
-    
+
     // *************************************************************************
     // Ray gen samples buffer
     // *************************************************************************s
@@ -361,25 +362,26 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForMetal(renderer.get())) {
+    if (!window->InitImGuiForMetal(renderer.get()))
+    {
         assert(false && "GrexWindow::InitImGuiForMetal failed");
         return EXIT_FAILURE;
     }
-    
+
     // *************************************************************************
     // Scene parameters
     // *************************************************************************
-    //SceneParameters sceneParams = {};
+    // SceneParameters sceneParams = {};
     MetalBuffer sceneParamsBuffer;
     CHECK_CALL(CreateBuffer(renderer.get(), sizeof(SceneParameters), nullptr, MTL::ResourceStorageModeShared, &sceneParamsBuffer));
     SceneParameters* pSceneParams = (SceneParameters*)sceneParamsBuffer.Buffer->contents();
-    
+
     // *************************************************************************
     // Misc vars
     // *************************************************************************
     uint32_t sampleCount     = 0;
-    float    rayGenStartTime = 0;    
-    
+    float    rayGenStartTime = 0;
+
     // *************************************************************************
     // Main loop
     // *************************************************************************
@@ -389,7 +391,8 @@ int main(int argc, char** argv)
     {
         window->ImGuiNewFrameMetal(pRenderPassDescriptor);
 
-        if (ImGui::Begin("Scene")) {
+        if (ImGui::Begin("Scene"))
+        {
             ImGui::SliderInt("Max Samples Per Pixel", reinterpret_cast<int*>(&gMaxSamples), 1, 16384);
 
             ImGui::Separator();
@@ -402,7 +405,8 @@ int main(int argc, char** argv)
             ImGui::Separator();
 
             static float elapsedTime = 0;
-            if (sampleCount < gMaxSamples) {
+            if (sampleCount < gMaxSamples)
+            {
                 float currentTime = static_cast<float>(glfwGetTime());
                 elapsedTime       = currentTime - rayGenStartTime;
             }
@@ -410,7 +414,7 @@ int main(int argc, char** argv)
             ImGui::Text("Render time: %0.3f seconds", elapsedTime);
         }
         ImGui::End();
-        
+
         // ---------------------------------------------------------------------
 
         if (gCurrentMaxSamples != gMaxSamples)
@@ -441,13 +445,13 @@ int main(int argc, char** argv)
         pSceneParams->MaxSamples              = gCurrentMaxSamples;
 
         // ---------------------------------------------------------------------
-    
+
         CA::MetalDrawable* pDrawable = renderer->pSwapchain->nextDrawable();
         assert(pDrawable != nullptr);
 
         auto commandBufferDescriptor = NS::TransferPtr(MTL::CommandBufferDescriptor::alloc()->init());
         commandBufferDescriptor->setErrorOptions(MTL::CommandBufferErrorOptionEncoderExecutionStatus);
-        
+
         MTL::CommandBuffer* pCommandBuffer = renderer->Queue->commandBuffer(commandBufferDescriptor.get());
 
         // Reset ray gen samples
@@ -455,13 +459,13 @@ int main(int argc, char** argv)
         {
             sampleCount     = 0;
             rayGenStartTime = static_cast<float>(glfwGetTime());
-            
+
             MTL::ComputeCommandEncoder* pComputeEncoder = pCommandBuffer->computeCommandEncoder();
 
             pComputeEncoder->setComputePipelineState(clearPipeline.get());
             pComputeEncoder->setTexture(accumTexture.Texture.get(), 0);
             pComputeEncoder->setBuffer(rayGenSamplesBuffer.Buffer.get(), 0, 0);
-            
+
             MTL::Size threadsPerThreadgroup = {8, 8, 1};
             MTL::Size threadsPerGrid        = {
                 (gWindowWidth + threadsPerThreadgroup.width - 1) / threadsPerThreadgroup.width,
@@ -471,16 +475,16 @@ int main(int argc, char** argv)
             pComputeEncoder->useResource(accumTexture.Texture.get(), MTL::ResourceUsageWrite);
             pComputeEncoder->useResource(rayGenSamplesBuffer.Buffer.get(), MTL::ResourceUsageWrite);
             pComputeEncoder->dispatchThreadgroups(threadsPerGrid, threadsPerThreadgroup);
-            
+
             pComputeEncoder->endEncoding();
-            
+
             gResetRayGenSamples = false;
         }
 
         // Ray trace
         {
             MTL::ComputeCommandEncoder* pComputeEncoder = pCommandBuffer->computeCommandEncoder();
-            
+
             pComputeEncoder->setComputePipelineState(rayTracePipeline.get());
             pComputeEncoder->setAccelerationStructure(TLAS.AS.get(), 0);
             pComputeEncoder->setBuffer(instanceBuffer.Buffer.get(), 0, 1);
@@ -491,16 +495,16 @@ int main(int argc, char** argv)
             pComputeEncoder->setTexture(iblTextures.envTexture.Texture.get(), 3);
             pComputeEncoder->setTexture(outputTexture.Texture.get(), 0);
             pComputeEncoder->setTexture(accumTexture.Texture.get(), 1);
-            
+
             pComputeEncoder->useResource(materialParamsBuffer.Buffer.get(), MTL::ResourceUsageRead);
             pComputeEncoder->useResource(sphereGeometry.indexBuffer.Buffer.get(), MTL::ResourceUsageRead);
             pComputeEncoder->useResource(sphereGeometry.normalBuffer.Buffer.get(), MTL::ResourceUsageRead);
             pComputeEncoder->useResource(boxGeometry.indexBuffer.Buffer.get(), MTL::ResourceUsageRead);
             pComputeEncoder->useResource(boxGeometry.normalBuffer.Buffer.get(), MTL::ResourceUsageRead);
-            
+
             pComputeEncoder->useResource(accumTexture.Texture.get(), MTL::ResourceUsageRead);
             pComputeEncoder->useResource(rayGenSamplesBuffer.Buffer.get(), MTL::ResourceUsageRead);
-            
+
             // Add a useResource() call for every BLAS used by the TLAS
             pComputeEncoder->useResource(sphereBLAS.AS.get(), MTL::ResourceUsageRead);
             pComputeEncoder->useResource(boxBLAS.AS.get(), MTL::ResourceUsageRead);
@@ -517,7 +521,7 @@ int main(int argc, char** argv)
             }
             pComputeEncoder->endEncoding();
         }
-        
+
         // Copy to swapchain image
         {
             auto colorTargetDesc = NS::TransferPtr(MTL::RenderPassColorAttachmentDescriptor::alloc()->init());
@@ -529,25 +533,26 @@ int main(int argc, char** argv)
             MTL::RenderCommandEncoder* pRenderEncoder = pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
             pRenderEncoder->setRenderPipelineState(copyPipeline.get());
             pRenderEncoder->setFragmentTexture(outputTexture.Texture.get(), 0);
-            
+
             pRenderEncoder->useResource(outputTexture.Texture.get(), MTL::ResourceUsageRead);
-            
+
             pRenderEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::Integer(0), 6);
-        
+
             // Draw ImGui
             window->ImGuiRenderDrawData(renderer.get(), pCommandBuffer, pRenderEncoder);
-            
+
             pRenderEncoder->endEncoding();
         }
 
         pCommandBuffer->presentDrawable(pDrawable);
         pCommandBuffer->commit();
         pCommandBuffer->waitUntilCompleted();
-        
+
         // Update sample count
-        if (sampleCount < gMaxSamples) {
+        if (sampleCount < gMaxSamples)
+        {
             ++sampleCount;
-        }        
+        }
     }
 
     return 0;
@@ -588,7 +593,7 @@ void CreateGeometries(
 
         geo.indexCount  = 3 * mesh.GetNumTriangles();
         geo.vertexCount = mesh.GetNumVertices();
-        
+
         geo.indexBuffer.Buffer->setLabel(NS::String::string("Sphere Index Buffer", NS::UTF8StringEncoding));
         geo.positionBuffer.Buffer->setLabel(NS::String::string("Sphere Position Buffer", NS::UTF8StringEncoding));
         geo.normalBuffer.Buffer->setLabel(NS::String::string("Sphere Normal Buffer", NS::UTF8StringEncoding));
@@ -627,19 +632,20 @@ void CreateGeometries(
 }
 
 void CreateBLASes(
-    MetalRenderer*   pRenderer,
-    const Geometry&  sphereGeometry,
-    const Geometry&  boxGeometry,
-    MetalAS*         pSphereBLAS,
-    MetalAS*         pBoxBLAS)
+    MetalRenderer*  pRenderer,
+    const Geometry& sphereGeometry,
+    const Geometry& boxGeometry,
+    MetalAS*        pSphereBLAS,
+    MetalAS*        pBoxBLAS)
 {
-    std::vector<const Geometry*>  geometries = {&sphereGeometry, &boxGeometry};
-    std::vector<MetalAS*>         BLASes     = {pSphereBLAS, pBoxBLAS};
-    
-    for (uint32_t i = 0; i < 2; ++i) {
+    std::vector<const Geometry*> geometries = {&sphereGeometry, &boxGeometry};
+    std::vector<MetalAS*>        BLASes     = {pSphereBLAS, pBoxBLAS};
+
+    for (uint32_t i = 0; i < 2; ++i)
+    {
         auto pGeometry = geometries[i];
         auto pBLAS     = BLASes[i];
-        
+
         // Fill out geometry descriptor
         auto geometryDesc = NS::TransferPtr(MTL::AccelerationStructureTriangleGeometryDescriptor::alloc()->init());
         geometryDesc->setIndexType(MTL::IndexTypeUInt32);
@@ -648,48 +654,48 @@ void CreateBLASes(
         geometryDesc->setVertexFormat(MTL::AttributeFormatFloat3);
         geometryDesc->setVertexStride(12);
         geometryDesc->setTriangleCount(pGeometry->indexCount / 3);
-        
+
         // Add geometry descriptor to a descriptor array
         auto pGeometryDesc = geometryDesc.get();
-        auto pDescriptors = NS::Array::array((NS::Object**)&pGeometryDesc, 1);
-        
+        auto pDescriptors  = NS::Array::array((NS::Object**)&pGeometryDesc, 1);
+
         // Fill out acceleration structure descriptor with geometry descriptor array
         auto accelStructDescriptor = NS::TransferPtr(MTL::PrimitiveAccelerationStructureDescriptor::alloc()->init());
         accelStructDescriptor->setGeometryDescriptors(pDescriptors);
-        
+
         // Calculate sizes for acceleration structure building
         auto accelSizes = pRenderer->Device->accelerationStructureSizes(accelStructDescriptor.get());
-        
+
         // Scratch buffer
         auto scratchBuffer = NS::TransferPtr(pRenderer->Device->newBuffer(accelSizes.buildScratchBufferSize, MTL::ResourceStorageModePrivate));
-        
+
         // Acceleration structure storage
         auto accelStruct = NS::TransferPtr(pRenderer->Device->newAccelerationStructure(accelSizes.accelerationStructureSize));
-        
+
         // Buffer for Metal to write teh compacted accelerature strcuture's size
         auto compactedSizeBuffer = NS::TransferPtr(pRenderer->Device->newBuffer(sizeof(uint32_t), MTL::ResourceStorageModeShared));
-                       
+
         // Build acceleration structure
         auto pCommandBuffer = pRenderer->Queue->commandBuffer();
-        auto pEncoder = pCommandBuffer->accelerationStructureCommandEncoder();
+        auto pEncoder       = pCommandBuffer->accelerationStructureCommandEncoder();
         pEncoder->buildAccelerationStructure(accelStruct.get(), accelStructDescriptor.get(), scratchBuffer.get(), 0);
         pEncoder->writeCompactedAccelerationStructureSize(accelStruct.get(), compactedSizeBuffer.get(), 0);
         pEncoder->endEncoding();
         pCommandBuffer->commit();
         pCommandBuffer->waitUntilCompleted();
-        
+
         // Compacted acceleration structure storage
-        const uint32_t compactedSize = *((uint32_t*)compactedSizeBuffer->contents());
-        auto compactedAccelStruct = NS::TransferPtr(pRenderer->Device->newAccelerationStructure(compactedSize));
-        
+        const uint32_t compactedSize        = *((uint32_t*)compactedSizeBuffer->contents());
+        auto           compactedAccelStruct = NS::TransferPtr(pRenderer->Device->newAccelerationStructure(compactedSize));
+
         // Compact acceleration structure
         pCommandBuffer = pRenderer->Queue->commandBuffer();
-        pEncoder = pCommandBuffer->accelerationStructureCommandEncoder();
+        pEncoder       = pCommandBuffer->accelerationStructureCommandEncoder();
         pEncoder->copyAndCompactAccelerationStructure(accelStruct.get(), compactedAccelStruct.get());
         pEncoder->endEncoding();
         pCommandBuffer->commit();
         pCommandBuffer->waitUntilCompleted();
-        
+
         // Store compacted acceleration structure
         pBLAS->AS = compactedAccelStruct;
     }
@@ -732,7 +738,7 @@ void CreateTLAS(
          {0.0f, 0.0f, 1.0f,  0.0f}},
     };
     // clang-format on
-    
+
     // Material params
     {
         // Rough plastic
@@ -794,15 +800,15 @@ void CreateTLAS(
 
             outMaterialParams.push_back(materialParams);
         }
-    }    
-    
+    }
+
     // Allocate buffer for instance descriptors
     const uint32_t bufferSize = static_cast<uint32_t>(transforms.size() * sizeof(MTL::AccelerationStructureInstanceDescriptor));
     CHECK_CALL(CreateBuffer(pRenderer, bufferSize, nullptr, MTL::ResourceStorageModeShared, pInstanceBuffer));
-    
+
     // Cast buffer pointer to instance descriptors
     auto pDescriptors = (MTL::AccelerationStructureInstanceDescriptor*)pInstanceBuffer->Buffer->contents();
-    
+
     // Instance descriptors
     std::vector<const MTL::AccelerationStructure*> BLASes;
     {
@@ -811,23 +817,23 @@ void CreateTLAS(
             {
                 for (int row = 0; row < 3; ++row)
                 {
-                   dst.columns[column][row] = src[row][column];
+                    dst.columns[column][row] = src[row][column];
                 }
             }
         };
-    
+
         // Zero out everything before we begin setting values
         memset(pDescriptors, 0, bufferSize);
-     
+
         uint32_t transformIdx = 0;
-           
+
         // Rough plastic sphere
         CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
         pDescriptors[transformIdx].mask                       = 1;
         pDescriptors[transformIdx].accelerationStructureIndex = transformIdx;
         BLASes.push_back(pSphereBLAS->AS.get());
         ++transformIdx;
-        
+
         // Shiny plastic sphere
         CopyTransposed(transforms[transformIdx], pDescriptors[transformIdx].transformationMatrix);
         pDescriptors[transformIdx].mask                       = 1;
@@ -857,52 +863,52 @@ void CreateTLAS(
         BLASes.push_back(pBoxBLAS->AS.get());
         ++transformIdx;
     }
-    
+
     // Add BLASes to instanced acceleration structure array
     NS::Array* pInstancedAccelStructs = NS::Array::array((const NS::Object* const*)DataPtr(BLASes), CountU32(BLASes));
-    
+
     // Fill out acceleration structure descriptor
     auto accelStructDescriptor = NS::TransferPtr(MTL::InstanceAccelerationStructureDescriptor::alloc()->init());
     accelStructDescriptor->setInstancedAccelerationStructures(pInstancedAccelStructs);
     accelStructDescriptor->setInstanceCount(CountU32(BLASes));
     accelStructDescriptor->setInstanceDescriptorBuffer(pInstanceBuffer->Buffer.get());
-    
+
     // Calculate sizes for acceleration structure building
     auto accelSizes = pRenderer->Device->accelerationStructureSizes(accelStructDescriptor.get());
-    
+
     // Scratch buffer
     auto scratchBuffer = NS::TransferPtr(pRenderer->Device->newBuffer(accelSizes.buildScratchBufferSize, MTL::ResourceStorageModePrivate));
-    
+
     // Acceleration structure storage
     auto accelStruct = NS::TransferPtr(pRenderer->Device->newAccelerationStructure(accelSizes.accelerationStructureSize));
-    
+
     // Buffer for Metal to write teh compacted accelerature strcuture's size
     auto compactedSizeBuffer = NS::TransferPtr(pRenderer->Device->newBuffer(sizeof(uint32_t), MTL::ResourceStorageModeShared));
-                   
+
     // Build acceleration structure
     auto pCommandBuffer = pRenderer->Queue->commandBuffer();
-    auto pEncoder = pCommandBuffer->accelerationStructureCommandEncoder();
+    auto pEncoder       = pCommandBuffer->accelerationStructureCommandEncoder();
     pEncoder->buildAccelerationStructure(accelStruct.get(), accelStructDescriptor.get(), scratchBuffer.get(), 0);
     pEncoder->writeCompactedAccelerationStructureSize(accelStruct.get(), compactedSizeBuffer.get(), 0);
     pEncoder->endEncoding();
     pCommandBuffer->commit();
     pCommandBuffer->waitUntilCompleted();
-    
+
     // Compacted acceleration structure storage
-    const uint32_t compactedSize = *((uint32_t*)compactedSizeBuffer->contents());
-    auto compactedAccelStruct = NS::TransferPtr(pRenderer->Device->newAccelerationStructure(compactedSize));
-    
+    const uint32_t compactedSize        = *((uint32_t*)compactedSizeBuffer->contents());
+    auto           compactedAccelStruct = NS::TransferPtr(pRenderer->Device->newAccelerationStructure(compactedSize));
+
     // Compact acceleration structure
     pCommandBuffer = pRenderer->Queue->commandBuffer();
-    pEncoder = pCommandBuffer->accelerationStructureCommandEncoder();
+    pEncoder       = pCommandBuffer->accelerationStructureCommandEncoder();
     pEncoder->copyAndCompactAccelerationStructure(accelStruct.get(), compactedAccelStruct.get());
     pEncoder->endEncoding();
     pCommandBuffer->commit();
     pCommandBuffer->waitUntilCompleted();
-    
+
     pTLAS->AS = compactedAccelStruct;
 }
-    
+
 void CreateIBLTextures(
     MetalRenderer* pRenderer,
     IBLTextures&   outIBLTextures)

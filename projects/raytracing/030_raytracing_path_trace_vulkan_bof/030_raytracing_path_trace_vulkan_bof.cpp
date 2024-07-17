@@ -47,9 +47,9 @@ void csmain(uint3 tid : SV_DispatchThreadId)
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth      = 1280;
-static uint32_t gWindowHeight     = 720;
-static bool     gEnableDebug      = true;
+static uint32_t gWindowWidth  = 1280;
+static uint32_t gWindowHeight = 720;
+static bool     gEnableDebug  = true;
 
 static uint32_t gMaxRayRecursionDepth = 8;
 
@@ -64,9 +64,9 @@ static bool     gResetRayGenSamples = true;
 static uint32_t gMaxSamples         = 4096;
 static uint32_t gCurrentMaxSamples  = 0;
 
-static float    gSelectedColor[3] = {0.0f, 0.0f, 0.0f};
-static uint32_t gSelectedPixel[2] = {0, 0};
-static bool     gSelectedPixelChanged = false;
+static float    gSelectedColor[3]         = {0.0f, 0.0f, 0.0f};
+static uint32_t gSelectedPixel[2]         = {0, 0};
+static bool     gSelectedPixelChanged     = false;
 static bool     gSelectedPixelShowAsFloat = false;
 
 struct Light
@@ -174,7 +174,8 @@ void MouseMove(int x, int y, int buttons)
     static int prevX = x;
     static int prevY = y;
 
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         int dx = x - prevX;
         int dy = y - prevY;
 
@@ -188,8 +189,8 @@ void MouseMove(int x, int y, int buttons)
 
     if (buttons & MOUSE_BUTTON_RIGHT)
     {
-        gSelectedPixel[0] = x;
-        gSelectedPixel[1] = y;
+        gSelectedPixel[0]     = x;
+        gSelectedPixel[1]     = y;
         gSelectedPixelChanged = true;
     }
 }
@@ -198,8 +199,8 @@ void MouseDown(int x, int y, int buttons)
 {
     if (buttons & MOUSE_BUTTON_RIGHT)
     {
-        gSelectedPixel[0] = x;
-        gSelectedPixel[1] = y;
+        gSelectedPixel[0]     = x;
+        gSelectedPixel[1]     = y;
         gSelectedPixelChanged = true;
     }
 }
@@ -249,7 +250,8 @@ int main(int argc, char** argv)
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(source, "", "lib_6_5", &rayTraceSpv, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (raytracing): " << errorMsg << "\n";
@@ -263,7 +265,8 @@ int main(int argc, char** argv)
     {
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(gClearRayGenSamplesShader, "csmain", "cs_6_5", &clearRayGenSpv, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (clear ray gen): " << errorMsg << "\n";
@@ -577,7 +580,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
     if (!window)
-	{
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -595,7 +598,7 @@ int main(int argc, char** argv)
     }
 
     if (!InitSwapchain(renderer.get(), surface, window->GetWidth(), window->GetHeight()))
-	{
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -608,7 +611,8 @@ int main(int argc, char** argv)
     {
         CHECK_CALL(GetSwapchainImages(renderer.get(), swapchainImages));
 
-        for (auto& image : swapchainImages) {
+        for (auto& image : swapchainImages)
+        {
             VkImageViewCreateInfo createInfo           = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
             createInfo.image                           = image;
             createInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
@@ -638,7 +642,6 @@ int main(int argc, char** argv)
         0,
         &readbackSwapchainSurface));
 
-
     // *************************************************************************
     // Render pass to draw ImGui
     // *************************************************************************
@@ -652,7 +655,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForVulkan(renderer.get(), renderPass.RenderPass)) {
+    if (!window->InitImGuiForVulkan(renderer.get(), renderPass.RenderPass))
+    {
         assert(false && "GrexWindow::InitImGuiForD3D12 failed");
         return EXIT_FAILURE;
     }
@@ -687,10 +691,12 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         window->ImGuiNewFrameVulkan();
 
-        if (ImGui::Begin("Scene")) {
+        if (ImGui::Begin("Scene"))
+        {
             ImGui::SliderInt("Max Samples Per Pixel", reinterpret_cast<int*>(&gMaxSamples), 1, 16384);
 
             ImGui::Separator();
@@ -703,7 +709,8 @@ int main(int argc, char** argv)
             ImGui::Separator();
 
             static float elapsedTime = 0;
-            if (sampleCount < gMaxSamples) {
+            if (sampleCount < gMaxSamples)
+            {
                 float currentTime = static_cast<float>(glfwGetTime());
                 elapsedTime       = currentTime - rayGenStartTime;
             }
@@ -712,8 +719,8 @@ int main(int argc, char** argv)
 
             ImGui::Separator();
 
-            std::string colorDescription;
-            std::stringstream pixelDescription;
+            std::string         colorDescription;
+            std::stringstream   pixelDescription;
             ImGuiColorEditFlags displayFlags = gSelectedPixelShowAsFloat ? ImGuiColorEditFlags_Float : 0;
 
             pixelDescription << "Pixel (" << gSelectedPixel[0] << ", " << gSelectedPixel[1] << ")";
@@ -725,7 +732,8 @@ int main(int argc, char** argv)
 
         // ---------------------------------------------------------------------
 
-        if (gCurrentMaxSamples != gMaxSamples) {
+        if (gCurrentMaxSamples != gMaxSamples)
+        {
             gCurrentMaxSamples  = gMaxSamples;
             gResetRayGenSamples = true;
         }
@@ -733,7 +741,8 @@ int main(int argc, char** argv)
         // Smooth out the rotation on Y
         gAngle += (gTargetAngle - gAngle) * 0.25f;
         // Keep resetting until the angle is somewhat stable
-        if (fabs(gTargetAngle - gAngle) > 0.1f) {
+        if (fabs(gTargetAngle - gAngle) > 0.1f)
+        {
             gResetRayGenSamples = true;
         }
 
@@ -754,7 +763,8 @@ int main(int argc, char** argv)
         // Acquire swapchain image index
         // ---------------------------------------------------------------------
         uint32_t swapchainImageIndex = 0;
-        if (AcquireNextImage(renderer.get(), &swapchainImageIndex)) {
+        if (AcquireNextImage(renderer.get(), &swapchainImageIndex))
+        {
             assert(false && "AcquireNextImage failed");
             break;
         }
@@ -782,7 +792,8 @@ int main(int argc, char** argv)
         CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
 
         // Reset ray gen samples
-        if (gResetRayGenSamples) {
+        if (gResetRayGenSamples)
+        {
             sampleCount     = 0;
             rayGenStartTime = static_cast<float>(glfwGetTime());
 
@@ -877,7 +888,8 @@ int main(int argc, char** argv)
             CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
 
             // Wait for the GPU to finish the work
-            if (!WaitForGpu(renderer.get())) {
+            if (!WaitForGpu(renderer.get()))
+            {
                 assert(false && "WaitForGpu failed");
             }
         }
@@ -980,13 +992,15 @@ int main(int argc, char** argv)
             CHECK_CALL(ExecuteCommandBuffer(renderer.get(), &cmdBuf));
 
             // Wait for the GPU to finish the work
-            if (!WaitForGpu(renderer.get())) {
+            if (!WaitForGpu(renderer.get()))
+            {
                 assert(false && "WaitForGpu failed");
             }
         }
 
         // Update sample count
-        if (sampleCount < gMaxSamples) {
+        if (sampleCount < gMaxSamples)
+        {
             ++sampleCount;
         }
 
@@ -1009,7 +1023,8 @@ int main(int argc, char** argv)
             gSelectedPixelChanged = false;
         }
 
-        if (!SwapchainPresent(renderer.get(), swapchainImageIndex)) {
+        if (!SwapchainPresent(renderer.get(), swapchainImageIndex))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -1424,7 +1439,8 @@ void CreateBLASes(
     std::vector<VulkanAccelStruct*> BLASes     = {pSphereBLAS, pBoxBLAS};
 
     uint32_t n = static_cast<uint32_t>(geometries.size());
-    for (uint32_t i = 0; i < n; ++i) {
+    for (uint32_t i = 0; i < n; ++i)
+    {
         auto pGeometry = geometries[i];
         auto pBLAS     = BLASes[i];
 
@@ -1534,7 +1550,8 @@ void CreateBLASes(
 
             CHECK_CALL(ExecuteCommandBuffer(pRenderer, &cmdBuf));
 
-            if (!WaitForGpu(pRenderer)) {
+            if (!WaitForGpu(pRenderer))
+            {
                 assert(false && "WaitForGpu failed");
             }
         }
@@ -1785,7 +1802,8 @@ void CreateTLAS(
 
         CHECK_CALL(ExecuteCommandBuffer(pRenderer, &cmdBuf));
 
-        if (!WaitForGpu(pRenderer)) {
+        if (!WaitForGpu(pRenderer))
+        {
             assert(false && "WaitForGpu failed");
         }
     }
@@ -1826,7 +1844,8 @@ void CreateIBLTextures(
     // BRDF LUT
     {
         auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut.hdr"));
-        if (bitmap.Empty()) {
+        if (bitmap.Empty())
+        {
             assert(false && "Load image failed");
             return;
         }
@@ -1845,7 +1864,8 @@ void CreateIBLTextures(
     auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
 
     IBLMaps ibl = {};
-    if (!LoadIBLMaps32f(iblFile, &ibl)) {
+    if (!LoadIBLMaps32f(iblFile, &ibl))
+    {
         GREX_LOG_ERROR("failed to load: " << iblFile);
         return;
     }
@@ -1873,7 +1893,8 @@ void CreateIBLTextures(
         uint32_t               levelOffset = 0;
         uint32_t               levelWidth  = ibl.baseWidth;
         uint32_t               levelHeight = ibl.baseHeight;
-        for (uint32_t i = 0; i < ibl.numLevels; ++i) {
+        for (uint32_t i = 0; i < ibl.numLevels; ++i)
+        {
             MipOffset mipOffset = {};
             mipOffset.Offset    = levelOffset;
             mipOffset.RowStride = rowStride;
@@ -2009,7 +2030,8 @@ void WriteDescriptors(
         uint32_t arrayElement = 0;
 
         // Spheres
-        for (uint32_t i = 0; i < kNumSpheres; ++i, ++arrayElement) {
+        for (uint32_t i = 0; i < kNumSpheres; ++i, ++arrayElement)
+        {
             // Index buffer (t20)
             WriteDescriptor(
                 pRenderer,

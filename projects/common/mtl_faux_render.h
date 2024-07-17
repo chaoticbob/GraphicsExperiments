@@ -81,7 +81,7 @@ struct SceneGraph : public FauxRender::SceneGraph
 
 MtlFauxRender::Buffer* Cast(FauxRender::Buffer* pBuffer);
 MtlFauxRender::Image*  Cast(FauxRender::Image* pImage);
-bool CalculateVertexStrides(FauxRender::Scene* pScene, std::vector<uint32> &vertexStrides);
+bool                   CalculateVertexStrides(FauxRender::Scene* pScene, std::vector<uint32>& vertexStrides);
 
 void Draw(const FauxRender::SceneGraph* pGraph, uint32_t instanceIndex, const FauxRender::Mesh* pMesh, MTL::RenderCommandEncoder* pRenderEncoder);
 void Draw(const FauxRender::SceneGraph* pGraph, const FauxRender::Scene* pScene, const FauxRender::SceneNode* pGeometryNode, MTL::RenderCommandEncoder* pRenderEncoder);

@@ -27,7 +27,7 @@ AlwaysBreakAfterReturnType: None
 BinPackArguments: false
 BinPackParameters: false
 BraceWrapping:
-  AfterCaseLabel: false
+  AfterCaseLabel: true
   AfterClass: true
   AfterControlStatement: Always
   AfterEnum: true
@@ -55,7 +55,6 @@ DerivePointerAlignment: false
 FixNamespaceComments: true
 IncludeBlocks: Preserve
 IndentCaseLabels: true
-IndentPPDirectives: AfterHash
 IndentWidth: 4
 IndentWrappedFunctionNames: false
 KeepEmptyLinesAtTheStartOfBlocks: false

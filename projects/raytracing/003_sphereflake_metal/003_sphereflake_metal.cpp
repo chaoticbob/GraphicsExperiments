@@ -474,13 +474,13 @@ int main(int argc, char** argv)
         pComputeEncoder->setAccelerationStructure(tlasBuffer.AS.get(), 0);
         pComputeEncoder->setIntersectionFunctionTable(intersectionFunctionTable.get(), 2);
         pComputeEncoder->setTexture(outputTex.Texture.get(), 0);
-        
+
         // Add a useResource() call for every BLAS used by the TLAS
         for (int blasIndex = 0; blasIndex < blasBuffer.size(); blasIndex++)
         {
             pComputeEncoder->useResource(blasBuffer[blasIndex].AS.get(), MTL::ResourceUsageRead);
         }
-        
+
         struct Camera
         {
             glm::mat4 viewInverse;

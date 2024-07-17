@@ -9,10 +9,10 @@ using namespace glm;
 namespace MtlFauxRender
 {
 
-const int32_t kPositionIndex  = 0;
-const int32_t kTexCoordIndex  = 1;
-const int32_t kNormalIndex    = 2;
-const int32_t kTangentIndex   = 3;
+const int32_t kPositionIndex = 0;
+const int32_t kTexCoordIndex = 1;
+const int32_t kNormalIndex   = 2;
+const int32_t kTangentIndex  = 3;
 
 bool Buffer::Map(void** ppData)
 {
@@ -332,7 +332,7 @@ bool CalculateVertexStrides(FauxRender::Scene* pScene, std::vector<uint32>& vert
 {
     assert((pScene != nullptr) && "pScene is NULL");
 
-    bool          meshPartStrideMismatch = false;
+    bool meshPartStrideMismatch = false;
 
     vertexStrides.resize(4);
 
@@ -341,7 +341,7 @@ bool CalculateVertexStrides(FauxRender::Scene* pScene, std::vector<uint32>& vert
         assert((pGeometryNode != nullptr) && "pGeometryNode is NULL");
         assert((pGeometryNode->Type == FauxRender::SCENE_NODE_TYPE_GEOMETRY) && "node is not of drawable type");
 
-        const FauxRender::Mesh* pMesh           = pGeometryNode->pMesh;
+        const FauxRender::Mesh* pMesh = pGeometryNode->pMesh;
 
         for (auto& batch : pMesh->DrawBatches)
         {
@@ -351,7 +351,7 @@ bool CalculateVertexStrides(FauxRender::Scene* pScene, std::vector<uint32>& vert
                 uint32_t vertexStride = batch.PositionBufferView.Stride;
 
                 meshPartStrideMismatch = meshPartStrideMismatch ||
-                   (vertexStrides[kPositionIndex] != vertexStride && vertexStrides[kPositionIndex] != 0);
+                                         (vertexStrides[kPositionIndex] != vertexStride && vertexStrides[kPositionIndex] != 0);
 
                 vertexStrides[kPositionIndex] = vertexStride;
             }
@@ -359,11 +359,11 @@ bool CalculateVertexStrides(FauxRender::Scene* pScene, std::vector<uint32>& vert
             // Tex Coord
             {
                 uint32_t texCoordStride = batch.NormalBufferView.Format != GREX_FORMAT_UNKNOWN
-                   ? batch.TexCoordBufferView.Stride
-                   : batch.PositionBufferView.Stride; // Can't have zero stride
+                                              ? batch.TexCoordBufferView.Stride
+                                              : batch.PositionBufferView.Stride; // Can't have zero stride
 
                 meshPartStrideMismatch = meshPartStrideMismatch ||
-                   (vertexStrides[kTexCoordIndex] != texCoordStride && vertexStrides[kTexCoordIndex] != 0);
+                                         (vertexStrides[kTexCoordIndex] != texCoordStride && vertexStrides[kTexCoordIndex] != 0);
 
                 vertexStrides[kTexCoordIndex] = texCoordStride;
             }
@@ -371,11 +371,11 @@ bool CalculateVertexStrides(FauxRender::Scene* pScene, std::vector<uint32>& vert
             // Normal
             {
                 uint32_t normalStride = batch.NormalBufferView.Format != GREX_FORMAT_UNKNOWN
-                   ? batch.NormalBufferView.Stride
-                   : batch.PositionBufferView.Stride; // Can't have zero stride
+                                            ? batch.NormalBufferView.Stride
+                                            : batch.PositionBufferView.Stride; // Can't have zero stride
 
                 meshPartStrideMismatch = meshPartStrideMismatch ||
-                   (vertexStrides[kNormalIndex] != normalStride && vertexStrides[kNormalIndex] != 0);
+                                         (vertexStrides[kNormalIndex] != normalStride && vertexStrides[kNormalIndex] != 0);
 
                 vertexStrides[kNormalIndex] = normalStride;
             }
@@ -383,11 +383,11 @@ bool CalculateVertexStrides(FauxRender::Scene* pScene, std::vector<uint32>& vert
             // Tangent
             {
                 uint32_t tangentStride = batch.TangentBufferView.Format != GREX_FORMAT_UNKNOWN
-                   ? batch.TangentBufferView.Stride
-                   : batch.PositionBufferView.Stride; // Can't have zero stride
+                                             ? batch.TangentBufferView.Stride
+                                             : batch.PositionBufferView.Stride; // Can't have zero stride
 
                 meshPartStrideMismatch = meshPartStrideMismatch ||
-                   (vertexStrides[kTangentIndex] != tangentStride && vertexStrides[kTangentIndex] != 0);
+                                         (vertexStrides[kTangentIndex] != tangentStride && vertexStrides[kTangentIndex] != 0);
 
                 vertexStrides[kTangentIndex] = tangentStride;
             }
@@ -425,35 +425,35 @@ void Draw(const FauxRender::SceneGraph* pGraph, uint32_t instanceIndex, const Fa
 
             // Position
             {
-               assert(batch.PositionBufferView.Format != GREX_FORMAT_UNKNOWN);
-               bufferViews[kPositionIndex]   = pBuffer->Resource.Buffer.get();
-               bufferOffsets[kPositionIndex] = batch.PositionBufferView.Offset;
+                assert(batch.PositionBufferView.Format != GREX_FORMAT_UNKNOWN);
+                bufferViews[kPositionIndex]   = pBuffer->Resource.Buffer.get();
+                bufferOffsets[kPositionIndex] = batch.PositionBufferView.Offset;
             }
 
             // Tex Coord
             {
-                bufferViews[kTexCoordIndex]   = pBuffer->Resource.Buffer.get();
+                bufferViews[kTexCoordIndex] = pBuffer->Resource.Buffer.get();
 
                 bufferOffsets[kTexCoordIndex] = batch.TexCoordBufferView.Format != GREX_FORMAT_UNKNOWN
-                  ? batch.TexCoordBufferView.Offset
-                  : batch.PositionBufferView.Offset;
+                                                    ? batch.TexCoordBufferView.Offset
+                                                    : batch.PositionBufferView.Offset;
             }
 
             //  Normal
             {
-                bufferViews[kNormalIndex]   = pBuffer->Resource.Buffer.get();
+                bufferViews[kNormalIndex] = pBuffer->Resource.Buffer.get();
 
                 bufferOffsets[kNormalIndex] = batch.NormalBufferView.Format != GREX_FORMAT_UNKNOWN
-                  ? batch.NormalBufferView.Offset
-                  : batch.PositionBufferView.Offset;
+                                                  ? batch.NormalBufferView.Offset
+                                                  : batch.PositionBufferView.Offset;
             }
 
             //  Tangent
             {
                 bufferViews[kTangentIndex]   = pBuffer->Resource.Buffer.get();
                 bufferOffsets[kTangentIndex] = batch.TangentBufferView.Format != GREX_FORMAT_UNKNOWN
-                  ? batch.TangentBufferView.Offset
-                  : batch.PositionBufferView.Offset;
+                                                   ? batch.TangentBufferView.Offset
+                                                   : batch.PositionBufferView.Offset;
             }
 
             pRenderEncoder->setVertexBuffers(bufferViews, bufferOffsets, NS::Range::Make(0, 4));

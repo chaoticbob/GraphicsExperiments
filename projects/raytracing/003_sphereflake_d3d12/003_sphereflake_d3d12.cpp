@@ -12,7 +12,8 @@ using glm::vec3;
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -213,7 +214,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
 
-    if (!InitDx(renderer.get(), gEnableDebug)) {
+    if (!InitDx(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -222,7 +224,8 @@ int main(int argc, char** argv)
     CHECK_CALL(renderer->Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5)));
 
     bool isRayTracingSupported = (options5.RaytracingTier == D3D12_RAYTRACING_TIER_1_1);
-    if (!isRayTracingSupported) {
+    if (!isRayTracingSupported)
+    {
         assert(false && "Required ray tracing tier not supported");
         return EXIT_FAILURE;
     }
@@ -254,7 +257,8 @@ int main(int argc, char** argv)
 
         ComPtr<IDxcBlob> errors;
         CHECK_CALL(result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errors), nullptr));
-        if (errors && (errors->GetBufferSize() > 0)) {
+        if (errors && (errors->GetBufferSize() > 0))
+        {
             std::string       errorMsg = std::string(reinterpret_cast<const char*>(errors->GetBufferPointer()), errors->GetBufferSize());
             std::stringstream ss;
             ss << "\n"
@@ -381,7 +385,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "003_sphereflake_d3d12");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -389,7 +394,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight())) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight()))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -419,7 +425,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         CHECK_CALL(commandAllocator->Reset());
         CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
 
@@ -457,7 +464,8 @@ int main(int argc, char** argv)
             ID3D12CommandList* pList = commandList.Get();
             renderer->Queue->ExecuteCommandLists(1, &pList);
 
-            if (!WaitForGpu(renderer.get())) {
+            if (!WaitForGpu(renderer.get()))
+            {
                 assert(false && "WaitForGpu failed");
                 break;
             }
@@ -492,13 +500,15 @@ int main(int argc, char** argv)
             ID3D12CommandList* pList = commandList.Get();
             renderer->Queue->ExecuteCommandLists(1, &pList);
 
-            if (!WaitForGpu(renderer.get())) {
+            if (!WaitForGpu(renderer.get()))
+            {
                 assert(false && "WaitForGpu failed");
                 break;
             }
         }
 
-        if (!SwapchainPresent(renderer.get())) {
+        if (!SwapchainPresent(renderer.get()))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }

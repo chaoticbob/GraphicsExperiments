@@ -10,7 +10,8 @@
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -74,7 +75,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
 
-    if (!InitDx(renderer.get(), gEnableDebug)) {
+    if (!InitDx(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -83,7 +85,8 @@ int main(int argc, char** argv)
     CHECK_CALL(renderer->Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5)));
 
     bool isRayTracingSupported = (options5.RaytracingTier == D3D12_RAYTRACING_TIER_1_1);
-    if (!isRayTracingSupported) {
+    if (!isRayTracingSupported)
+    {
         assert(false && "Required ray tracing tier not supported");
         return EXIT_FAILURE;
     }
@@ -98,7 +101,8 @@ int main(int argc, char** argv)
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(source, "", "lib_6_5", &dxil, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (raytracing): " << errorMsg << "\n";
@@ -208,17 +212,20 @@ int main(int argc, char** argv)
         descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
         // Index buffers
-        for (uint32_t i = 0; i < geometries.size(); ++i) {
+        for (uint32_t i = 0; i < geometries.size(); ++i)
+        {
             CreateDescriptoBufferSRV(renderer.get(), 0, geometries[i].indexCount / 3, 12, geometries[i].indexBuffer.Get(), descriptor);
             descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         }
         // Position buffers
-        for (uint32_t i = 0; i < geometries.size(); ++i) {
+        for (uint32_t i = 0; i < geometries.size(); ++i)
+        {
             CreateDescriptoBufferSRV(renderer.get(), 0, geometries[i].vertexCount, 4, geometries[i].positionBuffer.Get(), descriptor);
             descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         }
         // Normal buffers
-        for (uint32_t i = 0; i < geometries.size(); ++i) {
+        for (uint32_t i = 0; i < geometries.size(); ++i)
+        {
             CreateDescriptoBufferSRV(renderer.get(), 0, geometries[i].vertexCount, 4, geometries[i].normalBuffer.Get(), descriptor);
             descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         }
@@ -228,7 +235,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "022_raytracing_multi_geo_d3d12");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -236,7 +244,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight())) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight()))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -266,7 +275,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         CHECK_CALL(commandAllocator->Reset());
         CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
 
@@ -312,7 +322,8 @@ int main(int argc, char** argv)
             ID3D12CommandList* pList = commandList.Get();
             renderer->Queue->ExecuteCommandLists(1, &pList);
 
-            if (!WaitForGpu(renderer.get())) {
+            if (!WaitForGpu(renderer.get()))
+            {
                 assert(false && "WaitForGpu failed");
                 break;
             }
@@ -347,13 +358,15 @@ int main(int argc, char** argv)
             ID3D12CommandList* pList = commandList.Get();
             renderer->Queue->ExecuteCommandLists(1, &pList);
 
-            if (!WaitForGpu(renderer.get())) {
+            if (!WaitForGpu(renderer.get()))
+            {
                 assert(false && "WaitForGpu failed");
                 break;
             }
         }
 
-        if (!SwapchainPresent(renderer.get())) {
+        if (!SwapchainPresent(renderer.get()))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -414,7 +427,8 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     ComPtr<ID3DBlob> blob;
     ComPtr<ID3DBlob> error;
     HRESULT          hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         std::string errorMsg = std::string(reinterpret_cast<const char*>(error->GetBufferPointer()), error->GetBufferSize());
 
         std::stringstream ss;
@@ -785,7 +799,8 @@ void CreateBLAS(
     CreateBuffer(pRenderer, 3 * kTransform3x4Size, transformMatrices, &transformBuffer);
 
     std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometryDescs;
-    for (uint32_t i = 0; i < geometries.size(); ++i) {
+    for (uint32_t i = 0; i < geometries.size(); ++i)
+    {
         D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc = {};
 
         geometryDesc.Type                                 = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;

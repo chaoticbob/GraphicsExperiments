@@ -15,7 +15,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                                                               \
     {                                                                                \
         NS::Error* pError = FN;                                                      \
-        if (pError != nullptr) {                                                     \
+        if (pError != nullptr)                                                       \
+        {                                                                            \
             std::stringstream ss;                                                    \
             ss << "\n";                                                              \
             ss << "*** FUNCTION CALL FAILED *** \n";                                 \
@@ -42,17 +43,17 @@ using uint4    = glm::uvec4;
 //
 struct SceneProperties
 {
-    float3      EyePosition;
-    uint        __pad0;
-    float4x4    CameraVP;
-    uint        InstanceCount;
-    uint        MeshletCount;
-    uint        __pad1;
-    float       MaxLODDistance;         // Use least detail level at or beyond this distance
-    uint        Meshlet_LOD_Offsets[5]; // Align array element to 16 bytes
-    uint        Meshlet_LOD_Counts[5];  // Align array element to 16 bytes
-    float3      MeshBoundsMin;
-    float3      MeshBoundsMax;
+    float3   EyePosition;
+    uint     __pad0;
+    float4x4 CameraVP;
+    uint     InstanceCount;
+    uint     MeshletCount;
+    uint     __pad1;
+    float    MaxLODDistance;         // Use least detail level at or beyond this distance
+    uint     Meshlet_LOD_Offsets[5]; // Align array element to 16 bytes
+    uint     Meshlet_LOD_Counts[5];  // Align array element to 16 bytes
+    float3   MeshBoundsMin;
+    float3   MeshBoundsMax;
 };
 
 // =============================================================================
@@ -71,7 +72,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<MetalRenderer> renderer = std::make_unique<MetalRenderer>();
 
-    if (!InitMetal(renderer.get(), gEnableDebug)) {
+    if (!InitMetal(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -81,10 +83,11 @@ int main(int argc, char** argv)
     MetalShader osShader;
     MetalShader msShader;
     MetalShader fsShader;
-    NS::Error*  pError  = nullptr;
+    NS::Error*  pError = nullptr;
     {
         std::string shaderSource = LoadString("projects/116_mesh_shader_calc_lod/shaders.metal");
-        if (shaderSource.empty()) {
+        if (shaderSource.empty())
+        {
             assert(false && "no shader source");
             return EXIT_FAILURE;
         }
@@ -94,7 +97,8 @@ int main(int argc, char** argv)
             nullptr,
             &pError));
 
-        if (library.get() == nullptr) {
+        if (library.get() == nullptr)
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error: " << pError->localizedDescription()->utf8String() << "\n";
@@ -104,19 +108,22 @@ int main(int argc, char** argv)
         }
 
         osShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("objectMain", NS::UTF8StringEncoding)));
-        if (osShader.Function.get() == nullptr) {
+        if (osShader.Function.get() == nullptr)
+        {
             assert(false && "OS MTL::Library::newFunction() failed");
             return EXIT_FAILURE;
         }
 
         msShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("meshMain", NS::UTF8StringEncoding)));
-        if (msShader.Function.get() == nullptr) {
+        if (msShader.Function.get() == nullptr)
+        {
             assert(false && "MS MTL::Library::newFunction() failed");
             return EXIT_FAILURE;
         }
 
         fsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("fragmentMain", NS::UTF8StringEncoding)));
-        if (fsShader.Function.get() == nullptr) {
+        if (fsShader.Function.get() == nullptr)
+        {
             assert(false && "FS MTL::Library::newFunction() failed");
             return EXIT_FAILURE;
         }
@@ -187,7 +194,7 @@ int main(int argc, char** argv)
             meshLODs.push_back(mesh);
         }
     }
-    
+
     // *************************************************************************
     // Make them meshlets!
     // *************************************************************************
@@ -255,7 +262,8 @@ int main(int argc, char** argv)
             meshlet.triangle_offset += meshletTriangleOffset;
             combinedMeshlets.push_back(meshlet);
 
-            if (lodIdx == 0) {
+            if (lodIdx == 0)
+            {
                 LOD_0_vertexCount += meshlet.vertex_count;
                 LOD_0_triangleCount += meshlet.triangle_count;
             }
@@ -293,7 +301,7 @@ int main(int argc, char** argv)
         combinedMeshletTriangleCount += m.triangle_count;
     }
 
-    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to 
+    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to
     // make it easier to unpack on the GPU.
     //
     std::vector<uint32_t> meshletTrianglesU32;
@@ -321,7 +329,7 @@ int main(int argc, char** argv)
         // Update triangle offset for current meshlet
         m.triangle_offset = triangleOffset;
     }
-    
+
     MetalBuffer positionBuffer;
     MetalBuffer meshletBuffer;
     MetalBuffer meshletVerticesBuffer;
@@ -344,51 +352,57 @@ int main(int argc, char** argv)
         // Render pipeline state
         {
             auto desc = NS::TransferPtr(MTL::MeshRenderPipelineDescriptor::alloc()->init());
-            if (!desc) {
+            if (!desc)
+            {
                 assert(false && "MTL::MeshRenderPipelineDescriptor::alloc::init() failed");
-                return EXIT_FAILURE;        
+                return EXIT_FAILURE;
             }
-            
+
             desc->setObjectFunction(osShader.Function.get());
             desc->setMeshFunction(msShader.Function.get());
             desc->setFragmentFunction(fsShader.Function.get());
             desc->colorAttachments()->object(0)->setPixelFormat(GREX_DEFAULT_RTV_FORMAT);
             desc->setDepthAttachmentPixelFormat(GREX_DEFAULT_DSV_FORMAT);
 
-            NS::Error* pError           = nullptr;
+            NS::Error* pError         = nullptr;
             renderPipelineState.State = NS::TransferPtr(renderer->Device->newRenderPipelineState(desc.get(), MTL::PipelineOptionNone, nullptr, &pError));
-            if (renderPipelineState.State.get() == nullptr) {
+            if (renderPipelineState.State.get() == nullptr)
+            {
                 assert(false && "MTL::Device::newRenderPipelineState() failed");
                 return EXIT_FAILURE;
             }
         }
-        
+
         // Depth stencil state
         {
             auto desc = NS::TransferPtr(MTL::DepthStencilDescriptor::alloc()->init());
-            if (!desc) {
+            if (!desc)
+            {
                 assert(false && "MTL::DepthStencilDescriptor::alloc::init() failed");
-                return EXIT_FAILURE;        
+                return EXIT_FAILURE;
             }
 
-            if (desc.get() != nullptr) {
+            if (desc.get() != nullptr)
+            {
                 desc->setDepthCompareFunction(MTL::CompareFunctionLess);
                 desc->setDepthWriteEnabled(true);
 
                 depthStencilState.State = NS::TransferPtr(renderer->Device->newDepthStencilState(desc.get()));
-                if (depthStencilState.State.get() == nullptr) {
+                if (depthStencilState.State.get() == nullptr)
+                {
                     assert(false && "MTL::Device::newDepthStencilState() failed");
                     return EXIT_FAILURE;
                 }
             }
         }
     }
-    
+
     // *************************************************************************
     // Window
     // *************************************************************************
-    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight,  GREX_BASE_FILE_NAME());
-    if (!window) {
+    auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -401,7 +415,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, MTL::PixelFormatDepth32Float)) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, MTL::PixelFormatDepth32Float))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -409,20 +424,21 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForMetal(renderer.get())) {
+    if (!window->InitImGuiForMetal(renderer.get()))
+    {
         assert(false && "GrexWindow::InitImGuiForMetal failed");
         return EXIT_FAILURE;
     }
-    
+
     // *************************************************************************
     // Counter statistics - revisit later!
     // *************************************************************************
-        
+
     // *************************************************************************
     // Scene
     // *************************************************************************
     SceneProperties scene = {};
-    
+
     // *************************************************************************
     // Instances
     // *************************************************************************
@@ -439,10 +455,12 @@ int main(int argc, char** argv)
     MTL::ClearColor clearColor(0.23f, 0.23f, 0.31f, 0);
     uint32_t        frameIndex = 0;
 
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         window->ImGuiNewFrameMetal(pRenderPassDescriptor);
 
-        if (ImGui::Begin("Params")) {
+        if (ImGui::Begin("Params"))
+        {
             ImGui::DragFloat("Max LOD Distance", &gMaxLODDistance, 0.1f, 1.0f, 50.0f);
 
             ImGui::Separator();
@@ -466,7 +484,7 @@ int main(int argc, char** argv)
             ImGui::Columns(1);
         }
         ImGui::End();
-        
+
         // ---------------------------------------------------------------------
 
         // Update instance transforms
@@ -524,23 +542,23 @@ int main(int argc, char** argv)
             Camera::FrustumPlane frLeft, frRight, frTop, frBottom, frNear, frFar;
             camera.GetFrustumPlanes(&frLeft, &frRight, &frTop, &frBottom, &frNear, &frFar);
 
-            scene.EyePosition                          = camera.GetEyePosition();
-            scene.CameraVP                             = camera.GetViewProjectionMatrix();
-            scene.InstanceCount                        = static_cast<uint32_t>(instances.size());
-            scene.MeshletCount                         = meshlet_LOD_Counts[0];
-            scene.MaxLODDistance                       = gMaxLODDistance;
-            scene.Meshlet_LOD_Offsets[0]               = meshlet_LOD_Offsets[0];
-            scene.Meshlet_LOD_Offsets[1]               = meshlet_LOD_Offsets[1];
-            scene.Meshlet_LOD_Offsets[2]               = meshlet_LOD_Offsets[2];
-            scene.Meshlet_LOD_Offsets[3]               = meshlet_LOD_Offsets[3];
-            scene.Meshlet_LOD_Offsets[4]               = meshlet_LOD_Offsets[4];
-            scene.Meshlet_LOD_Counts[0]                = meshlet_LOD_Counts[0];
-            scene.Meshlet_LOD_Counts[1]                = meshlet_LOD_Counts[1];
-            scene.Meshlet_LOD_Counts[2]                = meshlet_LOD_Counts[2];
-            scene.Meshlet_LOD_Counts[3]                = meshlet_LOD_Counts[3];
-            scene.Meshlet_LOD_Counts[4]                = meshlet_LOD_Counts[4];
-            scene.MeshBoundsMin                        = float3(meshBounds.min);
-            scene.MeshBoundsMax                        = float3(meshBounds.max);
+            scene.EyePosition            = camera.GetEyePosition();
+            scene.CameraVP               = camera.GetViewProjectionMatrix();
+            scene.InstanceCount          = static_cast<uint32_t>(instances.size());
+            scene.MeshletCount           = meshlet_LOD_Counts[0];
+            scene.MaxLODDistance         = gMaxLODDistance;
+            scene.Meshlet_LOD_Offsets[0] = meshlet_LOD_Offsets[0];
+            scene.Meshlet_LOD_Offsets[1] = meshlet_LOD_Offsets[1];
+            scene.Meshlet_LOD_Offsets[2] = meshlet_LOD_Offsets[2];
+            scene.Meshlet_LOD_Offsets[3] = meshlet_LOD_Offsets[3];
+            scene.Meshlet_LOD_Offsets[4] = meshlet_LOD_Offsets[4];
+            scene.Meshlet_LOD_Counts[0]  = meshlet_LOD_Counts[0];
+            scene.Meshlet_LOD_Counts[1]  = meshlet_LOD_Counts[1];
+            scene.Meshlet_LOD_Counts[2]  = meshlet_LOD_Counts[2];
+            scene.Meshlet_LOD_Counts[3]  = meshlet_LOD_Counts[3];
+            scene.Meshlet_LOD_Counts[4]  = meshlet_LOD_Counts[4];
+            scene.MeshBoundsMin          = float3(meshBounds.min);
+            scene.MeshBoundsMax          = float3(meshBounds.max);
         }
 
         // ---------------------------------------------------------------------
@@ -549,7 +567,7 @@ int main(int argc, char** argv)
         memcpy(instancesBuffer.Buffer->contents(), DataPtr(instances), SizeInBytes(instances));
 
         // ---------------------------------------------------------------------
-        
+
         CA::MetalDrawable* pDrawable = renderer->pSwapchain->nextDrawable();
         assert(pDrawable != nullptr);
 

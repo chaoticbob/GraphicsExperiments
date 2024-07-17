@@ -12,7 +12,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -135,7 +136,8 @@ void MouseMove(int x, int y, int buttons)
     static int prevX = x;
     static int prevY = y;
 
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         int dx = x - prevX;
         int dy = y - prevY;
 
@@ -153,7 +155,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
 
-    if (!InitDx(renderer.get(), gEnableDebug)) {
+    if (!InitDx(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -162,7 +165,8 @@ int main(int argc, char** argv)
     CHECK_CALL(renderer->Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5)));
 
     bool isRayTracingSupported = (options5.RaytracingTier == D3D12_RAYTRACING_TIER_1_1);
-    if (!isRayTracingSupported) {
+    if (!isRayTracingSupported)
+    {
         assert(false && "Required ray tracing tier not supported");
         return EXIT_FAILURE;
     }
@@ -177,7 +181,8 @@ int main(int argc, char** argv)
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(source, "", "lib_6_5", &rayTraceDxil, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (raytracing): " << errorMsg << "\n";
@@ -322,7 +327,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "025_raytracing_refract_d3d12");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -331,7 +337,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight())) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight()))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -367,7 +374,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         CHECK_CALL(commandAllocator->Reset());
         CHECK_CALL(commandList->Reset(commandAllocator.Get(), nullptr));
 
@@ -432,7 +440,8 @@ int main(int argc, char** argv)
             ID3D12CommandList* pList = commandList.Get();
             renderer->Queue->ExecuteCommandLists(1, &pList);
 
-            if (!WaitForGpu(renderer.get())) {
+            if (!WaitForGpu(renderer.get()))
+            {
                 assert(false && "WaitForGpu failed");
                 break;
             }
@@ -467,13 +476,15 @@ int main(int argc, char** argv)
             ID3D12CommandList* pList = commandList.Get();
             renderer->Queue->ExecuteCommandLists(1, &pList);
 
-            if (!WaitForGpu(renderer.get())) {
+            if (!WaitForGpu(renderer.get()))
+            {
                 assert(false && "WaitForGpu failed");
                 break;
             }
         }
 
-        if (!SwapchainPresent(renderer.get())) {
+        if (!SwapchainPresent(renderer.get()))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -566,7 +577,8 @@ void CreateGlobalRootSig(DxRenderer* pRenderer, ID3D12RootSignature** ppRootSig)
     ComPtr<ID3DBlob> blob;
     ComPtr<ID3DBlob> error;
     HRESULT          hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         std::string errorMsg = std::string(reinterpret_cast<const char*>(error->GetBufferPointer()), error->GetBufferSize());
 
         std::stringstream ss;
@@ -888,7 +900,8 @@ void CreateBLASes(
     std::vector<const Geometry*>  geometries = {&sphereGeometry, &boxGeometry};
     std::vector<ID3D12Resource**> BLASes     = {ppSphereBLAS, ppBoxBLAS};
 
-    for (uint32_t i = 0; i < 2; ++i) {
+    for (uint32_t i = 0; i < 2; ++i)
+    {
         auto pGeometry = geometries[i];
         auto ppBLAS    = BLASes[i];
 
@@ -1174,7 +1187,8 @@ void CreateIBLTextures(
     auto iblFile = GetAssetPath("IBL/old_depot_4k.ibl");
 
     IBLMaps ibl = {};
-    if (!LoadIBLMaps32f(iblFile, &ibl)) {
+    if (!LoadIBLMaps32f(iblFile, &ibl))
+    {
         GREX_LOG_ERROR("failed to load: " << iblFile);
         return;
     }
@@ -1187,13 +1201,14 @@ void CreateIBLTextures(
         const uint32_t rowStride   = ibl.environmentMap.GetRowStride();
 
         std::vector<MipOffset> mipOffsets;
-        uint32_t                 levelOffset = 0;
-        uint32_t                 levelWidth  = ibl.baseWidth;
-        uint32_t                 levelHeight = ibl.baseHeight;
-        for (uint32_t i = 0; i < ibl.numLevels; ++i) {
+        uint32_t               levelOffset = 0;
+        uint32_t               levelWidth  = ibl.baseWidth;
+        uint32_t               levelHeight = ibl.baseHeight;
+        for (uint32_t i = 0; i < ibl.numLevels; ++i)
+        {
             MipOffset mipOffset = {};
-            mipOffset.Offset      = levelOffset;
-            mipOffset.RowStride   = rowStride;
+            mipOffset.Offset    = levelOffset;
+            mipOffset.RowStride = rowStride;
 
             mipOffsets.push_back(mipOffset);
 
@@ -1265,7 +1280,8 @@ void WriteDescriptors(
             const UINT                        kIncrementSize  = pRenderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
             // Spheres
-            for (uint32_t i = 0; i < kNumSpheres; ++i) {
+            for (uint32_t i = 0; i < kNumSpheres; ++i)
+            {
                 uint32_t                    offset     = 0;
                 D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
 

@@ -47,9 +47,9 @@ using namespace glm;
 // =============================================================================
 // Globals
 // =============================================================================
-static uint32_t gWindowWidth      = 1280;
-static uint32_t gWindowHeight     = 720;
-static bool     gEnableDebug      = true;
+static uint32_t gWindowWidth  = 1280;
+static uint32_t gWindowHeight = 720;
+static bool     gEnableDebug  = true;
 
 static std::vector<std::string> gIBLNames = {};
 
