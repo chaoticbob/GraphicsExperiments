@@ -136,8 +136,10 @@ int main(int argc, char** argv)
     {
         std::string errorMsg;
 #if defined(GREX_ENABLE_SLANG)
-        CompileResult res = CompileSlang(gShaders, "vsmain", "vs_6_0", {}, &spirvVS, &errorMsg);
-        if (res != COMPILE_SUCCESS)
+        //CompileResult res = CompileSlang(gShaders, "vsmain", "vs_6_0", {}, &spirvVS, &errorMsg);
+        //if (res != COMPILE_SUCCESS)
+        bool res = CompileSlangSimple(gShaders, "vsmain", "vs_6_0", &spirvVS, &errorMsg);
+        if (!res)
         {
             std::stringstream ss;
             ss << "\n"
@@ -146,8 +148,10 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        res = CompileSlang(gShaders, "psmain", "ps_6_0", {}, &spirvFS, &errorMsg);
-        if (res != COMPILE_SUCCESS)
+        //res = CompileSlang(gShaders, "psmain", "ps_6_0", {}, &spirvFS, &errorMsg);
+        //if (res != COMPILE_SUCCESS)
+        res = CompileSlangSimple(gShaders, "psmain", "ps_6_0", &spirvFS, &errorMsg);
+        if (!res)
         {
             std::stringstream ss;
             ss << "\n"

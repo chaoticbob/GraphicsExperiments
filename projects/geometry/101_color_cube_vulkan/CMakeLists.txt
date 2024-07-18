@@ -67,6 +67,8 @@ elseif(LINUX)
     )
 endif()
 
+################################################################################
+
 if (GREX_ENABLE_SLANG)
     set(TARGET_NAME "${TARGET_NAME}_slang")
 
@@ -85,6 +87,8 @@ if (GREX_ENABLE_SLANG)
     )
 
     set_target_properties(${TARGET_NAME} PROPERTIES FOLDER "geometry")
+
+    CopySharedLibs(${TARGET_NAME})
 
     target_compile_definitions(
         ${TARGET_NAME}

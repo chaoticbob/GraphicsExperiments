@@ -145,6 +145,8 @@ if (GREX_ENABLE_SLANG)
     message("Found Slang:")
     message("  Slang include directory: ${SLANG_INCLUDE_DIR}")
     message("  Slang library directory: ${SLANG_LIBRARY_DIR}")
+
+    include(cmake/slang.cmake)
 endif()
 
 # ------------------------------------------------------------------------------
