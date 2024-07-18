@@ -151,14 +151,16 @@ float2 IntegrateBRDF(float Roughness, float NoV)
     float3 N = float3(0, 1, 0);
 
     const uint NumSamples = 1024;
-    for (uint i = 0; i < NumSamples; i++) {
+    for (uint i = 0; i < NumSamples; i++)
+    {
         float2 Xi  = Hammersley(i, NumSamples);
         float3 H   = ImportanceSampleGGX(Xi, Roughness, N);
         float3 L   = 2 * dot(V, H) * H - V;
         float  NoL = saturate(L.y);
         float  NoH = saturate(H.y);
         float  VoH = saturate(dot(V, H));
-        if (NoL > 0) {
+        if (NoL > 0)
+        {
             float G     = Geometry_Smiths(NoV, NoL, Roughness);
             float G_Vis = G * VoH / (NoH * NoV);
             float Fc    = glm::pow(1 - VoH, 5.0f);
@@ -183,14 +185,16 @@ float2 IntegrateBRDF_Multiscatter(float Roughness, float NoV)
     float3 N = float3(0, 0, 1);
 
     const uint NumSamples = 1024;
-    for (uint i = 0; i < NumSamples; i++) {
+    for (uint i = 0; i < NumSamples; i++)
+    {
         float2 Xi  = Hammersley(i, NumSamples);
         float3 H   = ImportanceSampleGGX(Xi, Roughness, N);
         float3 L   = 2 * dot(V, H) * H - V;
         float  NoL = saturate(L.z);
         float  NoH = saturate(H.z);
         float  VoH = saturate(dot(V, H));
-        if (NoL > 0) {
+        if (NoL > 0)
+        {
             float G     = Geometry_Smiths(NoV, NoL, Roughness);
             float G_Vis = G * VoH / (NoH * NoV);
             float Fc    = glm::pow(1 - VoH, 5.0f);
@@ -243,7 +247,8 @@ float2 IntegrateBRDF_Narkowicz(int x, float ndotv, int LUT_WIDTH)
     float scale = 0.0f;
     float bias  = 0.0f;
 
-    for (unsigned int i = 0; i < sampleNum; ++i) {
+    for (unsigned int i = 0; i < sampleNum; ++i)
+    {
         float const e1 = (float)i / sampleNum;
         float const e2 = (float)((double)ReverseBits(i) / (double)0x100000000LL);
 
@@ -266,7 +271,8 @@ float2 IntegrateBRDF_Narkowicz(int x, float ndotv, int LUT_WIDTH)
         float const ndoth = std::max(hz, 0.0f);
         float const vdoth = std::max(vdh, 0.0f);
 
-        if (ndotl > 0.0f) {
+        if (ndotl > 0.0f)
+        {
             float const vis         = Vis(roughness, ndotv, ndotl);
             float const ndotlVisPDF = ndotl * vis * (4.0f * vdoth / ndoth);
             float const fresnel     = powf(1.0f - vdoth, 5.0f);
@@ -298,13 +304,15 @@ int GetNextScanline()
     std::lock_guard<std::mutex> lock(gScanlineMutex);
 
     int scanline = -1;
-    if (!gScanlines.empty()) {
+    if (!gScanlines.empty())
+    {
         scanline = gScanlines.back();
         gScanlines.pop_back();
 
         // Print every 32 scanlines
         size_t n = gResY - gScanlines.size();
-        if (((n % 32) == 0) || (n == 0) || (n == gResY)) {
+        if (((n % 32) == 0) || (n == 0) || (n == gResY))
+        {
             float percent = n / static_cast<float>(gResY) * 100.0f;
             std::cout << "Procssing:  " << std::fixed << std::setw(4) << std::setprecision(2) << percent << "% complete" << std::endl;
         }
@@ -316,17 +324,21 @@ int GetNextScanline()
 void ProcessScaline()
 {
     int y = GetNextScanline();
-    while (y != -1) {
+    while (y != -1)
+    {
         float3* pPixels = &gPixels[y * gResX];
 
-        for (int x = 0; x < gResX; ++x) {
+        for (int x = 0; x < gResX; ++x)
+        {
             float  roughness = (static_cast<float>(x) + 0.5f) / static_cast<float>(gResX);
             float  NoV       = (static_cast<float>(y) + 0.5f) / static_cast<float>(gResY);
             float2 brdf      = float2(0, 0);
-            if (gMultiscatter) {
+            if (gMultiscatter)
+            {
                 brdf = IntegrateBRDF_Multiscatter(roughness, NoV);
             }
-            else {
+            else
+            {
                 brdf = IntegrateBRDF(roughness, NoV);
             }
             *pPixels = float3(brdf, 0);
@@ -355,7 +367,8 @@ int main(int argc, char** argv)
     const uint32_t kMaxWidth  = 8192;
     const uint32_t kMaxHeight = 8192;
 
-    if (argc < 2) {
+    if (argc < 2)
+    {
         std::cout << "error: missing arguments" << std::endl;
         std::cout << "   "
                   << "ibl_brdf_lut <output file> [optional:flags/options]" << std::endl;
@@ -376,44 +389,54 @@ int main(int argc, char** argv)
     uint32_t              height     = 1024;
 
     std::string badOption = "";
-    for (int i = 2; i < argc; ++i) {
+    for (int i = 2; i < argc; ++i)
+    {
         std::string arg = argv[i];
-        if (arg == "-w") {
+        if (arg == "-w")
+        {
             ++i;
-            if (i >= argc) {
+            if (i >= argc)
+            {
                 badOption = arg;
                 break;
             }
             width = static_cast<uint32_t>(atoi(argv[i]));
         }
-        else if (arg == "-h") {
+        else if (arg == "-h")
+        {
             ++i;
-            if (i >= argc) {
+            if (i >= argc)
+            {
                 badOption = arg;
                 break;
             }
             height = static_cast<uint32_t>(atoi(argv[i]));
         }
-        else if (arg == "-ms") {
+        else if (arg == "-ms")
+        {
             gMultiscatter = true;
         }
-        else {
+        else
+        {
             std::cout << "error: unrecognized arg " << arg << std::endl;
             return EXIT_FAILURE;
         }
     }
-    if (!badOption.empty()) {
+    if (!badOption.empty())
+    {
         std::cout << "error: missing arg for option " << badOption << std::endl;
         return EXIT_FAILURE;
     }
 
-    if (width > kMaxWidth) {
+    if (width > kMaxWidth)
+    {
         std::cout << "error: width is too big" << std::endl;
         std::cout << "max width is " << kMaxWidth << std::endl;
         return EXIT_FAILURE;
     }
 
-    if (height > kMaxHeight) {
+    if (height > kMaxHeight)
+    {
         std::cout << "error: height is too big" << std::endl;
         std::cout << "max height is " << kMaxHeight << std::endl;
         return EXIT_FAILURE;
@@ -424,23 +447,28 @@ int main(int argc, char** argv)
 
     gPixels.resize(gResX * gResY);
 
-    for (int i = 0; i < gResY; ++i) {
+    for (int i = 0; i < gResY; ++i)
+    {
         gScanlines.push_back(gResY - i - 1);
     }
 
     std::vector<std::unique_ptr<std::thread>> threads;
-    for (int i = 0; i < gNumThreads; ++i) {
+    for (int i = 0; i < gNumThreads; ++i)
+    {
         auto thread = std::make_unique<std::thread>(&ProcessScaline);
         threads.push_back(std::move(thread));
     }
 
-    for (auto& thread : threads) {
+    for (auto& thread : threads)
+    {
         thread->join();
     }
 
-    if (!gPixels.empty()) {
+    if (!gPixels.empty())
+    {
         int res = stbi_write_hdr(outputFile.string().c_str(), gResX, gResY, 3, reinterpret_cast<const float*>(gPixels.data()));
-        if (res == 0) {
+        if (res == 0)
+        {
             std::cout << "ERROR: failed to write " << outputFile << std::endl;
             return EXIT_FAILURE;
         }

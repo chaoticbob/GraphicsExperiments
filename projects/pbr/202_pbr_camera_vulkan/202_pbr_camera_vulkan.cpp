@@ -125,7 +125,7 @@ void CreatePBRDescriptors(
 void CreateEnvDescriptors(
     VulkanRenderer*      pRenderer,
     VulkanDescriptorSet* pDescriptors,
-    VulkanImage*          pEnvTexture);
+    VulkanImage*         pEnvTexture);
 void CreateCameraVertexBuffers(
     VulkanRenderer*        pRenderer,
     const TriMesh*         pMesh,
@@ -162,7 +162,7 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    VulkanFeatures features = {};
+    VulkanFeatures features         = {};
     features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
@@ -1191,7 +1191,7 @@ void CreatePBRDescriptors(
         pMaterialParamsBuffer);
 
     // Texture2D                          IBLIntegrationLUT     : register(t3);
-	VulkanImageDescriptor iblIntegrationLUTDescriptor;
+    VulkanImageDescriptor iblIntegrationLUTDescriptor;
     {
         VkImageView imageView = VK_NULL_HANDLE;
         CHECK_CALL(CreateImageView(
@@ -1213,7 +1213,7 @@ void CreatePBRDescriptors(
     }
 
     // Texture2D                          IBLIrradianceMap      : register(t4);
-	VulkanImageDescriptor iblIrradianceMapDescriptor;
+    VulkanImageDescriptor iblIrradianceMapDescriptor;
     {
         VkImageView imageView = VK_NULL_HANDLE;
         CHECK_CALL(CreateImageView(
@@ -1235,7 +1235,7 @@ void CreatePBRDescriptors(
     }
 
     // Texture2D                          IBLEnvironmentMap     : register(t5);
-	VulkanImageDescriptor iblEnvironmentMapDescriptor;
+    VulkanImageDescriptor iblEnvironmentMapDescriptor;
     {
         VkImageView imageView = VK_NULL_HANDLE;
         CHECK_CALL(CreateImageView(
@@ -1258,7 +1258,7 @@ void CreatePBRDescriptors(
 
     // Samplers are setup in the immutable samplers in the DescriptorSetLayout
     // SamplerState                       IBLIntegrationSampler : register(s6);
-	VulkanImageDescriptor iblIntegrationSamplerDescriptor;
+    VulkanImageDescriptor iblIntegrationSamplerDescriptor;
     {
         VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         samplerInfo.flags                   = 0;
@@ -1294,7 +1294,7 @@ void CreatePBRDescriptors(
     }
 
     // SamplerState                       IBLMapSampler         : register(s7);
-	VulkanImageDescriptor iblMapSamplerDescriptor;
+    VulkanImageDescriptor iblMapSamplerDescriptor;
     {
         VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         samplerInfo.flags                   = 0;
@@ -1330,7 +1330,7 @@ void CreatePBRDescriptors(
     }
 
     // Texture2D    MaterialTextures[10] : register(t10);
-	VulkanImageDescriptor materialTexturesDescriptor(10);
+    VulkanImageDescriptor materialTexturesDescriptor(10);
     {
         uint32_t arrayIndex = 0;
         for (auto& materialTextures : materialTextureSets)
@@ -1368,7 +1368,7 @@ void CreatePBRDescriptors(
     }
 
     // SamplerState MaterialSampler      : register(s9);
-	VulkanImageDescriptor materialSamplerDescriptor;
+    VulkanImageDescriptor materialSamplerDescriptor;
     {
         VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         samplerInfo.flags                   = 0;
@@ -1404,30 +1404,30 @@ void CreatePBRDescriptors(
     }
 
     std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
-    {
-       sceneParamsDescriptor.layoutBinding,
-       materialParamsDescriptor.layoutBinding,
-       iblIntegrationLUTDescriptor.layoutBinding,
-       iblIrradianceMapDescriptor.layoutBinding,
-       iblEnvironmentMapDescriptor.layoutBinding,
-       iblIntegrationSamplerDescriptor.layoutBinding,
-       iblMapSamplerDescriptor.layoutBinding,
-       materialTexturesDescriptor.layoutBinding,
-       materialSamplerDescriptor.layoutBinding,
-    };
+        {
+            sceneParamsDescriptor.layoutBinding,
+            materialParamsDescriptor.layoutBinding,
+            iblIntegrationLUTDescriptor.layoutBinding,
+            iblIrradianceMapDescriptor.layoutBinding,
+            iblEnvironmentMapDescriptor.layoutBinding,
+            iblIntegrationSamplerDescriptor.layoutBinding,
+            iblMapSamplerDescriptor.layoutBinding,
+            materialTexturesDescriptor.layoutBinding,
+            materialSamplerDescriptor.layoutBinding,
+        };
 
-    std::vector<VkWriteDescriptorSet> writeDescriptorSets = 
-    {
-       sceneParamsDescriptor.writeDescriptorSet,
-       materialParamsDescriptor.writeDescriptorSet,
-       iblIntegrationLUTDescriptor.writeDescriptorSet,
-       iblIrradianceMapDescriptor.writeDescriptorSet,
-       iblEnvironmentMapDescriptor.writeDescriptorSet,
-       iblIntegrationSamplerDescriptor.writeDescriptorSet,
-       iblMapSamplerDescriptor.writeDescriptorSet,
-       materialTexturesDescriptor.writeDescriptorSet,
-       materialSamplerDescriptor.writeDescriptorSet,
-    };
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets =
+        {
+            sceneParamsDescriptor.writeDescriptorSet,
+            materialParamsDescriptor.writeDescriptorSet,
+            iblIntegrationLUTDescriptor.writeDescriptorSet,
+            iblIrradianceMapDescriptor.writeDescriptorSet,
+            iblEnvironmentMapDescriptor.writeDescriptorSet,
+            iblIntegrationSamplerDescriptor.writeDescriptorSet,
+            iblMapSamplerDescriptor.writeDescriptorSet,
+            materialTexturesDescriptor.writeDescriptorSet,
+            materialSamplerDescriptor.writeDescriptorSet,
+        };
 
     CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, pDescriptors);
 }
@@ -1441,7 +1441,7 @@ void CreateEnvDescriptors(
     // ConstantBuffer<SceneParameters> SceneParams       : register(b0);
 
     // SamplerState                    IBLMapSampler     : register(s1);
-	VulkanImageDescriptor iblMapSamplerDescriptor;
+    VulkanImageDescriptor iblMapSamplerDescriptor;
     {
         VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         samplerInfo.flags                   = 0;
@@ -1477,7 +1477,7 @@ void CreateEnvDescriptors(
     }
 
     // Texture2D                       IBLEnvironmentMap : register(t2);
-	VulkanImageDescriptor iblEnvironmentMapDescriptor;
+    VulkanImageDescriptor iblEnvironmentMapDescriptor;
     {
         VkImageView imageView = VK_NULL_HANDLE;
         CHECK_CALL(CreateImageView(
@@ -1497,18 +1497,18 @@ void CreateEnvDescriptors(
             imageView,
             VK_IMAGE_LAYOUT_GENERAL);
     }
-	
-    std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding = 
-    {
-       iblMapSamplerDescriptor.layoutBinding,
-       iblEnvironmentMapDescriptor.layoutBinding,
-    };
+
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
+        {
+            iblMapSamplerDescriptor.layoutBinding,
+            iblEnvironmentMapDescriptor.layoutBinding,
+        };
 
     std::vector<VkWriteDescriptorSet> writeDescriptorSets =
-    {
-       iblMapSamplerDescriptor.writeDescriptorSet,
-       iblEnvironmentMapDescriptor.writeDescriptorSet,
-    };
+        {
+            iblMapSamplerDescriptor.writeDescriptorSet,
+            iblEnvironmentMapDescriptor.writeDescriptorSet,
+        };
 
     CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, pDescriptors);
 }

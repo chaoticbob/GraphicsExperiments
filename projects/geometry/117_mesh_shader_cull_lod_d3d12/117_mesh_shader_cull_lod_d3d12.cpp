@@ -84,7 +84,7 @@ struct SceneProperties
     uint        VisibilityFunc;
     float       MaxLODDistance;         // Use least detail level at or beyond this distance
     uint4       Meshlet_LOD_Offsets[5]; // Align array element to 16 bytes
-    uint4       Meshlet_LOD_Counts[5];  // Align array element to 16 bytes   
+    uint4       Meshlet_LOD_Counts[5];  // Align array element to 16 bytes
     float3      MeshBoundsMin;
     uint        __pad1;
     float3      MeshBoundsMax;

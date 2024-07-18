@@ -154,7 +154,7 @@ int main(int argc, char** argv)
         meshlets.resize(meshletCount);
     }
 
-    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to 
+    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to
     // make it easier to unpack on the GPU.
     //
     std::vector<uint32_t> meshletTrianglesU32;

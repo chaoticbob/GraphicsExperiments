@@ -75,10 +75,11 @@ struct CompilerOptions
 
 enum VkPipelineFlags
 {
-   VK_PIPELINE_FLAGS_INTERLEAVED_ATTRS = 0x00000001
+    VK_PIPELINE_FLAGS_INTERLEAVED_ATTRS = 0x00000001
 };
 
-struct VulkanFeatures {
+struct VulkanFeatures
+{
     bool EnableRayTracing       = false;
     bool EnableMeshShader       = false;
     bool EnablePushDescriptor   = false;
@@ -135,7 +136,6 @@ bool     WaitForFence(VulkanRenderer* pRenderer, VkFence fence);
 VkResult GetSwapchainImages(VulkanRenderer* pRenderer, std::vector<VkImage>& images);
 VkResult AcquireNextImage(VulkanRenderer* pRenderer, uint32_t* pImageIndex);
 bool     SwapchainPresent(VulkanRenderer* pRenderer, uint32_t imageIndex);
-
 
 VkFormat    ToVkFormat(GREXFormat format);
 VkIndexType ToVkIndexType(GREXFormat format);
@@ -354,29 +354,29 @@ VkDeviceAddress GetDeviceAddress(VulkanRenderer* pRenderer, VkAccelerationStruct
 VkDeviceAddress GetDeviceAddress(VulkanRenderer* pRenderer, const VulkanAccelStruct* pAccelStruct);
 
 VkResult CreateDrawVertexColorPipeline(
-   VulkanRenderer*      pRenderer,
-   VkPipelineLayout     pipeline_layout,
-   VkShaderModule       vsShaderModule,
-   VkShaderModule       fsShaderModule,
-   VkFormat             rtvFormat,
-   VkFormat             dsvFormat,
-   VkPipeline*          pPipeline,
-   VkCullModeFlags      cullMode = VK_CULL_MODE_BACK_BIT,
-   VkPrimitiveTopology  topologyType = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-   uint32_t             pipelineFlags = 0);
+    VulkanRenderer*     pRenderer,
+    VkPipelineLayout    pipeline_layout,
+    VkShaderModule      vsShaderModule,
+    VkShaderModule      fsShaderModule,
+    VkFormat            rtvFormat,
+    VkFormat            dsvFormat,
+    VkPipeline*         pPipeline,
+    VkCullModeFlags     cullMode      = VK_CULL_MODE_BACK_BIT,
+    VkPrimitiveTopology topologyType  = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+    uint32_t            pipelineFlags = 0);
 
 VkResult CreateDrawNormalPipeline(
-   VulkanRenderer*      pRenderer,
-   VkPipelineLayout     pipelineLayout,
-   VkShaderModule       vsShaderModule,
-   VkShaderModule       fsShaderModule,
-   VkFormat             rtvFormat,
-   VkFormat             dsvFormat,
-   VkPipeline*          pPipeline,
-   bool                 enableTangents = false,
-   VkCullModeFlagBits   cullMode = VK_CULL_MODE_BACK_BIT,
-   const char*          vsEntryPoint = "main",
-   const char*          fsEntryPoint = "main");
+    VulkanRenderer*    pRenderer,
+    VkPipelineLayout   pipelineLayout,
+    VkShaderModule     vsShaderModule,
+    VkShaderModule     fsShaderModule,
+    VkFormat           rtvFormat,
+    VkFormat           dsvFormat,
+    VkPipeline*        pPipeline,
+    bool               enableTangents = false,
+    VkCullModeFlagBits cullMode       = VK_CULL_MODE_BACK_BIT,
+    const char*        vsEntryPoint   = "main",
+    const char*        fsEntryPoint   = "main");
 
 VkResult CreateDrawTexturePipeline(
     VulkanRenderer*    pRenderer,
@@ -398,54 +398,54 @@ VkResult CreateDrawBasicPipeline(
     VkFormat           rtvFormat,
     VkFormat           dsvFormat,
     VkPipeline*        pPipeline,
-    VkCullModeFlagBits cullMode = VK_CULL_MODE_BACK_BIT,
+    VkCullModeFlagBits cullMode     = VK_CULL_MODE_BACK_BIT,
     const char*        vsEntryPoint = "main",
     const char*        fsEntryPoint = "main");
 
 VkResult CreateGraphicsPipeline1(
-   VulkanRenderer*      pRenderer,
-   VkPipelineLayout     pipelineLayout,
-   VkShaderModule       vsShaderModule,
-   VkShaderModule       fsShaderModule,
-   VkFormat             rtvFormat,
-   VkFormat             dsvFormat,
-   VkPipeline*          pPipeline,
-   VkCullModeFlagBits   cullMode = VK_CULL_MODE_BACK_BIT);
+    VulkanRenderer*    pRenderer,
+    VkPipelineLayout   pipelineLayout,
+    VkShaderModule     vsShaderModule,
+    VkShaderModule     fsShaderModule,
+    VkFormat           rtvFormat,
+    VkFormat           dsvFormat,
+    VkPipeline*        pPipeline,
+    VkCullModeFlagBits cullMode = VK_CULL_MODE_BACK_BIT);
 
 VkResult CreateGraphicsPipeline2(
-   VulkanRenderer*      pRenderer,
-   VkPipelineLayout     pipelineLayout,
-   VkShaderModule       vsShaderModule,
-   VkShaderModule       fsShaderModule,
-   VkFormat             rtvFormat,
-   VkFormat             dsvFormat,
-   VkPipeline*          pPipeline,
-   VkCullModeFlagBits   cullMode = VK_CULL_MODE_BACK_BIT);
+    VulkanRenderer*    pRenderer,
+    VkPipelineLayout   pipelineLayout,
+    VkShaderModule     vsShaderModule,
+    VkShaderModule     fsShaderModule,
+    VkFormat           rtvFormat,
+    VkFormat           dsvFormat,
+    VkPipeline*        pPipeline,
+    VkCullModeFlagBits cullMode = VK_CULL_MODE_BACK_BIT);
 
 VkResult CreateMeshShaderPipeline(
-   VulkanRenderer*      pRenderer,
-   VkPipelineLayout     pipelineLayout,
-   VkShaderModule       asShaderModule,
-   VkShaderModule       msShaderModule,
-   VkShaderModule       fsShaderModule,
-   VkFormat             rtvFormat,
-   VkFormat             dsvFormat,
-   VkPipeline*          pPipeline,
-   VkCullModeFlags      cullMode = VK_CULL_MODE_BACK_BIT,
-   VkPrimitiveTopology  topologyType = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-   uint32_t             pipelineFlags = 0);
+    VulkanRenderer*     pRenderer,
+    VkPipelineLayout    pipelineLayout,
+    VkShaderModule      asShaderModule,
+    VkShaderModule      msShaderModule,
+    VkShaderModule      fsShaderModule,
+    VkFormat            rtvFormat,
+    VkFormat            dsvFormat,
+    VkPipeline*         pPipeline,
+    VkCullModeFlags     cullMode      = VK_CULL_MODE_BACK_BIT,
+    VkPrimitiveTopology topologyType  = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+    uint32_t            pipelineFlags = 0);
 
 VkResult CreateMeshShaderPipeline(
-   VulkanRenderer*      pRenderer,
-   VkPipelineLayout     pipelineLayout,
-   VkShaderModule       msShaderModule,
-   VkShaderModule       fsShaderModule,
-   VkFormat             rtvFormat,
-   VkFormat             dsvFormat,
-   VkPipeline*          pPipeline,
-   VkCullModeFlags      cullMode = VK_CULL_MODE_BACK_BIT,
-   VkPrimitiveTopology  topologyType = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-   uint32_t             pipelineFlags = 0);
+    VulkanRenderer*     pRenderer,
+    VkPipelineLayout    pipelineLayout,
+    VkShaderModule      msShaderModule,
+    VkShaderModule      fsShaderModule,
+    VkFormat            rtvFormat,
+    VkFormat            dsvFormat,
+    VkPipeline*         pPipeline,
+    VkCullModeFlags     cullMode      = VK_CULL_MODE_BACK_BIT,
+    VkPrimitiveTopology topologyType  = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+    uint32_t            pipelineFlags = 0);
 
 CompileResult CompileGLSL(
     const std::string&     shaderSource,
@@ -500,13 +500,13 @@ void WriteDescriptor(
 
 // Image view
 void CreateDescriptor(
-    VulkanRenderer*       pRenderer,
-   VulkanImageDescriptor* pImageDescriptor,
-    uint32_t              binding,
-    uint32_t              arrayElement,
-    VkDescriptorType      descriptorType,
-    VkImageView           imageView,
-    VkImageLayout         imageLayout);
+    VulkanRenderer*        pRenderer,
+    VulkanImageDescriptor* pImageDescriptor,
+    uint32_t               binding,
+    uint32_t               arrayElement,
+    VkDescriptorType       descriptorType,
+    VkImageView            imageView,
+    VkImageLayout          imageLayout);
 
 void WriteDescriptor(
     VulkanRenderer*       pRenderer,
@@ -518,7 +518,7 @@ void WriteDescriptor(
     VkImageView           imageView,
     VkImageLayout         imageLayout);
 
-// Sampler 
+// Sampler
 void CreateDescriptor(
     VulkanRenderer*        pRenderer,
     VulkanImageDescriptor* pImageDescriptor,
@@ -548,7 +548,7 @@ void CreateAndUpdateDescriptorSet(
     VulkanRenderer*                            pRenderer,
     std::vector<VkDescriptorSetLayoutBinding>& layoutBindings,
     std::vector<VkWriteDescriptorSet>&         writeDescriptorSets,
-    VulkanDescriptorSet*                               pDescriptors);
+    VulkanDescriptorSet*                       pDescriptors);
 
 // Loaded funtions
 extern PFN_vkCreateRayTracingPipelinesKHR             fn_vkCreateRayTracingPipelinesKHR;

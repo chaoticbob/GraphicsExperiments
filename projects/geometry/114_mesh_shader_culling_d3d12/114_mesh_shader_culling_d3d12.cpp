@@ -214,7 +214,7 @@ int main(int argc, char** argv)
     std::vector<meshopt_Meshlet> meshlets;
     std::vector<uint32_t>        meshletVertices;
     std::vector<uint8_t>         meshletTriangles;
-    {        
+    {
         TriMesh mesh = {};
         bool    res  = TriMesh::LoadOBJ2(GetAssetPath("models/horse_statue_01_1k.obj").string(), &mesh);
         if (!res)
@@ -277,7 +277,7 @@ int main(int argc, char** argv)
         meshletTriangleCount += m.triangle_count;
     }
 
-    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to 
+    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to
     // make it easier to unpack on the GPU.
     //
     std::vector<uint32_t> meshletTrianglesU32;
@@ -626,7 +626,6 @@ int main(int argc, char** argv)
             commandList->SetGraphicsRootShaderResourceView(5, meshletTrianglesBuffer->GetGPUVirtualAddress());
             commandList->SetGraphicsRootShaderResourceView(6, instancesBuffer->GetGPUVirtualAddress());
 
-            
             // DispatchMesh with pipeline statistics
             {
                 commandList->BeginQuery(queryHeap.Get(), D3D12_QUERY_TYPE_PIPELINE_STATISTICS1, 0);
@@ -642,7 +641,6 @@ int main(int argc, char** argv)
 
             // Resolve query
             commandList->ResolveQueryData(queryHeap.Get(), D3D12_QUERY_TYPE_PIPELINE_STATISTICS1, 0, 1, queryBuffer.Get(), 0);
-            
 
             // ImGui
             window->ImGuiRenderDrawData(renderer.get(), commandList.Get());

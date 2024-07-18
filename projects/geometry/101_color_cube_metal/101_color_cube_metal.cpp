@@ -12,7 +12,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                                                               \
     {                                                                                \
         NS::Error* pError = FN;                                                      \
-        if (pError != nullptr) {                                                     \
+        if (pError != nullptr)                                                       \
+        {                                                                            \
             std::stringstream ss;                                                    \
             ss << "\n";                                                              \
             ss << "*** FUNCTION CALL FAILED *** \n";                                 \
@@ -82,7 +83,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<MetalRenderer> renderer = std::make_unique<MetalRenderer>();
 
-    if (!InitMetal(renderer.get(), gEnableDebug)) {
+    if (!InitMetal(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -97,7 +99,8 @@ int main(int argc, char** argv)
         nullptr,
         &pError));
 
-    if (library.get() == nullptr) {
+    if (library.get() == nullptr)
+    {
         std::stringstream ss;
         ss << "\n"
            << "Shader compiler error (VS): " << pError->localizedDescription()->utf8String() << "\n";
@@ -107,13 +110,15 @@ int main(int argc, char** argv)
     }
 
     vsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("vertexMain", NS::UTF8StringEncoding)));
-    if (vsShader.Function.get() == nullptr) {
+    if (vsShader.Function.get() == nullptr)
+    {
         assert(false && "VS Shader MTL::Library::newFunction() failed");
         return EXIT_FAILURE;
     }
 
     fsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("fragmentMain", NS::UTF8StringEncoding)));
-    if (fsShader.Function.get() == nullptr) {
+    if (fsShader.Function.get() == nullptr)
+    {
         assert(false && "FS Shader MTL::Library::newFunction() failed");
         return EXIT_FAILURE;
     }
@@ -144,7 +149,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "101_color_cube_metal");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -157,7 +163,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, MTL::PixelFormatDepth32Float)) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, MTL::PixelFormatDepth32Float))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -168,7 +175,8 @@ int main(int argc, char** argv)
     MTL::ClearColor clearColor(0.23f, 0.23f, 0.31f, 0);
     uint32_t        frameIndex = 0;
 
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         CA::MetalDrawable* pDrawable = renderer->pSwapchain->nextDrawable();
         assert(pDrawable != nullptr);
 

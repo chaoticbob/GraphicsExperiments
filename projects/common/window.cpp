@@ -23,7 +23,8 @@ struct WindowEvents
     static void WindowMoveCallback(GLFWwindow* window, int eventX, int eventY)
     {
         auto it = sWindows.find(window);
-        if (it == sWindows.end()) {
+        if (it == sWindows.end())
+        {
             return;
         }
         GrexWindow* pAppWindow = it->second;
@@ -34,7 +35,8 @@ struct WindowEvents
     static void WindowResizeCallback(GLFWwindow* window, int eventWidth, int eventHeight)
     {
         auto it = sWindows.find(window);
-        if (it == sWindows.end()) {
+        if (it == sWindows.end())
+        {
             return;
         }
         GrexWindow* pAppWindow = it->second;
@@ -45,19 +47,23 @@ struct WindowEvents
     static void MouseButtonCallback(GLFWwindow* window, int eventButton, int eventAction, int eventMods)
     {
         auto it = sWindows.find(window);
-        if (it == sWindows.end()) {
+        if (it == sWindows.end())
+        {
             return;
         }
         GrexWindow* pAppWindow = it->second;
 
         int buttons = 0;
-        if (eventButton == GLFW_MOUSE_BUTTON_LEFT) {
+        if (eventButton == GLFW_MOUSE_BUTTON_LEFT)
+        {
             buttons |= MOUSE_BUTTON_LEFT;
         }
-        if (eventButton == GLFW_MOUSE_BUTTON_RIGHT) {
+        if (eventButton == GLFW_MOUSE_BUTTON_RIGHT)
+        {
             buttons |= MOUSE_BUTTON_RIGHT;
         }
-        if (eventButton == GLFW_MOUSE_BUTTON_MIDDLE) {
+        if (eventButton == GLFW_MOUSE_BUTTON_MIDDLE)
+        {
             buttons |= MOUSE_BUTTON_MIDDLE;
         }
 
@@ -65,13 +71,15 @@ struct WindowEvents
         double eventY;
         glfwGetCursorPos(window, &eventX, &eventY);
 
-        if (eventAction == GLFW_PRESS) {
+        if (eventAction == GLFW_PRESS)
+        {
             pAppWindow->MouseDownEvent(
                 static_cast<int>(eventX),
                 static_cast<int>(eventY),
                 buttons);
         }
-        else if (eventAction == GLFW_RELEASE) {
+        else if (eventAction == GLFW_RELEASE)
+        {
             pAppWindow->MouseUpEvent(
                 static_cast<int>(eventX),
                 static_cast<int>(eventY),
@@ -86,19 +94,23 @@ struct WindowEvents
     static void MouseMoveCallback(GLFWwindow* window, double eventX, double eventY)
     {
         auto it = sWindows.find(window);
-        if (it == sWindows.end()) {
+        if (it == sWindows.end())
+        {
             return;
         }
         GrexWindow* pAppWindow = it->second;
 
         uint32_t buttons = 0;
-        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
+        {
             buttons |= MOUSE_BUTTON_LEFT;
         }
-        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
+        {
             buttons |= MOUSE_BUTTON_RIGHT;
         }
-        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS) {
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS)
+        {
             buttons |= MOUSE_BUTTON_MIDDLE;
         }
         pAppWindow->MouseMoveEvent(
@@ -110,7 +122,8 @@ struct WindowEvents
     static void MouseScrollCallback(GLFWwindow* window, double xoffset, double yoffset)
     {
         auto it = sWindows.find(window);
-        if (it == sWindows.end()) {
+        if (it == sWindows.end())
+        {
             return;
         }
         GrexWindow* pAppWindow = it->second;
@@ -127,15 +140,18 @@ struct WindowEvents
     static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
     {
         auto it = sWindows.find(window);
-        if (it == sWindows.end()) {
+        if (it == sWindows.end())
+        {
             return;
         }
         GrexWindow* pAppWindow = it->second;
 
-        if (action == GLFW_PRESS) {
+        if (action == GLFW_PRESS)
+        {
             pAppWindow->KeyDownEvent(key);
         }
-        else if (action == GLFW_RELEASE) {
+        else if (action == GLFW_RELEASE)
+        {
             pAppWindow->KeyUpEvent(key);
         }
 
@@ -147,7 +163,8 @@ struct WindowEvents
     static void CharCallback(GLFWwindow* window, unsigned int c)
     {
         auto it = sWindows.find(window);
-        if (it == sWindows.end()) {
+        if (it == sWindows.end())
+        {
             return;
         }
 
@@ -159,7 +176,8 @@ struct WindowEvents
     static bool RegisterWindowEvents(GLFWwindow* window, GrexWindow* pAppWindow)
     {
         auto it = sWindows.find(window);
-        if (it != sWindows.end()) {
+        if (it != sWindows.end())
+        {
             return false;
         }
 
@@ -186,7 +204,8 @@ GrexWindow::GrexWindow(uint32_t width, uint32_t height, const char* pTitle)
     : mWidth(width),
       mHeight(height)
 {
-    if (glfwInit() != GLFW_TRUE) {
+    if (glfwInit() != GLFW_TRUE)
+    {
         assert(false && "glfwInit failed");
         return;
     }
@@ -195,29 +214,34 @@ GrexWindow::GrexWindow(uint32_t width, uint32_t height, const char* pTitle)
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
     mWindow = glfwCreateWindow(static_cast<int>(mWidth), static_cast<int>(mHeight), pTitle, nullptr, nullptr);
-    if (!mWindow) {
+    if (!mWindow)
+    {
         assert(false && "glfwCreateWindow failed");
         return;
     }
 
-    if (!WindowEvents::RegisterWindowEvents(mWindow, this)) {
+    if (!WindowEvents::RegisterWindowEvents(mWindow, this))
+    {
         assert(false && "WindowEvents::RegisterWindowEvents failed");
         return;
     }
 
-    for (size_t i = 0; i < static_cast<size_t>(GLFW_KEY_LAST); ++i) {
+    for (size_t i = 0; i < static_cast<size_t>(GLFW_KEY_LAST); ++i)
+    {
         mKeyDownState.push_back(false);
     }
 }
 
 GrexWindow::~GrexWindow()
 {
-    if (mWindow == nullptr) {
+    if (mWindow == nullptr)
+    {
         return;
     }
 
 #if defined(ENABLE_IMGUI_D3D12)
-    if (mImGuiEnabled) {
+    if (mImGuiEnabled)
+    {
         ImGui_ImplDX12_Shutdown();
         ImGui_ImplGlfw_Shutdown();
         ImGui::DestroyContext();
@@ -225,7 +249,8 @@ GrexWindow::~GrexWindow()
 #endif
 
 #if defined(ENABLE_IMGUI_VULKAN)
-    if (mImGuiEnabled) {
+    if (mImGuiEnabled)
+    {
         ImGui_ImplVulkan_Shutdown();
         ImGui_ImplGlfw_Shutdown();
         ImGui::DestroyContext();
@@ -233,7 +258,8 @@ GrexWindow::~GrexWindow()
 #endif
 
 #if defined(ENABLE_IMGUI_METAL)
-    if (mImGuiEnabled) {
+    if (mImGuiEnabled)
+    {
         ImGui_ImplMetal_Shutdown();
         ImGui_ImplGlfw_Shutdown();
         ImGui::DestroyContext();
@@ -249,10 +275,12 @@ GrexWindow::~GrexWindow()
 std::unique_ptr<GrexWindow> GrexWindow::Create(uint32_t width, uint32_t height, const char* pTitle)
 {
     GrexWindow* pWindow = new GrexWindow(width, height, pTitle);
-    if (IsNull(pWindow)) {
+    if (IsNull(pWindow))
+    {
         return nullptr;
     }
-    if (IsNull(pWindow->GetWindow())) {
+    if (IsNull(pWindow->GetWindow()))
+    {
         delete pWindow;
         return nullptr;
     }
@@ -261,14 +289,16 @@ std::unique_ptr<GrexWindow> GrexWindow::Create(uint32_t width, uint32_t height, 
 
 void GrexWindow::WindowMoveEvent(int x, int y)
 {
-    for (auto& callbackFn : mWindowMoveCallbacks) {
+    for (auto& callbackFn : mWindowMoveCallbacks)
+    {
         callbackFn(x, y);
     }
 }
 
 void GrexWindow::WindowResizeEvent(int width, int height)
 {
-    for (auto& callbackFn : mWindowResizeCallbacks) {
+    for (auto& callbackFn : mWindowResizeCallbacks)
+    {
         callbackFn(width, height);
     }
 }
@@ -276,15 +306,18 @@ void GrexWindow::WindowResizeEvent(int width, int height)
 void GrexWindow::MouseDownEvent(int x, int y, int buttons)
 {
 #if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN) || defined(ENABLE_IMGUI_METAL)
-    if (mImGuiEnabled) {
+    if (mImGuiEnabled)
+    {
         ImGuiIO& io = ImGui::GetIO();
-        if (io.WantCaptureMouse) {
+        if (io.WantCaptureMouse)
+        {
             return;
         }
     }
 #endif
 
-    for (auto& callbackFn : mMouseDownCallbacks) {
+    for (auto& callbackFn : mMouseDownCallbacks)
+    {
         callbackFn(x, y, buttons);
     }
 }
@@ -292,15 +325,18 @@ void GrexWindow::MouseDownEvent(int x, int y, int buttons)
 void GrexWindow::MouseUpEvent(int x, int y, int buttons)
 {
 #if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN) || defined(ENABLE_IMGUI_METAL)
-    if (mImGuiEnabled) {
+    if (mImGuiEnabled)
+    {
         ImGuiIO& io = ImGui::GetIO();
-        if (io.WantCaptureMouse) {
+        if (io.WantCaptureMouse)
+        {
             return;
         }
     }
 #endif
 
-    for (auto& callbackFn : mMouseUpCallbacks) {
+    for (auto& callbackFn : mMouseUpCallbacks)
+    {
         callbackFn(x, y, buttons);
     }
 }
@@ -308,15 +344,18 @@ void GrexWindow::MouseUpEvent(int x, int y, int buttons)
 void GrexWindow::MouseMoveEvent(int x, int y, int buttons)
 {
 #if defined(ENABLE_IMGUI_D3D12) || defined(ENABLE_IMGUI_VULKAN) || defined(ENABLE_IMGUI_METAL)
-    if (mImGuiEnabled) {
+    if (mImGuiEnabled)
+    {
         ImGuiIO& io = ImGui::GetIO();
-        if (io.WantCaptureMouse) {
+        if (io.WantCaptureMouse)
+        {
             return;
         }
     }
 #endif
 
-    for (auto& callbackFn : mMouseMoveCallbacks) {
+    for (auto& callbackFn : mMouseMoveCallbacks)
+    {
         callbackFn(x, y, buttons);
     }
 }
@@ -324,39 +363,46 @@ void GrexWindow::MouseMoveEvent(int x, int y, int buttons)
 void GrexWindow::MouseScrollEvent(float xoffset, float yoffset)
 {
 #if defined(ENABLE_IMGUI_D3D12)
-    if (mImGuiEnabled) {
+    if (mImGuiEnabled)
+    {
         ImGuiIO& io = ImGui::GetIO();
-        if (io.WantCaptureMouse) {
+        if (io.WantCaptureMouse)
+        {
             return;
         }
     }
 #endif
 
-    for (auto& callbackFn : mMouseScrollCallbacks) {
+    for (auto& callbackFn : mMouseScrollCallbacks)
+    {
         callbackFn(xoffset, yoffset);
     }
 }
 
 void GrexWindow::KeyDownEvent(int key)
 {
-    for (auto& callbackFn : mKeyDownCallbacks) {
+    for (auto& callbackFn : mKeyDownCallbacks)
+    {
         callbackFn(key);
     }
 
     size_t keyIndex = static_cast<size_t>(key);
-    if (keyIndex < mKeyDownState.size()) {
+    if (keyIndex < mKeyDownState.size())
+    {
         mKeyDownState[keyIndex] = true;
     }
 }
 
 void GrexWindow::KeyUpEvent(int key)
 {
-    for (auto& callbackFn : mKeyUpCallbacks) {
+    for (auto& callbackFn : mKeyUpCallbacks)
+    {
         callbackFn(key);
     }
 
     size_t keyIndex = static_cast<size_t>(key);
-    if (keyIndex < mKeyDownState.size()) {
+    if (keyIndex < mKeyDownState.size())
+    {
         mKeyDownState[keyIndex] = false;
     }
 }
@@ -404,7 +450,8 @@ void GrexWindow::AddKeyUpCallbacks(std::function<void(int)> fn)
 bool GrexWindow::IsKeyDown(int key)
 {
     size_t keyIndex = static_cast<size_t>(key);
-    if (keyIndex < mKeyDownState.size()) {
+    if (keyIndex < mKeyDownState.size())
+    {
         return mKeyDownState[keyIndex];
     }
     return false;
@@ -416,7 +463,8 @@ bool GrexWindow::InitImGuiForD3D12(DxRenderer* pRenderer)
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
 
-    if (!ImGui_ImplGlfw_InitForOther(mWindow, true)) {
+    if (!ImGui_ImplGlfw_InitForOther(mWindow, true))
+    {
         return false;
     }
 
@@ -427,7 +475,8 @@ bool GrexWindow::InitImGuiForD3D12(DxRenderer* pRenderer)
         nullptr,
         pRenderer->ImGuiFontDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
         pRenderer->ImGuiFontDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-    if (!res) {
+    if (!res)
+    {
         return false;
     }
 
@@ -470,7 +519,8 @@ bool GrexWindow::InitImGuiForVulkan(VulkanRenderer* pRenderer, VkRenderPass rend
     ImGui::CreateContext();
 
     bool res = ImGui_ImplGlfw_InitForVulkan(mWindow, true);
-    if (res == false) {
+    if (res == false)
+    {
         assert(false && "ImGui init GLFW for Vulkan failed!");
         return false;
     }
@@ -499,7 +549,8 @@ bool GrexWindow::InitImGuiForVulkan(VulkanRenderer* pRenderer, VkRenderPass rend
         createInfo.pPoolSizes                 = poolSizes;
 
         VkResult vkres = vkCreateDescriptorPool(pRenderer->Device, &createInfo, nullptr, &mDescriptorPool);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "Create descriptor pool for ImGui failed!");
             return false;
         }
@@ -521,7 +572,8 @@ bool GrexWindow::InitImGuiForVulkan(VulkanRenderer* pRenderer, VkRenderPass rend
     initInfo.CheckVkResultFn           = CheckVkResult;
 
     res = ImGui_ImplVulkan_Init(&initInfo, renderPass);
-    if (res == false) {
+    if (res == false)
+    {
         assert(false && "ImGui init Vulkan failed!");
         return false;
     }
@@ -540,7 +592,8 @@ bool GrexWindow::InitImGuiForVulkan(VulkanRenderer* pRenderer, VkRenderPass rend
                 &createInfo,
                 nullptr,
                 &commandPool);
-            if (vkres != VK_SUCCESS) {
+            if (vkres != VK_SUCCESS)
+            {
                 assert(false && "vkCreateCommandPool failed!");
                 return false;
             }
@@ -554,7 +607,8 @@ bool GrexWindow::InitImGuiForVulkan(VulkanRenderer* pRenderer, VkRenderPass rend
                 pRenderer->Device,
                 &allocInfo,
                 &commandBuf);
-            if (vkres != VK_SUCCESS) {
+            if (vkres != VK_SUCCESS)
+            {
                 assert(false && "vkAllocateCommandBuffers failed!");
                 return false;
             }
@@ -564,7 +618,8 @@ bool GrexWindow::InitImGuiForVulkan(VulkanRenderer* pRenderer, VkRenderPass rend
         beginInfo.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
         VkResult vkres = vkBeginCommandBuffer(commandBuf, &beginInfo);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkBeginCommandBuffer failed!");
             return false;
         }
@@ -572,7 +627,8 @@ bool GrexWindow::InitImGuiForVulkan(VulkanRenderer* pRenderer, VkRenderPass rend
         ImGui_ImplVulkan_CreateFontsTexture(commandBuf);
 
         vkres = vkEndCommandBuffer(commandBuf);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkEndCommandBuffer failed!");
             return false;
         }
@@ -582,13 +638,15 @@ bool GrexWindow::InitImGuiForVulkan(VulkanRenderer* pRenderer, VkRenderPass rend
         submitInfo.pCommandBuffers    = &commandBuf;
 
         vkres = vkQueueSubmit(pRenderer->Queue, 1, &submitInfo, VK_NULL_HANDLE);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkQueueSubmit failed!");
             return false;
         }
 
         vkres = vkQueueWaitIdle(pRenderer->Queue);
-        if (vkres != VK_SUCCESS) {
+        if (vkres != VK_SUCCESS)
+        {
             assert(false && "vkDeviceWaitIdle failed!");
             return false;
         }
@@ -623,18 +681,20 @@ bool GrexWindow::InitImGuiForMetal(MetalRenderer* pRenderer)
 {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-   
-   ImGuiIO& io = ImGui::GetIO();
-   io.DisplayFramebufferScale = ImVec2(1, 1);
-   
-   bool res = ImGui_ImplGlfw_InitForOther(mWindow, true);
-   if (res == false) {
-       assert(false && "ImGui init GLFW for Metal failed!");
-       return false;
-   }
+
+    ImGuiIO& io                = ImGui::GetIO();
+    io.DisplayFramebufferScale = ImVec2(1, 1);
+
+    bool res = ImGui_ImplGlfw_InitForOther(mWindow, true);
+    if (res == false)
+    {
+        assert(false && "ImGui init GLFW for Metal failed!");
+        return false;
+    }
 
     res = ImGui_ImplMetal_Init(pRenderer->Device.get());
-    if (res == false) {
+    if (res == false)
+    {
         assert(false && "ImGui init Metal failed!");
         return false;
     }
@@ -655,21 +715,21 @@ void GrexWindow::ImGuiNewFrameMetal(MTL::RenderPassDescriptor* pRenderPassDescri
 void GrexWindow::ImGuiRenderDrawData(MetalRenderer* pRenderer, MTL::CommandBuffer* pCommandBuffer, MTL::RenderCommandEncoder* pRenderEncoder)
 {
     ImGui::Render();
-   
-   // It seems like we're missing something when it comes to High DPI rendering
-   // When the system is not using the full resolution of the monitor (e.g. 2560x1440 on a 4k monitor)
-   // the view.window.screen.backingScaleFactor seems to always be set to 2.0. ImGUI uses that factor
-   // to scale it's scissor which causes the following debug validation layer error
-   //
-   // -[MTLDebugRenderCommandEncoder setScissorRect:]:3814: failed assertion `Set Scissor Rect Validation
-   //    (rect.x(0) + rect.width(3840))(3840) must be <= render pass width(1920)
-   //    (rect.y(0) + rect.height(2160))(2160) must be <= render pass height(1080)
-   //
-   // So to avoid that I'm setting the FramebufferScale to 1.0 regardless of what the system says.
-   ImDrawData* drawData = ImGui::GetDrawData();
-   drawData->FramebufferScale = ImVec2(1,1);
-   
-   ImGui_ImplMetal_RenderDrawData(ImGui::GetDrawData(), pCommandBuffer, pRenderEncoder);
+
+    // It seems like we're missing something when it comes to High DPI rendering
+    // When the system is not using the full resolution of the monitor (e.g. 2560x1440 on a 4k monitor)
+    // the view.window.screen.backingScaleFactor seems to always be set to 2.0. ImGUI uses that factor
+    // to scale it's scissor which causes the following debug validation layer error
+    //
+    // -[MTLDebugRenderCommandEncoder setScissorRect:]:3814: failed assertion `Set Scissor Rect Validation
+    //    (rect.x(0) + rect.width(3840))(3840) must be <= render pass width(1920)
+    //    (rect.y(0) + rect.height(2160))(2160) must be <= render pass height(1080)
+    //
+    // So to avoid that I'm setting the FramebufferScale to 1.0 regardless of what the system says.
+    ImDrawData* drawData       = ImGui::GetDrawData();
+    drawData->FramebufferScale = ImVec2(1, 1);
+
+    ImGui_ImplMetal_RenderDrawData(ImGui::GetDrawData(), pCommandBuffer, pRenderEncoder);
 }
 #endif // defined(ENABLE_IMGUI_METAL)
 
@@ -686,14 +746,15 @@ HWND GrexWindow::GetNativeWindowHandle() const
 #if defined(__APPLE__)
 void* GrexWindow::GetNativeWindowHandle() const
 {
-   return glfwGetCocoaWindow(mWindow);
+    return glfwGetCocoaWindow(mWindow);
 }
 #endif
 
 bool GrexWindow::PollEvents()
 {
     bool shouldClose = (glfwWindowShouldClose(mWindow) != 0);
-    if (shouldClose) {
+    if (shouldClose)
+    {
         return false;
     }
 
@@ -717,13 +778,13 @@ fs::path GetExecutablePath()
     GetModuleFileNameA(this_win32_module, buf, MAX_PATH);
     path = fs::path(buf);
 #elif defined(__APPLE__)
-   char buf[PATH_MAX];
-   uint32_t size = sizeof(buf);
-   std::memset(buf, 0, size);
-   _NSGetExecutablePath(buf, &size);
-   path = fs::path(buf);
+    char     buf[PATH_MAX];
+    uint32_t size = sizeof(buf);
+    std::memset(buf, 0, size);
+    _NSGetExecutablePath(buf, &size);
+    path = fs::path(buf);
 #else
-#    error "unsupported platform"
+#error "unsupported platform"
 #endif
     return path;
 }
@@ -734,26 +795,29 @@ uint32_t GetProcessId()
 #if defined(__linux__)
     pid = static_cast<uint32_t>(getpid());
 #elif defined(WIN32)
-    pid  = static_cast<uint32_t>(::GetCurrentProcessId());
+    pid = static_cast<uint32_t>(::GetCurrentProcessId());
 #elif defined(__APPLE__)
-   pid = static_cast<uint32_t>(getpid());
+    pid = static_cast<uint32_t>(getpid());
 #endif
     return pid;
 }
 
 std::vector<char> LoadFile(const fs::path& absPath)
 {
-    if (!fs::exists(absPath)) {
+    if (!fs::exists(absPath))
+    {
         return {};
     }
 
     size_t size = fs::file_size(absPath);
-    if (size == 0) {
+    if (size == 0)
+    {
         return {};
     }
 
     std::ifstream is(absPath.c_str(), std::ios::binary);
-    if (!is.is_open()) {
+    if (!is.is_open())
+    {
         return {};
     }
 
@@ -765,31 +829,37 @@ std::vector<char> LoadFile(const fs::path& absPath)
 
 static void InitAssetDirs()
 {
-    if (!sAssetDirs.empty()) {
+    if (!sAssetDirs.empty())
+    {
         return;
     }
 
     auto       dir  = GetExecutablePath().parent_path();
     const auto root = dir.root_path();
 
-    while (true) {
+    while (true)
+    {
         auto assetDir = dir / "assets";
         sAssetDirs.push_back(assetDir);
         GREX_LOG_INFO("Adding asset directory: " << assetDir);
-        if (dir == root) {
+        if (dir == root)
+        {
             break;
         }
         dir = dir.parent_path();
     }
 
     dir = GetExecutablePath().parent_path();
-    while (true) {
+    while (true)
+    {
         auto assetDir = dir / "__local_assets__";
-        if (fs::exists(assetDir)) {
+        if (fs::exists(assetDir))
+        {
             sAssetDirs.push_back(assetDir);
             GREX_LOG_INFO("Adding asset directory: " << assetDir);
         }
-        if (dir == root) {
+        if (dir == root)
+        {
             break;
         }
         dir = dir.parent_path();
@@ -805,7 +875,8 @@ const std::vector<fs::path>& GetAssetDirs()
 void AddAssetDir(const fs::path& absPath)
 {
     InitAssetDirs();
-    if (fs::exists(absPath)) {
+    if (fs::exists(absPath))
+    {
         sAssetDirs.push_back(absPath);
     }
 }
@@ -814,9 +885,11 @@ fs::path GetAssetPath(const fs::path& subPath)
 {
     InitAssetDirs();
     fs::path assetPath;
-    for (auto& assetDir : sAssetDirs) {
+    for (auto& assetDir : sAssetDirs)
+    {
         fs::path path = assetDir / subPath;
-        if (fs::exists(path)) {
+        if (fs::exists(path))
+        {
             assetPath = path;
             break;
         }
@@ -828,9 +901,11 @@ std::vector<fs::path> GetEveryAssetPath(const fs::path& subPath)
 {
     InitAssetDirs();
     std::vector<fs::path> assetPaths;
-    for (auto& assetDir : sAssetDirs) {
+    for (auto& assetDir : sAssetDirs)
+    {
         fs::path path = assetDir / subPath;
-        if (fs::exists(path)) {
+        if (fs::exists(path))
+        {
             assetPaths.push_back(path);
         }
     }
@@ -846,17 +921,20 @@ std::vector<char> LoadAsset(const fs::path& subPath)
 std::string LoadString(const fs::path& subPath)
 {
     fs::path absPath = GetAssetPath(subPath);
-    if (!fs::exists(absPath)) {
+    if (!fs::exists(absPath))
+    {
         return {};
     }
 
     size_t size = fs::file_size(absPath);
-    if (size == 0) {
+    if (size == 0)
+    {
         return {};
     }
 
     std::ifstream is(absPath.c_str(), std::ios::binary);
-    if (!is.is_open()) {
+    if (!is.is_open())
+    {
         return {};
     }
 
@@ -872,9 +950,10 @@ std::string LoadString(const fs::path& subPath)
 VkSurfaceKHR GrexWindow::CreateVkSurface(VkInstance instance, const VkAllocationCallbacks* allocator)
 {
     VkSurfaceKHR surface;
-    VkResult result = glfwCreateWindowSurface(instance, mWindow, allocator, &surface);
+    VkResult     result = glfwCreateWindowSurface(instance, mWindow, allocator, &surface);
 
-    if (result != VK_SUCCESS) {
+    if (result != VK_SUCCESS)
+    {
         GREX_LOG_ERROR("Failed to create VkSurface");
         return VK_NULL_HANDLE;
     }

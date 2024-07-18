@@ -40,12 +40,12 @@ using uint4  = glm::uvec4;
 
 struct SceneProperties
 {
-    float4x4    CameraVP;
-    uint        InstanceCount;
-    uint        MeshletCount;
-    uint        __pad0[2];
-    uint4       Meshlet_LOD_Offsets[5];
-    uint4       Meshlet_LOD_Counts[5];
+    float4x4 CameraVP;
+    uint     InstanceCount;
+    uint     MeshletCount;
+    uint     __pad0[2];
+    uint4    Meshlet_LOD_Offsets[5];
+    uint4    Meshlet_LOD_Counts[5];
 };
 
 // =============================================================================
@@ -264,7 +264,8 @@ int main(int argc, char** argv)
             meshlet.triangle_offset += meshletTriangleOffset;
             combinedMeshlets.push_back(meshlet);
 
-            if (lodIdx == 0) {
+            if (lodIdx == 0)
+            {
                 LOD_0_vertexCount += meshlet.vertex_count;
                 LOD_0_triangleCount += meshlet.triangle_count;
             }
@@ -302,7 +303,7 @@ int main(int argc, char** argv)
         combinedMeshletTriangleCount += m.triangle_count;
     }
 
-    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to 
+    // Repack triangles from 3 consecutive byes to 4-byte uint32_t to
     // make it easier to unpack on the GPU.
     //
     std::vector<uint32_t> meshletTrianglesU32;
@@ -561,19 +562,19 @@ int main(int argc, char** argv)
             Camera::FrustumPlane frLeft, frRight, frTop, frBottom, frNear, frFar;
             camera.GetFrustumPlanes(&frLeft, &frRight, &frTop, &frBottom, &frNear, &frFar);
 
-            scene.CameraVP                             = camera.GetViewProjectionMatrix();
-            scene.InstanceCount                        = static_cast<uint32_t>(instances.size());
-            scene.MeshletCount                         = meshlet_LOD_Counts[0];
-            scene.Meshlet_LOD_Offsets[0].x             = meshlet_LOD_Offsets[0];
-            scene.Meshlet_LOD_Offsets[1].x             = meshlet_LOD_Offsets[1];
-            scene.Meshlet_LOD_Offsets[2].x             = meshlet_LOD_Offsets[2];
-            scene.Meshlet_LOD_Offsets[3].x             = meshlet_LOD_Offsets[3];
-            scene.Meshlet_LOD_Offsets[4].x             = meshlet_LOD_Offsets[4];
-            scene.Meshlet_LOD_Counts[0].x              = meshlet_LOD_Counts[0];
-            scene.Meshlet_LOD_Counts[1].x              = meshlet_LOD_Counts[1];
-            scene.Meshlet_LOD_Counts[2].x              = meshlet_LOD_Counts[2];
-            scene.Meshlet_LOD_Counts[3].x              = meshlet_LOD_Counts[3];
-            scene.Meshlet_LOD_Counts[4].x              = meshlet_LOD_Counts[4];
+            scene.CameraVP                 = camera.GetViewProjectionMatrix();
+            scene.InstanceCount            = static_cast<uint32_t>(instances.size());
+            scene.MeshletCount             = meshlet_LOD_Counts[0];
+            scene.Meshlet_LOD_Offsets[0].x = meshlet_LOD_Offsets[0];
+            scene.Meshlet_LOD_Offsets[1].x = meshlet_LOD_Offsets[1];
+            scene.Meshlet_LOD_Offsets[2].x = meshlet_LOD_Offsets[2];
+            scene.Meshlet_LOD_Offsets[3].x = meshlet_LOD_Offsets[3];
+            scene.Meshlet_LOD_Offsets[4].x = meshlet_LOD_Offsets[4];
+            scene.Meshlet_LOD_Counts[0].x  = meshlet_LOD_Counts[0];
+            scene.Meshlet_LOD_Counts[1].x  = meshlet_LOD_Counts[1];
+            scene.Meshlet_LOD_Counts[2].x  = meshlet_LOD_Counts[2];
+            scene.Meshlet_LOD_Counts[3].x  = meshlet_LOD_Counts[3];
+            scene.Meshlet_LOD_Counts[4].x  = meshlet_LOD_Counts[4];
 
             void* pDst = nullptr;
             CHECK_CALL(sceneBuffer->Map(0, nullptr, &pDst));

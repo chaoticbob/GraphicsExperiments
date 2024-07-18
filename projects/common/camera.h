@@ -84,7 +84,6 @@ class PerspCamera
     : public Camera
 {
 public:
-
     struct FrustumCone
     {
         glm::vec3 Tip;
@@ -92,7 +91,6 @@ public:
         float     Height;
         float     Angle;
     };
-
 
     PerspCamera();
 

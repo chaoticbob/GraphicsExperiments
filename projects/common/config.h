@@ -13,7 +13,7 @@
 #include <vector>
 
 #if defined(WIN32)
-#    include <wrl/client.h>
+#include <wrl/client.h>
 using Microsoft::WRL::ComPtr;
 #endif
 

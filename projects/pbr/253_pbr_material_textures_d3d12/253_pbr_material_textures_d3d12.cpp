@@ -15,7 +15,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                               \
     {                                                \
         HRESULT hr = FN;                             \
-        if (FAILED(hr)) {                            \
+        if (FAILED(hr))                              \
+        {                                            \
             std::stringstream ss;                    \
             ss << "\n";                              \
             ss << "*** FUNCTION CALL FAILED *** \n"; \
@@ -142,7 +143,8 @@ void MouseMove(int x, int y, int buttons)
     static int prevX = x;
     static int prevY = y;
 
-    if (buttons & MOUSE_BUTTON_LEFT) {
+    if (buttons & MOUSE_BUTTON_LEFT)
+    {
         int dx = x - prevX;
         int dy = y - prevY;
 
@@ -160,7 +162,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
 
-    if (!InitDx(renderer.get(), gEnableDebug)) {
+    if (!InitDx(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -172,14 +175,16 @@ int main(int argc, char** argv)
     std::vector<char> dxilPS;
     {
         std::string shaderSource = LoadString("projects/253_pbr_material_textures/shaders.hlsl");
-        if (shaderSource.empty()) {
+        if (shaderSource.empty())
+        {
             assert(false && "no shader source");
             return EXIT_FAILURE;
         }
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &dxilVS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
@@ -189,7 +194,8 @@ int main(int argc, char** argv)
         }
 
         hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &dxilPS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (PS): " << errorMsg << "\n";
@@ -203,14 +209,16 @@ int main(int argc, char** argv)
     std::vector<char> drawTextureDxilPS;
     {
         std::string shaderSource = LoadString("projects/253_pbr_material_textures/drawtexture.hlsl");
-        if (shaderSource.empty()) {
+        if (shaderSource.empty())
+        {
             assert(false && "no shader source");
             return EXIT_FAILURE;
         }
 
         std::string errorMsg;
         HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &drawTextureDxilVS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
@@ -220,7 +228,8 @@ int main(int argc, char** argv)
         }
 
         hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &drawTextureDxilPS, &errorMsg);
-        if (FAILED(hr)) {
+        if (FAILED(hr))
+        {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (PS): " << errorMsg << "\n";
@@ -352,21 +361,24 @@ int main(int argc, char** argv)
 
         // IBLIrradianceMaps (t16)
         descriptor = {heapStart.ptr + IBL_IRRADIANCE_MAPS_DESCRIPTOR_OFFSET * incSize};
-        for (size_t i = 0; i < irrTextures.size(); ++i) {
+        for (size_t i = 0; i < irrTextures.size(); ++i)
+        {
             CreateDescriptorTexture2D(renderer.get(), irrTextures[i].Get(), descriptor);
             descriptor.ptr += incSize;
         }
 
         // IBLEnvironmentMaps (t48)
         descriptor = {heapStart.ptr + IBL_ENVIRONMENT_MAPS_DESCRIPTOR_OFFSET * incSize};
-        for (size_t i = 0; i < irrTextures.size(); ++i) {
+        for (size_t i = 0; i < irrTextures.size(); ++i)
+        {
             CreateDescriptorTexture2D(renderer.get(), envTextures[i].Get(), descriptor, 0, envNumLevels[i]);
             descriptor.ptr += incSize;
         }
 
         // Material textures
         descriptor = {heapStart.ptr + MATERIAL_TEXTURES_DESCRIPTOR_OFFSET * incSize};
-        for (auto& materialTextures : materialTexturesSets) {
+        for (auto& materialTextures : materialTexturesSets)
+        {
             // Base Color
             CreateDescriptorTexture2D(renderer.get(), materialTextures.baseColorTexture.Get(), descriptor);
             descriptor.ptr += renderer->Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -386,7 +398,8 @@ int main(int argc, char** argv)
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "253_pbr_material_textures_d3d12");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -395,7 +408,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT)) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, GREX_DEFAULT_DSV_FORMAT))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -403,7 +417,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Imgui
     // *************************************************************************
-    if (!window->InitImGuiForD3D12(renderer.get())) {
+    if (!window->InitImGuiForD3D12(renderer.get()))
+    {
         assert(false && "GrexWindow::InitImGuiForD3D12 failed");
         return EXIT_FAILURE;
     }
@@ -466,19 +481,25 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         window->ImGuiNewFrameD3D12();
 
-        if (ImGui::Begin("Scene")) {
+        if (ImGui::Begin("Scene"))
+        {
             static const char* currentModelName = gModelNames[0].c_str();
-            if (ImGui::BeginCombo("Model", currentModelName)) {
-                for (size_t i = 0; i < gModelNames.size(); ++i) {
+            if (ImGui::BeginCombo("Model", currentModelName))
+            {
+                for (size_t i = 0; i < gModelNames.size(); ++i)
+                {
                     bool isSelected = (currentModelName == gModelNames[i]);
-                    if (ImGui::Selectable(gModelNames[i].c_str(), isSelected)) {
+                    if (ImGui::Selectable(gModelNames[i].c_str(), isSelected))
+                    {
                         currentModelName = gModelNames[i].c_str();
                         gModelIndex      = static_cast<uint32_t>(i);
                     }
-                    if (isSelected) {
+                    if (isSelected)
+                    {
                         ImGui::SetItemDefaultFocus();
                     }
                 }
@@ -488,14 +509,18 @@ int main(int argc, char** argv)
             ImGui::Separator();
 
             static const char* currentIBLName = gIBLNames[0].c_str();
-            if (ImGui::BeginCombo("IBL", currentIBLName)) {
-                for (size_t i = 0; i < gIBLNames.size(); ++i) {
+            if (ImGui::BeginCombo("IBL", currentIBLName))
+            {
+                for (size_t i = 0; i < gIBLNames.size(); ++i)
+                {
                     bool isSelected = (currentIBLName == gIBLNames[i]);
-                    if (ImGui::Selectable(gIBLNames[i].c_str(), isSelected)) {
+                    if (ImGui::Selectable(gIBLNames[i].c_str(), isSelected))
+                    {
                         currentIBLName         = gIBLNames[i].c_str();
                         pSceneParams->iblIndex = static_cast<uint32_t>(i);
                     }
-                    if (isSelected) {
+                    if (isSelected)
+                    {
                         ImGui::SetItemDefaultFocus();
                     }
                 }
@@ -512,10 +537,12 @@ int main(int argc, char** argv)
 
             ImGui::Separator();
 
-            for (uint32_t lightIdx = 0; lightIdx < 4; ++lightIdx) {
+            for (uint32_t lightIdx = 0; lightIdx < 4; ++lightIdx)
+            {
                 std::stringstream lightName;
                 lightName << "Light " << lightIdx;
-                if (ImGui::TreeNodeEx(lightName.str().c_str(), ImGuiTreeNodeFlags_None)) {
+                if (ImGui::TreeNodeEx(lightName.str().c_str(), ImGuiTreeNodeFlags_None))
+                {
                     ImGui::Checkbox("Active", reinterpret_cast<bool*>(&pSceneParams->lights[lightIdx].active));
                     ImGui::SliderFloat("Intensity", &pSceneParams->lights[lightIdx].intensity, 0.0f, 10.0f);
                     ImGui::ColorPicker3("Albedo", reinterpret_cast<float*>(&(pSceneParams->lights[lightIdx].color)), ImGuiColorEditFlags_NoInputs);
@@ -526,9 +553,12 @@ int main(int argc, char** argv)
         }
         ImGui::End();
 
-        if (ImGui::Begin("Material Parameters")) {
-            for (uint32_t matIdx = 0; matIdx < gMaterialNames.size(); ++matIdx) {
-                if (ImGui::TreeNodeEx(gMaterialNames[matIdx].c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::Begin("Material Parameters"))
+        {
+            for (uint32_t matIdx = 0; matIdx < gMaterialNames.size(); ++matIdx)
+            {
+                if (ImGui::TreeNodeEx(gMaterialNames[matIdx].c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+                {
                     ImGui::SliderFloat("Specular", &(pMaterialParams[matIdx].specular), 0.0f, 1.0f);
 
                     ImGui::TreePop();
@@ -705,7 +735,8 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
                     commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -719,7 +750,8 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
                     commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -733,7 +765,8 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
                     commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -747,7 +780,8 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
                     commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -761,7 +795,8 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
                     commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -775,7 +810,8 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
                     commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -789,7 +825,8 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
                     commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -803,7 +840,8 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
                     commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -817,7 +855,8 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
                     commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -831,7 +870,8 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
                     commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -845,7 +885,8 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
                     commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -859,7 +900,8 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
                     commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -873,7 +915,8 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
                     commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -887,7 +930,8 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
                     commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -901,7 +945,8 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
                     commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -915,7 +960,8 @@ int main(int argc, char** argv)
                     commandList->SetGraphicsRoot32BitConstants(1, 1, &invertNormalMapY, 17);
                     commandList->DrawIndexedInstanced(geoBuffers.numIndices, 1, 0, 0, 0);
 
-                    if (materialIndex < (materialTexturesSets.size() - 1)) {
+                    if (materialIndex < (materialTexturesSets.size() - 1))
+                    {
                         ++materialIndex;
                     }
                 }
@@ -932,13 +978,15 @@ int main(int argc, char** argv)
         ID3D12CommandList* pList = commandList.Get();
         renderer->Queue->ExecuteCommandLists(1, &pList);
 
-        if (!WaitForGpu(renderer.get())) {
+        if (!WaitForGpu(renderer.get()))
+        {
             assert(false && "WaitForGpu failed");
             break;
         }
 
         // Present
-        if (!SwapchainPresent(renderer.get())) {
+        if (!SwapchainPresent(renderer.get()))
+        {
             assert(false && "SwapchainPresent failed");
             break;
         }
@@ -1236,7 +1284,8 @@ void CreateMaterialModels(
         options.transformRotate  = glm::vec3(0, glm::radians(180.0f), 0);
 
         TriMesh mesh;
-        if (!TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh)) {
+        if (!TriMesh::LoadOBJ(GetAssetPath("models/material_knob.obj").string(), "", options, &mesh))
+        {
             return;
         }
         mesh.ScaleToFit(1.0f);
@@ -1294,7 +1343,8 @@ void CreateMaterialModels(
         options.transformRotate  = glm::vec3(0, glm::radians(180.0f), 0);
 
         TriMesh mesh;
-        if (!TriMesh::LoadOBJ(GetAssetPath("models/monkey.obj").string(), "", options, &mesh)) {
+        if (!TriMesh::LoadOBJ(GetAssetPath("models/monkey.obj").string(), "", options, &mesh))
+        {
             return;
         }
         // mesh.ScaleToUnit();
@@ -1401,7 +1451,8 @@ void CreateIBLTextures(
     // BRDF LUT
     {
         auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut.hdr"));
-        if (bitmap.Empty()) {
+        if (bitmap.Empty())
+        {
             assert(false && "Load image failed");
             return;
         }
@@ -1420,7 +1471,8 @@ void CreateIBLTextures(
     // Multiscatter BRDF LUT
     {
         auto bitmap = LoadImage32f(GetAssetPath("IBL/brdf_lut_ms.hdr"));
-        if (bitmap.Empty()) {
+        if (bitmap.Empty())
+        {
             assert(false && "Load image failed");
             return;
         }
@@ -1438,24 +1490,29 @@ void CreateIBLTextures(
 
     auto                               iblDir = GetAssetPath("IBL");
     std::vector<std::filesystem::path> iblFiles;
-    for (auto& entry : std::filesystem::directory_iterator(iblDir)) {
-        if (!entry.is_regular_file()) {
+    for (auto& entry : std::filesystem::directory_iterator(iblDir))
+    {
+        if (!entry.is_regular_file())
+        {
             continue;
         }
         auto path = entry.path();
         auto ext  = path.extension();
-        if (ext == ".ibl") {
+        if (ext == ".ibl")
+        {
             path = std::filesystem::relative(path, iblDir.parent_path());
             iblFiles.push_back(path);
         }
     }
 
     size_t maxEntries = std::min<size_t>(gMaxIBLs, iblFiles.size());
-    for (size_t i = 0; i < maxEntries; ++i) {
+    for (size_t i = 0; i < maxEntries; ++i)
+    {
         std::filesystem::path iblFile = iblFiles[i];
 
         IBLMaps ibl = {};
-        if (!LoadIBLMaps32f(iblFile, &ibl)) {
+        if (!LoadIBLMaps32f(iblFile, &ibl))
+        {
             GREX_LOG_ERROR("failed to load: " << iblFile);
             assert(false && "IBL maps load failed failed");
             return;
@@ -1486,7 +1543,8 @@ void CreateIBLTextures(
             uint32_t               levelOffset = 0;
             uint32_t               levelWidth  = ibl.baseWidth;
             uint32_t               levelHeight = ibl.baseHeight;
-            for (uint32_t i = 0; i < ibl.numLevels; ++i) {
+            for (uint32_t i = 0; i < ibl.numLevels; ++i)
+            {
                 MipOffset mipOffset = {};
                 mipOffset.Offset    = levelOffset;
                 mipOffset.RowStride = rowStride;
@@ -1536,7 +1594,7 @@ void CreateMaterials(
     }
 
     // Texture directory
-    auto                               texturesDir = GetAssetPath("textures");
+    auto texturesDir = GetAssetPath("textures");
 
     // Material files - limit to 16 since there's 16 objects draws
     std::vector<std::filesystem::path> materialFiles = {
@@ -1559,44 +1617,53 @@ void CreateMaterials(
     };
 
     size_t maxEntries = materialFiles.size();
-    for (size_t i = 0; i < maxEntries; ++i) {
+    for (size_t i = 0; i < maxEntries; ++i)
+    {
         auto materialFile = materialFiles[i];
 
         std::ifstream is = std::ifstream(materialFile.string().c_str());
-        if (!is.is_open()) {
+        if (!is.is_open())
+        {
             assert(false && "faild to open material file");
         }
 
         MaterialTextures   materialTextures = outDefaultMaterialTextures;
         MaterialParameters materialParams   = {};
 
-        while (!is.eof()) {
+        while (!is.eof())
+        {
             ComPtr<ID3D12Resource>* pTargetTexture = nullptr;
             std::filesystem::path   textureFile    = "";
 
             std::string key;
             is >> key;
-            if (key == "basecolor") {
+            if (key == "basecolor")
+            {
                 is >> textureFile;
                 pTargetTexture = &materialTextures.baseColorTexture;
             }
-            else if (key == "normal") {
+            else if (key == "normal")
+            {
                 is >> textureFile;
                 pTargetTexture = &materialTextures.normalTexture;
             }
-            else if (key == "roughness") {
+            else if (key == "roughness")
+            {
                 is >> textureFile;
                 pTargetTexture = &materialTextures.roughnessTexture;
             }
-            else if (key == "metallic") {
+            else if (key == "metallic")
+            {
                 is >> textureFile;
                 pTargetTexture = &materialTextures.metallicTexture;
             }
-            else if (key == "specular") {
+            else if (key == "specular")
+            {
                 is >> materialParams.specular;
             }
 
-            if (textureFile.empty()) {
+            if (textureFile.empty())
+            {
                 continue;
             }
 
@@ -1604,7 +1671,8 @@ void CreateMaterials(
             textureFile = "textures" / cwd / textureFile;
 
             auto bitmap = LoadImage8u(textureFile);
-            if (!bitmap.Empty()) {
+            if (!bitmap.Empty())
+            {
                 MipmapRGBA8u mipmap = MipmapRGBA8u(
                     bitmap,
                     BITMAP_SAMPLE_MODE_WRAP,
@@ -1612,7 +1680,8 @@ void CreateMaterials(
                     BITMAP_FILTER_MODE_NEAREST);
 
                 std::vector<MipOffset> mipOffsets;
-                for (auto& srcOffset : mipmap.GetOffsets()) {
+                for (auto& srcOffset : mipmap.GetOffsets())
+                {
                     MipOffset dstOffset = {};
                     dstOffset.Offset    = srcOffset;
                     dstOffset.RowStride = mipmap.GetRowStride();
@@ -1631,7 +1700,8 @@ void CreateMaterials(
 
                 GREX_LOG_INFO("Created texture from " << textureFile);
             }
-            else {
+            else
+            {
                 GREX_LOG_ERROR("Failed to load: " << textureFile);
                 assert(false && "Failed to load texture!");
             }

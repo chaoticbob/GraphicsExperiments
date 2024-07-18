@@ -101,12 +101,14 @@ void KeyDown(int key)
     {
         default: break;
 
-        case GLFW_KEY_UP: {
+        case GLFW_KEY_UP:
+        {
             gShadowStep += 1.0f;
         }
         break;
 
-        case GLFW_KEY_DOWN: {
+        case GLFW_KEY_DOWN:
+        {
             gShadowStep -= 1.0f;
         }
         break;

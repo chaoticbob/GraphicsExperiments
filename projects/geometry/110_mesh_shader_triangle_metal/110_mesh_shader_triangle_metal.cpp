@@ -12,7 +12,8 @@ using namespace glm;
 #define CHECK_CALL(FN)                                                               \
     {                                                                                \
         NS::Error* pError = FN;                                                      \
-        if (pError != nullptr) {                                                     \
+        if (pError != nullptr)                                                       \
+        {                                                                            \
             std::stringstream ss;                                                    \
             ss << "\n";                                                              \
             ss << "*** FUNCTION CALL FAILED *** \n";                                 \
@@ -89,7 +90,8 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<MetalRenderer> renderer = std::make_unique<MetalRenderer>();
 
-    if (!InitMetal(renderer.get(), gEnableDebug)) {
+    if (!InitMetal(renderer.get(), gEnableDebug))
+    {
         return EXIT_FAILURE;
     }
 
@@ -104,7 +106,8 @@ int main(int argc, char** argv)
         nullptr,
         &pError));
 
-    if (library.get() == nullptr) {
+    if (library.get() == nullptr)
+    {
         std::stringstream ss;
         ss << "\n"
            << "Shader compiler error: " << pError->localizedDescription()->utf8String() << "\n";
@@ -114,13 +117,15 @@ int main(int argc, char** argv)
     }
 
     msShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("meshMain", NS::UTF8StringEncoding)));
-    if (msShader.Function.get() == nullptr) {
+    if (msShader.Function.get() == nullptr)
+    {
         assert(false && "MS MTL::Library::newFunction() failed");
         return EXIT_FAILURE;
     }
 
     fsShader.Function = NS::TransferPtr(library->newFunction(NS::String::string("fragmentMain", NS::UTF8StringEncoding)));
-    if (fsShader.Function.get() == nullptr) {
+    if (fsShader.Function.get() == nullptr)
+    {
         assert(false && "FS MTL::Library::newFunction() failed");
         return EXIT_FAILURE;
     }
@@ -133,30 +138,33 @@ int main(int argc, char** argv)
         // Render pipeline state
         {
             auto desc = NS::TransferPtr(MTL::MeshRenderPipelineDescriptor::alloc()->init());
-            if (!desc) {
+            if (!desc)
+            {
                 assert(false && "MTL::MeshRenderPipelineDescriptor::alloc::init() failed");
-                return EXIT_FAILURE;        
+                return EXIT_FAILURE;
             }
-            
+
             desc->setMeshFunction(msShader.Function.get());
             desc->setFragmentFunction(fsShader.Function.get());
             desc->colorAttachments()->object(0)->setPixelFormat(GREX_DEFAULT_RTV_FORMAT);
             desc->setDepthAttachmentPixelFormat(GREX_DEFAULT_DSV_FORMAT);
 
-            NS::Error* pError           = nullptr;
+            NS::Error* pError         = nullptr;
             renderPipelineState.State = NS::TransferPtr(renderer->Device->newRenderPipelineState(desc.get(), MTL::PipelineOptionNone, nullptr, &pError));
-            if (renderPipelineState.State.get() == nullptr) {
+            if (renderPipelineState.State.get() == nullptr)
+            {
                 assert(false && "MTL::Device::newRenderPipelineState() failed");
                 return EXIT_FAILURE;
             }
         }
     }
-    
+
     // *************************************************************************
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, "110_mesh_shader_triangle_metal");
-    if (!window) {
+    if (!window)
+    {
         assert(false && "GrexWindow::Create failed");
         return EXIT_FAILURE;
     }
@@ -169,7 +177,8 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain
     // *************************************************************************
-    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, MTL::PixelFormatDepth32Float)) {
+    if (!InitSwapchain(renderer.get(), window->GetNativeWindowHandle(), window->GetWidth(), window->GetHeight(), 2, MTL::PixelFormatDepth32Float))
+    {
         assert(false && "InitSwapchain failed");
         return EXIT_FAILURE;
     }
@@ -180,7 +189,8 @@ int main(int argc, char** argv)
     MTL::ClearColor clearColor(0.23f, 0.23f, 0.31f, 0);
     uint32_t        frameIndex = 0;
 
-    while (window->PollEvents()) {
+    while (window->PollEvents())
+    {
         CA::MetalDrawable* pDrawable = renderer->pSwapchain->nextDrawable();
         assert(pDrawable != nullptr);
 
@@ -200,7 +210,7 @@ int main(int argc, char** argv)
 
         // No object function, so all zeros for threadsPerObjectThreadgroup
         pRenderEncoder->drawMeshThreadgroups(MTL::Size(1, 1, 1), MTL::Size(0, 0, 0), MTL::Size(1, 1, 1));
-        
+
         pRenderEncoder->endEncoding();
 
         pCommandBuffer->presentDrawable(pDrawable);

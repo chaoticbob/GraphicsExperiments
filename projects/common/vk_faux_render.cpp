@@ -7,9 +7,9 @@
 #include <glm/gtx/transform.hpp>
 using namespace glm;
 
-#define CAMERA_REGISTER                    1   // b1
-#define INSTANCE_BUFFER_REGISTER           10  // t10
-#define MATERIAL_BUFFER_REGISTER           11  // t11
+#define CAMERA_REGISTER          1  // b1
+#define INSTANCE_BUFFER_REGISTER 10 // t10
+#define MATERIAL_BUFFER_REGISTER 11 // t11
 
 namespace VkFauxRender
 {
@@ -22,7 +22,7 @@ bool Buffer::Map(void** ppData)
     }
 
     const VulkanBuffer* buffer = &this->Resource;
-    VkResult vkres = vmaMapMemory(buffer->Allocator, buffer->Allocation, ppData);
+    VkResult            vkres  = vmaMapMemory(buffer->Allocator, buffer->Allocation, ppData);
 
     if (vkres != VK_SUCCESS)
     {
@@ -408,8 +408,8 @@ void Draw(const FauxRender::SceneGraph* pGraph, uint32_t instanceIndex, const Fa
             // Tex Coord
             if (batch.TexCoordBufferView.Format != GREX_FORMAT_UNKNOWN)
             {
-                auto& srcView = batch.TexCoordBufferView;
-                bufferViews[numBufferViews] = pBuffer->Resource.Buffer;
+                auto& srcView                 = batch.TexCoordBufferView;
+                bufferViews[numBufferViews]   = pBuffer->Resource.Buffer;
                 bufferOffsets[numBufferViews] = srcView.Offset;
                 bufferSizes[numBufferViews]   = srcView.Size;
                 bufferStrides[numBufferViews] = srcView.Stride;
@@ -492,8 +492,8 @@ void Draw(const FauxRender::SceneGraph* pGraph, const FauxRender::Scene* pScene,
 {
     assert((pScene != nullptr) && "pScene is NULL");
 
-    const VkFauxRender::SceneGraph* pVkGraph          = static_cast<const VkFauxRender::SceneGraph*>(pGraph);
-    VulkanRenderer*                 pRenderer         = pVkGraph->pRenderer;
+    const VkFauxRender::SceneGraph* pVkGraph  = static_cast<const VkFauxRender::SceneGraph*>(pGraph);
+    VulkanRenderer*                 pRenderer = pVkGraph->pRenderer;
 
     void* pDescriptorBufferStartAddress = nullptr;
     vmaMapMemory(
@@ -503,28 +503,28 @@ void Draw(const FauxRender::SceneGraph* pGraph, const FauxRender::Scene* pScene,
 
     // Set camera
     {
-        auto     resource      = VkFauxRender::Cast(pScene->pCameraArgs)->Resource;
+        auto resource = VkFauxRender::Cast(pScene->pCameraArgs)->Resource;
 
         WriteDescriptor(
             pRenderer,
             pDescriptorBufferStartAddress,
             pVkGraph->pPipelineLayout->DescriptorSetLayout,
             CAMERA_REGISTER, // binding
-            0, // arrayElement
+            0,               // arrayElement
             VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             &resource);
     }
 
     // Set instance buffer
     {
-        auto     resource      = VkFauxRender::Cast(pScene->pInstanceBuffer)->Resource;
+        auto resource = VkFauxRender::Cast(pScene->pInstanceBuffer)->Resource;
 
         WriteDescriptor(
             pRenderer,
             pDescriptorBufferStartAddress,
             pVkGraph->pPipelineLayout->DescriptorSetLayout,
             INSTANCE_BUFFER_REGISTER, // binding
-            0,  // arrayElement
+            0,                        // arrayElement
             VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             &resource);
     }
@@ -538,14 +538,14 @@ void Draw(const FauxRender::SceneGraph* pGraph, const FauxRender::Scene* pScene,
             pDescriptorBufferStartAddress,
             pVkGraph->pPipelineLayout->DescriptorSetLayout,
             MATERIAL_BUFFER_REGISTER, // binding
-            0,  // arrayElement
+            0,                        // arrayElement
             VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             &resource);
     }
-	
+
     vmaUnmapMemory(pRenderer->Allocator, pVkGraph->DescriptorBuffer.Allocation);
 
-	// Bind all descriptors to the command list
+    // Bind all descriptors to the command list
     VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
     descriptorBufferBindingInfo.pNext                            = nullptr;
     descriptorBufferBindingInfo.address                          = GetDeviceAddress(pRenderer, &pVkGraph->DescriptorBuffer);
@@ -562,7 +562,6 @@ void Draw(const FauxRender::SceneGraph* pGraph, const FauxRender::Scene* pScene,
         1, // setCount
         &bufferIndices,
         &descriptorBufferOffsets);
-
 
     for (auto pGeometryNode : pScene->GeometryNodes)
     {

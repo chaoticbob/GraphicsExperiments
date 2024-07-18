@@ -550,13 +550,13 @@ int main(int argc, char** argv)
         pComputeEncoder->setAccelerationStructure(tlasBuffer.AS.get(), 0);
         pComputeEncoder->setIntersectionFunctionTable(intersectionFunctionTable.get(), 2);
         pComputeEncoder->setTexture(outputTex.Texture.get(), 0);
-        
+
         // Add a useResource() call for every BLAS used by the TLAS
         for (int blasIndex = 0; blasIndex < blasBuffer.size(); blasIndex++)
         {
             pComputeEncoder->useResource(blasBuffer[blasIndex].AS.get(), MTL::ResourceUsageRead);
         }
-        
+
         struct Camera
         {
             glm::mat4 viewInverse;
@@ -567,11 +567,11 @@ int main(int argc, char** argv)
 
         Camera camera      = {};
         camera.eyePosition = vec3(0, 2.5f, 3.5f);
-        
+
         camera.projInverse = glm::inverse(glm::perspective(glm::radians(60.0f), gWindowWidth / static_cast<float>(gWindowHeight), 0.1f, 512.0f));
         auto mat           = glm::lookAt(camera.eyePosition, vec3(0, 1, 0), vec3(0, 1, 0));
         camera.viewInverse = glm::inverse(mat);
-        
+
         pComputeEncoder->setBytes(&camera, sizeof(Camera), 1);
 
         {
@@ -635,7 +635,7 @@ void CreateSphereBuffer(
         SizeInBytes(spheres),
         DataPtr(spheres),
         pBuffer));
-    
+
     GREX_LOG_INFO("Num spheres: " << *pNumSpheres);
 }
 

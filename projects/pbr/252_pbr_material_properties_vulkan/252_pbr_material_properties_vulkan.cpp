@@ -156,7 +156,7 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    VulkanFeatures features = {};
+    VulkanFeatures features         = {};
     features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
@@ -730,27 +730,31 @@ int main(int argc, char** argv)
                     switch (yi)
                     {
                         default: break;
-                        case ROW_METALLIC: {
+                        case ROW_METALLIC:
+                        {
                             materialParams.baseColor = F0_MetalChromium;
                             materialParams.metallic  = t;
                             materialParams.roughness = 0;
                         }
                         break;
 
-                        case ROW_ROUGHNESS_NON_METALLIC: {
+                        case ROW_ROUGHNESS_NON_METALLIC:
+                        {
                             materialParams.baseColor = vec3(0, 0, 0.75f);
                             materialParams.roughness = std::max(0.045f, t);
                         }
                         break;
 
-                        case ROW_ROUGHNESS_METALLIC: {
+                        case ROW_ROUGHNESS_METALLIC:
+                        {
                             materialParams.baseColor = pPBRSceneParams->furnace ? vec3(1) : F0_MetalGold;
                             materialParams.roughness = std::max(0.045f, t);
                             materialParams.metallic  = 1.0;
                         }
                         break;
 
-                        case ROW_REFLECTANCE: {
+                        case ROW_REFLECTANCE:
+                        {
                             materialParams.baseColor   = vec3(0.75f, 0, 0);
                             materialParams.roughness   = 0.2f;
                             materialParams.metallic    = 0;
@@ -758,7 +762,8 @@ int main(int argc, char** argv)
                         }
                         break;
 
-                        case ROW_CLEAR_COAT: {
+                        case ROW_CLEAR_COAT:
+                        {
                             materialParams.baseColor = vec3(0.75f, 0, 0);
                             materialParams.roughness = 0.8f;
                             materialParams.metallic  = 1.0f;
@@ -766,7 +771,8 @@ int main(int argc, char** argv)
                         }
                         break;
 
-                        case ROW_CLEAR_COAT_ROUGHNESS: {
+                        case ROW_CLEAR_COAT_ROUGHNESS:
+                        {
                             materialParams.baseColor          = vec3(0.75f, 0, 0);
                             materialParams.roughness          = 0.8f;
                             materialParams.metallic           = 1.0f;
@@ -775,7 +781,8 @@ int main(int argc, char** argv)
                         }
                         break;
 
-                        case ROW_ANISOTROPY: {
+                        case ROW_ANISOTROPY:
+                        {
                             materialParams.baseColor  = F0_MetalZinc;
                             materialParams.roughness  = 0.45f;
                             materialParams.metallic   = 1.0f;
@@ -1320,26 +1327,26 @@ void CreatePBRDescriptors(
     }
 
     std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
-    {
-        sceneParamsDescriptor.layoutBinding,
-        iblIntegrationMultiscatterLUTDescriptor.layoutBinding,
-        iblIntegrationLUTDescriptor.layoutBinding,
-        iblIrradianceMapDescriptor.layoutBinding,
-        iblEnvironmentMapDescriptor.layoutBinding,
-        iblIntegrationSamplerDescriptor.layoutBinding,
-        iblMapSamplerDescriptor.layoutBinding,
-    };
+        {
+            sceneParamsDescriptor.layoutBinding,
+            iblIntegrationMultiscatterLUTDescriptor.layoutBinding,
+            iblIntegrationLUTDescriptor.layoutBinding,
+            iblIrradianceMapDescriptor.layoutBinding,
+            iblEnvironmentMapDescriptor.layoutBinding,
+            iblIntegrationSamplerDescriptor.layoutBinding,
+            iblMapSamplerDescriptor.layoutBinding,
+        };
 
     std::vector<VkWriteDescriptorSet> writeDescriptorSets =
-    {
-        sceneParamsDescriptor.writeDescriptorSet,
-        iblIntegrationMultiscatterLUTDescriptor.writeDescriptorSet,
-        iblIntegrationLUTDescriptor.writeDescriptorSet,
-        iblIrradianceMapDescriptor.writeDescriptorSet,
-        iblEnvironmentMapDescriptor.writeDescriptorSet,
-        iblIntegrationSamplerDescriptor.writeDescriptorSet,
-        iblMapSamplerDescriptor.writeDescriptorSet,
-    };
+        {
+            sceneParamsDescriptor.writeDescriptorSet,
+            iblIntegrationMultiscatterLUTDescriptor.writeDescriptorSet,
+            iblIntegrationLUTDescriptor.writeDescriptorSet,
+            iblIrradianceMapDescriptor.writeDescriptorSet,
+            iblEnvironmentMapDescriptor.writeDescriptorSet,
+            iblIntegrationSamplerDescriptor.writeDescriptorSet,
+            iblMapSamplerDescriptor.writeDescriptorSet,
+        };
 
     CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, pDescriptors);
 }

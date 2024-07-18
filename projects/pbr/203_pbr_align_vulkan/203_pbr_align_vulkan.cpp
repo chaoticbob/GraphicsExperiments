@@ -137,7 +137,7 @@ int main(int argc, char** argv)
 {
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
-    VulkanFeatures features = {};
+    VulkanFeatures features         = {};
     features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
@@ -612,7 +612,6 @@ int main(int argc, char** argv)
 
             // Draw material sphere
             {
-
                 vkCmdBindDescriptorSets(
                     cmdBuf.CommandBuffer,
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1227,24 +1226,24 @@ void CreatePBRDescriptors(
     }
 
     std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
-    {
-        sceneParamsDescriptor.layoutBinding,
-        iblIntegrationLUTDescriptor.layoutBinding,
-        iblIrradianceMapDescriptor.layoutBinding,
-        iblEnvironmentMapDescriptor.layoutBinding,
-        iblIntegrationSamplerDescriptor.layoutBinding,
-        iblMapSamplerDescriptor.layoutBinding,
-    };
+        {
+            sceneParamsDescriptor.layoutBinding,
+            iblIntegrationLUTDescriptor.layoutBinding,
+            iblIrradianceMapDescriptor.layoutBinding,
+            iblEnvironmentMapDescriptor.layoutBinding,
+            iblIntegrationSamplerDescriptor.layoutBinding,
+            iblMapSamplerDescriptor.layoutBinding,
+        };
 
     std::vector<VkWriteDescriptorSet> writeDescriptorSets =
-    {
-        sceneParamsDescriptor.writeDescriptorSet,
-        iblIntegrationLUTDescriptor.writeDescriptorSet,
-        iblIrradianceMapDescriptor.writeDescriptorSet,
-        iblEnvironmentMapDescriptor.writeDescriptorSet,
-        iblIntegrationSamplerDescriptor.writeDescriptorSet,
-        iblMapSamplerDescriptor.writeDescriptorSet,
-    };
+        {
+            sceneParamsDescriptor.writeDescriptorSet,
+            iblIntegrationLUTDescriptor.writeDescriptorSet,
+            iblIrradianceMapDescriptor.writeDescriptorSet,
+            iblEnvironmentMapDescriptor.writeDescriptorSet,
+            iblIntegrationSamplerDescriptor.writeDescriptorSet,
+            iblMapSamplerDescriptor.writeDescriptorSet,
+        };
 
     CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, pDescriptors);
 }
@@ -1316,16 +1315,16 @@ void CreateEnvDescriptors(
     }
 
     std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
-    {
-        iblMapSamplerDescriptor.layoutBinding,
-        iblEnvironmentMapDescriptor.layoutBinding,
-    };
+        {
+            iblMapSamplerDescriptor.layoutBinding,
+            iblEnvironmentMapDescriptor.layoutBinding,
+        };
 
     std::vector<VkWriteDescriptorSet> writeDescriptorSets =
-    {
-        iblMapSamplerDescriptor.writeDescriptorSet,
-        iblEnvironmentMapDescriptor.writeDescriptorSet,
-    };
+        {
+            iblMapSamplerDescriptor.writeDescriptorSet,
+            iblEnvironmentMapDescriptor.writeDescriptorSet,
+        };
 
     CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, pDescriptors);
 }

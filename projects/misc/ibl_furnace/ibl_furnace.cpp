@@ -12,7 +12,8 @@
 
 int main(int argc, char** argv)
 {
-    if (argc < 4) {
+    if (argc < 4)
+    {
         std::cout << "error: missing arguments" << std::endl;
         std::cout << "   "
                   << "ibl_furnance <output file> <width> <height>" << std::endl;
@@ -28,14 +29,16 @@ int main(int argc, char** argv)
     const uint32_t kMaxHeight = 4096;
 
     uint32_t width = static_cast<uint32_t>(atoi(argv[2]));
-    if (width > kMaxWidth) {
+    if (width > kMaxWidth)
+    {
         std::cout << "error: width is too big" << std::endl;
         std::cout << "max width is " << kMaxWidth << std::endl;
         return EXIT_FAILURE;
     }
 
     uint32_t height = static_cast<uint32_t>(atoi(argv[3]));
-    if (height > kMaxHeight) {
+    if (height > kMaxHeight)
+    {
         std::cout << "error: height is too big" << std::endl;
         std::cout << "max height is " << kMaxHeight << std::endl;
         return EXIT_FAILURE;
@@ -44,9 +47,11 @@ int main(int argc, char** argv)
     std::vector<glm::vec4> pixels(width * height);
     std::fill(pixels.begin(), pixels.end(), glm::vec4(2.0f));
 
-    if (!pixels.empty()) {
+    if (!pixels.empty())
+    {
         int res = stbi_write_hdr(outputPath.string().c_str(), width, height, 3, reinterpret_cast<const float*>(pixels.data()));
-        if (res == 0) {
+        if (res == 0)
+        {
             std::cout << "ERROR: failed to write " << outputPath << std::endl;
             return EXIT_FAILURE;
         }
