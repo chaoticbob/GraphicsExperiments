@@ -375,10 +375,7 @@ bool InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeature
         VkPhysicalDeviceTimelineSemaphoreFeatures timelineSemaphoreFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES, &synchronization2Features};
         timelineSemaphoreFeatures.timelineSemaphore                         = VK_TRUE;
 
-        VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptorBufferFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT, &timelineSemaphoreFeatures};
-        descriptorBufferFeatures.descriptorBuffer                            = pRenderer->Features.EnableDescriptorBuffer ? VK_TRUE : VK_FALSE;
-
-        VkPhysicalDeviceScalarBlockLayoutFeatures scalarBlockLayoutFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES, &descriptorBufferFeatures};
+        VkPhysicalDeviceScalarBlockLayoutFeatures scalarBlockLayoutFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES, &timelineSemaphoreFeatures};
         scalarBlockLayoutFeatures.scalarBlockLayout                         = VK_TRUE;
 
         VkPhysicalDeviceRobustness2FeaturesEXT robustness2Features = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT, &scalarBlockLayoutFeatures};
@@ -1974,7 +1971,9 @@ VkResult CreateDrawVertexColorPipeline(
     VkPipeline*         pPipeline,
     VkCullModeFlags     cullMode,
     VkPrimitiveTopology topologyType,
-    uint32_t            pipelineFlags)
+    uint32_t            pipelineFlags,
+    const char*         vsEntryPoint,
+    const char*         fsEntryPoint)
 {
     bool                          isInterleavedAttrs             = pipelineFlags & VK_PIPELINE_FLAGS_INTERLEAVED_ATTRS;
     VkFormat                      rtv_format                     = GREX_DEFAULT_RTV_FORMAT;
@@ -1986,11 +1985,11 @@ VkResult CreateDrawVertexColorPipeline(
     VkPipelineShaderStageCreateInfo shader_stages[2] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
     shader_stages[0].stage                           = VK_SHADER_STAGE_VERTEX_BIT;
     shader_stages[0].module                          = vsShaderModule;
-    shader_stages[0].pName                           = "main";
+    shader_stages[0].pName                           = vsEntryPoint;
     shader_stages[1].sType                           = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     shader_stages[1].stage                           = VK_SHADER_STAGE_FRAGMENT_BIT;
     shader_stages[1].module                          = fsShaderModule;
-    shader_stages[1].pName                           = "main";
+    shader_stages[1].pName                           = fsEntryPoint;
 
     VkVertexInputBindingDescription vertex_binding_desc[2] = {};
     vertex_binding_desc[0].binding                         = 0;
@@ -3469,7 +3468,8 @@ CompileResult CompileSlang(
 {
     // Bail if entry point is empty and we're not compiling to a library
     bool isTargetLibrary = profile.starts_with("lib_6_");
-    if (!isTargetLibrary && entryPoint.empty()) {
+    if (!isTargetLibrary && entryPoint.empty())
+    {
         return COMPILE_ERROR_INVALID_ENTRY_POINT;
     }
 
@@ -3481,8 +3481,11 @@ CompileResult CompileSlang(
 
     slang::TargetDesc targetDesc = {};
     targetDesc.format            = SLANG_SPIRV;
-    targetDesc.profile           = globalSession->findProfile(profile.c_str());
-    targetDesc.flags             = SLANG_TARGET_FLAG_GENERATE_SPIRV_DIRECTLY;
+    targetDesc.flags = SLANG_TARGET_FLAG_GENERATE_SPIRV_DIRECTLY;
+    //
+    // Disable profile for now since it's causing ISession::loadModuleFromSourceString to crash.
+    //
+    //targetDesc.profile           = globalSession->findProfile(profile.c_str());
 
     targetDesc.flags |= SLANG_TARGET_FLAG_GENERATE_WHOLE_PROGRAM;
 
@@ -3518,7 +3521,7 @@ CompileResult CompileSlang(
                 slang::CompilerOptionEntry{
                     slang::CompilerOptionName::GLSLForceScalarLayout,
                     slang::CompilerOptionValue{slang::CompilerOptionValueKind::Int, 1}
-            });   
+            });
         }
     }
 
@@ -3539,35 +3542,37 @@ CompileResult CompileSlang(
     slang::IModule* pSlangModule = nullptr;
     {
         Slang::ComPtr<slang::IBlob> diagBlob;
-    
-        pSlangModule = compileSession->loadModuleFromSourceString("grex-module", nullptr, shaderSource.c_str(), diagBlob.writeRef());
+
+        pSlangModule = compileSession->loadModuleFromSourceString("grex-module", "grex-path", shaderSource.c_str(), diagBlob.writeRef());
         if (pSlangModule == nullptr)
         {
             if (pErrorMsg != nullptr)
             {
                 *pErrorMsg = std::string(static_cast<const char*>(diagBlob->getBufferPointer()), diagBlob->getBufferSize());
             }
-    
+
             return COMPILE_ERROR_INTERNAL_COMPILER_ERROR;
         }
     }
 
     Slang::ComPtr<slang::IBlob> spirvCode;
-    if (isTargetLibrary) {
+    if (isTargetLibrary)
+    {
         //
         // NOTE: This may not be the most correct way to do it, but it works for now
         //
 
         // Create compile request
-        std::unique_ptr<SlangCompileRequest, void(*)(SlangCompileRequest*)> compileRequest(nullptr, nullptr);
-        {        
+        std::unique_ptr<SlangCompileRequest, void (*)(SlangCompileRequest*)> compileRequest(nullptr, nullptr);
+        {
             SlangCompileRequest* pCompileRequest = nullptr;
-            auto slangRes = compileSession->createCompileRequest(&pCompileRequest);
-            if (SLANG_FAILED(slangRes)) {
+            auto                 slangRes        = compileSession->createCompileRequest(&pCompileRequest);
+            if (SLANG_FAILED(slangRes))
+            {
                 return COMPILE_ERROR_INTERNAL_COMPILER_ERROR;
             }
 
-            compileRequest = std::unique_ptr<SlangCompileRequest, void(*)(SlangCompileRequest*)>(pCompileRequest, spDestroyCompileRequest);
+            compileRequest = std::unique_ptr<SlangCompileRequest, void (*)(SlangCompileRequest*)>(pCompileRequest, spDestroyCompileRequest);
         }
 
         // Add translation unit
@@ -3576,48 +3581,54 @@ CompileResult CompileSlang(
 
         // Compile
         auto slangRes = compileRequest->compile();
-        if (SLANG_FAILED(slangRes)) {
-            if (pErrorMsg != nullptr) {
+        if (SLANG_FAILED(slangRes))
+        {
+            if (pErrorMsg != nullptr)
+            {
                 Slang::ComPtr<slang::IBlob> diagBlob;
 
                 slangRes = compileRequest->getDiagnosticOutputBlob(diagBlob.writeRef());
-                if (SLANG_SUCCEEDED(slangRes)) 
+                if (SLANG_SUCCEEDED(slangRes))
                 {
                     *pErrorMsg = std::string(static_cast<const char*>(diagBlob->getBufferPointer()), diagBlob->getBufferSize());
                 }
-                else {
+                else
+                {
                     // Something has gone really wrong
                     assert(false && "failed to get diagnostic output blob");
                 }
-            }                
+            }
 
             return COMPILE_ERROR_COMPILE_FAILED;
         }
-        
-        // Get SPIR-V 
+
+        // Get SPIR-V
         slangRes = compileRequest->getTargetCodeBlob(0, spirvCode.writeRef());
-        if (SLANG_FAILED(slangRes)) {
-            if (pErrorMsg != nullptr) {
+        if (SLANG_FAILED(slangRes))
+        {
+            if (pErrorMsg != nullptr)
+            {
                 *pErrorMsg = "unable to retrieve SPIR-V blob for library";
             }
 
             return COMPILE_ERROR_INTERNAL_COMPILER_ERROR;
         }
     }
-    else {
+    else
+    {
         // Load source
         slang::IModule* pSlangModule = nullptr;
         {
             Slang::ComPtr<slang::IBlob> diagBlob;
-    
-            pSlangModule = compileSession->loadModuleFromSourceString("grex-module", nullptr, shaderSource.c_str(), diagBlob.writeRef());
+
+            pSlangModule = compileSession->loadModuleFromSourceString("grex-module", "", shaderSource.c_str(), diagBlob.writeRef());
             if (pSlangModule == nullptr)
             {
                 if (pErrorMsg != nullptr)
                 {
                     *pErrorMsg = std::string(static_cast<const char*>(diagBlob->getBufferPointer()), diagBlob->getBufferSize());
                 }
-    
+
                 return COMPILE_ERROR_INTERNAL_COMPILER_ERROR;
             }
         }
@@ -3627,20 +3638,25 @@ CompileResult CompileSlang(
         components.push_back(pSlangModule);
 
         // Entry points
-        if (!entryPoint.empty()) {
+        if (!entryPoint.empty())
+        {
             Slang::ComPtr<slang::IEntryPoint> slangEntryPoint;
             if (SLANG_FAILED(pSlangModule->findEntryPointByName(entryPoint.c_str(), slangEntryPoint.writeRef())))
             {
+                *pErrorMsg = "Couldn't find entry point by name";
                 return COMPILE_ERROR_INTERNAL_COMPILER_ERROR;
             }
             components.push_back(slangEntryPoint);
         }
-        else {
+        else
+        {
             SlangInt32 slangEntryPointCount = pSlangModule->getDefinedEntryPointCount();
-            for (SlangInt32 i = 0; i < slangEntryPointCount; ++i) {
+            for (SlangInt32 i = 0; i < slangEntryPointCount; ++i)
+            {
                 ComPtr<slang::IEntryPoint> slangEntryPoint;
-                if (SLANG_FAILED(pSlangModule->getDefinedEntryPoint( i, &slangEntryPoint)))
+                if (SLANG_FAILED(pSlangModule->getDefinedEntryPoint(i, &slangEntryPoint)))
                 {
+                    *pErrorMsg = "Couldn't get defined entry point";
                     return COMPILE_ERROR_INTERNAL_COMPILER_ERROR;
                 }
                 components.push_back(slangEntryPoint.Get());
@@ -3666,11 +3682,11 @@ CompileResult CompileSlang(
                 return COMPILE_ERROR_COMPILE_FAILED;
             }
         }
-   
-        // Get SPIR-V 
+
+        // Get SPIR-V
         {
             Slang::ComPtr<slang::IBlob> diagBlob;
- 
+
             auto slangRes = composedProgram->getEntryPointCode(
                 0, // entryPointIndex,
                 0, // targetIndex,

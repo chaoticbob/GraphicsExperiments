@@ -363,7 +363,9 @@ VkResult CreateDrawVertexColorPipeline(
     VkPipeline*         pPipeline,
     VkCullModeFlags     cullMode      = VK_CULL_MODE_BACK_BIT,
     VkPrimitiveTopology topologyType  = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-    uint32_t            pipelineFlags = 0);
+    uint32_t            pipelineFlags = 0,
+    const char*         vsEntryPoint  = "main",
+    const char*         fsEntryPoint  = "main");
 
 VkResult CreateDrawNormalPipeline(
     VulkanRenderer*    pRenderer,
