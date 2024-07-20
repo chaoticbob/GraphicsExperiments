@@ -52,6 +52,60 @@ struct DrawParameters
 // =============================================================================
 // Shader code
 // =============================================================================
+#if defined(GREX_ENABLE_SLANG)
+const char* gShaders = R"(
+struct CameraProperties {
+	float4x4 MVP;
+    float3   LightPosition;
+};
+
+struct DrawParameters {
+    uint MaterialIndex;
+};
+
+struct Material {
+    float3 Albedo;
+    uint   recieveLight;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<DrawParameters>   DrawParams;
+
+ConstantBuffer<CameraProperties> Camera     : register(b0);
+StructuredBuffer<Material>       Materials  : register(t2);
+
+struct VSOutput {
+    float4 PositionCS : SV_POSITION;
+    float3 PositionOS : POSITION;
+    float3 Normal     : NORMAL;
+};
+
+[shader("vertex")]
+VSOutput vsmain(float3 PositionOS : POSITION, float3 Normal : NORMAL)
+{
+    VSOutput output = (VSOutput)0;
+    output.PositionCS = mul(Camera.MVP, float4(PositionOS, 1));
+    output.PositionOS = PositionOS;
+    output.Normal = Normal;
+    return output;
+}
+
+[shader("pixel")]
+float4 psmain(VSOutput input) : SV_TARGET
+{
+    float3 lightDir = normalize(Camera.LightPosition - input.PositionOS);
+    float  diffuse = 0.7 * saturate(dot(lightDir, input.Normal));
+
+    Material material = Materials[DrawParams.MaterialIndex];
+    float3 color = material.Albedo;
+    if (material.recieveLight) {
+        color = (0.3 + diffuse) * material.Albedo;
+    }
+
+    return float4(color, 1);   
+}
+)";
+#else
 const char* gShadersVS = R"(
 #version 460
 
@@ -118,6 +172,7 @@ void main()
    FragColor = vec4(color, 1);
 }
 )";
+#endif
 
 // =============================================================================
 // Globals
@@ -167,28 +222,48 @@ int main(int argc, char** argv)
     std::vector<uint32_t> spirvVS;
     std::vector<uint32_t> spirvFS;
     {
-        std::string   errorMsg;
-        CompileResult vkRes = CompileGLSL(gShadersVS, VK_SHADER_STAGE_VERTEX_BIT, {}, &spirvVS, &errorMsg);
-        if (vkRes != COMPILE_SUCCESS)
+        std::string errorMsg;
+#if defined(GREX_ENABLE_SLANG)
+        CompileResult res = CompileSlang(gShaders, "vsmain", "vs_6_0", {}, &spirvVS, &errorMsg);
+        if (res != COMPILE_SUCCESS)
         {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
             GREX_LOG_ERROR(ss.str().c_str());
-            assert(false);
             return EXIT_FAILURE;
         }
 
-        vkRes = CompileGLSL(gShadersFS, VK_SHADER_STAGE_FRAGMENT_BIT, {}, &spirvFS, &errorMsg);
-        if (vkRes != COMPILE_SUCCESS)
+        res = CompileSlang(gShaders, "psmain", "ps_6_0", {}, &spirvFS, &errorMsg);
+        if (res != COMPILE_SUCCESS)
         {
             std::stringstream ss;
             ss << "\n"
-               << "Shader compiler error (PS): " << errorMsg << "\n";
+               << "Shader compiler error (FS): " << errorMsg << "\n";
             GREX_LOG_ERROR(ss.str().c_str());
-            assert(false);
             return EXIT_FAILURE;
         }
+#else
+        CompileResult res = CompileGLSL(gShaderVS, VK_SHADER_STAGE_VERTEX_BIT, {}, &spirvVS, &errorMsg);
+        if (res != COMPILE_SUCCESS)
+        {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (VS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            return EXIT_FAILURE;
+        }
+
+        res = CompileGLSL(gShaderFS, VK_SHADER_STAGE_FRAGMENT_BIT, {}, &spirvFS, &errorMsg);
+        if (res != COMPILE_SUCCESS)
+        {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (FS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            return EXIT_FAILURE;
+        }
+#endif
     }
 
     // *************************************************************************
@@ -216,6 +291,13 @@ int main(int argc, char** argv)
     // Graphics pipeline state object
     // *************************************************************************
     VkPipeline pipeline = VK_NULL_HANDLE;
+#if defined(GREX_ENABLE_SLANG)
+    const char* vsEntryPoint = "vsmain";
+    const char* fsEntryPoint = "psmain";
+#else
+    const char* vsEntryPoint = "main";
+    const char* fsEntryPoint = "main";
+#endif
     CHECK_CALL(CreateDrawNormalPipeline(
         renderer.get(),
         pipelineLayout.PipelineLayout,
@@ -223,7 +305,11 @@ int main(int argc, char** argv)
         moduleFS,
         GREX_DEFAULT_RTV_FORMAT,
         GREX_DEFAULT_DSV_FORMAT,
-        &pipeline));
+        &pipeline,
+        false,
+        VK_CULL_MODE_BACK_BIT,
+        vsEntryPoint,
+        fsEntryPoint));
 
     // *************************************************************************
     // Geometry data
@@ -512,7 +598,6 @@ void CreatePipelineLayout(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayo
         }
 
         VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
         createInfo.bindingCount                    = CountU32(bindings);
         createInfo.pBindings                       = DataPtr(bindings);
 

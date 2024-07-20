@@ -6,7 +6,7 @@ set(TARGET_NAME ${PROJECT_NAME})
 
 add_executable(
     ${TARGET_NAME}
-        ${PROJECT_NAME}.cpp
+    ${PROJECT_NAME}.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.cpp

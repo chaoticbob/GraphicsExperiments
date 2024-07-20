@@ -54,6 +54,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # ------------------------------------------------------------------------------
+# Compiler otions
+# ------------------------------------------------------------------------------
+if (MSVC)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
+endif()
+
+# ------------------------------------------------------------------------------
 # Compile flags and definitions
 # ------------------------------------------------------------------------------
 if (GREX_LINUX)

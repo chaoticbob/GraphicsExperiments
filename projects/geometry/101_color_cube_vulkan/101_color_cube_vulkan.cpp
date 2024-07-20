@@ -136,10 +136,8 @@ int main(int argc, char** argv)
     {
         std::string errorMsg;
 #if defined(GREX_ENABLE_SLANG)
-        //CompileResult res = CompileSlang(gShaders, "vsmain", "vs_6_0", {}, &spirvVS, &errorMsg);
-        //if (res != COMPILE_SUCCESS)
-        bool res = CompileSlangSimple(gShaders, "vsmain", "vs_6_0", &spirvVS, &errorMsg);
-        if (!res)
+        CompileResult res = CompileSlang(gShaders, "vsmain", "vs_6_0", {}, &spirvVS, &errorMsg);
+        if (res != COMPILE_SUCCESS)
         {
             std::stringstream ss;
             ss << "\n"
@@ -148,10 +146,8 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        //res = CompileSlang(gShaders, "psmain", "ps_6_0", {}, &spirvFS, &errorMsg);
-        //if (res != COMPILE_SUCCESS)
-        res = CompileSlangSimple(gShaders, "psmain", "ps_6_0", &spirvFS, &errorMsg);
-        if (!res)
+        res = CompileSlang(gShaders, "psmain", "ps_6_0", {}, &spirvFS, &errorMsg);
+        if (res != COMPILE_SUCCESS)
         {
             std::stringstream ss;
             ss << "\n"
@@ -212,14 +208,26 @@ int main(int argc, char** argv)
     //
     // *************************************************************************
     VkPipeline pipeline = VK_NULL_HANDLE;
-    CreateDrawVertexColorPipeline(
+#if defined(GREX_ENABLE_SLANG)
+    const char* vsEntryPoint = "vsmain";
+    const char* fsEntryPoint = "psmain";
+#else
+    const char* vsEntryPoint = "main";
+    const char* fsEntryPoint = "main";
+#endif
+    CHECK_CALL(CreateDrawVertexColorPipeline(
         renderer.get(),
         pipelineLayout,
         moduleVS,
         moduleFS,
         GREX_DEFAULT_RTV_FORMAT,
         GREX_DEFAULT_DSV_FORMAT,
-        &pipeline);
+        &pipeline,
+        VK_CULL_MODE_BACK_BIT,
+        VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        0,
+        vsEntryPoint,
+        fsEntryPoint));
 
     // *************************************************************************
     // Get descriptor buffer properties
