@@ -3495,6 +3495,16 @@ CompileResult CompileSlang(
     // Compiler options for Slang
     std::vector<slang::CompilerOptionEntry> compilerOptions;
     {
+        // Define __spirv__
+        {
+            slang::CompilerOptionEntry entry = {slang::CompilerOptionName::MacroDefine};
+            entry.value.kind                 = slang::CompilerOptionValueKind::String;
+            entry.value.stringValue0         = "__spirv__";
+            entry.value.stringValue1         = "1";
+
+            compilerOptions.push_back(entry);
+        }
+
         // Force Slang language to prevent any accidental interpretations as GLSL or HLSL
         {
             slang::CompilerOptionEntry entry = {slang::CompilerOptionName::Language};
@@ -3509,6 +3519,15 @@ CompileResult CompileSlang(
             compilerOptions.push_back(
                 slang::CompilerOptionEntry{
                     slang::CompilerOptionName::VulkanUseEntryPointName,
+                    slang::CompilerOptionValue{slang::CompilerOptionValueKind::Int, 1}
+            });
+        }
+
+        // Use unscoped enums
+        {
+            compilerOptions.push_back(
+                slang::CompilerOptionEntry{
+                    slang::CompilerOptionName::UnscopedEnum,
                     slang::CompilerOptionValue{slang::CompilerOptionValueKind::Int, 1}
             });
         }
