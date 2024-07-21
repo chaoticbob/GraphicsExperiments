@@ -60,6 +60,7 @@ struct VSOutput {
     float3 Normal     : NORMAL;
 };    
 
+[shader("vertex")]
 VSOutput vsmain(
     float3 PositionOS : POSITION, 
     float3 Normal     : NORMAL
@@ -196,6 +197,7 @@ float3 ACESFilm(float3 x)
     return saturate((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14));
 }
 
+[shader("pixel")]
 float4 psmain(VSOutput input) : SV_TARGET
 {   
     // Scene and geometry variables - world space
