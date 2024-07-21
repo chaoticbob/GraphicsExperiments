@@ -46,6 +46,7 @@ groupshared Payload sPayload;
 // -------------------------------------------------------------------------------------------------
 // Amplification Shader
 // -------------------------------------------------------------------------------------------------
+[shader("amplification")]
 [numthreads(AS_GROUP_SIZE, 1, 1)]
 void asmain(
     uint gtid : SV_GroupThreadID,
@@ -61,6 +62,7 @@ void asmain(
 // -------------------------------------------------------------------------------------------------
 // Mesh Shader
 // -------------------------------------------------------------------------------------------------
+[shader("mesh")]
 [outputtopology("triangle")]
 [numthreads(128, 1, 1)]
 void msmain(
@@ -114,6 +116,7 @@ struct PSInput {
     float3               Bary        : SV_BARYCENTRICS;
 };
 
+[shader("pixel")]
 float4 psmain(PSInput input) : SV_TARGET
 {
     // Get triangle's vertex indices

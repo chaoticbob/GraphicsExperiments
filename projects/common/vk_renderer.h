@@ -66,6 +66,8 @@ struct CompilerOptions
     uint32_t BindingShiftSampler = 0;
     uint32_t BindingShiftSSBO    = 0;
     uint32_t BindingShiftUAV     = 0;
+
+    bool ForceEntryPointMain = false;
 };
 
 #define GREX_DEFAULT_RTV_FORMAT VK_FORMAT_B8G8R8A8_UNORM
@@ -361,7 +363,9 @@ VkResult CreateDrawVertexColorPipeline(
     VkPipeline*         pPipeline,
     VkCullModeFlags     cullMode      = VK_CULL_MODE_BACK_BIT,
     VkPrimitiveTopology topologyType  = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-    uint32_t            pipelineFlags = 0);
+    uint32_t            pipelineFlags = 0,
+    const char*         vsEntryPoint  = "main",
+    const char*         fsEntryPoint  = "main");
 
 VkResult CreateDrawNormalPipeline(
     VulkanRenderer*    pRenderer,
@@ -458,6 +462,16 @@ HRESULT CompileHLSL(
     const std::string&     profile,
     std::vector<uint32_t>* pSPIRV,
     std::string*           pErrorMsg);
+
+#if defined(GREX_ENABLE_SLANG)
+CompileResult CompileSlang(
+    const std::string&     shaderSource,
+    const std::string&     entryPoint,
+    const std::string&     profile,
+    const CompilerOptions& options,
+    std::vector<uint32_t>* pSPIRV,
+    std::string*           pErrorMsg);
+#endif
 
 // Buffer
 void CreateDescriptor(

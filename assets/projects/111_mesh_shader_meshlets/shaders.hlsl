@@ -17,10 +17,10 @@ struct Vertex {
 };
 
 struct Meshlet {
-	uint VertexOffset;
-	uint TriangleOffset;
-	uint VertexCount;
-	uint TriangleCount;
+    uint VertexOffset;
+    uint TriangleOffset;
+    uint VertexCount;
+    uint TriangleCount;
 };
 
 StructuredBuffer<Vertex>  Vertices        : register(t1);
@@ -33,6 +33,7 @@ struct MeshOutput {
     float3 Color    : COLOR;
 };
 
+[shader("mesh")]
 [outputtopology("triangle")]
 [numthreads(128, 1, 1)]
 void msmain(
@@ -74,6 +75,7 @@ void msmain(
     }
 }
 
+[shader("pixel")]
 float4 psmain(MeshOutput input) : SV_TARGET
 {
     return float4(input.Color, 1);

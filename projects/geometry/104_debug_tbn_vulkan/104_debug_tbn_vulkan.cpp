@@ -32,6 +32,37 @@ struct Camera
 // =============================================================================
 // Shader code
 // =============================================================================
+#if defined(GREX_ENABLE_SLANG)
+const char* gShaders = R"(
+
+struct CameraProperties {
+	float4x4 MVP;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<CameraProperties> Cam;
+
+struct VSOutput {
+    float4 PositionCS : SV_POSITION;
+    float3 Color      : COLOR;
+};
+
+[shader("vertex")]
+VSOutput vsmain(float3 PositionOS : POSITION, float3 Color : COLOR0)
+{
+    VSOutput output = (VSOutput)0;
+    output.PositionCS = mul(Cam.MVP, float4(PositionOS, 1));
+    output.Color = Color;
+    return output;
+}
+
+[shader("pixel")]
+float4 psmain(VSOutput input) : SV_TARGET
+{
+    return float4(input.Color, 1);   
+}
+)";
+#else
 const char* gShadersVS = R"(
 #version 460
 
@@ -63,6 +94,7 @@ void main()
     FragColor = vec4(Color, 1);   
 }
 )";
+#endif
 
 // =============================================================================
 // Constants
@@ -157,28 +189,49 @@ int main(int argc, char** argv)
     std::vector<uint32_t> spirvVS;
     std::vector<uint32_t> spirvFS;
     {
-        std::string   errorMsg;
-        CompileResult vkRes = CompileGLSL(gShadersVS, VK_SHADER_STAGE_VERTEX_BIT, {}, &spirvVS, &errorMsg);
-        if (vkRes != COMPILE_SUCCESS)
+
+        std::string errorMsg;
+#if defined(GREX_ENABLE_SLANG)
+        CompileResult res = CompileSlang(gShaders, "vsmain", "vs_6_0", {}, &spirvVS, &errorMsg);
+        if (res != COMPILE_SUCCESS)
         {
             std::stringstream ss;
             ss << "\n"
                << "Shader compiler error (VS): " << errorMsg << "\n";
             GREX_LOG_ERROR(ss.str().c_str());
-            assert(false);
             return EXIT_FAILURE;
         }
 
-        vkRes = CompileGLSL(gShadersFS, VK_SHADER_STAGE_FRAGMENT_BIT, {}, &spirvFS, &errorMsg);
-        if (vkRes != COMPILE_SUCCESS)
+        res = CompileSlang(gShaders, "psmain", "ps_6_0", {}, &spirvFS, &errorMsg);
+        if (res != COMPILE_SUCCESS)
         {
             std::stringstream ss;
             ss << "\n"
-               << "Shader compiler error (PS): " << errorMsg << "\n";
+               << "Shader compiler error (FS): " << errorMsg << "\n";
             GREX_LOG_ERROR(ss.str().c_str());
-            assert(false);
             return EXIT_FAILURE;
         }
+#else
+        CompileResult res = CompileGLSL(gShaderVS, VK_SHADER_STAGE_VERTEX_BIT, {}, &spirvVS, &errorMsg);
+        if (res != COMPILE_SUCCESS)
+        {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (VS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            return EXIT_FAILURE;
+        }
+
+        res = CompileGLSL(gShaderFS, VK_SHADER_STAGE_FRAGMENT_BIT, {}, &spirvFS, &errorMsg);
+        if (res != COMPILE_SUCCESS)
+        {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (FS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            return EXIT_FAILURE;
+        }
+#endif
     }
 
     // *************************************************************************
@@ -211,6 +264,13 @@ int main(int argc, char** argv)
     //
     // *************************************************************************
     VkPipeline trianglePipelineState = VK_NULL_HANDLE;
+#if defined(GREX_ENABLE_SLANG)
+    const char* vsEntryPoint = "vsmain";
+    const char* fsEntryPoint = "psmain";
+#else
+    const char* vsEntryPoint = "main";
+    const char* fsEntryPoint = "main";
+#endif
     CHECK_CALL(CreateDrawVertexColorPipeline(
         renderer.get(),
         pipelineLayout,
@@ -218,7 +278,12 @@ int main(int argc, char** argv)
         moduleFS,
         GREX_DEFAULT_RTV_FORMAT,
         GREX_DEFAULT_DSV_FORMAT,
-        &trianglePipelineState));
+        &trianglePipelineState,
+        VK_CULL_MODE_BACK_BIT,
+        VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        0,
+        vsEntryPoint,
+        fsEntryPoint));
 
     VkPipeline tbnDebugPipelineState = VK_NULL_HANDLE;
     CHECK_CALL(CreateDrawVertexColorPipeline(
@@ -231,7 +296,9 @@ int main(int argc, char** argv)
         &tbnDebugPipelineState,
         VK_CULL_MODE_NONE,
         VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
-        VK_PIPELINE_FLAGS_INTERLEAVED_ATTRS));
+        VK_PIPELINE_FLAGS_INTERLEAVED_ATTRS,
+        vsEntryPoint,
+        fsEntryPoint));
 
     // *************************************************************************
     // Geometry data

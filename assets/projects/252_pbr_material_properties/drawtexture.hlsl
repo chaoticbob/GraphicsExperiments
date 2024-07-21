@@ -13,6 +13,7 @@ struct VSOutput
     float2 TexCoord   : TEXCOORD;
 };
 
+[shader("vertex")]
  VSOutput vsmain(float3 PositionOS : POSITION, float2 TexCoord : TEXCOORD)
  {
     VSOutput output = (VSOutput)0;
@@ -29,6 +30,7 @@ float3 ACESFilm(float3 x){
     return saturate((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14));
 }
 
+[shader("pixel")]
  float4 psmain(VSOutput input) : SV_Target
  {
     float3 color = IBLEnvironmentMap.SampleLevel(IBLMapSampler, input.TexCoord, 0).xyz;
