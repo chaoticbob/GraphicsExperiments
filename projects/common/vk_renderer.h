@@ -67,7 +67,9 @@ struct CompilerOptions
     uint32_t BindingShiftSSBO    = 0;
     uint32_t BindingShiftUAV     = 0;
 
-    bool ForceEntryPointMain = false;
+    bool        ForceEntryPointMain = false;
+    bool        DumpShaderBinary    = false;
+    std::string ShaderBinaryPrefix  = "";
 };
 
 #define GREX_DEFAULT_RTV_FORMAT VK_FORMAT_B8G8R8A8_UNORM
@@ -452,6 +454,21 @@ VkResult CreateMeshShaderPipeline(
 CompileResult CompileGLSL(
     const std::string&     shaderSource,
     VkShaderStageFlagBits  shaderStage,
+    const CompilerOptions& options,
+    std::vector<uint32_t>* pSPIRV,
+    std::string*           pErrorMsg);
+
+HRESULT CompileHLSL(
+    const std::string&     shaderSource,
+    const std::string&     entryPoint,
+    const std::string&     profile,
+    std::vector<uint32_t>* pSPIRV,
+    std::string*           pErrorMsg);
+
+HRESULT CompileHLSL(
+    const std::string&     shaderSource,
+    const std::string&     entryPoint,
+    const std::string&     profile,
     const CompilerOptions& options,
     std::vector<uint32_t>* pSPIRV,
     std::string*           pErrorMsg);

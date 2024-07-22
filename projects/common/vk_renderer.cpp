@@ -3360,6 +3360,7 @@ HRESULT CompileHLSL(
     const std::string&     shaderSource,
     const std::string&     entryPoint,
     const std::string&     profile,
+    const CompilerOptions& options,
     std::vector<uint32_t>* pSPIRV,
     std::string*           pErrorMsg)
 {
@@ -3457,6 +3458,16 @@ HRESULT CompileHLSL(
     return S_OK;
 }
 
+HRESULT CompileHLSL(
+    const std::string&     shaderSource,
+    const std::string&     entryPoint,
+    const std::string&     profile,
+    std::vector<uint32_t>* pSPIRV,
+    std::string*           pErrorMsg)
+{
+    return CompileHLSL(shaderSource, entryPoint, profile, {}, pSPIRV, pErrorMsg);
+}
+
 #if defined(GREX_ENABLE_SLANG)
 CompileResult CompileSlang(
     const std::string&     shaderSource,
@@ -3481,11 +3492,11 @@ CompileResult CompileSlang(
 
     slang::TargetDesc targetDesc = {};
     targetDesc.format            = SLANG_SPIRV;
-    targetDesc.flags = SLANG_TARGET_FLAG_GENERATE_SPIRV_DIRECTLY;
+    targetDesc.flags             = SLANG_TARGET_FLAG_GENERATE_SPIRV_DIRECTLY;
     //
     // Disable profile for now since it's causing ISession::loadModuleFromSourceString to crash.
     //
-    //targetDesc.profile           = globalSession->findProfile(profile.c_str());
+    // targetDesc.profile           = globalSession->findProfile(profile.c_str());
 
     targetDesc.flags |= SLANG_TARGET_FLAG_GENERATE_WHOLE_PROGRAM;
 
