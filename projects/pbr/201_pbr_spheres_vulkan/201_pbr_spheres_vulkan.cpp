@@ -153,9 +153,14 @@ int main(int argc, char** argv)
     {
         std::string shaderSource = LoadString("projects/201_pbr_spheres/shaders.hlsl");
 
+        CompilerOptions options    = {};
+        options.DumpShaderBinary   = true;
+        options.ShaderBinaryDir    = GetExecutableDir();
+        options.ShaderBinaryPrefix = GREX_BASE_FILE_NAME();
+
         std::string errorMsg;
 #if defined(GREX_ENABLE_SLANG)
-        auto res = CompileSlang(shaderSource, "vsmain", "vs_6_0", {}, &spirvVS, &errorMsg);
+        auto res = CompileSlang(shaderSource, "vsmain", "vs_6_0", options, &spirvVS, &errorMsg);
         if (res != CompileResult::COMPILE_SUCCESS)
         {
             std::stringstream ss;
@@ -166,7 +171,7 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        res = CompileSlang(shaderSource, "psmain", "ps_6_0", {}, &spirvFS, &errorMsg);
+        res = CompileSlang(shaderSource, "psmain", "ps_6_0", options, &spirvFS, &errorMsg);
         if (res != CompileResult::COMPILE_SUCCESS)
         {
             std::stringstream ss;
@@ -177,7 +182,7 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 #else
-        HRESULT hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &spirvVS, &errorMsg);
+        HRESULT hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", options, &spirvVS, &errorMsg);
         if (FAILED(hr))
         {
             std::stringstream ss;
@@ -188,7 +193,7 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &spirvFS, &errorMsg);
+        hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", options, &spirvFS, &errorMsg);
         if (FAILED(hr))
         {
             std::stringstream ss;

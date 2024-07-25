@@ -67,9 +67,10 @@ struct CompilerOptions
     uint32_t BindingShiftSSBO    = 0;
     uint32_t BindingShiftUAV     = 0;
 
-    bool        ForceEntryPointMain = false;
-    bool        DumpShaderBinary    = false;
-    std::string ShaderBinaryPrefix  = "";
+    bool                  ForceEntryPointMain = false;
+    bool                  DumpShaderBinary    = false;
+    std::filesystem::path ShaderBinaryDir     = "";
+    std::string           ShaderBinaryPrefix  = "";
 };
 
 #define GREX_DEFAULT_RTV_FORMAT VK_FORMAT_B8G8R8A8_UNORM

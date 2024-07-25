@@ -3455,6 +3455,18 @@ HRESULT CompileHLSL(
     pSPIRV->resize(wordCount);
     memcpy(pSPIRV->data(), pBuffer, bufferSize);
 
+    if (options.DumpShaderBinary && !options.ShaderBinaryPrefix.empty())
+    {
+        std::string binaryName = options.ShaderBinaryPrefix + "_" + entryPoint + "_" + profile + ".spv";
+        auto        binaryPath = options.ShaderBinaryDir / binaryName;
+
+        std::ofstream os(binaryPath, std::ios::binary);
+        if (os.is_open())
+        {
+            os.write(pBuffer, bufferSize);
+        }
+    }
+
     return S_OK;
 }
 
@@ -3515,6 +3527,15 @@ CompileResult CompileSlang(
 
             compilerOptions.push_back(entry);
         }
+
+        //// Force row major
+        //{
+        //    compilerOptions.push_back(
+        //        slang::CompilerOptionEntry{
+        //            slang::CompilerOptionName::MatrixLayoutRow,
+        //            slang::CompilerOptionValue{slang::CompilerOptionValueKind::Int, 1}
+        //    });
+        //}
 
         // Force Slang language to prevent any accidental interpretations as GLSL or HLSL
         {
@@ -3740,6 +3761,18 @@ CompileResult CompileSlang(
 
     pSPIRV->resize(wordCount);
     memcpy(pSPIRV->data(), pBuffer, bufferSize);
+
+    if (options.DumpShaderBinary && !options.ShaderBinaryPrefix.empty())
+    {
+        std::string binaryName = options.ShaderBinaryPrefix + "_" + entryPoint + "_" + profile + ".spv";
+        auto        binaryPath = options.ShaderBinaryDir / binaryName;
+
+        std::ofstream os(binaryPath, std::ios::binary);
+        if (os.is_open())
+        {
+            os.write(pBuffer, bufferSize);
+        }
+    }
 
     return COMPILE_SUCCESS;
 }
