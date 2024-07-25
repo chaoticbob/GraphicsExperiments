@@ -63,7 +63,7 @@ float4 psmain(VSOutput input) : SV_TARGET
 }
 )";
 #else
-const char* gShadersVS = R"(
+const char* gShaderVS = R"(
 #version 460
 
 layout( push_constant ) uniform CameraProperties 
@@ -82,7 +82,7 @@ void main()
     outColor = Color;
 }
 )";
-const char* gShadersFS = R"(
+const char* gShaderFS = R"(
 #version 460
 
 in vec3 Color;

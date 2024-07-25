@@ -106,7 +106,7 @@ float4 psmain(VSOutput input) : SV_TARGET
 }
 )";
 #else
-const char* gShadersVS = R"(
+const char* gShaderVS = R"(
 #version 460
 
 layout(binding=0) uniform CameraProperties
@@ -128,7 +128,7 @@ void main()
    outNormal = Normal;
 }
 )";
-const char* gShadersFS = R"(
+const char* gShaderFS = R"(
 #version 460
 
 layout(binding=0) uniform CameraProperties
