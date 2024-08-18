@@ -153,7 +153,7 @@ bool VisibleFrustumConeAndNearPlane(float4 sphere)
 {
     bool i0 = VisibleFrustumCone(sphere);
 
-    FrustumPlane frNear = Scene.Frustum.Planes[FRUSTUM_PLANE_NEAR];
+    FrustumPlane frNear = Scene.Frustum.Planes[(int)FRUSTUM_PLANE_NEAR];
     float d0 = SignedPointPlaneDistance(sphere.xyz, frNear.Normal, frNear.Position);
     bool  i1 = (abs(d0) < sphere.w); // Intersects with near plane
     bool  i2 = (d0 > 0);             // On positive half space of near plane
@@ -161,6 +161,7 @@ bool VisibleFrustumConeAndNearPlane(float4 sphere)
     return i0 && (i1 || i2);
 };
 
+[shader("amplification")]
 [numthreads(AS_GROUP_SIZE, 1, 1)]
 void asmain(
     uint gtid : SV_GroupThreadID,
@@ -239,6 +240,7 @@ void asmain(
 // -------------------------------------------------------------------------------------------------
 // Mesh Shader
 // -------------------------------------------------------------------------------------------------
+[shader("mesh")]
 [outputtopology("triangle")]
 [numthreads(128, 1, 1)]
 void msmain(
@@ -289,6 +291,7 @@ void msmain(
 // -------------------------------------------------------------------------------------------------
 // Pixel Shader
 // -------------------------------------------------------------------------------------------------
+[shader("pixel")]
 float4 psmain(MeshOutput input) : SV_TARGET
 {
     return float4(input.Color, 1);

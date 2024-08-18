@@ -79,7 +79,38 @@ int main(int argc, char** argv)
         assert((!source.empty()) && "no shader source!");
 
         std::string errorMsg;
-        auto        hr = CompileHLSL(source, "asmain", "as_6_5", &spirvAS, &errorMsg);
+#if defined(GREX_ENABLE_SLANG)
+        auto res = CompileSlang(source, "asmain", "as_6_5", {}, &spirvAS, &errorMsg);
+        if (res != COMPILE_SUCCESS)
+        {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (AS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            return EXIT_FAILURE;
+        }
+
+        res = CompileSlang(source, "msmain", "ms_6_5", {}, &spirvMS, &errorMsg);
+        if (res != COMPILE_SUCCESS)
+        {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (MS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            return EXIT_FAILURE;
+        }
+
+        res = CompileSlang(source, "psmain", "ps_6_5", {}, &spirvFS, &errorMsg);
+        if (res != COMPILE_SUCCESS)
+        {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (FS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            return EXIT_FAILURE;
+        }
+#else
+        auto hr = CompileHLSL(source, "asmain", "as_6_5", &spirvAS, &errorMsg);
         if (FAILED(hr))
         {
             std::stringstream ss;
@@ -108,6 +139,7 @@ int main(int argc, char** argv)
             GREX_LOG_ERROR(ss.str().c_str());
             return EXIT_FAILURE;
         }
+#endif
     }
 
     // *************************************************************************

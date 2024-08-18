@@ -153,8 +153,36 @@ int main(int argc, char** argv)
     {
         std::string shaderSource = LoadString("projects/201_pbr_spheres/shaders.hlsl");
 
+        CompilerOptions options    = {};
+        options.DumpShaderBinary   = true;
+        options.ShaderBinaryDir    = GetExecutableDir();
+        options.ShaderBinaryPrefix = GREX_BASE_FILE_NAME();
+
         std::string errorMsg;
-        HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &spirvVS, &errorMsg);
+#if defined(GREX_ENABLE_SLANG)
+        auto res = CompileSlang(shaderSource, "vsmain", "vs_6_0", options, &spirvVS, &errorMsg);
+        if (res != CompileResult::COMPILE_SUCCESS)
+        {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (VS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            assert(false);
+            return EXIT_FAILURE;
+        }
+
+        res = CompileSlang(shaderSource, "psmain", "ps_6_0", options, &spirvFS, &errorMsg);
+        if (res != CompileResult::COMPILE_SUCCESS)
+        {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (FS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            assert(false);
+            return EXIT_FAILURE;
+        }
+#else
+        HRESULT hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", options, &spirvVS, &errorMsg);
         if (FAILED(hr))
         {
             std::stringstream ss;
@@ -165,7 +193,7 @@ int main(int argc, char** argv)
             return EXIT_FAILURE;
         }
 
-        hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", &spirvFS, &errorMsg);
+        hr = CompileHLSL(shaderSource, "psmain", "ps_6_0", options, &spirvFS, &errorMsg);
         if (FAILED(hr))
         {
             std::stringstream ss;
@@ -175,6 +203,7 @@ int main(int argc, char** argv)
             assert(false);
             return EXIT_FAILURE;
         }
+#endif
     }
 
     VkShaderModule shaderModuleVS = VK_NULL_HANDLE;
@@ -207,7 +236,30 @@ int main(int argc, char** argv)
         }
 
         std::string errorMsg;
-        HRESULT     hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &drawTextureSpirvVS, &errorMsg);
+#if defined(GREX_ENABLE_SLANG)
+        auto res = CompileSlang(shaderSource, "vsmain", "vs_6_0", {}, &drawTextureSpirvVS, &errorMsg);
+        if (res != CompileResult::COMPILE_SUCCESS)
+        {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (VS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            assert(false);
+            return EXIT_FAILURE;
+        }
+
+        res = CompileSlang(shaderSource, "psmain", "ps_6_0", {}, &drawTextureSpirvFS, &errorMsg);
+        if (res != CompileResult::COMPILE_SUCCESS)
+        {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (FS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            assert(false);
+            return EXIT_FAILURE;
+        }
+#else
+        HRESULT hr = CompileHLSL(shaderSource, "vsmain", "vs_6_0", &drawTextureSpirvVS, &errorMsg);
         if (FAILED(hr))
         {
             std::stringstream ss;
@@ -228,6 +280,7 @@ int main(int argc, char** argv)
             assert(false);
             return EXIT_FAILURE;
         }
+#endif
     }
 
     VkShaderModule drawTextureShaderModuleVS = VK_NULL_HANDLE;
@@ -783,7 +836,6 @@ void CreatePBRPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* pLayout)
         }
 
         VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
         createInfo.bindingCount                    = CountU32(bindings);
         createInfo.pBindings                       = DataPtr(bindings);
 
@@ -835,7 +887,6 @@ void CreateEnvironmentPipeline(VulkanRenderer* pRenderer, VulkanPipelineLayout* 
         }
 
         VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
         createInfo.bindingCount                    = CountU32(bindings);
         createInfo.pBindings                       = DataPtr(bindings);
 
