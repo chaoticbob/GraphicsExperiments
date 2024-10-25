@@ -12,7 +12,7 @@
 #include "stb_image_write.h"
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
-#include "stb_image_resize.h"
+#include "stb_image_resize2.h"
 
 #if defined(GREX_ENABLE_EXR)
 #    define TINYEXR_IMPLEMENTATION

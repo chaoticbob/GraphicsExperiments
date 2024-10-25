@@ -22,6 +22,9 @@ using Microsoft::WRL::ComPtr;
 #include <cmath>
 #endif
 
+// Put these here for convenience
+#define GLM_ENABLE_EXPERIMENTAL
+
 #define GREX_LOG_INFO(MSG)                                 \
     {                                                      \
         std::stringstream ss_grex_log_info;                \
