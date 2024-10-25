@@ -15,8 +15,8 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/tri_mesh.h
     ${GREX_PROJECTS_COMMON_DIR}/tri_mesh.cpp
     ${IMGUI_VULKAN_FILES}
-    ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/resource_limits_c.cpp
-    ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/ResourceLimits.cpp
+    ${GREX_THIRD_PARTY_DIR}/glslang/glslang/ResourceLimits/resource_limits_c.cpp
+    ${GREX_THIRD_PARTY_DIR}/glslang/glslang/ResourceLimits/ResourceLimits.cpp
     ${GREX_THIRD_PARTY_DIR}/MikkTSpace/mikktspace.h
     ${GREX_THIRD_PARTY_DIR}/MikkTSpace/mikktspace.c
 )

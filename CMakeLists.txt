@@ -137,6 +137,7 @@ set(ENABLE_GLSLANG_JS       OFF CACHE BOOL "" FORCE)
 set(ENABLE_HLSL             OFF CACHE BOOL "" FORCE)
 set(ENABLE_PCH              OFF CACHE BOOL "" FORCE)
 set(ENABLE_CTEST            OFF CACHE BOOL "" FORCE)
+set(ENABLE_OPT              OFF CACHE BOOL "" FORCE)
 add_subdirectory(${GREX_THIRD_PARTY_DIR}/glslang)
 message("Enabled GLSL runtime shader compilation with glslang")
 
