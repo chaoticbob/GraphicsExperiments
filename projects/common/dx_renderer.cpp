@@ -114,7 +114,6 @@ bool InitDx(DxRenderer* pRenderer, bool enableDebug)
 
             // Filter out remote and software adapters
             if (desc.Flags == DXGI_ADAPTER_FLAG_NONE)
-            //if (desc.Flags == DXGI_ADAPTER_FLAG_SOFTWARE)
             {
                 adapters.push_back(pEnumeratedAdapter);
             }
