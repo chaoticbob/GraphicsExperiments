@@ -198,6 +198,44 @@ set(IMGUI_INC_DIR ${GREX_THIRD_PARTY_DIR}/imgui)
 add_subdirectory(${GREX_THIRD_PARTY_DIR}/meshoptimizer)
 
 # ------------------------------------------------------------------------------
+# Direct3D Agility SDK
+# ------------------------------------------------------------------------------
+if (GREX_AGILITY_SDK)
+
+	if (GREX_ENABLE_D3D12)
+		# Split the version into three parts (major.minor.patch)
+		string(REGEX MATCHALL "[0-9]+" VERSION_LIST "${GREX_AGILITY_SDK}")
+		list(LENGTH VERSION_LIST VERSION_LENGTH)
+
+		if (VERSION_LENGTH EQUAL 3)
+			list(GET VERSION_LIST 1 GREX_AGILITY_SDK_VERSION)
+		else()
+			message(FATAL_ERROR "Unknown DirectX Agility SDK Version ${GREX_AGILITY_SDK}. Should be <MAJOR.MINOR.PATCH> for the SDK version you wish to use")
+		endif()
+
+		# D3D12SDKPath needs to be a relative path from the binary to the D3D12Core.lib 
+		# you want to use
+		cmake_path(RELATIVE_PATH CMAKE_BINARY_DIR
+			BASE_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+			OUTPUT_VARIABLE BIN_TO_BUILD_PATH)
+
+
+		# We need the extra leading ../ to deal with the sub-directory for the build format (Debug/Release/etc ...)
+		set(GREX_AGILITY_RELATIVE_SDK_PATH "../${BIN_TO_BUILD_PATH}/packages/Microsoft.Direct3D.D3D12.${GREX_AGILITY_SDK}/build/native/bin/x64")
+
+		# Output the results on the command line during build
+		message("Generating DirectX Agility SDK Export Symbols:")
+		message("  D3D12SDKVersion: ${GREX_AGILITY_SDK_VERSION}")
+		message("  D3D12SDKPath:    '${GREX_AGILITY_RELATIVE_SDK_PATH}'")
+		message("  NuGet PM:        NuGet\\Install-Package Microsoft.Direct3D.D3D12 -Version ${GREX_AGILITY_SDK}")
+		message("")
+
+	else()
+		message("GREX_AGILITY_SDK not supported for non D3D12 platforms")
+	endif()
+endif()
+
+# ------------------------------------------------------------------------------
 # Graphics experiments
 # ------------------------------------------------------------------------------
 add_subdirectory(projects)

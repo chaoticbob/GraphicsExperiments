@@ -1,5 +1,13 @@
 #include "dx_renderer.h"
 
+#if defined(GREX_USE_AGILITY_SDK)
+
+ extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = GREX_AGILITY_SDK_VERSION; }
+ extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = GREX_AGILITY_SDK_PATH; }
+ // extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = "../../third_party/DirectX-AgilitySDK/1.614.1/bin/x64"; }
+
+#endif
+
 bool     IsCompressed(DXGI_FORMAT fmt);
 bool     IsVideo(DXGI_FORMAT fmt);
 uint32_t BitsPerPixel(DXGI_FORMAT fmt);
@@ -106,6 +114,7 @@ bool InitDx(DxRenderer* pRenderer, bool enableDebug)
 
             // Filter out remote and software adapters
             if (desc.Flags == DXGI_ADAPTER_FLAG_NONE)
+            //if (desc.Flags == DXGI_ADAPTER_FLAG_SOFTWARE)
             {
                 adapters.push_back(pEnumeratedAdapter);
             }
