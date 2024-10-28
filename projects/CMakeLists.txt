@@ -10,6 +10,7 @@ add_subdirectory(io)
 add_subdirectory(pbr)
 add_subdirectory(raytracing)
 add_subdirectory(texture)
+add_subdirectory(api)
 
 if (GREX_ENABLE_D3D12)
     add_subdirectory(misc/imgui_d3d12)
