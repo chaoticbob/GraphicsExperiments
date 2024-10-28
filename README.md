@@ -89,7 +89,7 @@ target_compile_definitions(
 
 Currently the `VS_PACKAGE_REFERENCES()` is not used to actually download/setup the NuGet file as it doesn't seem to work
 for C++ projects. However, the cmake process should print out the command you'll need to use in the Nuget Package
-Manager Console in Visual Studio (Tools -> NuGet Package Manager -> Package Manager Console).
+Manager Console in Visual Studio (*Tools -> NuGet Package Manager -> Package Manager Console*).
 
 ```
 NuGet\Install-Package Microsoft.Direct3D.D3D12 -Version X.Y.Z
