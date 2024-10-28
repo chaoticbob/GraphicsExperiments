@@ -118,6 +118,15 @@ D3D12_RESOURCE_BARRIER CreateTransition(
     UINT                         Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
     D3D12_RESOURCE_BARRIER_FLAGS Flags       = D3D12_RESOURCE_BARRIER_FLAG_NONE);
 
+D3D12_TEXTURE_BARRIER CreateTextureBarrier(
+    ID3D12Resource*      pResource,
+    D3D12_BARRIER_SYNC   syncBefore,
+    D3D12_BARRIER_SYNC   syncAfter,
+    D3D12_BARRIER_ACCESS accessBefore,
+    D3D12_BARRIER_ACCESS accessAfter,
+    D3D12_BARRIER_LAYOUT layoutBefore,
+    D3D12_BARRIER_LAYOUT layoutAfter);
+
 HRESULT CreateDrawVertexColorPipeline(
     DxRenderer*                   pRenderer,
     ID3D12RootSignature*          pRootSig,

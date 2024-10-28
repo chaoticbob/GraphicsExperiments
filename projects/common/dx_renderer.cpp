@@ -1166,6 +1166,32 @@ D3D12_RESOURCE_BARRIER CreateTransition(
     return barrier;
 }
 
+D3D12_TEXTURE_BARRIER CreateTextureBarrier(
+    ID3D12Resource*      pResource,
+    D3D12_BARRIER_SYNC   syncBefore,
+    D3D12_BARRIER_SYNC   syncAfter,
+    D3D12_BARRIER_ACCESS accessBefore,
+    D3D12_BARRIER_ACCESS accessAfter,
+    D3D12_BARRIER_LAYOUT layoutBefore,
+    D3D12_BARRIER_LAYOUT layoutAfter)
+{
+    D3D12_TEXTURE_BARRIER barrier = {};
+
+    barrier.SyncBefore   = syncBefore;
+    barrier.SyncAfter    = syncAfter;
+    barrier.AccessBefore = accessBefore;
+    barrier.AccessAfter  = accessAfter;
+    barrier.LayoutBefore = layoutBefore;
+    barrier.LayoutAfter  = layoutAfter;
+
+    barrier.pResource                         = pResource;
+    barrier.Flags                             = D3D12_TEXTURE_BARRIER_FLAG_DISCARD;
+    barrier.Subresources                      = {};
+    barrier.Subresources.IndexOrFirstMipLevel = 0xffffffff;
+
+    return barrier;
+}
+
 HRESULT CreateDrawVertexColorPipeline(
     DxRenderer*                   pRenderer,
     ID3D12RootSignature*          pRootSig,
