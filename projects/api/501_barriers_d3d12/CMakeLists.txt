@@ -17,15 +17,15 @@ add_executable(
 set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER "api")
 
 if (GREX_AGILITY_SDK)
-	message("  ${PROJECT_NAME} using Agility SDK - Don't forget to NuGet it for this project")
-
-	target_compile_definitions(
-		${PROJECT_NAME}
-		PUBLIC 
-			GREX_USE_AGILITY_SDK
-			GREX_AGILITY_SDK_VERSION=${GREX_AGILITY_SDK_VERSION}
-			GREX_AGILITY_SDK_PATH="${GREX_AGILITY_RELATIVE_SDK_PATH}"
-	)
+    target_compile_definitions(
+        ${PROJECT_NAME}
+            PUBLIC 
+            GREX_USE_AGILITY_SDK
+            GREX_AGILITY_SDK_VERSION=${GREX_AGILITY_SDK_VERSION}
+            GREX_AGILITY_SDK_PATH="${GREX_AGILITY_RELATIVE_SDK_PATH}"
+    )
+	
+    target_include_directories(${PROJECT_NAME} PUBLIC ${GREX_AGILITY_SDK_INCLUDES})
 endif()
 
 target_include_directories(
