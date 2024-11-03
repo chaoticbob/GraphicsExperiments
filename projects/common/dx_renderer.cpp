@@ -4,7 +4,6 @@
 
  extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = GREX_AGILITY_SDK_VERSION; }
  extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = GREX_AGILITY_SDK_PATH; }
- // extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = "../../third_party/DirectX-AgilitySDK/1.614.1/bin/x64"; }
 
 #endif
 
