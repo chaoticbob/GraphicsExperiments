@@ -69,32 +69,26 @@ This will generate a solution for Visual Studio 2022 Professional in the `build-
 
 ### Direct3D Agility SDK
 
-You can specify what Agility SDK you want to use with the command `-DGREX_AGILITY_SDK=X.Y.Z` where `X.Y.Z` is the version of the Agility SDK you want to use. 
+You can specify what Agility SDK you want to use with the command `-DGREX_AGILITY_SDK=X.Y.Z` where `X.Y.Z` is the version of the Agility SDK you want to use.
 
-It will generate the following symbols that can be used by individual projects
+Using this option will
+* Download nuget.exe to <BUILD DIRECTORY>/bin/nuget.exe
+* Download the desired Agility SDK to <BUILD DIRECTORY>/packages/... which is what the NuGet Package Manager would do for you in Visual Studio
+* Create a global variable that points to the include directory for the Agility SDK: ${GREX_AGILITY_SDK_INCLUDES}
+
+It will also generate the following symbols that can then be used by individual projects
 * ${GREX_AGILITY_SDK_VERSION}
 * ${GREX_AGILITY_RELATIVE_SDK_PATH}
 
-You can enable the specified Agility SDK in your project by adding the following to a project's CMakeLists.txt file
+You can enable the specified Agility SDK in your project's CMakeLists.txt file by adding the following to a project's CMakeLists.txt file
 
 ```
 target_compile_definitions(
-	MyTargetName
-	PUBLIC 
-		GREX_USE_AGILITY_SDK
-		GREX_AGILITY_SDK_VERSION=${GREX_AGILITY_SDK_VERSION}
-		GREX_AGILITY_SDK_PATH="${GREX_AGILITY_RELATIVE_SDK_PATH}"
+    ${PROJECT_NAME}
+    PUBLIC GREX_USE_AGILITY_SDK
+           GREX_AGILITY_SDK_VERSION=${GREX_AGILITY_SDK_VERSION}
+           GREX_AGILITY_SDK_PATH="${GREX_AGILITY_RELATIVE_SDK_PATH}"
 )
+
+target_include_directories(${PROJECT_NAME} PUBLIC ${GREX_AGILITY_SDK_INCLUDES})
 ```
-
-Currently the `VS_PACKAGE_REFERENCES()` is not used to actually download/setup the NuGet file as it doesn't seem to work
-for C++ projects. However, the cmake process should print out the command you'll need to use in the Nuget Package
-Manager Console in Visual Studio (*Tools -> NuGet Package Manager -> Package Manager Console*).
-
-```
-NuGet\Install-Package Microsoft.Direct3D.D3D12 -Version X.Y.Z
-```
-
-Which will download the package to the `build/packages/...` directory and setup your project to use it.
-
-
