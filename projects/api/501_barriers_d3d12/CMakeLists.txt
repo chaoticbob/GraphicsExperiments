@@ -23,7 +23,7 @@ if (GREX_AGILITY_SDK)
                GREX_AGILITY_SDK_VERSION=${GREX_AGILITY_SDK_VERSION}
                GREX_AGILITY_SDK_PATH="${GREX_AGILITY_RELATIVE_SDK_PATH}"
     )
-	
+
     target_include_directories(${PROJECT_NAME} PUBLIC ${GREX_AGILITY_SDK_INCLUDES})
 endif()
 
