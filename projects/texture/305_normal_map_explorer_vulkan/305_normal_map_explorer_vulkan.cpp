@@ -73,16 +73,11 @@ void CreateShaderModules(
     const std::vector<uint32_t>& spirvFS,
     VkShaderModule*              pModuleVS,
     VkShaderModule*              pModuleFS);
-void CreateDescriptorBuffer(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout pDescriptorSetLayout,
-    VulkanBuffer*         pBuffer);
-void WriteDescriptors(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pDescriptorBuffer,
-    const TextureSet&     textureSet,
-    VkSampler             sampler);
+void CreateDescriptors(
+    VulkanRenderer*      pRenderer,
+    VulkanDescriptorSet* pDescriptors,
+    const TextureSet&    textureSet,
+    VkSampler            sampler);
 void CreateGeometryBuffers(
     VulkanRenderer*        pRenderer,
     std::vector<Geometry>& outGeometries);
@@ -116,6 +111,7 @@ int main(int argc, char** argv)
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
     VulkanFeatures features = {};
+    features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
         return EXIT_FAILURE;
@@ -195,8 +191,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Descriptor buffers
     // *************************************************************************
-    VulkanBuffer envDescriptorBuffer = {};
-    CreateDescriptorBuffer(renderer.get(), pipelineLayout.DescriptorSetLayout, &envDescriptorBuffer);
+    VulkanDescriptorSet descriptors;
 
     VkSamplerCreateInfo samplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
     samplerInfo.flags                   = 0;
@@ -411,10 +406,9 @@ int main(int argc, char** argv)
 
             auto& textureSet = textureSets[currentTextureSetIndex];
 
-            WriteDescriptors(
+            CreateDescriptors(
                 renderer.get(),
-                pipelineLayout.DescriptorSetLayout,
-                &envDescriptorBuffer,
+                &descriptors,
                 textureSet,
                 sampler);
         }
@@ -464,22 +458,15 @@ int main(int argc, char** argv)
 
             vkCmdBeginRendering(cmdBuf.CommandBuffer, &vkri);
 
-            VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
-            descriptorBufferBindingInfo.pNext                            = nullptr;
-            descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &envDescriptorBuffer);
-            descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-            fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
-
-            uint32_t     bufferIndices           = 0;
-            VkDeviceSize descriptorBufferOffsets = 0;
-            fn_vkCmdSetDescriptorBufferOffsetsEXT(
+            vkCmdBindDescriptorSets(
                 cmdBuf.CommandBuffer,
                 VK_PIPELINE_BIND_POINT_GRAPHICS,
                 pipelineLayout.PipelineLayout,
                 0, // firstSet
                 1, // setCount
-                &bufferIndices,
-                &descriptorBufferOffsets);
+                &descriptors.DescriptorSet,
+                0,
+                nullptr);
 
             VkViewport viewport = {0, static_cast<float>(gWindowHeight), static_cast<float>(gWindowWidth), -static_cast<float>(gWindowHeight), 0.0f, 1.0f};
             vkCmdSetViewport(cmdBuf.CommandBuffer, 0, 1, &viewport);
@@ -780,44 +767,17 @@ void CreateShaderModules(
     }
 }
 
-void CreateDescriptorBuffer(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pBuffer)
+void CreateDescriptors(
+    VulkanRenderer*      pRenderer,
+    VulkanDescriptorSet* pDescriptors,
+    const TextureSet&    textureSet,
+    VkSampler            sampler) 
 {
-    VkDeviceSize size = 0;
-    fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
-
-    VkBufferUsageFlags usageFlags =
-        VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,  // pRenderer
-        size,       // srcSize
-        nullptr,    // pSrcData
-        usageFlags, // usageFlags
-        0,          // minAlignment
-        pBuffer));  // pBuffer
-}
-
-void WriteDescriptors(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pDescriptorBuffer,
-    const TextureSet&     textureSet,
-    VkSampler             sampler)
-{
-    char* pDescriptorBufferStartAddress = nullptr;
-    CHECK_CALL(vmaMapMemory(
-        pRenderer->Allocator,
-        pDescriptorBuffer->Allocation,
-        reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
-
     // Push Constant
     // ConstantBuffer<CameraProperties> Camera              : register(b0); // Constant buffer
 
     // Texture2D                        DiffuseTexture      : register(t1); // Texture
+    VulkanImageDescriptor diffuseTextureDescriptor;
     {
         VkImageView imageView = VK_NULL_HANDLE;
         CHECK_CALL(CreateImageView(
@@ -828,10 +788,9 @@ void WriteDescriptors(
             GREX_ALL_SUBRESOURCES,
             &imageView));
 
-        WriteDescriptor(
+        CreateDescriptor(
             pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
+            &diffuseTextureDescriptor,
             1, // binding
             0, // arrayElement
             VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -839,6 +798,7 @@ void WriteDescriptors(
             VK_IMAGE_LAYOUT_GENERAL);
     }
     // Texture2D                        NormalTexture       : register(t2); // Texture
+    VulkanImageDescriptor normalTextureDescriptor;
     {
         VkImageView imageView = VK_NULL_HANDLE;
         CHECK_CALL(CreateImageView(
@@ -849,10 +809,9 @@ void WriteDescriptors(
             GREX_ALL_SUBRESOURCES,
             &imageView));
 
-        WriteDescriptor(
+        CreateDescriptor(
             pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
+            &normalTextureDescriptor,
             2, // binding
             0, // arrayElement
             VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -861,15 +820,29 @@ void WriteDescriptors(
     }
 
     // SamplerState                     Sampler0            : register(s4); // Sampler
-    WriteDescriptor(
+    VulkanImageDescriptor sampler0Descriptor;
+    CreateDescriptor(
         pRenderer,
-        pDescriptorBufferStartAddress,
-        descriptorSetLayout,
+        &sampler0Descriptor,
         4, // binding
         0, // arrayElement
         sampler);
 
-    vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
+    {
+        diffuseTextureDescriptor.layoutBinding,
+        normalTextureDescriptor.layoutBinding,
+        sampler0Descriptor.layoutBinding,
+    };
+
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets =
+    {
+        diffuseTextureDescriptor.writeDescriptorSet,
+        normalTextureDescriptor.writeDescriptorSet,
+        sampler0Descriptor.writeDescriptorSet,
+    };
+
+    CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, pDescriptors);
 }
 
 void CreateGeometryBuffers(
