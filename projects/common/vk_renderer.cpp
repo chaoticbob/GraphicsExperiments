@@ -3456,6 +3456,7 @@ HRESULT CompileHLSL(
 void CreateDescriptor(
     VulkanRenderer*         pRenderer,
     VulkanBufferDescriptor* pBufferDescriptor,
+    VkShaderStageFlags      stageFlags,
     uint32_t                binding,
     uint32_t                arrayElement,
     VkDescriptorType        descriptorType,
@@ -3465,7 +3466,7 @@ void CreateDescriptor(
 
     pBufferDescriptor->layoutBinding                 = {};
     pBufferDescriptor->layoutBinding.descriptorType  = descriptorType;
-    pBufferDescriptor->layoutBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    pBufferDescriptor->layoutBinding.stageFlags      = stageFlags;
     pBufferDescriptor->layoutBinding.binding         = binding;
     pBufferDescriptor->layoutBinding.descriptorCount = 1;
 
@@ -3478,6 +3479,24 @@ void CreateDescriptor(
     pBufferDescriptor->writeDescriptorSet.dstBinding      = binding;
     pBufferDescriptor->writeDescriptorSet.pBufferInfo     = &pBufferDescriptor->bufferInfo;
     pBufferDescriptor->writeDescriptorSet.descriptorCount = 1;
+}
+
+void CreateDescriptor(
+    VulkanRenderer*         pRenderer,
+    VulkanBufferDescriptor* pBufferDescriptor,
+    uint32_t                binding,
+    uint32_t                arrayElement,
+    VkDescriptorType        descriptorType,
+    const VulkanBuffer*     pBuffer)
+{
+    CreateDescriptor(
+        pRenderer,
+        pBufferDescriptor,
+        VK_SHADER_STAGE_ALL_GRAPHICS,
+        binding,
+        arrayElement,
+        descriptorType,
+        pBuffer);
 }
 
 void WriteDescriptor(
@@ -3596,6 +3615,7 @@ void WriteDescriptor(
 void CreateDescriptor(
     VulkanRenderer*        pRenderer,
     VulkanImageDescriptor* pImageDescriptor,
+    VkShaderStageFlags     stageFlags,
     uint32_t               binding,
     uint32_t               arrayElement,
     VkDescriptorType       descriptorType,
@@ -3606,12 +3626,12 @@ void CreateDescriptor(
 
     pImageDescriptor->layoutBinding                 = {};
     pImageDescriptor->layoutBinding.descriptorType  = descriptorType;
-    pImageDescriptor->layoutBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    pImageDescriptor->layoutBinding.stageFlags      = stageFlags;
     pImageDescriptor->layoutBinding.binding         = binding;
     pImageDescriptor->layoutBinding.descriptorCount = static_cast<uint32_t>(pImageDescriptor->imageInfo.size());
 
     pImageDescriptor->imageInfo[arrayElement].imageView   = imageView;
-    pImageDescriptor->imageInfo[arrayElement].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    pImageDescriptor->imageInfo[arrayElement].imageLayout = imageLayout;
 
     pImageDescriptor->writeDescriptorSet                 = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
     pImageDescriptor->writeDescriptorSet.dstSet          = VK_NULL_HANDLE;
@@ -3619,6 +3639,26 @@ void CreateDescriptor(
     pImageDescriptor->writeDescriptorSet.dstBinding      = binding;
     pImageDescriptor->writeDescriptorSet.pImageInfo      = DataPtr(pImageDescriptor->imageInfo);
     pImageDescriptor->writeDescriptorSet.descriptorCount = CountU32(pImageDescriptor->imageInfo);
+}
+
+void CreateDescriptor(
+    VulkanRenderer*        pRenderer,
+    VulkanImageDescriptor* pImageDescriptor,
+    uint32_t               binding,
+    uint32_t               arrayElement,
+    VkDescriptorType       descriptorType,
+    VkImageView            imageView,
+    VkImageLayout          imageLayout)
+{
+    CreateDescriptor(
+        pRenderer,
+        pImageDescriptor,
+        VK_SHADER_STAGE_ALL_GRAPHICS,
+        binding,
+        arrayElement,
+        descriptorType,
+        imageView,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 void WriteDescriptor(
@@ -3815,6 +3855,7 @@ void CreateAndUpdateDescriptorSet(
     }
 
     VkDescriptorPoolCreateInfo poolCreateInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    poolCreateInfo.flags                      = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     poolCreateInfo.maxSets                    = 1;
     poolCreateInfo.poolSizeCount              = CountU32(poolSizes);
     poolCreateInfo.pPoolSizes                 = DataPtr(poolSizes);
@@ -3847,6 +3888,28 @@ void CreateAndUpdateDescriptorSet(
 
     // Update all descriptor sets
     vkUpdateDescriptorSets(pRenderer->Device, CountU32(writeDescriptorSets), DataPtr(writeDescriptorSets), 0, nullptr);
+}
+
+void DestroyDescriptorSet(
+    VulkanRenderer*      pRenderer,
+    VulkanDescriptorSet* pDescriptors)
+{
+    assert(pRenderer && pDescriptors);
+
+    if (pDescriptors->DescriptorPool == VK_NULL_HANDLE &&
+        pDescriptors->DescriptorSet == VK_NULL_HANDLE &&
+        pDescriptors->DescriptorSetLayout == VK_NULL_HANDLE)
+        return;
+
+    VkResult vkRes = vkFreeDescriptorSets(pRenderer->Device, pDescriptors->DescriptorPool, 1, &pDescriptors->DescriptorSet);
+    assert(vkRes == VK_SUCCESS);
+
+    vkDestroyDescriptorSetLayout(pRenderer->Device, pDescriptors->DescriptorSetLayout, nullptr);
+    vkDestroyDescriptorPool(pRenderer->Device, pDescriptors->DescriptorPool, nullptr);
+
+    pDescriptors->DescriptorPool      = VK_NULL_HANDLE;
+    pDescriptors->DescriptorSet       = VK_NULL_HANDLE;
+    pDescriptors->DescriptorSetLayout = VK_NULL_HANDLE;
 }
 
 uint32_t BytesPerPixel(VkFormat fmt)
