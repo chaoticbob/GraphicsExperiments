@@ -463,6 +463,15 @@ HRESULT CompileHLSL(
 void CreateDescriptor(
     VulkanRenderer*         pRenderer,
     VulkanBufferDescriptor* pBufferDescriptor,
+    VkShaderStageFlags      stageFlags,
+    uint32_t                binding,
+    uint32_t                arrayElements,
+    VkDescriptorType        descriptorType,
+    const VulkanBuffer*     pBuffer);
+
+void CreateDescriptor(
+    VulkanRenderer*         pRenderer,
+    VulkanBufferDescriptor* pBufferDescriptor,
     uint32_t                binding,
     uint32_t                arrayElements,
     VkDescriptorType        descriptorType,
@@ -487,6 +496,16 @@ void WriteDescriptor(
     const VulkanAccelStruct* pAccelStruct);
 
 // Image view
+void CreateDescriptor(
+    VulkanRenderer*        pRenderer,
+    VulkanImageDescriptor* pImageDescriptor,
+    VkShaderStageFlags     stageFlags,
+    uint32_t               binding,
+    uint32_t               arrayElement,
+    VkDescriptorType       descriptorType,
+    VkImageView            imageView,
+    VkImageLayout          imageLayout);
+
 void CreateDescriptor(
     VulkanRenderer*        pRenderer,
     VulkanImageDescriptor* pImageDescriptor,
@@ -537,6 +556,10 @@ void CreateAndUpdateDescriptorSet(
     std::vector<VkDescriptorSetLayoutBinding>& layoutBindings,
     std::vector<VkWriteDescriptorSet>&         writeDescriptorSets,
     VulkanDescriptorSet*                       pDescriptors);
+
+void DestroyDescriptorSet(
+    VulkanRenderer*      pRenderer,
+    VulkanDescriptorSet* pDescriptors);
 
 // Loaded funtions
 extern PFN_vkCreateRayTracingPipelinesKHR             fn_vkCreateRayTracingPipelinesKHR;
