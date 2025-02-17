@@ -3567,6 +3567,39 @@ void WriteDescriptor(
         pDescriptor);      // pDescriptor
 }
 
+void CreateDescriptor(
+    VulkanRenderer*               pRenderer,
+    VulkanAccelerationDescriptor* pAccelerationDescriptor,
+    uint32_t                      binding,
+    uint32_t                      arrayElement,
+    const VulkanAccelStruct*      pAccelStruct)
+{
+    assert(pAccelerationDescriptor);
+    assert(pAccelStruct);
+
+    pAccelerationDescriptor->layoutBinding                 = {};
+    pAccelerationDescriptor->layoutBinding.descriptorType  = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+    pAccelerationDescriptor->layoutBinding.stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+    pAccelerationDescriptor->layoutBinding.binding         = binding;
+    pAccelerationDescriptor->layoutBinding.descriptorCount = 1;
+
+    pAccelerationDescriptor->bufferInfo.buffer = pAccelStruct->Buffer.Buffer;
+    pAccelerationDescriptor->bufferInfo.offset = 0;
+    pAccelerationDescriptor->bufferInfo.range  = VK_WHOLE_SIZE;
+
+    pAccelerationDescriptor->accelerationDescriptor                            = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR};
+    pAccelerationDescriptor->accelerationDescriptor.pAccelerationStructures    = &pAccelStruct->AccelStruct;
+    pAccelerationDescriptor->accelerationDescriptor.accelerationStructureCount = 1;
+
+    pAccelerationDescriptor->writeDescriptorSet                 = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    pAccelerationDescriptor->writeDescriptorSet.pNext           = &pAccelerationDescriptor->accelerationDescriptor;
+    pAccelerationDescriptor->writeDescriptorSet.dstSet          = VK_NULL_HANDLE;
+    pAccelerationDescriptor->writeDescriptorSet.descriptorType  = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+    pAccelerationDescriptor->writeDescriptorSet.dstBinding      = binding;
+    pAccelerationDescriptor->writeDescriptorSet.pBufferInfo     = &pAccelerationDescriptor->bufferInfo;
+    pAccelerationDescriptor->writeDescriptorSet.descriptorCount = 1;
+}
+
 void WriteDescriptor(
     VulkanRenderer*          pRenderer,
     void*                    pDescriptorBufferStartAddress,

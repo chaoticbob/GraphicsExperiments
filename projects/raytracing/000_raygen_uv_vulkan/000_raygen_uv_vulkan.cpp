@@ -236,9 +236,7 @@ int main(int argc, char** argv)
             CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &imageView));
 
             imageViews.push_back(imageView);
-
-            VulkanDescriptorSet descriptor = {VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE};
-            descriptors.push_back(std::move(descriptor));
+            descriptors.push_back(VulkanDescriptorSet());
         }
     }
 
