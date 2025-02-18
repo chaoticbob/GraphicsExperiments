@@ -1131,6 +1131,28 @@ VkResult TransitionImageLayout(
     return VK_SUCCESS;
 }
 
+VulkanBufferDescriptor::VulkanBufferDescriptor(size_t count)
+{
+    bufferInfo.resize(count);
+    for (auto& info : bufferInfo)
+    {
+        info.buffer = VK_NULL_HANDLE;
+        info.offset = 0;
+        info.range  = VK_WHOLE_SIZE;
+    }
+
+    writeDescriptorSet.sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writeDescriptorSet.pNext            = nullptr;
+    writeDescriptorSet.dstSet           = VK_NULL_HANDLE;
+    writeDescriptorSet.dstBinding       = 0;
+    writeDescriptorSet.dstArrayElement  = 0;
+    writeDescriptorSet.descriptorCount  = 0;
+    writeDescriptorSet.descriptorType   = static_cast<VkDescriptorType>(0);
+    writeDescriptorSet.pImageInfo       = nullptr;
+    writeDescriptorSet.pBufferInfo      = nullptr;
+    writeDescriptorSet.pTexelBufferView = nullptr;
+}
+
 VulkanImageDescriptor::VulkanImageDescriptor(size_t count)
 {
     imageInfo.resize(count);
@@ -3454,6 +3476,41 @@ HRESULT CompileHLSL(
 }
 
 void CreateDescriptor(
+    VulkanRenderer*                         pRenderer,
+    VulkanBufferDescriptor*                 pBufferDescriptor,
+    VkShaderStageFlags                      stageFlags,
+    uint32_t                                binding,
+    VkDescriptorType                        descriptorType,
+    const std::vector<const VulkanBuffer*>& pBuffers)
+{
+    assert(pBufferDescriptor);
+
+    pBufferDescriptor->layoutBinding                 = {};
+    pBufferDescriptor->layoutBinding.descriptorType  = descriptorType;
+    pBufferDescriptor->layoutBinding.stageFlags      = stageFlags;
+    pBufferDescriptor->layoutBinding.binding         = binding;
+    pBufferDescriptor->layoutBinding.descriptorCount = CountU32(pBuffers);
+
+    pBufferDescriptor->bufferInfo.clear();
+    for (const VulkanBuffer* buffer : pBuffers)
+    {
+        VkDescriptorBufferInfo bufferInfo;
+
+        bufferInfo.buffer = buffer->Buffer;
+        bufferInfo.offset = 0;
+        bufferInfo.range  = VK_WHOLE_SIZE;
+
+        pBufferDescriptor->bufferInfo.push_back(std::move(bufferInfo));
+    }
+
+    pBufferDescriptor->writeDescriptorSet                 = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    pBufferDescriptor->writeDescriptorSet.descriptorType  = descriptorType;
+    pBufferDescriptor->writeDescriptorSet.dstBinding      = binding;
+    pBufferDescriptor->writeDescriptorSet.pBufferInfo     = DataPtr(pBufferDescriptor->bufferInfo);
+    pBufferDescriptor->writeDescriptorSet.descriptorCount = CountU32(pBufferDescriptor->bufferInfo);
+}
+
+void CreateDescriptor(
     VulkanRenderer*         pRenderer,
     VulkanBufferDescriptor* pBufferDescriptor,
     VkShaderStageFlags      stageFlags,
@@ -3470,14 +3527,14 @@ void CreateDescriptor(
     pBufferDescriptor->layoutBinding.binding         = binding;
     pBufferDescriptor->layoutBinding.descriptorCount = 1;
 
-    pBufferDescriptor->bufferInfo.buffer = pBuffer->Buffer;
-    pBufferDescriptor->bufferInfo.offset = 0;
-    pBufferDescriptor->bufferInfo.range  = VK_WHOLE_SIZE;
+    pBufferDescriptor->bufferInfo[0].buffer = pBuffer->Buffer;
+    pBufferDescriptor->bufferInfo[0].offset = 0;
+    pBufferDescriptor->bufferInfo[0].range  = VK_WHOLE_SIZE;
 
     pBufferDescriptor->writeDescriptorSet                 = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
     pBufferDescriptor->writeDescriptorSet.descriptorType  = descriptorType;
     pBufferDescriptor->writeDescriptorSet.dstBinding      = binding;
-    pBufferDescriptor->writeDescriptorSet.pBufferInfo     = &pBufferDescriptor->bufferInfo;
+    pBufferDescriptor->writeDescriptorSet.pBufferInfo     = &pBufferDescriptor->bufferInfo[0];
     pBufferDescriptor->writeDescriptorSet.descriptorCount = 1;
 }
 
