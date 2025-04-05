@@ -34,6 +34,7 @@ struct MeshOutput {
     float3 Color    : COLOR;
 };
 
+[shader("mesh")]
 [outputtopology("triangle")]
 [numthreads(1, 1, 1)]
 void msmain(out indices uint3 triangles[1], out vertices MeshOutput vertices[3]) {
@@ -50,6 +51,7 @@ void msmain(out indices uint3 triangles[1], out vertices MeshOutput vertices[3])
     vertices[2].Color = float3(0.0, 0.0, 1.0);
 }
 
+[shader("pixel")]
 float4 psmain(MeshOutput input) : SV_TARGET
 {
     return float4(input.Color, 1);
@@ -96,6 +98,27 @@ int main(int argc, char** argv)
     std::vector<uint32_t> spirvFS;
     {
         std::string errorMsg;
+#if defined(GREX_ENABLE_SLANG)
+        CompileResult res = CompileSlang(gShaders, "msmain", "ms_6_5", {}, &spirvMS, &errorMsg);
+        if (res != COMPILE_SUCCESS)
+        {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (MS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            return EXIT_FAILURE;
+        }
+
+        res = CompileSlang(gShaders, "psmain", "ps_6_5", {}, &spirvFS, &errorMsg);
+        if (res != COMPILE_SUCCESS)
+        {
+            std::stringstream ss;
+            ss << "\n"
+               << "Shader compiler error (FS): " << errorMsg << "\n";
+            GREX_LOG_ERROR(ss.str().c_str());
+            return EXIT_FAILURE;
+        }
+#else
         auto        hr = CompileHLSL(gShaders, "msmain", "ms_6_5", &spirvMS, &errorMsg);
         if (FAILED(hr))
         {
@@ -115,6 +138,7 @@ int main(int argc, char** argv)
             GREX_LOG_ERROR(ss.str().c_str());
             return EXIT_FAILURE;
         }
+#endif
     }
 
     // *************************************************************************

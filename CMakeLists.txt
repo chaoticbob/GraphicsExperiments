@@ -19,7 +19,7 @@ else()
     option(GREX_ENABLE_VULKAN "Build Vulkan projects" ON)
 endif()
 
-
+option(GREX_ENABLE_SLANG          "Build Slang version of Vulkan projects" OFF)
 option(GREX_ENABLE_MISC_PROJECTS  "Build misc projects" OFF)
 
 # ------------------------------------------------------------------------------
@@ -52,6 +52,14 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# ------------------------------------------------------------------------------
+# Compiler otions
+# ------------------------------------------------------------------------------
+if (MSVC)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
+endif()
 
 # ------------------------------------------------------------------------------
 # Compile flags and definitions
@@ -125,6 +133,28 @@ if (VULKAN_INCLUDE_DIR)
     message("Found Vulkan:")
     message("  Vulkan include directory: ${VULKAN_INCLUDE_DIR}")
     message("  Vulkan library directory: ${VULKAN_LIBRARY_DIR}")
+endif()
+
+# ------------------------------------------------------------------------------
+# Slang
+# ------------------------------------------------------------------------------
+if (GREX_ENABLE_SLANG)
+    if (NOT SLANG_DIR)
+        message(FATAL_ERROR "GREX_ENABLE_SLANG requires -DSLANG_DIR=<path to Slang>")
+    endif()
+
+    set(SLANG_INCLUDE_DIR "${SLANG_DIR}/include")
+    set(SLANG_LIBRARY_DIR "${SLANG_DIR}/lib")
+
+    if (NOT EXISTS "${SLANG_DIR}/include/slang.h")
+        message(FATAL_ERROR "Could not find slang.h at ${SLANG_DIR}/include/slang.h")
+    endif()
+
+    message("Found Slang:")
+    message("  Slang include directory: ${SLANG_INCLUDE_DIR}")
+    message("  Slang library directory: ${SLANG_LIBRARY_DIR}")
+
+    include(cmake/slang.cmake)
 endif()
 
 # ------------------------------------------------------------------------------

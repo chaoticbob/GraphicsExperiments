@@ -789,6 +789,12 @@ fs::path GetExecutablePath()
     return path;
 }
 
+fs::path GetExecutableDir()
+{
+    auto dir = GetExecutablePath().parent_path();
+    return dir;
+}
+
 uint32_t GetProcessId()
 {
     uint32_t pid = UINT32_MAX;
