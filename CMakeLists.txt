@@ -198,6 +198,75 @@ set(IMGUI_INC_DIR ${GREX_THIRD_PARTY_DIR}/imgui)
 add_subdirectory(${GREX_THIRD_PARTY_DIR}/meshoptimizer)
 
 # ------------------------------------------------------------------------------
+# Direct3D Agility SDK
+# ------------------------------------------------------------------------------
+if (GREX_AGILITY_SDK)
+
+	if (GREX_ENABLE_D3D12)
+		# Split the version into three parts (major.minor.patch)
+		string(REGEX MATCHALL "[0-9]+" VERSION_LIST "${GREX_AGILITY_SDK}")
+		list(LENGTH VERSION_LIST VERSION_LENGTH)
+
+		if (VERSION_LENGTH EQUAL 3)
+			list(GET VERSION_LIST 1 GREX_AGILITY_SDK_VERSION)
+		else()
+			message(FATAL_ERROR "Unknown DirectX Agility SDK Version ${GREX_AGILITY_SDK}. Should be <MAJOR.MINOR.PATCH> for the SDK version you wish to use")
+		endif()
+
+		set(GREX_AGILITY_SDK_NAME "Microsoft.Direct3D.D3D12")
+		set(GREX_AGILITY_SDK_PACKAGE_LOCATION ${CMAKE_BINARY_DIR}/packages/${GREX_AGILITY_SDK_NAME}.${GREX_AGILITY_SDK})
+
+		# Install nuget if we don't have it
+		set(GREX_NUGET_WEB_ADDRESS "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe")
+		set(GREX_NUGET_EXE ${CMAKE_BINARY_DIR}/bin/nuget.exe)
+
+		if (NOT EXISTS ${GREX_NUGET_EXE})
+			message(CHECK_START "Downloading nuget.exe")
+			file(DOWNLOAD ${GREX_NUGET_WEB_ADDRESS} ${GREX_NUGET_EXE} STATUS GREX_NUGET_DOWNLOAD_STATUS)
+
+			list(GET GREX_NUGET_DOWNLOAD_STATUS 0 GREX_NUGET_DOWNLOAD_ERROR_CODE)
+			list(GET GREX_NUGET_DOWNLOAD_STATUS 1 GREX_NUGET_DOWNLOAD_ERROR_STRING)
+			if (${GREX_NUGET_DOWNLOAD_ERROR_CODE} EQUAL 0)
+				message(CHECK_PASS "downloaded")
+			else()
+				file(REMOVE ${GREX_NUGET_EXE})
+				message(CHECK_FAIL "not downloaded")
+				message(FATAL_ERROR "'${GREX_NUGET_WEB_ADDRESS}' not found (${GREX_NUGET_DOWNLOAD_ERROR_CODE}) ${GREX_NUGET_DOWNLOAD_ERROR_STRING}")
+
+			endif()
+		endif()
+
+		# Install the DirectX Agility SDK if we don't have it
+		if (NOT EXISTS ${GREX_AGILITY_SDK_PACKAGE_LOCATION})
+			message(CHECK_START "Attempting to nuget install ${GREX_AGILITY_SDK_NAME} Ver: ${GREX_AGILITY_SDK}")
+			execute_process(
+				COMMAND "${GREX_NUGET_EXE}" install ${GREX_AGILITY_SDK_NAME} -Version ${GREX_AGILITY_SDK} -OutputDirectory ${CMAKE_BINARY_DIR}/packages
+				OUTPUT_QUIET
+				COMMAND_ERROR_IS_FATAL ANY) 
+			message(CHECK_PASS "installed")
+		endif()
+
+		# D3D12SDKPath needs to be a relative path from the binary to the D3D12Core.lib 
+		# you want to use
+		cmake_path(RELATIVE_PATH CMAKE_BINARY_DIR
+			BASE_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+			OUTPUT_VARIABLE BIN_TO_BUILD_PATH)
+
+		# We need the extra leading ../ to deal with the sub-directory for the build format (Debug/Release/etc ...)
+		set(GREX_AGILITY_RELATIVE_SDK_PATH "../${BIN_TO_BUILD_PATH}/packages/${GREX_AGILITY_SDK_NAME}.${GREX_AGILITY_SDK}/build/native/bin/x64")
+		set(GREX_AGILITY_SDK_INCLUDES "${CMAKE_BINARY_DIR}/packages/${GREX_AGILITY_SDK_NAME}.${GREX_AGILITY_SDK}/build/native/include")
+
+		# Output the results on the command line during build
+		message("   Generating DirectX Agility SDK Export Symbols:")
+		message("     D3D12SDKVersion: ${GREX_AGILITY_SDK_VERSION}")
+		message("     D3D12SDKPath:    '${GREX_AGILITY_RELATIVE_SDK_PATH}'")
+
+	else()
+		message("GREX_AGILITY_SDK not supported for non D3D12 platforms")
+	endif()
+endif()
+
+# ------------------------------------------------------------------------------
 # Graphics experiments
 # ------------------------------------------------------------------------------
 add_subdirectory(projects)

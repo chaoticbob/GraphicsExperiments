@@ -67,3 +67,28 @@ cmake -B build-vs2022
 ```
 This will generate a solution for Visual Studio 2022 Professional in the `build-vs2022` directory.
 
+### Direct3D Agility SDK
+
+You can specify what Agility SDK you want to use with the command `-DGREX_AGILITY_SDK=X.Y.Z` where `X.Y.Z` is the version of the Agility SDK you want to use.
+
+Using this option will
+* Download nuget.exe to `BUILD DIRECTORY/bin/nuget.exe`
+* Download the desired Agility SDK to `BUILD DIRECTORY/packages/...` which is what the NuGet Package Manager would do for you in Visual Studio
+* Create a global variable that points to the include directory for the Agility SDK: `${GREX_AGILITY_SDK_INCLUDES}`
+
+It will also generate the following symbols that can then be used by individual projects
+* `${GREX_AGILITY_SDK_VERSION}`
+* `${GREX_AGILITY_RELATIVE_SDK_PATH}`
+
+You can enable the specified Agility SDK in your project's CMakeLists.txt file by adding the following to a project's CMakeLists.txt file
+
+```
+target_compile_definitions(
+    ${PROJECT_NAME}
+    PUBLIC GREX_USE_AGILITY_SDK
+           GREX_AGILITY_SDK_VERSION=${GREX_AGILITY_SDK_VERSION}
+           GREX_AGILITY_SDK_PATH="${GREX_AGILITY_RELATIVE_SDK_PATH}"
+)
+
+target_include_directories(${PROJECT_NAME} PUBLIC ${GREX_AGILITY_SDK_INCLUDES})
+```
