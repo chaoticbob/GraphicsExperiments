@@ -122,9 +122,9 @@ struct CommandObjects
 // Descriptor container for convenience
 struct VulkanDescriptorSet
 {
-    VkDescriptorPool      DescriptorPool;
-    VkDescriptorSet       DescriptorSet;
-    VkDescriptorSetLayout DescriptorSetLayout;
+    VkDescriptorPool      DescriptorPool      = VK_NULL_HANDLE;
+    VkDescriptorSet       DescriptorSet       = VK_NULL_HANDLE;
+    VkDescriptorSetLayout DescriptorSetLayout = VK_NULL_HANDLE;
 };
 
 bool     InitVulkan(VulkanRenderer* pRenderer, bool enableDebug, const VulkanFeatures& features, uint32_t apiVersion = VK_API_VERSION_1_3);
@@ -208,8 +208,17 @@ struct VulkanImageDescriptor
 
 struct VulkanAccelStruct
 {
-    VulkanBuffer               Buffer;
-    VkAccelerationStructureKHR AccelStruct;
+    VulkanBuffer               Buffer = {};
+    VkAccelerationStructureKHR AccelStruct = VK_NULL_HANDLE;
+};
+
+struct VulkanAccelerationDescriptor
+{
+    VkDescriptorSetLayoutBinding                 layoutBinding;
+    VkWriteDescriptorSet                         writeDescriptorSet;
+
+    VkDescriptorBufferInfo                       bufferInfo;
+    VkWriteDescriptorSetAccelerationStructureKHR accelerationDescriptor;
 };
 
 struct VulkanAttachmentInfo
@@ -487,6 +496,13 @@ void WriteDescriptor(
     const VulkanBuffer*   pBuffer);
 
 // Acceleration structure
+void CreateDescriptor(
+    VulkanRenderer*               pRenderer,
+    VulkanAccelerationDescriptor* pAccelerationDescriptor,
+    uint32_t                      binding,
+    uint32_t                      arrayElement,
+    const VulkanAccelStruct*      pAccelStruct);
+
 void WriteDescriptor(
     VulkanRenderer*          pRenderer,
     void*                    pDescriptorBufferStartAddress,
