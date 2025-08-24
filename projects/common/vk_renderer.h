@@ -185,9 +185,11 @@ struct VulkanBuffer
 
 struct VulkanBufferDescriptor
 {
-    VkDescriptorSetLayoutBinding layoutBinding;
-    VkDescriptorBufferInfo       bufferInfo;
-    VkWriteDescriptorSet         writeDescriptorSet;
+    VkDescriptorSetLayoutBinding        layoutBinding;
+    std::vector<VkDescriptorBufferInfo> bufferInfo;
+    VkWriteDescriptorSet                writeDescriptorSet;
+
+    VulkanBufferDescriptor(size_t count = 1);
 };
 
 struct VulkanImage
@@ -469,6 +471,14 @@ HRESULT CompileHLSL(
     std::string*           pErrorMsg);
 
 // Buffer
+void CreateDescriptor(
+    VulkanRenderer*                         pRenderer,
+    VulkanBufferDescriptor*                 pBufferDescriptor,
+    VkShaderStageFlags                      stageFlags,
+    uint32_t                                binding,
+    VkDescriptorType                        descriptorType,
+    const std::vector<const VulkanBuffer*>& pBuffer);
+
 void CreateDescriptor(
     VulkanRenderer*         pRenderer,
     VulkanBufferDescriptor* pBufferDescriptor,
