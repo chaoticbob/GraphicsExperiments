@@ -316,17 +316,18 @@ void CreateShaderBindingTables(
     VulkanBuffer*                                    pMissSBT,
     VulkanBuffer*                                    pHitGroupSBT);
 void CreateBLAS(
-    VulkanRenderer*             pRenderer,
-    uint32_t                    numSpheres,
-    const VulkanBuffer*         pSphereBuffer,
-    VulkanBuffer*               pBLASBuffer,
-    VkAccelerationStructureKHR* pBLAS);
-void CreateTLAS(VulkanRenderer* pRenderer, VkAccelerationStructureKHR blas, VulkanBuffer* pTLASBuffer, VkAccelerationStructureKHR* pTLAS);
+    VulkanRenderer*     pRenderer,
+    uint32_t            numSpheres,
+    const VulkanBuffer* pSphereBuffer,
+    VulkanAccelStruct*  pBLAS);
+void CreateTLAS(VulkanRenderer* pRenderer, const VulkanAccelStruct* pBLAS, VulkanAccelStruct* pTLAS);
 void CreateUniformBuffer(VulkanRenderer* pRenderer, VulkanBuffer* pBuffer);
-void CreateDescriptorBuffer(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pBuffer);
+void CreateDescriptors(
+    VulkanRenderer*      pRenderer,
+    VulkanDescriptorSet* pDescriptors,
+    VulkanAccelStruct*   pTLAS,
+    VkImageView          pBackBuffer,
+    VulkanBuffer*        pCameraBuffer);
 
 // =============================================================================
 // main()
@@ -337,6 +338,7 @@ int main(int argc, char** argv)
 
     VulkanFeatures features   = {};
     features.EnableRayTracing = true;
+    features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
         return EXIT_FAILURE;
@@ -488,95 +490,20 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Bottom level acceleration structure
     // *************************************************************************
-    VulkanBuffer               blasBuffer = {};
-    VkAccelerationStructureKHR blas       = VK_NULL_HANDLE;
-    CreateBLAS(renderer.get(), numSpheres, &sphereBuffer, &blasBuffer, &blas);
+    VulkanAccelStruct blas;
+    CreateBLAS(renderer.get(), numSpheres, &sphereBuffer, &blas);
 
     // *************************************************************************
     // Top level acceleration structure
     // *************************************************************************
-    VulkanBuffer               tlasBuffer = {};
-    VkAccelerationStructureKHR tlas       = VK_NULL_HANDLE;
-    CreateTLAS(renderer.get(), blas, &tlasBuffer, &tlas);
+    VulkanAccelStruct tlas;
+    CreateTLAS(renderer.get(), &blas, &tlas);
 
     // *************************************************************************
     // Uniform buffer
     // *************************************************************************
     VulkanBuffer uniformBuffer = {};
     CreateUniformBuffer(renderer.get(), &uniformBuffer);
-
-    // *************************************************************************
-    // Get descriptor buffer properties
-    // *************************************************************************
-    VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT};
-    {
-        VkPhysicalDeviceProperties2 properties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
-        properties.pNext                       = &descriptorBufferProperties;
-        vkGetPhysicalDeviceProperties2(renderer->PhysicalDevice, &properties);
-    }
-
-    // *************************************************************************
-    // Descriptor buffer
-    // *************************************************************************
-    VulkanBuffer descriptorBuffer = {};
-    CreateDescriptorBuffer(renderer.get(), descriptorSetLayout, &descriptorBuffer);
-    //
-    // Map descriptor buffer - leave this mapped since we'll use it in the
-    // main loop
-    //
-    char* pDescriptorBufferMappedAddres = nullptr;
-    vmaMapMemory(renderer->Allocator, descriptorBuffer.Allocation, reinterpret_cast<void**>(&pDescriptorBufferMappedAddres));
-    //
-    // Update descriptors - storage image is updated in main loop
-    //
-    {
-        // Acceleration structure (binding = 0)
-        {
-            VkDeviceSize offset = 0;
-            fn_vkGetDescriptorSetLayoutBindingOffsetEXT(
-                renderer->Device,
-                descriptorSetLayout,
-                0, // binding
-                &offset);
-
-            VkDescriptorGetInfoEXT descriptorInfo     = {VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT};
-            descriptorInfo.type                       = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-            descriptorInfo.data.accelerationStructure = GetDeviceAddress(renderer.get(), tlas);
-
-            char* pDescriptor = pDescriptorBufferMappedAddres + offset;
-            fn_vkGetDescriptorEXT(
-                renderer->Device,                                               // device
-                &descriptorInfo,                                                // pDescriptorInfo
-                descriptorBufferProperties.accelerationStructureDescriptorSize, // dataSize
-                pDescriptor);                                                   // pDescriptor
-        }
-
-        // Uniform buffer (binding = 2)
-        {
-            VkDeviceSize offset = 0;
-            fn_vkGetDescriptorSetLayoutBindingOffsetEXT(
-                renderer->Device,
-                descriptorSetLayout,
-                2, // binding
-                &offset);
-
-            VkDescriptorAddressInfoEXT uniformBufferAddressInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT};
-            uniformBufferAddressInfo.address                    = GetDeviceAddress(renderer.get(), &uniformBuffer);
-            uniformBufferAddressInfo.range                      = gUniformmBufferSize;
-            uniformBufferAddressInfo.format                     = VK_FORMAT_UNDEFINED;
-
-            VkDescriptorGetInfoEXT descriptorInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT};
-            descriptorInfo.type                   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            descriptorInfo.data.pUniformBuffer    = &uniformBufferAddressInfo;
-
-            char* pDescriptor = pDescriptorBufferMappedAddres + offset;
-            fn_vkGetDescriptorEXT(
-                renderer->Device,                                       // device
-                &descriptorInfo,                                        // pDescriptorInfo
-                descriptorBufferProperties.uniformBufferDescriptorSize, // dataSize
-                pDescriptor);                                           // pDescriptor
-        }
-    }
 
     // *************************************************************************
     // Window
@@ -607,9 +534,10 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Swapchain image views
     // *************************************************************************
-    std::vector<VkImageView> imageViews;
+    std::vector<VkImage>             images;
+    std::vector<VkImageView>         imageViews;
+    std::vector<VulkanDescriptorSet> descriptors;
     {
-        std::vector<VkImage> images;
         CHECK_CALL(GetSwapchainImages(renderer.get(), images));
 
         for (auto& image : images)
@@ -629,6 +557,7 @@ int main(int argc, char** argv)
             CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &imageView));
 
             imageViews.push_back(imageView);
+            descriptors.push_back(VulkanDescriptorSet());
         }
     }
 
@@ -652,34 +581,12 @@ int main(int argc, char** argv)
             break;
         }
 
-        //
-        // Storage image (binding = 1)
-        //
-        // Most Vulkan implementations support STORAGE_IMAGE so we can
-        // write directly to the image and skip a copy.
-        //
-        {
-            VkDeviceSize offset = 0;
-            fn_vkGetDescriptorSetLayoutBindingOffsetEXT(
-                renderer->Device,
-                descriptorSetLayout,
-                1, // binding
-                &offset);
-
-            VkDescriptorImageInfo imageInfo = {};
-            imageInfo.imageView             = imageViews[imageIndex];
-
-            VkDescriptorGetInfoEXT descriptorInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT};
-            descriptorInfo.type                   = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-            descriptorInfo.data.pStorageImage     = &imageInfo;
-
-            char* pDescriptor = pDescriptorBufferMappedAddres + offset;
-            fn_vkGetDescriptorEXT(
-                renderer->Device,                                      // device
-                &descriptorInfo,                                       // pDescriptorInfo
-                descriptorBufferProperties.storageImageDescriptorSize, // dataSize
-                pDescriptor);                                          // pDescriptor
-        }
+        CreateDescriptors(
+            renderer.get(),
+            &descriptors[imageIndex],
+            &tlas,
+            imageViews[imageIndex],
+            &uniformBuffer);
 
         // Build command buffer to trace rays
         VkCommandBufferBeginInfo vkbi = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
@@ -687,25 +594,25 @@ int main(int argc, char** argv)
 
         CHECK_CALL(vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi));
         {
+            CmdTransitionImageLayout(
+                cmdBuf.CommandBuffer,
+                images[imageIndex],
+                GREX_ALL_SUBRESOURCES,
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                RESOURCE_STATE_PRESENT,
+                RESOURCE_STATE_COMMON);
+
             vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline);
 
-            VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
-            descriptorBufferBindingInfo.pNext                            = nullptr;
-            descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &descriptorBuffer);
-            descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-
-            fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
-
-            uint32_t     bufferIndices           = 0;
-            VkDeviceSize descriptorBufferOffsets = 0;
-            fn_vkCmdSetDescriptorBufferOffsetsEXT(
+            vkCmdBindDescriptorSets(
                 cmdBuf.CommandBuffer,
                 VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
                 pipelineLayout,
+                0, // firstSet
+                1, // setCount
+                &descriptors[imageIndex].DescriptorSet,
                 0,
-                1,
-                &bufferIndices,
-                &descriptorBufferOffsets);
+                nullptr);
 
             const uint32_t alignedHandleSize = Align(
                 rayTracingProperties.shaderGroupHandleSize,
@@ -737,6 +644,14 @@ int main(int argc, char** argv)
                 gWindowWidth,
                 gWindowHeight,
                 1);
+
+            CmdTransitionImageLayout(
+                cmdBuf.CommandBuffer,
+                images[imageIndex],
+                GREX_ALL_SUBRESOURCES,
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                RESOURCE_STATE_COMMON,
+                RESOURCE_STATE_PRESENT);
         }
         CHECK_CALL(vkEndCommandBuffer(cmdBuf.CommandBuffer));
 
@@ -755,8 +670,6 @@ int main(int argc, char** argv)
             break;
         }
     }
-
-    vmaUnmapMemory(renderer->Allocator, descriptorBuffer.Allocation);
 
     return 0;
 }
@@ -834,7 +747,6 @@ void CreateDescriptorSetLayout(VulkanRenderer* pRenderer, VkDescriptorSetLayout*
     }
 
     VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-    createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
     createInfo.bindingCount                    = CountU32(bindings);
     createInfo.pBindings                       = DataPtr(bindings);
 
@@ -982,7 +894,6 @@ void CreateRayTracingPipeline(
     }
 
     VkRayTracingPipelineCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR};
-    createInfo.flags                             = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
     createInfo.stageCount                        = CountU32(shaderStages);
     createInfo.pStages                           = DataPtr(shaderStages);
     createInfo.groupCount                        = CountU32(shaderGroups);
@@ -1123,11 +1034,10 @@ void CreateShaderBindingTables(
 }
 
 void CreateBLAS(
-    VulkanRenderer*             pRenderer,
-    uint32_t                    numSpheres,
-    const VulkanBuffer*         pSphereBuffer,
-    VulkanBuffer*               pBLASBuffer,
-    VkAccelerationStructureKHR* pBLAS)
+    VulkanRenderer*     pRenderer,
+    uint32_t            numSpheres,
+    const VulkanBuffer* pSphereBuffer,
+    VulkanAccelStruct*  pBLAS)
 {
     // Get acceleration structure build size
     VkAccelerationStructureBuildSizesInfoKHR buildSizesInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR};
@@ -1168,19 +1078,19 @@ void CreateBLAS(
             usageFlags,
             VMA_MEMORY_USAGE_GPU_ONLY,
             0,
-            pBLASBuffer));
+            &pBLAS->Buffer));
     }
 
     // Create accleration structure object
     {
         VkAccelerationStructureCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR};
-        createInfo.buffer                               = pBLASBuffer->Buffer;
+        createInfo.buffer                               = pBLAS->Buffer.Buffer;
         createInfo.offset                               = 0;
         createInfo.size                                 = buildSizesInfo.accelerationStructureSize;
         createInfo.type                                 = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
         createInfo.deviceAddress                        = 0;
 
-        CHECK_CALL(fn_vkCreateAccelerationStructureKHR(pRenderer->Device, &createInfo, nullptr, pBLAS));
+        CHECK_CALL(fn_vkCreateAccelerationStructureKHR(pRenderer->Device, &createInfo, nullptr, &pBLAS->AccelStruct));
     }
 
     // Create scratch buffer
@@ -1227,7 +1137,7 @@ void CreateBLAS(
         buildGeometryInfo.type                      = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
         buildGeometryInfo.flags                     = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
         buildGeometryInfo.mode                      = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-        buildGeometryInfo.dstAccelerationStructure  = *pBLAS;
+        buildGeometryInfo.dstAccelerationStructure  = pBLAS->AccelStruct;
         buildGeometryInfo.geometryCount             = 1;
         buildGeometryInfo.pGeometries               = &geometry;
         buildGeometryInfo.scratchData.deviceAddress = GetDeviceAddress(pRenderer, &scratchBuffer);
@@ -1260,7 +1170,7 @@ void CreateBLAS(
     DestroyBuffer(pRenderer, &scratchBuffer);
 }
 
-void CreateTLAS(VulkanRenderer* pRenderer, VkAccelerationStructureKHR blas, VulkanBuffer* pTLASBuffer, VkAccelerationStructureKHR* pTLAS)
+void CreateTLAS(VulkanRenderer* pRenderer, const VulkanAccelStruct* pBLAS, VulkanAccelStruct* pTLAS)
 {
     // clang-format off
 	VkTransformMatrixKHR transformMatrix = {
@@ -1276,7 +1186,7 @@ void CreateTLAS(VulkanRenderer* pRenderer, VkAccelerationStructureKHR blas, Vulk
     instance.mask                                   = 0xFF;
     instance.instanceShaderBindingTableRecordOffset = 0;
     instance.flags                                  = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
-    instance.accelerationStructureReference         = GetDeviceAddress(pRenderer, blas);
+    instance.accelerationStructureReference         = GetDeviceAddress(pRenderer, pBLAS->AccelStruct);
 
     // Instance buffer
     //
@@ -1334,19 +1244,19 @@ void CreateTLAS(VulkanRenderer* pRenderer, VkAccelerationStructureKHR blas, Vulk
             usageFlags,
             VMA_MEMORY_USAGE_GPU_ONLY,
             0,
-            pTLASBuffer));
+            &pTLAS->Buffer));
     }
 
-    // Create accleration structure object
+    // Create acceleration structure object
     {
         VkAccelerationStructureCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR};
-        createInfo.buffer                               = pTLASBuffer->Buffer;
+        createInfo.buffer                               = pTLAS->Buffer.Buffer;
         createInfo.offset                               = 0;
         createInfo.size                                 = buildSizesInfo.accelerationStructureSize;
         createInfo.type                                 = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
         createInfo.deviceAddress                        = 0;
 
-        CHECK_CALL(fn_vkCreateAccelerationStructureKHR(pRenderer->Device, &createInfo, nullptr, pTLAS));
+        CHECK_CALL(fn_vkCreateAccelerationStructureKHR(pRenderer->Device, &createInfo, nullptr, &pTLAS->AccelStruct));
     }
 
     // Create scratch buffer
@@ -1388,7 +1298,7 @@ void CreateTLAS(VulkanRenderer* pRenderer, VkAccelerationStructureKHR blas, Vulk
         buildGeometryInfo.type                      = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
         buildGeometryInfo.flags                     = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
         buildGeometryInfo.mode                      = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-        buildGeometryInfo.dstAccelerationStructure  = *pTLAS;
+        buildGeometryInfo.dstAccelerationStructure  = pTLAS->AccelStruct;
         buildGeometryInfo.geometryCount             = 1;
         buildGeometryInfo.pGeometries               = &geometry;
         buildGeometryInfo.scratchData.deviceAddress = GetDeviceAddress(pRenderer, &scratchBuffer);
@@ -1446,21 +1356,60 @@ void CreateUniformBuffer(VulkanRenderer* pRenderer, VulkanBuffer* pBuffer)
         pBuffer));           // pBuffer
 }
 
-void CreateDescriptorBuffer(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pBuffer)
+void CreateDescriptors(
+    VulkanRenderer*      pRenderer,
+    VulkanDescriptorSet* pDescriptors,
+    VulkanAccelStruct*   pTLAS,
+    VkImageView          pBackBuffer,
+    VulkanBuffer*        pCameraBuffer)
 {
-    VkDeviceSize size = 0;
-    fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
+    // layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
+    VulkanAccelerationDescriptor topLevelASDescriptor;
+    CreateDescriptor(
+        pRenderer,
+        &topLevelASDescriptor,
+        VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+        0, // binding
+        0, // arrayElement
+        pTLAS);
 
-    VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    // layout(binding = 1, set = 0, rgba8) uniform image2D image;
+    VulkanImageDescriptor backbufferDescriptor;
+    CreateDescriptor(
+        pRenderer,
+        &backbufferDescriptor,
+        VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+        1, // binding
+        0, // arrayElement
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+        pBackBuffer,
+        VK_IMAGE_LAYOUT_GENERAL);
 
-    CHECK_CALL(CreateBuffer(
-        pRenderer,  // pRenderer
-        size,       // srcSize
-        nullptr,    // pSrcData
-        usageFlags, // usageFlags
-        0,          // minAlignment
-        pBuffer));  // pBuffer
+    // layout(binding = 2, set = 0) uniform CameraProperties
+    VulkanBufferDescriptor cameraPropertiesDescriptor;
+    CreateDescriptor(
+        pRenderer,
+        &cameraPropertiesDescriptor,
+        VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+        2, // binding
+        0, // arrayElement
+        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        pCameraBuffer);
+
+    std::vector<VkDescriptorSetLayoutBinding> layoutBindings =
+        {
+            topLevelASDescriptor.layoutBinding,
+            backbufferDescriptor.layoutBinding,
+            cameraPropertiesDescriptor.layoutBinding,
+        };
+
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets =
+        {
+            topLevelASDescriptor.writeDescriptorSet,
+            backbufferDescriptor.writeDescriptorSet,
+            cameraPropertiesDescriptor.writeDescriptorSet,
+        };
+
+    DestroyDescriptorSet(pRenderer, pDescriptors);
+    CreateAndUpdateDescriptorSet(pRenderer, layoutBindings, writeDescriptorSets, pDescriptors);
 }

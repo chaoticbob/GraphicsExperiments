@@ -3574,12 +3574,29 @@ void CreateDescriptor(
     uint32_t                      arrayElement,
     const VulkanAccelStruct*      pAccelStruct)
 {
+    CreateDescriptor(
+        pRenderer,
+        pAccelerationDescriptor,
+        VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+        binding,
+        arrayElement,
+        pAccelStruct);
+}
+
+void CreateDescriptor(
+    VulkanRenderer*               pRenderer,
+    VulkanAccelerationDescriptor* pAccelerationDescriptor,
+    VkShaderStageFlags            stageFlags,
+    uint32_t                      binding,
+    uint32_t                      arrayElement,
+    const VulkanAccelStruct*      pAccelStruct)
+{
     assert(pAccelerationDescriptor);
     assert(pAccelStruct);
 
     pAccelerationDescriptor->layoutBinding                 = {};
     pAccelerationDescriptor->layoutBinding.descriptorType  = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-    pAccelerationDescriptor->layoutBinding.stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+    pAccelerationDescriptor->layoutBinding.stageFlags      = stageFlags;
     pAccelerationDescriptor->layoutBinding.binding         = binding;
     pAccelerationDescriptor->layoutBinding.descriptorCount = 1;
 

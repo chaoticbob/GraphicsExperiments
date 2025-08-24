@@ -503,6 +503,14 @@ void CreateDescriptor(
     uint32_t                      arrayElement,
     const VulkanAccelStruct*      pAccelStruct);
 
+void CreateDescriptor(
+    VulkanRenderer*               pRenderer,
+    VulkanAccelerationDescriptor* pAccelerationDescriptor,
+    VkShaderStageFlags            stageFlags,
+    uint32_t                      binding,
+    uint32_t                      arrayElement,
+    const VulkanAccelStruct*      pAccelStruct);
+
 void WriteDescriptor(
     VulkanRenderer*          pRenderer,
     void*                    pDescriptorBufferStartAddress,
