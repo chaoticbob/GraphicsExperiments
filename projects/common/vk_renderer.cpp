@@ -3840,6 +3840,7 @@ void WriteDescriptor(
 void CreateDescriptor(
     VulkanRenderer*        pRenderer,
     VulkanImageDescriptor* pImageDescriptor,
+    VkShaderStageFlags     stageFlags,
     uint32_t               binding,
     uint32_t               arrayElement,
     VkSampler              sampler)
@@ -3848,7 +3849,7 @@ void CreateDescriptor(
 
     pImageDescriptor->layoutBinding                 = {};
     pImageDescriptor->layoutBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
-    pImageDescriptor->layoutBinding.stageFlags      = VK_SHADER_STAGE_ALL_GRAPHICS;
+    pImageDescriptor->layoutBinding.stageFlags      = stageFlags;
     pImageDescriptor->layoutBinding.binding         = binding;
     pImageDescriptor->layoutBinding.descriptorCount = static_cast<uint32_t>(pImageDescriptor->imageInfo.size());
 
@@ -3859,6 +3860,22 @@ void CreateDescriptor(
     pImageDescriptor->writeDescriptorSet.dstBinding      = binding;
     pImageDescriptor->writeDescriptorSet.pImageInfo      = DataPtr(pImageDescriptor->imageInfo);
     pImageDescriptor->writeDescriptorSet.descriptorCount = CountU32(pImageDescriptor->imageInfo);
+}
+
+void CreateDescriptor(
+    VulkanRenderer*        pRenderer,
+    VulkanImageDescriptor* pImageDescriptor,
+    uint32_t               binding,
+    uint32_t               arrayElement,
+    VkSampler              sampler)
+{
+    CreateDescriptor(
+        pRenderer,
+        pImageDescriptor,
+        VK_SHADER_STAGE_ALL_GRAPHICS,
+        binding,
+        arrayElement,
+        sampler);
 }
 
 void WriteDescriptor(

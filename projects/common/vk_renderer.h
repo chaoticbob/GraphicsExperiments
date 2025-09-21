@@ -563,6 +563,14 @@ void WriteDescriptor(
 void CreateDescriptor(
     VulkanRenderer*        pRenderer,
     VulkanImageDescriptor* pImageDescriptor,
+    VkShaderStageFlags     stageFlags,
+    uint32_t               binding,
+    uint32_t               arrayElement,
+    VkSampler              sampler);
+
+void CreateDescriptor(
+    VulkanRenderer*        pRenderer,
+    VulkanImageDescriptor* pImageDescriptor,
     uint32_t               binding,
     uint32_t               arrayElement,
     VkSampler              sampler);
