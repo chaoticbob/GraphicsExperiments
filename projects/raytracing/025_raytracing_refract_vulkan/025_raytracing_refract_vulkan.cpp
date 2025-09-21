@@ -124,21 +124,17 @@ void CreateTLAS(
 void CreateIBLTextures(
     VulkanRenderer* pRenderer,
     IBLTextures&    outIBLTextures);
-void CreateDescriptorBuffer(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pBuffer);
-void WriteDescriptors(
-    VulkanRenderer*          pRenderer,
-    VkDescriptorSetLayout    descriptorSetLayout,
-    VulkanBuffer*            pDescriptorBuffer,
-    const VulkanBuffer&      sceneParamsBuffer,
-    const VulkanAccelStruct& accelStruct,
-    const Geometry&          sphereGeometry,
-    const Geometry&          boxGeometry,
-    const VulkanBuffer&      materialParamsBuffer,
-    const IBLTextures&       iblTextures,
-    VkSampler                iblSampler);
+void CreateDescriptors(
+    VulkanRenderer*      pRenderer,
+    VulkanDescriptorSet* pDescriptors,
+    VulkanBuffer*        pSceneParamsBuffer,
+    VulkanAccelStruct*   pAccelStruct,
+    VkImageView          backBuffer,
+    const Geometry&      sphereGeometry,
+    const Geometry&      boxGeometry,
+    VulkanBuffer*        pMaterialParamsBuffer,
+    const IBLTextures&   pIblTextures,
+    VkSampler            iblSampler);
 
 void MouseMove(int x, int y, int buttons)
 {
@@ -166,6 +162,7 @@ int main(int argc, char** argv)
 
     VulkanFeatures features   = {};
     features.EnableRayTracing = true;
+    features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
         return EXIT_FAILURE;
@@ -178,16 +175,6 @@ int main(int argc, char** argv)
     {
         VkPhysicalDeviceProperties2 properties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
         properties.pNext                       = &rayTracingProperties;
-        vkGetPhysicalDeviceProperties2(renderer->PhysicalDevice, &properties);
-    }
-
-    // *************************************************************************
-    // Get descriptor buffer properties
-    // *************************************************************************
-    VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT};
-    {
-        VkPhysicalDeviceProperties2 properties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
-        properties.pNext                       = &descriptorBufferProperties;
         vkGetPhysicalDeviceProperties2(renderer->PhysicalDevice, &properties);
     }
 
@@ -328,7 +315,7 @@ int main(int argc, char** argv)
         &sceneParamsBuffer));
 
     // *************************************************************************
-    // IBL txtures
+    // IBL textures
     // *************************************************************************
     IBLTextures iblTextures = {};
     CreateIBLTextures(
@@ -364,25 +351,6 @@ int main(int argc, char** argv)
         &iblSampler));
 
     // *************************************************************************
-    // Descriptor buffers
-    // *************************************************************************
-    VulkanBuffer rayTraceDescriptorBuffer = {};
-    CreateDescriptorBuffer(renderer.get(), rayTracePipelineLayout.DescriptorSetLayout, &rayTraceDescriptorBuffer);
-
-    // Write descriptor to descriptor heap
-    WriteDescriptors(
-        renderer.get(),
-        rayTracePipelineLayout.DescriptorSetLayout,
-        &rayTraceDescriptorBuffer,
-        sceneParamsBuffer,
-        TLAS,
-        sphereGeometry,
-        boxGeometry,
-        materialParamsBuffer,
-        iblTextures,
-        iblSampler);
-
-    // *************************************************************************
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
@@ -414,6 +382,7 @@ int main(int argc, char** argv)
     // *************************************************************************
     std::vector<VkImage>     swapchainImages;
     std::vector<VkImageView> swapchainImageViews;
+    std::vector<VulkanDescriptorSet> descriptorSets;
     {
         CHECK_CALL(GetSwapchainImages(renderer.get(), swapchainImages));
 
@@ -434,6 +403,7 @@ int main(int argc, char** argv)
             CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &imageView));
 
             swapchainImageViews.push_back(imageView);
+            descriptorSets.push_back(VulkanDescriptorSet());
         }
     }
 
@@ -455,15 +425,6 @@ int main(int argc, char** argv)
     // *************************************************************************
     SceneParameters* pSceneParams = nullptr;
     CHECK_CALL(vmaMapMemory(renderer->Allocator, sceneParamsBuffer.Allocation, reinterpret_cast<void**>(&pSceneParams)));
-
-    // *************************************************************************
-    // Persistent map ray trace descriptor buffer
-    // *************************************************************************
-    char* pRayTraceDescriptorBuffeStartAddress = nullptr;
-    CHECK_CALL(vmaMapMemory(
-        renderer->Allocator,
-        rayTraceDescriptorBuffer.Allocation,
-        reinterpret_cast<void**>(&pRayTraceDescriptorBuffeStartAddress)));
 
     // *************************************************************************
     // Misc vars
@@ -501,20 +462,17 @@ int main(int argc, char** argv)
             break;
         }
 
-        // Update output texture (u1)
-        //
-        // Most Vulkan implementations support STORAGE_IMAGE so we can
-        // write directly to the image and skip a copy.
-        //
-        WriteDescriptor(
+        CreateDescriptors(
             renderer.get(),
-            pRayTraceDescriptorBuffeStartAddress,
-            rayTracePipelineLayout.DescriptorSetLayout,
-            1, // binding
-            0, // arrayElement
-            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            &descriptorSets[swapchainImageIndex],
+            &sceneParamsBuffer,
+            &TLAS,
             swapchainImageViews[swapchainImageIndex],
-            VK_IMAGE_LAYOUT_GENERAL);
+            sphereGeometry,
+            boxGeometry,
+            &materialParamsBuffer,
+            iblTextures,
+            iblSampler);
 
         // ---------------------------------------------------------------------
         // Build command buffer to trace rays
@@ -535,23 +493,15 @@ int main(int argc, char** argv)
 
             vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rayTracePipeline);
 
-            VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
-            descriptorBufferBindingInfo.pNext                            = nullptr;
-            descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &rayTraceDescriptorBuffer);
-            descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-
-            fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
-
-            uint32_t     bufferIndices           = 0;
-            VkDeviceSize descriptorBufferOffsets = 0;
-            fn_vkCmdSetDescriptorBufferOffsetsEXT(
+            vkCmdBindDescriptorSets(
                 cmdBuf.CommandBuffer,
                 VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
                 rayTracePipelineLayout.PipelineLayout,
                 0, // firstSet
                 1, // setCount
-                &bufferIndices,
-                &descriptorBufferOffsets);
+                &descriptorSets[swapchainImageIndex].DescriptorSet,
+                0,
+                nullptr);
 
             const uint32_t alignedHandleSize = Align(
                 rayTracingProperties.shaderGroupHandleSize,
@@ -703,7 +653,6 @@ void CreateRayTracePipelineLayout(
         }
 
         VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
         createInfo.bindingCount                    = CountU32(bindings);
         createInfo.pBindings                       = DataPtr(bindings);
 
@@ -806,7 +755,6 @@ void CreateRayTracingPipeline(
     pipelineInterfaceCreateInfo.maxPipelineRayHitAttributeSize = 2 * sizeof(float);                        // barycentrics
 
     VkRayTracingPipelineCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR};
-    createInfo.flags                             = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
     createInfo.stageCount                        = CountU32(shaderStages);
     createInfo.pStages                           = DataPtr(shaderStages);
     createInfo.groupCount                        = CountU32(shaderGroups);
@@ -1379,156 +1327,124 @@ void CreateIBLTextures(
     GREX_LOG_INFO("Loaded " << iblFile);
 }
 
-void CreateDescriptorBuffer(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pBuffer)
+void CreateDescriptors(
+    VulkanRenderer*      pRenderer,
+    VulkanDescriptorSet* pDescriptors,
+    VulkanBuffer*        pSceneParamsBuffer,
+    VulkanAccelStruct*   pAccelStruct,
+    VkImageView          backBuffer,
+    const Geometry&      sphereGeometry,
+    const Geometry&      boxGeometry,
+    VulkanBuffer*        pMaterialParamsBuffer,
+    const IBLTextures&   iblTextures,
+    VkSampler            iblSampler)
 {
-    VkDeviceSize size = 0;
-    fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
-
-    VkBufferUsageFlags usageFlags =
-        VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,  // pRenderer
-        size,       // srcSize
-        nullptr,    // pSrcData
-        usageFlags, // usageFlags
-        0,          // minAlignment
-        pBuffer));  // pBuffer
-}
-
-void WriteDescriptors(
-    VulkanRenderer*          pRenderer,
-    VkDescriptorSetLayout    descriptorSetLayout,
-    VulkanBuffer*            pDescriptorBuffer,
-    const VulkanBuffer&      sceneParamsBuffer,
-    const VulkanAccelStruct& accelStruct,
-    const Geometry&          sphereGeometry,
-    const Geometry&          boxGeometry,
-    const VulkanBuffer&      materialParamsBuffer,
-    const IBLTextures&       iblTextures,
-    VkSampler                iblSampler)
-{
-    char* pDescriptorBufferStartAddress = nullptr;
-    CHECK_CALL(vmaMapMemory(
-        pRenderer->Allocator,
-        pDescriptorBuffer->Allocation,
-        reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
-
     // Scene params (b5)
-    WriteDescriptor(
+    VulkanBufferDescriptor sceneParamsBufferDescriptor;
+    CreateDescriptor(
         pRenderer,
-        pDescriptorBufferStartAddress,
-        descriptorSetLayout,
+        &sceneParamsBufferDescriptor,
+        VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR,
         5, // binding
         0, // arrayElement
         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        &sceneParamsBuffer);
+        pSceneParamsBuffer);
 
     // Acceleration structured (t0)
-    WriteDescriptor(
+    VulkanAccelerationDescriptor accelStructDescriptor;
+    CreateDescriptor(
         pRenderer,
-        pDescriptorBufferStartAddress,
-        descriptorSetLayout,
-        0, // binding,
-        0, // arrayElement,
-        &accelStruct);
+        &accelStructDescriptor,
+        VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+        0, // binding
+        0, // arrayElement
+        pAccelStruct);
 
+    // Output texture (u1)
     //
-    // NOTE: Output texture (u1) will be updated per frame
+    // Most Vulkan implementations support STORAGE_IMAGE so we can
+    // write directly to the image and skip a copy.
     //
+    VulkanImageDescriptor backBufferDescriptor;
+    CreateDescriptor(
+        pRenderer,
+        &backBufferDescriptor,
+        VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+        1, // binding
+        0, // arrayElement,
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+        backBuffer,
+        VK_IMAGE_LAYOUT_GENERAL);
 
     // Geometry
+    const uint32_t         kNumSpheres = 4;
+    VulkanBufferDescriptor geoIndexBufferDescriptor(kNumSpheres);
+    VulkanBufferDescriptor geoPositionBufferDescriptor(kNumSpheres);
+    VulkanBufferDescriptor geoNormalBufferDescriptor(kNumSpheres);
+
     {
-        const uint32_t kNumSpheres          = 3;
         const uint32_t kIndexBufferIndex    = 20;
         const uint32_t kPositionBufferIndex = 25;
         const uint32_t kNormalBufferIndex   = 30;
 
-        uint32_t arrayElement = 0;
+        std::vector<const VulkanBuffer*> indexBuffers;
+        std::vector<const VulkanBuffer*> positionBuffers;
+        std::vector<const VulkanBuffer*> normalBuffers;
 
         // Spheres
-        for (uint32_t i = 0; i < kNumSpheres; ++i, ++arrayElement)
+        for (uint32_t i = 0; i < kNumSpheres; ++i)
         {
-            // Index buffer (t20)
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kIndexBufferIndex,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &sphereGeometry.indexBuffer);
-
-            // Position buffer (t25)
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kPositionBufferIndex,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &sphereGeometry.positionBuffer);
-
-            // Normal buffer (t30)
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kNormalBufferIndex,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &sphereGeometry.normalBuffer);
+            indexBuffers.push_back(&sphereGeometry.indexBuffer);
+            positionBuffers.push_back(&sphereGeometry.positionBuffer);
+            normalBuffers.push_back(&sphereGeometry.normalBuffer);
         }
 
         // Box
-        {
-            // Index buffer (t20)
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kIndexBufferIndex,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &boxGeometry.indexBuffer);
+        indexBuffers.push_back(&boxGeometry.indexBuffer);
+        positionBuffers.push_back(&boxGeometry.positionBuffer);
+        normalBuffers.push_back(&boxGeometry.normalBuffer);
 
-            // Position buffer (t25)
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kPositionBufferIndex,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &boxGeometry.positionBuffer);
+        // Index buffer (t20)
+        CreateDescriptor(
+            pRenderer,
+            &geoIndexBufferDescriptor,
+            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+            kIndexBufferIndex,
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            indexBuffers);
 
-            // Normal buffer (t30)
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kNormalBufferIndex,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &boxGeometry.normalBuffer);
-        }
+        // Position buffer (t25)
+        CreateDescriptor(
+            pRenderer,
+            &geoPositionBufferDescriptor,
+            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+            kPositionBufferIndex,
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            positionBuffers);
+
+        // Normal buffer (t30)
+        CreateDescriptor(
+            pRenderer,
+            &geoNormalBufferDescriptor,
+            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+            kNormalBufferIndex,
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            normalBuffers);
     }
 
     // Material params (t9)
-    WriteDescriptor(
+    VulkanBufferDescriptor materialParamsBufferDescriptor;
+    CreateDescriptor(
         pRenderer,
-        pDescriptorBufferStartAddress,
-        descriptorSetLayout,
+        &materialParamsBufferDescriptor,
+        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
         9, // binding
         0, // arrayElement
         VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-        &materialParamsBuffer);
+        pMaterialParamsBuffer);
 
     // IBL Texture (t12)
+    VulkanImageDescriptor envTextureDescriptor;
     {
         VkImageView imageView = VK_NULL_HANDLE;
         CHECK_CALL(CreateImageView(
@@ -1542,10 +1458,10 @@ void WriteDescriptors(
             1,
             &imageView));
 
-        WriteDescriptor(
+        CreateDescriptor(
             pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
+            &envTextureDescriptor,
+            VK_SHADER_STAGE_MISS_BIT_KHR,
             12, // binding
             0,  // arrayElement
             VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -1554,13 +1470,40 @@ void WriteDescriptors(
     }
 
     // IBL sampler (s14)
-    WriteDescriptor(
+    VulkanImageDescriptor iblSamplerDescriptor;
+    CreateDescriptor(
         pRenderer,
-        pDescriptorBufferStartAddress,
-        descriptorSetLayout,
+        &iblSamplerDescriptor,
+        VK_SHADER_STAGE_MISS_BIT_KHR,
         14, // binding
         0,  // arrayElement
         iblSampler);
 
-    vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
+        {
+            sceneParamsBufferDescriptor.layoutBinding,
+            accelStructDescriptor.layoutBinding,
+            backBufferDescriptor.layoutBinding,
+            geoIndexBufferDescriptor.layoutBinding,
+            geoPositionBufferDescriptor.layoutBinding,
+            geoNormalBufferDescriptor.layoutBinding,
+            materialParamsBufferDescriptor.layoutBinding,
+            envTextureDescriptor.layoutBinding,
+            iblSamplerDescriptor.layoutBinding,
+        };
+
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets =
+        {
+            sceneParamsBufferDescriptor.writeDescriptorSet,
+            accelStructDescriptor.writeDescriptorSet,
+            backBufferDescriptor.writeDescriptorSet,
+            geoIndexBufferDescriptor.writeDescriptorSet,
+            geoPositionBufferDescriptor.writeDescriptorSet,
+            geoNormalBufferDescriptor.writeDescriptorSet,
+            materialParamsBufferDescriptor.writeDescriptorSet,
+            envTextureDescriptor.writeDescriptorSet,
+            iblSamplerDescriptor.writeDescriptorSet,
+        };
+
+    CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, pDescriptors);
 }
