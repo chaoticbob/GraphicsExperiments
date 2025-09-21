@@ -28,7 +28,7 @@ using namespace glm;
 // =============================================================================
 // Macros, enums, and constants
 // =============================================================================
-const uint32_t kMaxIBLs       = 100;
+const uint32_t kMaxIBLs       = 1;
 const uint32_t kMaxGeometries = 25;
 
 // =============================================================================
@@ -167,16 +167,12 @@ void CreateAccumTexture(VulkanRenderer* pRenderer, VulkanImage* pBuffer);
 void CreateIBLTextures(
     VulkanRenderer*           pRenderer,
     std::vector<IBLTextures>& outIBLTextures);
-void CreateDescriptorBuffer(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pBuffer);
-void WriteDescriptors(
+void CreateRayTracingDescriptors(
     VulkanRenderer*                 pRenderer,
-    VkDescriptorSetLayout           descriptorSetLayout,
-    VulkanBuffer*                   pDescriptorBuffer,
+    VulkanDescriptorSet*            pDescriptors,
     const VulkanBuffer&             sceneParamsBuffer,
     const VulkanAccelStruct&        accelStruct,
+    VkImageView                     backBuffer,
     const VulkanImage&              accumTexture,
     const VulkanBuffer&             rayGenSamplesBuffer,
     const Geometry&                 sphereGeometry,
@@ -187,8 +183,12 @@ void WriteDescriptors(
     const VulkanBuffer&             materialParamsBuffer,
     const std::vector<IBLTextures>& iblTextures,
     VkSampler                       iblSampler,
-    VkImageView*                    pAccumImageView,
-    std::vector<VkImageView>*       pIBLImageViews);
+    VkImageView*                    pAccumImageView);
+void CreateClearRayGenDescriptors(
+    VulkanRenderer*      pRenderer,
+    VulkanDescriptorSet* pDescriptors,
+    VkImageView          accumImageView,
+    VulkanBuffer*        pRayGenSamplesBuffer);
 
 void MouseMove(int x, int y, int buttons)
 {
@@ -218,6 +218,7 @@ int main(int argc, char** argv)
 
     VulkanFeatures features   = {};
     features.EnableRayTracing = true;
+    features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
         return EXIT_FAILURE;
@@ -233,16 +234,6 @@ int main(int argc, char** argv)
         vkGetPhysicalDeviceProperties2(renderer->PhysicalDevice, &properties);
 
         assert((gMaxRayRecursionDepth <= rayTracingProperties.maxRayRecursionDepth) && "Max ray recursion depth exceeded!");
-    }
-
-    // *************************************************************************
-    // Get descriptor buffer properties
-    // *************************************************************************
-    VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT};
-    {
-        VkPhysicalDeviceProperties2 properties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
-        properties.pNext                       = &descriptorBufferProperties;
-        vkGetPhysicalDeviceProperties2(renderer->PhysicalDevice, &properties);
     }
 
     // *************************************************************************
@@ -352,7 +343,6 @@ int main(int argc, char** argv)
             };
 
             VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-            createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
             createInfo.bindingCount                    = CountU32(bindings);
             createInfo.pBindings                       = DataPtr(bindings);
 
@@ -387,7 +377,6 @@ int main(int argc, char** argv)
         // Pipeline
         {
             VkComputePipelineCreateInfo createInfo = {VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
-            createInfo.flags                       = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
             createInfo.stage                       = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
             createInfo.stage.flags                 = 0;
             createInfo.stage.stage                 = VK_SHADER_STAGE_COMPUTE_BIT;
@@ -537,68 +526,6 @@ int main(int argc, char** argv)
         &iblSampler));
 
     // *************************************************************************
-    // Descriptor buffers
-    // *************************************************************************
-    VulkanBuffer rayTraceDescriptorBuffer = {};
-    CreateDescriptorBuffer(renderer.get(), rayTracePipelineLayout.DescriptorSetLayout, &rayTraceDescriptorBuffer);
-
-    // Write descriptors
-    VkImageView              accumImageView = VK_NULL_HANDLE;
-    std::vector<VkImageView> iblImageViews;
-    WriteDescriptors(
-        renderer.get(),
-        rayTracePipelineLayout.DescriptorSetLayout,
-        &rayTraceDescriptorBuffer,
-        sceneParamsBuffer,
-        TLAS,
-        accumTexture,
-        rayGenSamplesBuffer,
-        sphereGeometry,
-        knobGeometry,
-        monkeyGeometry,
-        teapotGeometry,
-        boxGeometry,
-        materialParamsBuffer,
-        iblTextures,
-        iblSampler,
-        &accumImageView,
-        &iblImageViews);
-
-    // Clear ray gen descriptor buffer
-    VulkanBuffer clearRayGenDescriptorBuffer = {};
-    CreateDescriptorBuffer(renderer.get(), clearRayGenPipelineLayout.DescriptorSetLayout, &clearRayGenDescriptorBuffer);
-
-    // Write descriptors
-    {
-        char* pDescriptorBuffeStartAddress = nullptr;
-        CHECK_CALL(vmaMapMemory(
-            renderer->Allocator,
-            clearRayGenDescriptorBuffer.Allocation,
-            reinterpret_cast<void**>(&pDescriptorBuffeStartAddress)));
-
-        WriteDescriptor(
-            renderer.get(),
-            pDescriptorBuffeStartAddress,
-            clearRayGenPipelineLayout.DescriptorSetLayout,
-            0, // binding
-            0, // arrayElement
-            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            accumImageView,
-            VK_IMAGE_LAYOUT_GENERAL);
-
-        WriteDescriptor(
-            renderer.get(),
-            pDescriptorBuffeStartAddress,
-            clearRayGenPipelineLayout.DescriptorSetLayout,
-            1, // binding
-            0, // arrayElement
-            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            &rayGenSamplesBuffer);
-
-        vmaUnmapMemory(renderer->Allocator, clearRayGenDescriptorBuffer.Allocation);
-    }
-
-    // *************************************************************************
     // Window
     // *************************************************************************
     auto window = GrexWindow::Create(gWindowWidth, gWindowHeight, GREX_BASE_FILE_NAME());
@@ -630,6 +557,9 @@ int main(int argc, char** argv)
     // *************************************************************************
     std::vector<VkImage>     swapchainImages;
     std::vector<VkImageView> swapchainImageViews;
+    std::vector<VulkanDescriptorSet> rayTraceDescriptorSets;
+    std::vector<VulkanDescriptorSet> clearRayGenDescriptorSets;
+
     {
         CHECK_CALL(GetSwapchainImages(renderer.get(), swapchainImages));
 
@@ -650,6 +580,8 @@ int main(int argc, char** argv)
             CHECK_CALL(vkCreateImageView(renderer->Device, &createInfo, nullptr, &imageView));
 
             swapchainImageViews.push_back(imageView);
+            rayTraceDescriptorSets.push_back(VulkanDescriptorSet());
+            clearRayGenDescriptorSets.push_back(VulkanDescriptorSet());
         }
     }
 
@@ -683,15 +615,6 @@ int main(int argc, char** argv)
     // *************************************************************************
     SceneParameters* pSceneParams = nullptr;
     CHECK_CALL(vmaMapMemory(renderer->Allocator, sceneParamsBuffer.Allocation, reinterpret_cast<void**>(&pSceneParams)));
-
-    // *************************************************************************
-    // Persistent map ray trace descriptor buffer
-    // *************************************************************************
-    char* pRayTraceDescriptorBuffeStartAddress = nullptr;
-    CHECK_CALL(vmaMapMemory(
-        renderer->Allocator,
-        rayTraceDescriptorBuffer.Allocation,
-        reinterpret_cast<void**>(&pRayTraceDescriptorBuffeStartAddress)));
 
     // *************************************************************************
     // Misc vars
@@ -795,20 +718,30 @@ int main(int argc, char** argv)
             break;
         }
 
-        // Update output texture (u1)
-        //
-        // Most Vulkan implementations support STORAGE_IMAGE so we can
-        // write directly to the image and skip a copy.
-        //
-        WriteDescriptor(
+        VkImageView accumImageView = VK_NULL_HANDLE;
+        CreateRayTracingDescriptors(
             renderer.get(),
-            pRayTraceDescriptorBuffeStartAddress,
-            rayTracePipelineLayout.DescriptorSetLayout,
-            1, // binding
-            0, // arrayElement
-            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            &rayTraceDescriptorSets[swapchainImageIndex],
+            sceneParamsBuffer,
+            TLAS,
             swapchainImageViews[swapchainImageIndex],
-            VK_IMAGE_LAYOUT_GENERAL);
+            accumTexture,
+            rayGenSamplesBuffer,
+            sphereGeometry,
+            knobGeometry,
+            monkeyGeometry,
+            teapotGeometry,
+            boxGeometry,
+            materialParamsBuffer,
+            iblTextures,
+            iblSampler,
+            &accumImageView);
+
+        CreateClearRayGenDescriptors(
+            renderer.get(),
+            &clearRayGenDescriptorSets[swapchainImageIndex],
+            accumImageView,
+            &rayGenSamplesBuffer);
 
         // ---------------------------------------------------------------------
         // Build command buffer to trace rays
@@ -825,22 +758,15 @@ int main(int argc, char** argv)
 
             vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, clearRayGenPipeline);
 
-            VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
-            descriptorBufferBindingInfo.pNext                            = nullptr;
-            descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &clearRayGenDescriptorBuffer);
-            descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-            fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
-
-            uint32_t     bufferIndices           = 0;
-            VkDeviceSize descriptorBufferOffsets = 0;
-            fn_vkCmdSetDescriptorBufferOffsetsEXT(
+            vkCmdBindDescriptorSets(
                 cmdBuf.CommandBuffer,
                 VK_PIPELINE_BIND_POINT_COMPUTE,
                 clearRayGenPipelineLayout.PipelineLayout,
                 0, // firstSet
                 1, // setCount
-                &bufferIndices,
-                &descriptorBufferOffsets);
+                &clearRayGenDescriptorSets[swapchainImageIndex].DescriptorSet,
+                0,
+                nullptr);
 
             vkCmdDispatch(cmdBuf.CommandBuffer, gWindowWidth / 8, gWindowHeight / 8, 1);
 
@@ -859,23 +785,15 @@ int main(int argc, char** argv)
 
             vkCmdBindPipeline(cmdBuf.CommandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rayTracePipeline);
 
-            VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
-            descriptorBufferBindingInfo.pNext                            = nullptr;
-            descriptorBufferBindingInfo.address                          = GetDeviceAddress(renderer.get(), &rayTraceDescriptorBuffer);
-            descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-
-            fn_vkCmdBindDescriptorBuffersEXT(cmdBuf.CommandBuffer, 1, &descriptorBufferBindingInfo);
-
-            uint32_t     bufferIndices           = 0;
-            VkDeviceSize descriptorBufferOffsets = 0;
-            fn_vkCmdSetDescriptorBufferOffsetsEXT(
+            vkCmdBindDescriptorSets(
                 cmdBuf.CommandBuffer,
                 VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
                 rayTracePipelineLayout.PipelineLayout,
                 0, // firstSet
                 1, // setCount
-                &bufferIndices,
-                &descriptorBufferOffsets);
+                &rayTraceDescriptorSets[swapchainImageIndex].DescriptorSet,
+                0,
+                nullptr);
 
             const uint32_t alignedHandleSize = Align(
                 rayTracingProperties.shaderGroupHandleSize,
@@ -1103,7 +1021,6 @@ void CreateRayTracePipelineLayout(
         }
 
         VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
         createInfo.bindingCount                    = CountU32(bindings);
         createInfo.pBindings                       = DataPtr(bindings);
 
@@ -1205,7 +1122,6 @@ void CreateRayTracingPipeline(
     pipelineInterfaceCreateInfo.maxPipelineRayHitAttributeSize = 2 * sizeof(float);                        // barycentrics;
 
     VkRayTracingPipelineCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR};
-    createInfo.flags                             = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
     createInfo.stageCount                        = CountU32(shaderStages);
     createInfo.pStages                           = DataPtr(shaderStages);
     createInfo.groupCount                        = CountU32(shaderGroups);
@@ -2343,31 +2259,12 @@ void CreateIBLTextures(
     }
 }
 
-void CreateDescriptorBuffer(
-    VulkanRenderer*       pRenderer,
-    VkDescriptorSetLayout descriptorSetLayout,
-    VulkanBuffer*         pBuffer)
-{
-    VkDeviceSize size = 0;
-    fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
-
-    VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-
-    CHECK_CALL(CreateBuffer(
-        pRenderer,                   // pRenderer
-        size,                        // srcSize
-        usageFlags,                  // usageFlags
-        VMA_MEMORY_USAGE_CPU_TO_GPU, // memoryUsage
-        0,                           // minAlignment
-        pBuffer));                   // pBuffer
-}
-
-void WriteDescriptors(
+void CreateRayTracingDescriptors(
     VulkanRenderer*                 pRenderer,
-    VkDescriptorSetLayout           descriptorSetLayout,
-    VulkanBuffer*                   pDescriptorBuffer,
+    VulkanDescriptorSet*            pDescriptors,
     const VulkanBuffer&             sceneParamsBuffer,
     const VulkanAccelStruct&        accelStruct,
+    VkImageView                     backBuffer,
     const VulkanImage&              accumTexture,
     const VulkanBuffer&             rayGenSamplesBuffer,
     const Geometry&                 sphereGeometry,
@@ -2378,39 +2275,47 @@ void WriteDescriptors(
     const VulkanBuffer&             materialParamsBuffer,
     const std::vector<IBLTextures>& iblTextures,
     VkSampler                       iblSampler,
-    VkImageView*                    pAccumImageView,
-    std::vector<VkImageView>*       pIBLImageViews)
+    VkImageView*                    pAccumImageView)
 {
-    char* pDescriptorBufferStartAddress = nullptr;
-    CHECK_CALL(vmaMapMemory(
-        pRenderer->Allocator,
-        pDescriptorBuffer->Allocation,
-        reinterpret_cast<void**>(&pDescriptorBufferStartAddress)));
-
     // Scene params (b5)
-    WriteDescriptor(
+    VulkanBufferDescriptor sceneParamsBufferDescriptor;
+    CreateDescriptor(
         pRenderer,
-        pDescriptorBufferStartAddress,
-        descriptorSetLayout,
+        &sceneParamsBufferDescriptor,
+        VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR,
         5, // binding
         0, // arrayElement
         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         &sceneParamsBuffer);
 
-    // Acceleration strcutured (t0)
-    WriteDescriptor(
+    // Acceleration structure (t0)
+    VulkanAccelerationDescriptor accelStructDescriptor;
+    CreateDescriptor(
         pRenderer,
-        pDescriptorBufferStartAddress,
-        descriptorSetLayout,
-        0, // binding,
-        0, // arrayElement,
+        &accelStructDescriptor,
+        VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+        0, // binding
+        0, // arrayElement
         &accelStruct);
 
+    // Output texture (u1)
     //
-    // NOTE: Ouput texture (u1) will be updated per frame
+    // Most Vulkan implementations support STORAGE_IMAGE so we can
+    // write directly to the image and skip a copy.
     //
+    VulkanImageDescriptor backBufferDescriptor;
+    CreateDescriptor(
+        pRenderer,
+        &backBufferDescriptor,
+        VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+        1, // binding
+        0, // arrayElement,
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+        backBuffer,
+        VK_IMAGE_LAYOUT_GENERAL);
 
     // Accumulation texture (u2)
+    VulkanImageDescriptor accumImageDescriptor;
     {
         VkImageView imageView = VK_NULL_HANDLE;
         CHECK_CALL(CreateImageView(
@@ -2422,10 +2327,10 @@ void WriteDescriptors(
             &imageView));
         *pAccumImageView = imageView;
 
-        WriteDescriptor(
+        CreateDescriptor(
             pRenderer,
-            pDescriptorBufferStartAddress,
-            descriptorSetLayout,
+            &accumImageDescriptor,
+            VK_SHADER_STAGE_RAYGEN_BIT_KHR,
             2, // binding
             0, // arrayElement
             VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -2434,191 +2339,119 @@ void WriteDescriptors(
     }
 
     // Ray generation samples (u3)
-    WriteDescriptor(
+    VulkanBufferDescriptor rayGenSamplesBufferDescriptor;
+    CreateDescriptor(
         pRenderer,
-        pDescriptorBufferStartAddress,
-        descriptorSetLayout,
+        &rayGenSamplesBufferDescriptor,
+        VK_SHADER_STAGE_RAYGEN_BIT_KHR,
         3, // binding
         0, // arrayElement
         VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
         &rayGenSamplesBuffer);
 
     // Geometry
+    const uint32_t         kNumInstances = 4;
+    VulkanBufferDescriptor geoIndexBufferDescriptor(kMaxGeometries);
+    VulkanBufferDescriptor geoPositionBufferDescriptor(kMaxGeometries);
+    VulkanBufferDescriptor geoNormalBufferDescriptor(kMaxGeometries);
     {
-        const uint32_t kNumInstances          = 4;
+        std::vector<const VulkanBuffer*> indexBuffers;
+        std::vector<const VulkanBuffer*> positionBuffers;
+        std::vector<const VulkanBuffer*> normalBuffers;
+
+        // Spheres
+        for (uint32_t i = 0; i < kNumInstances; ++i)
+        {
+            indexBuffers.push_back(&sphereGeometry.indexBuffer);
+            positionBuffers.push_back(&sphereGeometry.positionBuffer);
+            normalBuffers.push_back(&sphereGeometry.normalBuffer);
+        }
+
+        // Knob
+        for (uint32_t i = 0; i < kNumInstances; ++i)
+        {
+            indexBuffers.push_back(&knobGeometry.indexBuffer);
+            positionBuffers.push_back(&knobGeometry.positionBuffer);
+            normalBuffers.push_back(&knobGeometry.normalBuffer);
+        }
+
+        // Monkey
+        for (uint32_t i = 0; i < kNumInstances; ++i)
+        {
+            indexBuffers.push_back(&monkeyGeometry.indexBuffer);
+            positionBuffers.push_back(&monkeyGeometry.positionBuffer);
+            normalBuffers.push_back(&monkeyGeometry.normalBuffer);
+        }
+
+        // Teapot
+        for (uint32_t i = 0; i < kNumInstances; ++i)
+        {
+            indexBuffers.push_back(&teapotGeometry.indexBuffer);
+            positionBuffers.push_back(&teapotGeometry.positionBuffer);
+            normalBuffers.push_back(&teapotGeometry.normalBuffer);
+        }
+
+        // Box
+        indexBuffers.push_back(&boxGeometry.indexBuffer);
+        positionBuffers.push_back(&boxGeometry.positionBuffer);
+        normalBuffers.push_back(&boxGeometry.normalBuffer);
+
+        // Fill out the rest of the descriptor set layout so we don't get validation errors 
+        // This was originally built with Descriptor Buffers, so not filling out some descriptors 
+        // wasn't an error before
+        uint32_t filledCount = indexBuffers.size();
+        for (uint32_t i = filledCount; i < kMaxGeometries; i++)
+        {
+            indexBuffers.push_back(&sphereGeometry.indexBuffer);
+            positionBuffers.push_back(&sphereGeometry.positionBuffer);
+            normalBuffers.push_back(&sphereGeometry.normalBuffer);
+        }
+
         const uint32_t kIndexBufferBinding    = 20; // Index buffer (t20)
         const uint32_t kPositionBufferBinding = 45; // Position buffer (t45)
         const uint32_t kNormalBufferBinding   = 70; // Normal buffer (t70)
 
-        uint32_t arrayElement = 0;
+        // Index buffer (t20)
+        CreateDescriptor(
+            pRenderer,
+            &geoIndexBufferDescriptor,
+            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+            kIndexBufferBinding,
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            indexBuffers);
 
-        // Spheres
-        for (uint32_t i = 0; i < kNumInstances; ++i, ++arrayElement)
-        {
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kIndexBufferBinding,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &sphereGeometry.indexBuffer);
+        // Position buffer (t45)
+        CreateDescriptor(
+            pRenderer,
+            &geoPositionBufferDescriptor,
+            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+            kPositionBufferBinding,
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            positionBuffers);
 
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kPositionBufferBinding,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &sphereGeometry.positionBuffer);
-
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kNormalBufferBinding,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &sphereGeometry.normalBuffer);
-        }
-
-        // Knob
-        for (uint32_t i = 0; i < kNumInstances; ++i, ++arrayElement)
-        {
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kIndexBufferBinding,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &knobGeometry.indexBuffer);
-
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kPositionBufferBinding,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &knobGeometry.positionBuffer);
-
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kNormalBufferBinding,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &knobGeometry.normalBuffer);
-        }
-
-        // Monkey
-        for (uint32_t i = 0; i < kNumInstances; ++i, ++arrayElement)
-        {
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kIndexBufferBinding,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &monkeyGeometry.indexBuffer);
-
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kPositionBufferBinding,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &monkeyGeometry.positionBuffer);
-
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kNormalBufferBinding,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &monkeyGeometry.normalBuffer);
-        }
-
-        // Teapot
-        for (uint32_t i = 0; i < kNumInstances; ++i, ++arrayElement)
-        {
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kIndexBufferBinding,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &teapotGeometry.indexBuffer);
-
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kPositionBufferBinding,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &teapotGeometry.positionBuffer);
-
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kNormalBufferBinding,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &teapotGeometry.normalBuffer);
-        }
-
-        // Box
-        uint32_t instanceStride = 0 * kNumInstances;
-        {
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kIndexBufferBinding,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &boxGeometry.indexBuffer);
-
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kPositionBufferBinding,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &boxGeometry.positionBuffer);
-
-            WriteDescriptor(
-                pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
-                kNormalBufferBinding,
-                arrayElement,
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &boxGeometry.normalBuffer);
-        }
+        // Normal buffer (t70)
+        CreateDescriptor(
+            pRenderer,
+            &geoNormalBufferDescriptor,
+            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+            kNormalBufferBinding,
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            normalBuffers);
     }
 
     // Material params (t9)
-    WriteDescriptor(
+    VulkanBufferDescriptor materialParamsBufferDescriptor;
+    CreateDescriptor(
         pRenderer,
-        pDescriptorBufferStartAddress,
-        descriptorSetLayout,
+        &materialParamsBufferDescriptor,
+        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
         9, // binding
         0, // arrayElement
         VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
         &materialParamsBuffer);
 
     // IBL environment textures (t100)
+    VulkanImageDescriptor iblTextureDescriptor(kMaxIBLs);
     {
         uint32_t arrayElement = 0;
         for (uint32_t i = 0; i < iblTextures.size(); ++i, ++arrayElement)
@@ -2636,12 +2469,11 @@ void WriteDescriptors(
                 0,
                 1,
                 &imageView));
-            pIBLImageViews->push_back(imageView);
 
-            WriteDescriptor(
+            CreateDescriptor(
                 pRenderer,
-                pDescriptorBufferStartAddress,
-                descriptorSetLayout,
+                &iblTextureDescriptor,
+                VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR,
                 100,
                 arrayElement,
                 VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -2651,13 +2483,87 @@ void WriteDescriptors(
     }
 
     // IBL sampler (s10)
-    WriteDescriptor(
+    VulkanImageDescriptor iblSamplerDescriptor;
+    CreateDescriptor(
         pRenderer,
-        pDescriptorBufferStartAddress,
-        descriptorSetLayout,
+        &iblSamplerDescriptor,
+        VK_SHADER_STAGE_ALL,
         10, // binding
         0,  // arrayElement
         iblSampler);
 
-    vmaUnmapMemory(pRenderer->Allocator, pDescriptorBuffer->Allocation);
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
+        {
+            sceneParamsBufferDescriptor.layoutBinding,
+            accelStructDescriptor.layoutBinding,
+            backBufferDescriptor.layoutBinding,
+            accumImageDescriptor.layoutBinding,
+            rayGenSamplesBufferDescriptor.layoutBinding,
+            geoIndexBufferDescriptor.layoutBinding,
+            geoPositionBufferDescriptor.layoutBinding,
+            geoNormalBufferDescriptor.layoutBinding,
+            materialParamsBufferDescriptor.layoutBinding,
+            iblTextureDescriptor.layoutBinding,
+            iblSamplerDescriptor.layoutBinding,
+        };
+
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets =
+        {
+            sceneParamsBufferDescriptor.writeDescriptorSet,
+            accelStructDescriptor.writeDescriptorSet,
+            backBufferDescriptor.writeDescriptorSet,
+            accumImageDescriptor.writeDescriptorSet,
+            rayGenSamplesBufferDescriptor.writeDescriptorSet,
+            geoIndexBufferDescriptor.writeDescriptorSet,
+            geoPositionBufferDescriptor.writeDescriptorSet,
+            geoNormalBufferDescriptor.writeDescriptorSet,
+            materialParamsBufferDescriptor.writeDescriptorSet,
+            iblTextureDescriptor.writeDescriptorSet,
+            iblSamplerDescriptor.writeDescriptorSet,
+        };
+
+    CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, pDescriptors);
+}
+
+void CreateClearRayGenDescriptors(
+    VulkanRenderer*      pRenderer,
+    VulkanDescriptorSet* pDescriptors,
+    VkImageView          accumImageView,
+    VulkanBuffer*        pRayGenSamplesBuffer)
+{
+    VulkanImageDescriptor accumImageDescriptor;
+    CreateDescriptor(
+        pRenderer,
+        &accumImageDescriptor,
+        VK_SHADER_STAGE_COMPUTE_BIT,
+        0, // binding
+        0, // arrayElement
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+        accumImageView,
+        VK_IMAGE_LAYOUT_GENERAL);
+
+    VulkanBufferDescriptor rayGenSamplesBufferDescriptor;
+    CreateDescriptor(
+        pRenderer,
+        &rayGenSamplesBufferDescriptor,
+        VK_SHADER_STAGE_COMPUTE_BIT,
+        1, // binding
+        0, // arrayElement
+        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        pRayGenSamplesBuffer);
+
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
+        {
+            accumImageDescriptor.layoutBinding,
+            rayGenSamplesBufferDescriptor.layoutBinding,
+        };
+
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets =
+        {
+            accumImageDescriptor.writeDescriptorSet,
+            rayGenSamplesBufferDescriptor.writeDescriptorSet,
+        };
+
+    CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, pDescriptors);
+
 }
