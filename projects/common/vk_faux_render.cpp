@@ -351,6 +351,152 @@ bool SceneGraph::CreateImage(
     return true;
 }
 
+bool SceneGraph::InitializeResources()
+{
+    bool result = FauxRender::SceneGraph::InitializeResources();
+
+    if (result && pRenderer->Features.EnableDescriptorBuffer == false)
+    {
+        auto pScene = Scenes[0].get();
+
+        // Create camera descriptors
+        VulkanBufferDescriptor sceneCameraDescriptor;
+        {
+            auto resource = VkFauxRender::Cast(pScene->pCameraArgs)->Resource;
+
+            CreateDescriptor(
+                pRenderer,
+                &sceneCameraDescriptor,
+                CAMERA_REGISTER, // binding
+                0,               // arrayElement
+                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                &resource);
+        }
+
+        // Create instance buffer descriptors
+        VulkanBufferDescriptor sceneInstanceBufferDescriptor;
+        {
+            auto resource = VkFauxRender::Cast(pScene->pInstanceBuffer)->Resource;
+
+            CreateDescriptor(
+                pRenderer,
+                &sceneInstanceBufferDescriptor,
+                INSTANCE_BUFFER_REGISTER, // binding
+                0,                        // arrayElement
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &resource);
+        }
+
+        // Set material buffer
+        VulkanBufferDescriptor sceneMaterialBufferDescriptor;
+        {
+            auto resource = VkFauxRender::Cast(pMaterialBuffer)->Resource;
+
+            CreateDescriptor(
+                pRenderer,
+                &sceneMaterialBufferDescriptor,
+                MATERIAL_BUFFER_REGISTER, // binding
+                0,                        // arrayElement
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &resource);
+        }
+
+        // Empty Material Sampler descriptors - Required for DescriptorSet validation
+        VkSamplerCreateInfo emptySamplerInfo = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+
+        VkSampler emptySampler = VK_NULL_HANDLE;
+        vkCreateSampler(pRenderer->Device, &emptySamplerInfo, nullptr, &emptySampler);
+
+        VulkanImageDescriptor materialSamplersDescriptors(FauxRender::Shader::MAX_SAMPLERS);
+        for (int i = 0; i < Samplers.size(); ++i)
+        {
+            auto      fauxSamplerInfo = Samplers[i].get();
+            VkSampler sampler     = VK_NULL_HANDLE;
+
+            VkSamplerCreateInfo samplerInfo = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+            samplerInfo.minFilter           = Cast(fauxSamplerInfo->MinFilter);
+            samplerInfo.magFilter           = Cast(fauxSamplerInfo->MagFilter);
+            samplerInfo.mipmapMode          = CastMipmap(fauxSamplerInfo->MipFilter);
+            samplerInfo.addressModeU        = Cast(fauxSamplerInfo->AddressU);
+            samplerInfo.addressModeV        = Cast(fauxSamplerInfo->AddressV);
+            samplerInfo.addressModeW        = Cast(fauxSamplerInfo->AddressW);
+
+            vkCreateSampler(
+                pRenderer->Device,
+                &samplerInfo,
+                nullptr,
+                &sampler);
+
+            CreateDescriptor(
+                pRenderer,
+                &materialSamplersDescriptors,
+                FauxRender::Shader::MATERIAL_SAMPLER_START_REGISTER, // binding
+                i,                                                   // arrayElement
+                sampler);
+        }
+
+        for (int i = Samplers.size(); i < FauxRender::Shader::MAX_SAMPLERS; ++i)
+        {
+            VkSampler sampler = VK_NULL_HANDLE;
+            VkSamplerCreateInfo samplerInfo = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+            vkCreateSampler(pRenderer->Device, &samplerInfo, nullptr, &sampler);
+            CreateDescriptor(
+                pRenderer,
+                &materialSamplersDescriptors,
+                FauxRender::Shader::MATERIAL_SAMPLER_START_REGISTER, // binding
+                i,                                                   // arrayElement
+                sampler);
+        }
+
+        VulkanImageDescriptor materialImagesDescriptors(FauxRender::Shader::MAX_IMAGES);
+        for (int i = 0; i < Images.size(); ++i)
+        {
+            auto               image    = VkFauxRender::Cast(Images[i].get());
+            const VulkanImage* resource = &image->Resource;
+
+            VkImageView imageView = VK_NULL_HANDLE;
+            CreateImageView(
+                pRenderer,
+                resource,
+                VK_IMAGE_VIEW_TYPE_2D,
+                VK_FORMAT_R8G8B8A8_UNORM,
+                GREX_ALL_SUBRESOURCES,
+                &imageView);
+
+            CreateDescriptor(
+                pRenderer,
+                &materialImagesDescriptors,
+                FauxRender::Shader::MATERIAL_IMAGES_START_REGISTER, // binding
+                i,                                                  // arrayElement
+                VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                imageView,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        }
+
+        std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
+            {
+                sceneCameraDescriptor.layoutBinding,
+                sceneInstanceBufferDescriptor.layoutBinding,
+                sceneMaterialBufferDescriptor.layoutBinding,
+                materialSamplersDescriptors.layoutBinding,
+                materialImagesDescriptors.layoutBinding,
+            };
+
+        std::vector<VkWriteDescriptorSet> writeDescriptorSets =
+            {
+                sceneCameraDescriptor.writeDescriptorSet,
+                sceneInstanceBufferDescriptor.writeDescriptorSet,
+                sceneMaterialBufferDescriptor.writeDescriptorSet,
+                materialSamplersDescriptors.writeDescriptorSet,
+                materialImagesDescriptors.writeDescriptorSet,
+            };
+
+        CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, &DescriptorSet);
+    }
+
+    return result;
+}
+
 // =============================================================================
 // Functions
 // =============================================================================
@@ -362,6 +508,57 @@ VkFauxRender::Buffer* Cast(FauxRender::Buffer* pBuffer)
 VkFauxRender::Image* Cast(FauxRender::Image* pImage)
 {
     return static_cast<VkFauxRender::Image*>(pImage);
+}
+
+VkFilter Cast(FauxRender::FilterMode mode)
+{
+   switch (mode)
+    {
+       case FauxRender::FILTER_MODE_NEAREST:
+            return VK_FILTER_NEAREST;
+
+        case FauxRender::FILTER_MODE_LINEAR:
+            return VK_FILTER_LINEAR;
+
+        default:
+            return VK_FILTER_NEAREST;
+    }
+}
+
+VkSamplerMipmapMode CastMipmap(FauxRender::FilterMode mode)
+{
+   switch (mode)
+    {
+        case FauxRender::FILTER_MODE_NEAREST:
+            return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+
+        case FauxRender::FILTER_MODE_LINEAR:
+            return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+
+        default:
+            return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    }
+}
+
+VkSamplerAddressMode Cast(FauxRender::TextureAddressMode mode)
+{
+   switch (mode)
+    {
+        case FauxRender::TEXTURE_ADDRESS_MODE_CLAMP:
+            return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+        case FauxRender::TEXTURE_ADDRESS_MODE_WRAP:
+            return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+
+        case FauxRender::TEXTURE_ADDRESS_MODE_MIRROR:
+            return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+
+        case FauxRender::TEXTURE_ADDRESS_MODE_BORDER:
+            return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+
+        default:
+            return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    }
 }
 
 void Draw(const FauxRender::SceneGraph* pGraph, uint32_t instanceIndex, const FauxRender::Mesh* pMesh, CommandObjects* pCmdObjects)
@@ -573,97 +770,6 @@ void Draw(const FauxRender::SceneGraph* pGraph, const FauxRender::Scene* pScene,
     }
     else
     {
-        // Set camera
-        VulkanBufferDescriptor sceneCameraDescriptor;
-        {
-            auto resource = VkFauxRender::Cast(pScene->pCameraArgs)->Resource;
-
-            CreateDescriptor(
-                pRenderer,
-                &sceneCameraDescriptor,
-                CAMERA_REGISTER, // binding
-                0,               // arrayElement
-                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                &resource);
-        }
-
-        // Set instance buffer
-        VulkanBufferDescriptor sceneInstanceBufferDescriptor;
-        {
-            auto resource = VkFauxRender::Cast(pScene->pInstanceBuffer)->Resource;
-
-            CreateDescriptor(
-                pRenderer,
-                &sceneInstanceBufferDescriptor,
-                INSTANCE_BUFFER_REGISTER, // binding
-                0,                        // arrayElement
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &resource);
-        }
-
-        // Set material buffer
-        VulkanBufferDescriptor sceneMaterialBufferDescriptor;
-        {
-            auto resource = VkFauxRender::Cast(pGraph->pMaterialBuffer)->Resource;
-
-            CreateDescriptor(
-                pRenderer,
-                &sceneMaterialBufferDescriptor,
-                MATERIAL_BUFFER_REGISTER, // binding
-                0,                        // arrayElement
-                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                &resource);
-        }
-
-        // Empty Material Sampler descriptors - Required for DescriptorSet validation
-        VkSamplerCreateInfo emptySamplerInfo = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-
-        VkSampler emptySampler = VK_NULL_HANDLE;
-        vkCreateSampler(pRenderer->Device, &emptySamplerInfo, nullptr, &emptySampler);
-
-        VulkanImageDescriptor emptyMaterialSamplersDescriptors(FauxRender::Shader::MAX_SAMPLERS);
-        for (int i = 0; i < FauxRender::Shader::MAX_SAMPLERS; ++i)
-        {
-            CreateDescriptor(
-                pRenderer,
-                &emptyMaterialSamplersDescriptors,
-                FauxRender::Shader::MATERIAL_SAMPLER_START_REGISTER, // binding
-                i,                                                   // arrayElement
-                emptySampler);
-        }
-
-        // Empty Material Image descriptors - Required for DescriptorSet validation
-        VulkanImageDescriptor emptyMaterialImagesDescriptors(FauxRender::Shader::MAX_IMAGES);
-        CreateDescriptor(
-            pRenderer,
-            &emptyMaterialImagesDescriptors,
-            FauxRender::Shader::MATERIAL_IMAGES_START_REGISTER, // binding
-            0,                                                  // arrayElement
-            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            VK_NULL_HANDLE,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-        std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
-            {
-                sceneCameraDescriptor.layoutBinding,
-                sceneInstanceBufferDescriptor.layoutBinding,
-                sceneMaterialBufferDescriptor.layoutBinding,
-                emptyMaterialSamplersDescriptors.layoutBinding,
-                emptyMaterialImagesDescriptors.layoutBinding,
-            };
-
-        std::vector<VkWriteDescriptorSet> writeDescriptorSets =
-            {
-                sceneCameraDescriptor.writeDescriptorSet,
-                sceneInstanceBufferDescriptor.writeDescriptorSet,
-                sceneMaterialBufferDescriptor.writeDescriptorSet,
-                emptyMaterialSamplersDescriptors.writeDescriptorSet,
-                emptyMaterialImagesDescriptors.writeDescriptorSet,
-            };
-
-        VulkanDescriptorSet sceneDescriptors;
-        CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, &sceneDescriptors);
-
         // Bind all descriptors to the command list
         vkCmdBindDescriptorSets(
             pCmdObjects->CommandBuffer,
@@ -671,7 +777,7 @@ void Draw(const FauxRender::SceneGraph* pGraph, const FauxRender::Scene* pScene,
             pVkGraph->pPipelineLayout->PipelineLayout,
             0, // firstSet
             1, // setCount
-            &sceneDescriptors.DescriptorSet,
+            &pVkGraph->DescriptorSet.DescriptorSet,
             0,
             nullptr);
     }

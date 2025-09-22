@@ -28,7 +28,7 @@ enum SceneNodeType
 
 enum FilterMode
 {
-    FILTER_MODE_NEAREST = 1,
+    FILTER_MODE_NEAREST = 0,
     FILTER_MODE_LINEAR  = 1,
 };
 
@@ -244,7 +244,7 @@ struct SceneGraph
         FauxRender::TextureAddressMode addressW,
         FauxRender::Sampler**          ppSampler);
 
-    bool InitializeResources();
+    virtual bool InitializeResources();
 
 protected:
     bool InitializeDefaults();
