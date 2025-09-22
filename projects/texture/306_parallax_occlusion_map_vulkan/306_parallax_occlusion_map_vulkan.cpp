@@ -101,7 +101,6 @@ int main(int argc, char** argv)
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
     VulkanFeatures features   = {};
-    features.EnableDescriptorBuffer = false;
     features.EnableRayTracing = true;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {

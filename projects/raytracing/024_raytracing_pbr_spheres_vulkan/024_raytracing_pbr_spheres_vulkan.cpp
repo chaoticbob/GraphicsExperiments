@@ -123,6 +123,7 @@ void CreateDescriptors(
     VulkanDescriptorSet* pDescriptors,
     VulkanBuffer*        pSceneParamsBuffer,
     VulkanAccelStruct*   pAccelStruct,
+    VkImageView          backBuffer,
     Geometry*            pGeometry,
     VulkanBuffer*        pMaterialParamsBuffer,
     VulkanBuffer*        pModelParamsBuffer,
@@ -157,7 +158,6 @@ int main(int argc, char** argv)
 
     VulkanFeatures features   = {};
     features.EnableRayTracing = true;
-    features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
         return EXIT_FAILURE;
@@ -170,16 +170,6 @@ int main(int argc, char** argv)
     {
         VkPhysicalDeviceProperties2 properties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
         properties.pNext                       = &rayTracingProperties;
-        vkGetPhysicalDeviceProperties2(renderer->PhysicalDevice, &properties);
-    }
-
-    // *************************************************************************
-    // Get descriptor buffer properties
-    // *************************************************************************
-    VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT};
-    {
-        VkPhysicalDeviceProperties2 properties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
-        properties.pNext                       = &descriptorBufferProperties;
         vkGetPhysicalDeviceProperties2(renderer->PhysicalDevice, &properties);
     }
 
@@ -477,6 +467,7 @@ int main(int argc, char** argv)
             &descriptorSets[swapchainImageIndex],
             &sceneParamsBuffer,
             &TLAS,
+            swapchainImageViews[swapchainImageIndex],
             &geometry,
             &materialParamsBuffer,
             &modelParamsBuffer,
@@ -663,7 +654,7 @@ void CreateRayTracePipelineLayout(
         {
             VkDescriptorSetLayoutBinding binding = {};
             binding.binding                      = 10;
-            binding.descriptorType               = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
             binding.descriptorCount              = 1;
             binding.stageFlags                   = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR;
             bindings.push_back(binding);
@@ -672,7 +663,7 @@ void CreateRayTracePipelineLayout(
         {
             VkDescriptorSetLayoutBinding binding = {};
             binding.binding                      = 11;
-            binding.descriptorType               = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
             binding.descriptorCount              = 1;
             binding.stageFlags                   = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR;
             bindings.push_back(binding);
@@ -681,7 +672,7 @@ void CreateRayTracePipelineLayout(
         {
             VkDescriptorSetLayoutBinding binding = {};
             binding.binding                      = 12;
-            binding.descriptorType               = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
             binding.descriptorCount              = 1;
             binding.stageFlags                   = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR;
             bindings.push_back(binding);
@@ -707,7 +698,6 @@ void CreateRayTracePipelineLayout(
         }
 
         VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
         createInfo.bindingCount                    = CountU32(bindings);
         createInfo.pBindings                       = DataPtr(bindings);
 
@@ -810,7 +800,6 @@ void CreateRayTracingPipeline(
     pipelineInterfaceCreateInfo.maxPipelineRayHitAttributeSize = 2 * sizeof(float); // barycentrics
 
     VkRayTracingPipelineCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR};
-    createInfo.flags                             = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
     createInfo.stageCount                        = CountU32(shaderStages);
     createInfo.pStages                           = DataPtr(shaderStages);
     createInfo.groupCount                        = CountU32(shaderGroups);
@@ -1351,9 +1340,7 @@ void CreateDescriptorBuffer(
     VkDeviceSize size = 0;
     fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, descriptorSetLayout, &size);
 
-    VkBufferUsageFlags usageFlags =
-        VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
     CHECK_CALL(CreateBuffer(
         pRenderer,  // pRenderer
@@ -1383,6 +1370,7 @@ void CreateDescriptors(
     CreateDescriptor(
         pRenderer,
         &sceneParamsBufferDescriptor,
+        VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
         2, // binding
         0, // arrayElement,
         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -1393,7 +1381,7 @@ void CreateDescriptors(
     CreateDescriptor(
         pRenderer,
         &accelStructDescriptor,
-        VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+        VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
         0, // binding
         0, // arrayElement
         pAccelStruct);
@@ -1407,6 +1395,7 @@ void CreateDescriptors(
     CreateDescriptor(
         pRenderer,
         &backBufferDescriptor,
+        VK_SHADER_STAGE_RAYGEN_BIT_KHR,
         1, // binding
         0, // arrayElement,
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -1428,6 +1417,7 @@ void CreateDescriptors(
         CreateDescriptor(
             pRenderer,
             &geometryIndexBufferDescriptor,
+            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
             kIndexBufferIndex,
             arrayElement,
             VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -1437,6 +1427,7 @@ void CreateDescriptors(
         CreateDescriptor(
             pRenderer,
             &geometryPositionBufferDescriptor,
+            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
             kPositionBufferIndex,
             arrayElement,
             VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -1446,6 +1437,7 @@ void CreateDescriptors(
         CreateDescriptor(
             pRenderer,
             &geometryNormalBufferDescriptor,
+            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
             kNormalBufferIndex,
             arrayElement,
             VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -1457,6 +1449,7 @@ void CreateDescriptors(
     CreateDescriptor(
         pRenderer,
         &modelParamsBufferDescriptor,
+        VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR,
         3, // binding
         0, // arrayElement
         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -1467,6 +1460,7 @@ void CreateDescriptors(
     CreateDescriptor(
         pRenderer,
         &materialParamsBufferDescriptor,
+        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
         9, // binding
         0, // arrayElement
         VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -1495,6 +1489,7 @@ void CreateDescriptors(
         CreateDescriptor(
             pRenderer,
             &brdfLUTDescriptor,
+            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR,
             10, // binding
             0,  // arrayElement
             VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -1516,6 +1511,7 @@ void CreateDescriptors(
         CreateDescriptor(
             pRenderer,
             &irrTextureDescriptor,
+            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR,
             11, // binding
             0,  // arrayElement
             VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -1537,6 +1533,7 @@ void CreateDescriptors(
         CreateDescriptor(
             pRenderer,
             &envNumLevelsDescriptor,
+            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR,
             12, // binding
             0,  // arrayElement
             VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -1549,6 +1546,7 @@ void CreateDescriptors(
     CreateDescriptor(
         pRenderer,
         &clampedSamplerDescriptor,
+        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR,
         13, // binding
         0,  // arrayElement
         clampedSampler);
@@ -1558,6 +1556,7 @@ void CreateDescriptors(
     CreateDescriptor(
         pRenderer,
         &uWrapSamplerDescriptor,
+        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR,
         14, // binding
         0,  // arrayElement,
         uWrapSampler);

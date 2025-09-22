@@ -28,7 +28,7 @@ using namespace glm;
 // =============================================================================
 // Macros, enums, and constants
 // =============================================================================
-const uint32_t kMaxIBLs       = 1;
+const uint32_t kMaxIBLs       = 100;
 const uint32_t kMaxGeometries = 25;
 
 // =============================================================================
@@ -218,7 +218,6 @@ int main(int argc, char** argv)
 
     VulkanFeatures features   = {};
     features.EnableRayTracing = true;
-    features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
         return EXIT_FAILURE;

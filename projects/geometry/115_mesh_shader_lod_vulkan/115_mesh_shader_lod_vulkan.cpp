@@ -73,7 +73,6 @@ int main(int argc, char** argv)
     VulkanFeatures features         = {};
     features.EnableMeshShader       = true;
     features.EnablePushDescriptor   = true;
-    features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
         return EXIT_FAILURE;
