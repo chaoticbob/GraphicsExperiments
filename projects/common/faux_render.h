@@ -269,10 +269,23 @@ using float3   = glm::vec3;
 using float4   = glm::vec4;
 using float4x4 = glm::mat4;
 
-const uint32_t MAX_INSTANCES = 100;
-const uint32_t MAX_MATERIALS = 100;
-const uint32_t MAX_SAMPLERS  = 32;
-const uint32_t MAX_IMAGES    = 1024;
+const uint32_t MAX_INSTANCES    = 100;
+const uint32_t MAX_MATERIALS    = 100;
+const uint32_t MAX_SAMPLERS     = 32;
+const uint32_t MAX_IMAGES       = 1024;
+const uint32_t MAX_IBL_TEXTURES = 1;
+
+const uint32_t CAMERA_REGISTER                    = 1;
+const uint32_t DRAW_REGISTER                      = 2;
+const uint32_t INSTANCE_BUFFER_REGISTER           = 10;
+const uint32_t MATERIAL_BUFFER_REGISTER           = 11;
+const uint32_t MATERIAL_SAMPLER_START_REGISTER    = 100;
+const uint32_t MATERIAL_IMAGES_START_REGISTER     = 200;
+const uint32_t IBL_ENV_MAP_TEXTURE_START_REGISTER = 32;
+const uint32_t IBL_IRR_MAP_TEXTURE_START_REGISTER = 64;
+const uint32_t IBL_INTEGRATION_LUT_REGISTER       = 16;
+const uint32_t IBL_MAP_SAMPLER_REGISTER           = 18;
+const uint32_t IBL_INTEGRATION_SAMPLER_REGISTER   = 19;
 
 enum MaterialFlagBits
 {

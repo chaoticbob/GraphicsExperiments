@@ -50,20 +50,23 @@ SceneGraph::SceneGraph(VulkanRenderer* pTheRenderer, VulkanPipelineLayout* pTheP
     : pRenderer(pTheRenderer),
       pPipelineLayout(pThePipelineLayout)
 {
-    VkDeviceSize size = 0;
-    fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, pPipelineLayout->DescriptorSetLayout, &size);
+    if (pRenderer->Features.EnableDescriptorBuffer)
+    {
+        VkDeviceSize size = 0;
+        fn_vkGetDescriptorSetLayoutSizeEXT(pRenderer->Device, pPipelineLayout->DescriptorSetLayout, &size);
 
-    VkBufferUsageFlags usageFlags =
-        VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        VkBufferUsageFlags usageFlags =
+            VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+            VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
-    ::CreateBuffer(
-        pRenderer,  // pRenderer
-        size,       // srcSize
-        nullptr,    // pSrcData
-        usageFlags, // usageFlags
-        0,          // minAlignment
-        &DescriptorBuffer);
+        ::CreateBuffer(
+            pRenderer,  // pRenderer
+            size,       // srcSize
+            nullptr,    // pSrcData
+            usageFlags, // usageFlags
+            0,          // minAlignment
+            &DescriptorBuffer);
+    }
 
     this->InitializeDefaults();
 }
@@ -143,7 +146,10 @@ bool SceneGraph::CreateBuffer(
         return false;
     }
 
-    VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    VkBufferUsageFlags usageFlags = 
+       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | 
+       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 
     // Create the buffer resource
     VulkanBuffer resource;
@@ -495,73 +501,180 @@ void Draw(const FauxRender::SceneGraph* pGraph, const FauxRender::Scene* pScene,
     const VkFauxRender::SceneGraph* pVkGraph  = static_cast<const VkFauxRender::SceneGraph*>(pGraph);
     VulkanRenderer*                 pRenderer = pVkGraph->pRenderer;
 
-    void* pDescriptorBufferStartAddress = nullptr;
-    vmaMapMemory(
-        pRenderer->Allocator,
-        pVkGraph->DescriptorBuffer.Allocation,
-        &pDescriptorBufferStartAddress);
-
-    // Set camera
+    if (pRenderer->Features.EnableDescriptorBuffer)
     {
-        auto resource = VkFauxRender::Cast(pScene->pCameraArgs)->Resource;
+        void* pDescriptorBufferStartAddress = nullptr;
+        vmaMapMemory(
+            pRenderer->Allocator,
+            pVkGraph->DescriptorBuffer.Allocation,
+            &pDescriptorBufferStartAddress);
 
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            pVkGraph->pPipelineLayout->DescriptorSetLayout,
-            CAMERA_REGISTER, // binding
-            0,               // arrayElement
-            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            &resource);
+        // Set camera
+        {
+            auto resource = VkFauxRender::Cast(pScene->pCameraArgs)->Resource;
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                pVkGraph->pPipelineLayout->DescriptorSetLayout,
+                CAMERA_REGISTER, // binding
+                0,               // arrayElement
+                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                &resource);
+        }
+
+        // Set instance buffer
+        {
+            auto resource = VkFauxRender::Cast(pScene->pInstanceBuffer)->Resource;
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                pVkGraph->pPipelineLayout->DescriptorSetLayout,
+                INSTANCE_BUFFER_REGISTER, // binding
+                0,                        // arrayElement
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &resource);
+        }
+
+        // Set material buffer
+        {
+            auto resource = VkFauxRender::Cast(pGraph->pMaterialBuffer)->Resource;
+
+            WriteDescriptor(
+                pRenderer,
+                pDescriptorBufferStartAddress,
+                pVkGraph->pPipelineLayout->DescriptorSetLayout,
+                MATERIAL_BUFFER_REGISTER, // binding
+                0,                        // arrayElement
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &resource);
+        }
+
+        vmaUnmapMemory(pRenderer->Allocator, pVkGraph->DescriptorBuffer.Allocation);
+
+        // Bind all descriptors to the command list
+        VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
+        descriptorBufferBindingInfo.pNext                            = nullptr;
+        descriptorBufferBindingInfo.address                          = GetDeviceAddress(pRenderer, &pVkGraph->DescriptorBuffer);
+        descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+        fn_vkCmdBindDescriptorBuffersEXT(pCmdObjects->CommandBuffer, 1, &descriptorBufferBindingInfo);
+
+        uint32_t     bufferIndices           = 0;
+        VkDeviceSize descriptorBufferOffsets = 0;
+        fn_vkCmdSetDescriptorBufferOffsetsEXT(
+            pCmdObjects->CommandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            pVkGraph->pPipelineLayout->PipelineLayout,
+            0, // firstSet
+            1, // setCount
+            &bufferIndices,
+            &descriptorBufferOffsets);
     }
-
-    // Set instance buffer
+    else
     {
-        auto resource = VkFauxRender::Cast(pScene->pInstanceBuffer)->Resource;
+        // Set camera
+        VulkanBufferDescriptor sceneCameraDescriptor;
+        {
+            auto resource = VkFauxRender::Cast(pScene->pCameraArgs)->Resource;
 
-        WriteDescriptor(
+            CreateDescriptor(
+                pRenderer,
+                &sceneCameraDescriptor,
+                CAMERA_REGISTER, // binding
+                0,               // arrayElement
+                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                &resource);
+        }
+
+        // Set instance buffer
+        VulkanBufferDescriptor sceneInstanceBufferDescriptor;
+        {
+            auto resource = VkFauxRender::Cast(pScene->pInstanceBuffer)->Resource;
+
+            CreateDescriptor(
+                pRenderer,
+                &sceneInstanceBufferDescriptor,
+                INSTANCE_BUFFER_REGISTER, // binding
+                0,                        // arrayElement
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &resource);
+        }
+
+        // Set material buffer
+        VulkanBufferDescriptor sceneMaterialBufferDescriptor;
+        {
+            auto resource = VkFauxRender::Cast(pGraph->pMaterialBuffer)->Resource;
+
+            CreateDescriptor(
+                pRenderer,
+                &sceneMaterialBufferDescriptor,
+                MATERIAL_BUFFER_REGISTER, // binding
+                0,                        // arrayElement
+                VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                &resource);
+        }
+
+        // Empty Material Sampler descriptors - Required for DescriptorSet validation
+        VkSamplerCreateInfo emptySamplerInfo = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+
+        VkSampler emptySampler = VK_NULL_HANDLE;
+        vkCreateSampler(pRenderer->Device, &emptySamplerInfo, nullptr, &emptySampler);
+
+        VulkanImageDescriptor emptyMaterialSamplersDescriptors(FauxRender::Shader::MAX_SAMPLERS);
+        for (int i = 0; i < FauxRender::Shader::MAX_SAMPLERS; ++i)
+        {
+            CreateDescriptor(
+                pRenderer,
+                &emptyMaterialSamplersDescriptors,
+                FauxRender::Shader::MATERIAL_SAMPLER_START_REGISTER, // binding
+                i,                                                   // arrayElement
+                emptySampler);
+        }
+
+        // Empty Material Image descriptors - Required for DescriptorSet validation
+        VulkanImageDescriptor emptyMaterialImagesDescriptors(FauxRender::Shader::MAX_IMAGES);
+        CreateDescriptor(
             pRenderer,
-            pDescriptorBufferStartAddress,
-            pVkGraph->pPipelineLayout->DescriptorSetLayout,
-            INSTANCE_BUFFER_REGISTER, // binding
-            0,                        // arrayElement
-            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            &resource);
+            &emptyMaterialImagesDescriptors,
+            FauxRender::Shader::MATERIAL_IMAGES_START_REGISTER, // binding
+            0,                                                  // arrayElement
+            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            VK_NULL_HANDLE,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+        std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
+            {
+                sceneCameraDescriptor.layoutBinding,
+                sceneInstanceBufferDescriptor.layoutBinding,
+                sceneMaterialBufferDescriptor.layoutBinding,
+                emptyMaterialSamplersDescriptors.layoutBinding,
+                emptyMaterialImagesDescriptors.layoutBinding,
+            };
+
+        std::vector<VkWriteDescriptorSet> writeDescriptorSets =
+            {
+                sceneCameraDescriptor.writeDescriptorSet,
+                sceneInstanceBufferDescriptor.writeDescriptorSet,
+                sceneMaterialBufferDescriptor.writeDescriptorSet,
+                emptyMaterialSamplersDescriptors.writeDescriptorSet,
+                emptyMaterialImagesDescriptors.writeDescriptorSet,
+            };
+
+        VulkanDescriptorSet sceneDescriptors;
+        CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, &sceneDescriptors);
+
+        // Bind all descriptors to the command list
+        vkCmdBindDescriptorSets(
+            pCmdObjects->CommandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            pVkGraph->pPipelineLayout->PipelineLayout,
+            0, // firstSet
+            1, // setCount
+            &sceneDescriptors.DescriptorSet,
+            0,
+            nullptr);
     }
-
-    // Set material buffer
-    {
-        auto resource = VkFauxRender::Cast(pGraph->pMaterialBuffer)->Resource;
-
-        WriteDescriptor(
-            pRenderer,
-            pDescriptorBufferStartAddress,
-            pVkGraph->pPipelineLayout->DescriptorSetLayout,
-            MATERIAL_BUFFER_REGISTER, // binding
-            0,                        // arrayElement
-            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            &resource);
-    }
-
-    vmaUnmapMemory(pRenderer->Allocator, pVkGraph->DescriptorBuffer.Allocation);
-
-    // Bind all descriptors to the command list
-    VkDescriptorBufferBindingInfoEXT descriptorBufferBindingInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT};
-    descriptorBufferBindingInfo.pNext                            = nullptr;
-    descriptorBufferBindingInfo.address                          = GetDeviceAddress(pRenderer, &pVkGraph->DescriptorBuffer);
-    descriptorBufferBindingInfo.usage                            = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-    fn_vkCmdBindDescriptorBuffersEXT(pCmdObjects->CommandBuffer, 1, &descriptorBufferBindingInfo);
-
-    uint32_t     bufferIndices           = 0;
-    VkDeviceSize descriptorBufferOffsets = 0;
-    fn_vkCmdSetDescriptorBufferOffsetsEXT(
-        pCmdObjects->CommandBuffer,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
-        pVkGraph->pPipelineLayout->PipelineLayout,
-        0, // firstSet
-        1, // setCount
-        &bufferIndices,
-        &descriptorBufferOffsets);
 
     for (auto pGeometryNode : pScene->GeometryNodes)
     {
