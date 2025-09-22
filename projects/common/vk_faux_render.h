@@ -27,6 +27,7 @@ struct SceneGraph : public FauxRender::SceneGraph
     VulkanRenderer*       pRenderer        = nullptr;
     VulkanPipelineLayout* pPipelineLayout  = nullptr;
     VulkanBuffer          DescriptorBuffer = {};
+    VulkanDescriptorSet   DescriptorSet    = {};
 
     struct
     {
@@ -79,10 +80,15 @@ struct SceneGraph : public FauxRender::SceneGraph
         size_t                        srcImageDataSize,
         const void*                   pSrcImageData,
         FauxRender::Image**           ppImage) override;
+
+    virtual bool InitializeResources();
 };
 
 VkFauxRender::Buffer* Cast(FauxRender::Buffer* pBuffer);
 VkFauxRender::Image*  Cast(FauxRender::Image* pImage);
+VkFilter              Cast(FauxRender::FilterMode mode);
+VkSamplerMipmapMode   CastMipmap(FauxRender::FilterMode mode);
+VkSamplerAddressMode  Cast(FauxRender::TextureAddressMode mode);
 
 void Draw(const FauxRender::SceneGraph* pGraph, uint32_t instanceIndex, const FauxRender::Mesh* pMesh, CommandObjects* pCmdObjects);
 void Draw(const FauxRender::SceneGraph* pGraph, const FauxRender::Scene* pScene, const FauxRender::SceneNode* pGeometryNode, CommandObjects* pCmdObjects);

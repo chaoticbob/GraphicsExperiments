@@ -65,10 +65,6 @@ void CreateShaderModules(
 void CreatePipelineLayout(
     VulkanRenderer*       pRenderer,
     VulkanPipelineLayout* pLayout);
-void CreateDescriptorSet(
-    VulkanRenderer*           pRenderer,
-    VulkanDescriptorSet*      pDescriptors,
-    VkFauxRender::SceneGraph* graph);
 
 void MouseMove(int x, int y, int buttons)
 {
@@ -181,12 +177,6 @@ int main(int argc, char** argv)
         GREX_DEFAULT_RTV_FORMAT,
         GREX_DEFAULT_DSV_FORMAT,
         &pipelineState));
-
-    // *************************************************************************
-    // Descriptors
-    // *************************************************************************
-    VulkanDescriptorSet sceneDescriptorSet;
-    CreateDescriptorSet(renderer.get(), &sceneDescriptorSet, &graph);
 
     // *************************************************************************
     // Window
@@ -476,130 +466,4 @@ void CreatePipelineLayout(
     createInfo.pSetLayouts                = &pLayout->DescriptorSetLayout;
 
     CHECK_CALL(vkCreatePipelineLayout(pRenderer->Device, &createInfo, nullptr, &pLayout->PipelineLayout));
-}
-
-void CreateDescriptorSet(
-    VulkanRenderer*           pRenderer,
-    VulkanDescriptorSet*      pDescriptors,
-    VkFauxRender::SceneGraph* graph)
-{
-
-    // Material Textures
-    VulkanImageDescriptor imageDescriptors(graph->Images.size());
-    {
-        for (size_t i = 0; i < graph->Images.size(); ++i)
-        {
-            auto               image    = VkFauxRender::Cast(graph->Images[i].get());
-            const VulkanImage* resource = &image->Resource;
-
-            VkImageView imageView = VK_NULL_HANDLE;
-            CHECK_CALL(CreateImageView(
-                pRenderer,
-                resource,
-                VK_IMAGE_VIEW_TYPE_2D,
-                VK_FORMAT_R8G8B8A8_UNORM,
-                GREX_ALL_SUBRESOURCES,
-                &imageView));
-
-            CreateDescriptor(
-                pRenderer,
-                &imageDescriptors,
-                MATERIAL_IMAGES_START_REGISTER, // binding
-                i,                              // arrayElements
-                VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                imageView,
-                VK_IMAGE_LAYOUT_GENERAL);
-        }
-    }
-
-    // Material Samplers
-    VulkanImageDescriptor clampedSamplerDescriptor;
-    VulkanImageDescriptor repeatSamplerDescriptor;
-    {
-        // Clamped
-        {
-            VkSamplerCreateInfo clampedSamplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-            clampedSamplerInfo.flags                   = 0;
-            clampedSamplerInfo.magFilter               = VK_FILTER_LINEAR;
-            clampedSamplerInfo.minFilter               = VK_FILTER_LINEAR;
-            clampedSamplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-            clampedSamplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            clampedSamplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            clampedSamplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            clampedSamplerInfo.mipLodBias              = 0;
-            clampedSamplerInfo.anisotropyEnable        = VK_FALSE;
-            clampedSamplerInfo.maxAnisotropy           = 0;
-            clampedSamplerInfo.compareEnable           = VK_TRUE;
-            clampedSamplerInfo.compareOp               = VK_COMPARE_OP_NEVER;
-            clampedSamplerInfo.minLod                  = 0;
-            clampedSamplerInfo.maxLod                  = 1;
-            clampedSamplerInfo.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-            clampedSamplerInfo.unnormalizedCoordinates = VK_FALSE;
-
-            VkSampler clampedSampler = VK_NULL_HANDLE;
-            CHECK_CALL(vkCreateSampler(
-                pRenderer->Device,
-                &clampedSamplerInfo,
-                nullptr,
-                &clampedSampler));
-
-            CreateDescriptor(
-                pRenderer,
-                &clampedSamplerDescriptor,
-                MATERIAL_SAMPLER_START_REGISTER, // binding
-                0,                               // arrayElement
-                clampedSampler);
-        }
-
-        // Repeat
-        {
-            VkSamplerCreateInfo repeatSamplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-            repeatSamplerInfo.flags                   = 0;
-            repeatSamplerInfo.magFilter               = VK_FILTER_LINEAR;
-            repeatSamplerInfo.minFilter               = VK_FILTER_LINEAR;
-            repeatSamplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-            repeatSamplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            repeatSamplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            repeatSamplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            repeatSamplerInfo.mipLodBias              = 0;
-            repeatSamplerInfo.anisotropyEnable        = VK_FALSE;
-            repeatSamplerInfo.maxAnisotropy           = 0;
-            repeatSamplerInfo.compareEnable           = VK_TRUE;
-            repeatSamplerInfo.compareOp               = VK_COMPARE_OP_NEVER;
-            repeatSamplerInfo.minLod                  = 0;
-            repeatSamplerInfo.maxLod                  = 1;
-            repeatSamplerInfo.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-            repeatSamplerInfo.unnormalizedCoordinates = VK_FALSE;
-
-            VkSampler repeatSampler = VK_NULL_HANDLE;
-            CHECK_CALL(vkCreateSampler(
-                pRenderer->Device,
-                &repeatSamplerInfo,
-                nullptr,
-                &repeatSampler));
-
-            CreateDescriptor(
-                pRenderer,
-                &repeatSamplerDescriptor,
-                MATERIAL_SAMPLER_START_REGISTER + 1, // binding
-                0,                                   // arrayElement
-                repeatSampler);
-        }
-    }
-
-    std::vector<VkDescriptorSetLayoutBinding> setLayoutBinding =
-        {
-            imageDescriptors.layoutBinding,
-            clampedSamplerDescriptor.layoutBinding,
-            repeatSamplerDescriptor.layoutBinding,
-        };
-
-    std::vector<VkWriteDescriptorSet> writeDescriptorSets =
-        {
-            imageDescriptors.writeDescriptorSet,
-            clampedSamplerDescriptor.writeDescriptorSet,
-            repeatSamplerDescriptor.writeDescriptorSet,
-        };
-
-    CreateAndUpdateDescriptorSet(pRenderer, setLayoutBinding, writeDescriptorSets, pDescriptors);
 }

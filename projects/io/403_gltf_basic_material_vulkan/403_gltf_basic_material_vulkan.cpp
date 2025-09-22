@@ -92,6 +92,7 @@ int main(int argc, char** argv)
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
     VulkanFeatures features = {};
+    features.EnableDescriptorBuffer = false;
     if (!InitVulkan(renderer.get(), gEnableDebug, features))
     {
         return EXIT_FAILURE;
@@ -177,121 +178,6 @@ int main(int argc, char** argv)
         GREX_DEFAULT_RTV_FORMAT,
         GREX_DEFAULT_DSV_FORMAT,
         &pipelineState));
-
-    // *************************************************************************
-    // Descriptors
-    // *************************************************************************
-    {
-        void*         pDescriptorBufferStartAddress = nullptr;
-        VulkanBuffer* descriptorBuffer              = &static_cast<VkFauxRender::SceneGraph*>(&graph)->DescriptorBuffer;
-
-        vmaMapMemory(renderer->Allocator, descriptorBuffer->Allocation, &pDescriptorBufferStartAddress);
-
-        // Material Textures
-        {
-            for (size_t i = 0; i < graph.Images.size(); ++i)
-            {
-                auto               image    = VkFauxRender::Cast(graph.Images[i].get());
-                const VulkanImage* resource = &image->Resource;
-
-                VkImageView imageView = VK_NULL_HANDLE;
-                CHECK_CALL(CreateImageView(
-                    renderer.get(),
-                    resource,
-                    VK_IMAGE_VIEW_TYPE_2D,
-                    VK_FORMAT_R8G8B8A8_UNORM,
-                    GREX_ALL_SUBRESOURCES,
-                    &imageView));
-
-                WriteDescriptor(
-                    renderer.get(),
-                    pDescriptorBufferStartAddress,
-                    pipelineLayout.DescriptorSetLayout,
-                    static_cast<uint32_t>(MATERIAL_IMAGES_START_REGISTER + i),
-                    0,
-                    VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                    imageView,
-                    VK_IMAGE_LAYOUT_GENERAL);
-            }
-        }
-
-        // Material Samplers
-        {
-            // Clamped
-            {
-                VkSamplerCreateInfo clampedSamplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-                clampedSamplerInfo.flags                   = 0;
-                clampedSamplerInfo.magFilter               = VK_FILTER_LINEAR;
-                clampedSamplerInfo.minFilter               = VK_FILTER_LINEAR;
-                clampedSamplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-                clampedSamplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                clampedSamplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                clampedSamplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                clampedSamplerInfo.mipLodBias              = 0;
-                clampedSamplerInfo.anisotropyEnable        = VK_FALSE;
-                clampedSamplerInfo.maxAnisotropy           = 0;
-                clampedSamplerInfo.compareEnable           = VK_TRUE;
-                clampedSamplerInfo.compareOp               = VK_COMPARE_OP_NEVER;
-                clampedSamplerInfo.minLod                  = 0;
-                clampedSamplerInfo.maxLod                  = 1;
-                clampedSamplerInfo.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-                clampedSamplerInfo.unnormalizedCoordinates = VK_FALSE;
-
-                VkSampler clampedSampler = VK_NULL_HANDLE;
-                CHECK_CALL(vkCreateSampler(
-                    renderer.get()->Device,
-                    &clampedSamplerInfo,
-                    nullptr,
-                    &clampedSampler));
-
-                WriteDescriptor(
-                    renderer.get(),
-                    pDescriptorBufferStartAddress,
-                    pipelineLayout.DescriptorSetLayout,
-                    MATERIAL_SAMPLER_START_REGISTER, // binding
-                    0,                               // arrayElement
-                    clampedSampler);
-            }
-
-            // Repeat
-            {
-                VkSamplerCreateInfo repeatSamplerInfo     = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-                repeatSamplerInfo.flags                   = 0;
-                repeatSamplerInfo.magFilter               = VK_FILTER_LINEAR;
-                repeatSamplerInfo.minFilter               = VK_FILTER_LINEAR;
-                repeatSamplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-                repeatSamplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                repeatSamplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                repeatSamplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-                repeatSamplerInfo.mipLodBias              = 0;
-                repeatSamplerInfo.anisotropyEnable        = VK_FALSE;
-                repeatSamplerInfo.maxAnisotropy           = 0;
-                repeatSamplerInfo.compareEnable           = VK_TRUE;
-                repeatSamplerInfo.compareOp               = VK_COMPARE_OP_NEVER;
-                repeatSamplerInfo.minLod                  = 0;
-                repeatSamplerInfo.maxLod                  = 1;
-                repeatSamplerInfo.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-                repeatSamplerInfo.unnormalizedCoordinates = VK_FALSE;
-
-                VkSampler repeatSampler = VK_NULL_HANDLE;
-                CHECK_CALL(vkCreateSampler(
-                    renderer.get()->Device,
-                    &repeatSamplerInfo,
-                    nullptr,
-                    &repeatSampler));
-
-                WriteDescriptor(
-                    renderer.get(),
-                    pDescriptorBufferStartAddress,
-                    pipelineLayout.DescriptorSetLayout,
-                    MATERIAL_SAMPLER_START_REGISTER + 1, // binding
-                    0,                                   // arrayElement
-                    repeatSampler);
-            }
-        }
-
-        vmaUnmapMemory(renderer->Allocator, descriptorBuffer->Allocation);
-    }
 
     // *************************************************************************
     // Window
@@ -506,16 +392,6 @@ void CreatePipelineLayout(
     {
         std::vector<VkDescriptorSetLayoutBinding> bindings = {};
 
-        // ConstantBuffer<SceneData>      Scene                                   : register(SCENE_REGISTER);                     // Scene constants
-        {
-            VkDescriptorSetLayoutBinding binding = {};
-            binding.binding                      = SCENE_REGISTER;
-            binding.descriptorType               = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            binding.descriptorCount              = 1;
-            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-            bindings.push_back(binding);
-        }
-
         // ConstantBuffer<CameraData>     Camera                                  : register(CAMERA_REGISTER);                     // Camera constants
         {
             VkDescriptorSetLayoutBinding binding = {};
@@ -565,54 +441,8 @@ void CreatePipelineLayout(
             binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
             bindings.push_back(binding);
         }
-        // Texture2D                      IBLEnvMapTexture[MAX_IBL_TEXTURES]      : register(IBL_ENV_MAP_TEXTURE_START_REGISTER);  // IBL environment map texture
-        {
-            VkDescriptorSetLayoutBinding binding = {};
-            binding.binding                      = IBL_ENV_MAP_TEXTURE_START_REGISTER;
-            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-            binding.descriptorCount              = MAX_IBL_TEXTURES;
-            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-            bindings.push_back(binding);
-        }
-        // Texture2D                      IBLIrrMapTexture[MAX_IBL_TEXTURES]      : register(IBL_IRR_MAP_TEXTURE_START_REGISTER);  // IBL irradiance map texture
-        {
-            VkDescriptorSetLayoutBinding binding = {};
-            binding.binding                      = IBL_IRR_MAP_TEXTURE_START_REGISTER;
-            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-            binding.descriptorCount              = MAX_IBL_TEXTURES;
-            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-            bindings.push_back(binding);
-        }
-        // Texture2D                      IBLIntegrationLUT                       : register(IBL_INTEGRATION_LUT_REGISTER);        // IBL integration LUT
-        {
-            VkDescriptorSetLayoutBinding binding = {};
-            binding.binding                      = IBL_INTEGRATION_LUT_REGISTER;
-            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-            binding.descriptorCount              = 1;
-            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-            bindings.push_back(binding);
-        }
-        // SamplerState                   IBLMapSampler                           : register(IBL_MAP_SAMPLER_REGISTER);            // IBL environment/irradiance map sampler
-        {
-            VkDescriptorSetLayoutBinding binding = {};
-            binding.binding                      = IBL_MAP_SAMPLER_REGISTER;
-            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
-            binding.descriptorCount              = 1;
-            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-            bindings.push_back(binding);
-        }
-        // SamplerState                   IBLIntegrationSampler                   : register(IBL_INTEGRATION_SAMPLER_REGISTER);    // IBL integration sampler
-        {
-            VkDescriptorSetLayoutBinding binding = {};
-            binding.binding                      = IBL_INTEGRATION_SAMPLER_REGISTER;
-            binding.descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
-            binding.descriptorCount              = 1;
-            binding.stageFlags                   = VK_SHADER_STAGE_ALL_GRAPHICS;
-            bindings.push_back(binding);
-        }
 
         VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        createInfo.flags                           = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
         createInfo.bindingCount                    = CountU32(bindings);
         createInfo.pBindings                       = DataPtr(bindings);
 
