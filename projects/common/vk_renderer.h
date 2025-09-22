@@ -81,7 +81,6 @@ struct VulkanFeatures
     bool EnableRayTracing       = false;
     bool EnableMeshShader       = false;
     bool EnablePushDescriptor   = false;
-    bool EnableDescriptorBuffer = true;
 };
 
 struct VulkanRenderer
@@ -496,15 +495,6 @@ void CreateDescriptor(
     VkDescriptorType        descriptorType,
     const VulkanBuffer*     pBuffer);
 
-void WriteDescriptor(
-    VulkanRenderer*       pRenderer,
-    void*                 pDescriptorBufferStartAddress,
-    VkDescriptorSetLayout descriptorSetLayout,
-    uint32_t              binding,
-    uint32_t              arrayElement,
-    VkDescriptorType      descriptorType,
-    const VulkanBuffer*   pBuffer);
-
 // Acceleration structure
 void CreateDescriptor(
     VulkanRenderer*               pRenderer,
@@ -520,14 +510,6 @@ void CreateDescriptor(
     uint32_t                      binding,
     uint32_t                      arrayElement,
     const VulkanAccelStruct*      pAccelStruct);
-
-void WriteDescriptor(
-    VulkanRenderer*          pRenderer,
-    void*                    pDescriptorBufferStartAddress,
-    VkDescriptorSetLayout    descriptorSetLayout,
-    uint32_t                 binding,
-    uint32_t                 arrayElement,
-    const VulkanAccelStruct* pAccelStruct);
 
 // Image view
 void CreateDescriptor(
@@ -549,16 +531,6 @@ void CreateDescriptor(
     VkImageView            imageView,
     VkImageLayout          imageLayout);
 
-void WriteDescriptor(
-    VulkanRenderer*       pRenderer,
-    void*                 pDescriptorBufferStartAddress,
-    VkDescriptorSetLayout descriptorSetLayout,
-    uint32_t              binding,
-    uint32_t              arrayElement,
-    VkDescriptorType      descriptorType,
-    VkImageView           imageView,
-    VkImageLayout         imageLayout);
-
 // Sampler
 void CreateDescriptor(
     VulkanRenderer*        pRenderer,
@@ -574,14 +546,6 @@ void CreateDescriptor(
     uint32_t               binding,
     uint32_t               arrayElement,
     VkSampler              sampler);
-
-void WriteDescriptor(
-    VulkanRenderer*       pRenderer,
-    void*                 pDescriptorBufferStartAddress,
-    VkDescriptorSetLayout descriptorSetLayout,
-    uint32_t              binding,
-    uint32_t              arrayElement,
-    VkSampler             sampler);
 
 // Buffer
 void PushGraphicsDescriptor(
