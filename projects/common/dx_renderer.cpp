@@ -1,5 +1,12 @@
 #include "dx_renderer.h"
 
+#if defined(GREX_USE_AGILITY_SDK)
+
+ extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = GREX_AGILITY_SDK_VERSION; }
+ extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = GREX_AGILITY_SDK_PATH; }
+
+#endif
+
 bool     IsCompressed(DXGI_FORMAT fmt);
 bool     IsVideo(DXGI_FORMAT fmt);
 uint32_t BitsPerPixel(DXGI_FORMAT fmt);

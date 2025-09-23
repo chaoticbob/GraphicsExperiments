@@ -4,6 +4,8 @@
 
 #if defined(GREX_USE_D3DX12)
 #include "directx/d3dx12.h"
+#elif defined(GREX_USE_AGILITY_SDK)
+#include "d3dx12/d3dx12.h"
 #else
 #include <d3d12.h>
 #endif
