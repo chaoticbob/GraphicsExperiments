@@ -20,8 +20,8 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/vk_faux_render.cpp
     ${GREX_PROJECTS_COMMON_DIR}/bitmap.h
     ${GREX_PROJECTS_COMMON_DIR}/bitmap.cpp
-    ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/resource_limits_c.cpp
-    ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/ResourceLimits.cpp
+    ${GREX_THIRD_PARTY_DIR}/glslang/glslang/ResourceLimits/resource_limits_c.cpp
+    ${GREX_THIRD_PARTY_DIR}/glslang/glslang/ResourceLimits/ResourceLimits.cpp
 )
 
 set_target_properties(${TARGET_NAME} PROPERTIES FOLDER "io")

@@ -16,8 +16,8 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/camera.cpp
     ${GREX_PROJECTS_COMMON_DIR}/tri_mesh.h
     ${GREX_PROJECTS_COMMON_DIR}/tri_mesh.cpp
-    ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/resource_limits_c.cpp
-    ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/ResourceLimits.cpp
+    ${GREX_THIRD_PARTY_DIR}/glslang/glslang/ResourceLimits/resource_limits_c.cpp
+    ${GREX_THIRD_PARTY_DIR}/glslang/glslang/ResourceLimits/ResourceLimits.cpp
     ${IMGUI_VULKAN_FILES}
 )
 

@@ -564,6 +564,7 @@ bool GrexWindow::InitImGuiForVulkan(VulkanRenderer* pRenderer, VkRenderPass rend
     initInfo.Queue                     = pRenderer->Queue;
     initInfo.PipelineCache             = VK_NULL_HANDLE;
     initInfo.DescriptorPool            = mDescriptorPool;
+    initInfo.RenderPass                = renderPass;
     initInfo.Subpass                   = 0;
     initInfo.MinImageCount             = pRenderer->SwapchainImageCount;
     initInfo.ImageCount                = pRenderer->SwapchainImageCount;
@@ -571,13 +572,16 @@ bool GrexWindow::InitImGuiForVulkan(VulkanRenderer* pRenderer, VkRenderPass rend
     initInfo.Allocator                 = nullptr;
     initInfo.CheckVkResultFn           = CheckVkResult;
 
-    res = ImGui_ImplVulkan_Init(&initInfo, renderPass);
+    res = ImGui_ImplVulkan_Init(&initInfo);
     if (res == false)
     {
         assert(false && "ImGui init Vulkan failed!");
         return false;
     }
 
+    ImGui_ImplVulkan_CreateFontsTexture();
+
+    /*
     // Upload Fonts
     {
         VkCommandPool   commandPool = VK_NULL_HANDLE;
@@ -656,6 +660,7 @@ bool GrexWindow::InitImGuiForVulkan(VulkanRenderer* pRenderer, VkRenderPass rend
         vkFreeCommandBuffers(pRenderer->Device, commandPool, 1, &commandBuf);
         vkDestroyCommandPool(pRenderer->Device, commandPool, nullptr);
     }
+    */
 
     mImGuiEnabled = true;
 
