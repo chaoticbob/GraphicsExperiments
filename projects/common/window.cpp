@@ -763,6 +763,29 @@ bool GrexWindow::PollEvents()
     return true;
 }
 
+void GrexWindow::ResetTimer()
+{
+    mTimer.Reset();
+}
+
+double GrexWindow::GetElapsedSeconds() const
+{
+    return mTimer.GetElapsedSeconds();
+}
+
+GrexCommandLineArgs ParseCommandLineArgs(int argc, char** argv)
+{
+    GrexCommandLineArgs args;
+    for (int i = 1; i < argc - 1; ++i)
+    {
+        if (strcmp(argv[i], "--auto-exit") == 0)
+        {
+            args.autoExitSeconds = atoi(argv[i + 1]);
+        }
+    }
+    return args;
+}
+
 fs::path GetExecutablePath()
 {
     fs::path path;
