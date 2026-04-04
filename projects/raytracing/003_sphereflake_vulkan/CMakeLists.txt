@@ -14,6 +14,8 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.cpp
     ${GREX_PROJECTS_COMMON_DIR}/window.h
     ${GREX_PROJECTS_COMMON_DIR}/window.cpp
+    ${GREX_PROJECTS_COMMON_DIR}/Timer.h
+    ${GREX_PROJECTS_COMMON_DIR}/Timer.cpp
     ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/resource_limits_c.cpp
     ${GREX_THIRD_PARTY_DIR}/glslang/StandAlone/ResourceLimits.cpp
 )

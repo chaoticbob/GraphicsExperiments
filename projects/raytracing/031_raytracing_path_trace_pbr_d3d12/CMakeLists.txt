@@ -12,6 +12,8 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/bitmap.cpp
     ${GREX_PROJECTS_COMMON_DIR}/window.h
     ${GREX_PROJECTS_COMMON_DIR}/window.cpp
+    ${GREX_PROJECTS_COMMON_DIR}/Timer.h
+    ${GREX_PROJECTS_COMMON_DIR}/Timer.cpp
     ${GREX_PROJECTS_COMMON_DIR}/tri_mesh.h
     ${GREX_PROJECTS_COMMON_DIR}/tri_mesh.cpp
     ${IMGUI_D3D12_FILES}

@@ -209,6 +209,8 @@ void MouseDown(int x, int y, int buttons)
 // =============================================================================
 int main(int argc, char** argv)
 {
+    auto args = ParseCommandLineArgs(argc, argv);
+
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
     VulkanFeatures features   = {};
@@ -613,8 +615,14 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
+    window->ResetTimer();
+
     while (window->PollEvents())
     {
+        if (args.autoExitSeconds >= 0 && window->GetElapsedSeconds() >= args.autoExitSeconds)
+        {
+            break;
+        }
         window->ImGuiNewFrameVulkan();
 
         if (ImGui::Begin("Scene"))

@@ -89,6 +89,8 @@ void MouseMove(int x, int y, int buttons)
 // =============================================================================
 int main(int argc, char** argv)
 {
+    auto args = ParseCommandLineArgs(argc, argv);
+
     std::unique_ptr<VulkanRenderer> renderer = std::make_unique<VulkanRenderer>();
 
     VulkanFeatures features = {};
@@ -279,8 +281,14 @@ int main(int argc, char** argv)
     };
     clearValues[1].depthStencil = {1.0f, 0};
 
+    window->ResetTimer();
+
     while (window->PollEvents())
     {
+        if (args.autoExitSeconds >= 0 && window->GetElapsedSeconds() >= args.autoExitSeconds)
+        {
+            break;
+        }
         UINT bufferIndex = 0;
         if (AcquireNextImage(renderer.get(), &bufferIndex))
         {

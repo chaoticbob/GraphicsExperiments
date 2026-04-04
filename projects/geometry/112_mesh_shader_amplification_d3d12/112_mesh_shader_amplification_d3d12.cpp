@@ -46,6 +46,8 @@ void CreateGeometryBuffers(
 // =============================================================================
 int main(int argc, char** argv)
 {
+    auto args = ParseCommandLineArgs(argc, argv);
+
     std::unique_ptr<DxRenderer> renderer = std::make_unique<DxRenderer>();
 
     if (!InitDx(renderer.get(), gEnableDebug))
@@ -311,8 +313,14 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
+    window->ResetTimer();
+
     while (window->PollEvents())
     {
+        if (args.autoExitSeconds >= 0 && window->GetElapsedSeconds() >= args.autoExitSeconds)
+        {
+            break;
+        }
         UINT bufferIndex = renderer->Swapchain->GetCurrentBackBufferIndex();
 
         ComPtr<ID3D12Resource> swapchainBuffer;

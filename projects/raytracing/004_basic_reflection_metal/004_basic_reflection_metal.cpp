@@ -367,6 +367,8 @@ NS::SharedPtr<MTL::IntersectionFunctionTable> CreateIntersectionFunctionTable(
 // =============================================================================
 int main(int argc, char** argv)
 {
+    auto args = ParseCommandLineArgs(argc, argv);
+
     std::unique_ptr<MetalRenderer> renderer = std::make_unique<MetalRenderer>();
 
     if (!InitMetal(renderer.get(), gEnableDebug))
@@ -538,8 +540,14 @@ int main(int argc, char** argv)
     MTL::ClearColor clearColor(0.23f, 0.23f, 0.31f, 0);
     uint32_t        frameIndex = 0;
 
+    window->ResetTimer();
+
     while (window->PollEvents())
     {
+        if (args.autoExitSeconds >= 0 && window->GetElapsedSeconds() >= args.autoExitSeconds)
+        {
+            break;
+        }
         CA::MetalDrawable* pDrawable = renderer->pSwapchain->nextDrawable();
         assert(pDrawable != nullptr);
 

@@ -12,6 +12,8 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer_utils.mm
     ${GREX_PROJECTS_COMMON_DIR}/window.h
     ${GREX_PROJECTS_COMMON_DIR}/window.cpp
+    ${GREX_PROJECTS_COMMON_DIR}/Timer.h
+    ${GREX_PROJECTS_COMMON_DIR}/Timer.cpp
 )
 
 set_target_properties(002_basic_procedural_metal PROPERTIES FOLDER "raytracing")
