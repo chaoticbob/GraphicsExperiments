@@ -56,6 +56,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # ------------------------------------------------------------------------------
 # Compile flags and definitions
 # ------------------------------------------------------------------------------
+add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
+
 if (GREX_LINUX)
     add_definitions(-DGREX_LINUX)
 elseif (GREX_MACOS)
