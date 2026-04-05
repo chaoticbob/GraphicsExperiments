@@ -274,7 +274,7 @@ int main(int argc, char** argv)
 
     while (window->PollEvents())
     {
-        if (args.autoExitSeconds >= 0 && window->GetElapsedSeconds() >= args.autoExitSeconds)
+        if (args.screenshotFrame < 0 && args.autoExitSeconds >= 0 && window->GetElapsedSeconds() >= args.autoExitSeconds)
         {
             break;
         }
@@ -324,7 +324,21 @@ int main(int argc, char** argv)
         pRenderEncoder->endEncoding();
 
         pCommandBuffer->presentDrawable(pDrawable);
-        pCommandBuffer->commit();
+        if (!args.screenshotPath.empty() && (args.screenshotFrame < 0 || (int)frameIndex == args.screenshotFrame))
+        {
+            SaveMetalTextureAsPNG(renderer.get(), pCommandBuffer, pDrawable->texture(), args.screenshotPath);
+            args.screenshotPath.clear();
+            if (args.screenshotFrame >= 0)
+            {
+                break;
+            }
+        }
+        else
+        {
+            pCommandBuffer->commit();
+        }
+
+        ++frameIndex;
     }
 
     return 0;

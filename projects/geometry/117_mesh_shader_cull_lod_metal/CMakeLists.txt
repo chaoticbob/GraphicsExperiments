@@ -6,6 +6,8 @@ add_executable(
     ${PROJECT_NAME} 
     ${PROJECT_NAME}.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
+    ${GREX_PROJECTS_COMMON_DIR}/bitmap.h
+    ${GREX_PROJECTS_COMMON_DIR}/bitmap.cpp
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer.cpp
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer_utils.h

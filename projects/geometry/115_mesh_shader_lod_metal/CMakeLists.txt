@@ -6,6 +6,8 @@ add_executable(
     115_mesh_shader_lod_metal
     115_mesh_shader_lod_metal.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
+    ${GREX_PROJECTS_COMMON_DIR}/bitmap.h
+    ${GREX_PROJECTS_COMMON_DIR}/bitmap.cpp
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer.cpp
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer_utils.h
