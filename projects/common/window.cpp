@@ -785,6 +785,10 @@ GrexCommandLineArgs ParseCommandLineArgs(int argc, char** argv)
         else if (strcmp(argv[i], "--screenshot") == 0)
         {
             args.screenshotPath = argv[i + 1];
+            if (i + 2 < argc && isdigit(static_cast<unsigned char>(argv[i + 2][0])))
+            {
+                args.screenshotFrame = atoi(argv[i + 2]);
+            }
         }
     }
     return args;
