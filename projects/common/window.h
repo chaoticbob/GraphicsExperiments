@@ -149,7 +149,8 @@ private:
 
 struct GrexCommandLineArgs
 {
-    int autoExitSeconds = -1; // -1 means no auto-exit
+    int         autoExitSeconds = -1; // -1 means no auto-exit
+    std::string screenshotPath  = ""; // empty means no screenshot
 };
 
 GrexCommandLineArgs ParseCommandLineArgs(int argc, char** argv);

@@ -782,6 +782,10 @@ GrexCommandLineArgs ParseCommandLineArgs(int argc, char** argv)
         {
             args.autoExitSeconds = atoi(argv[i + 1]);
         }
+        else if (strcmp(argv[i], "--screenshot") == 0)
+        {
+            args.screenshotPath = argv[i + 1];
+        }
     }
     return args;
 }

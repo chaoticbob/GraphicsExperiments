@@ -1460,3 +1460,51 @@ uint32_t BitsPerElement(MTL::VertexFormat fmt)
             return 0;
     }
 }
+
+bool SaveMetalTextureAsPNG(MetalRenderer* pRenderer, MTL::CommandBuffer* pCommandBuffer, MTL::Texture* pTexture, const std::filesystem::path& absPath)
+{
+    const uint32_t width        = static_cast<uint32_t>(pTexture->width());
+    const uint32_t height       = static_cast<uint32_t>(pTexture->height());
+    const uint32_t bytesPerRow  = width * 4;
+    const size_t   bufferSize   = bytesPerRow * height;
+
+    // Create a shared buffer for CPU readback
+    NS::SharedPtr<MTL::Buffer> readbackBuffer = NS::TransferPtr(
+        pRenderer->Device->newBuffer(bufferSize, MTL::ResourceStorageModeShared));
+    if (!readbackBuffer)
+    {
+        GREX_LOG_ERROR("SaveMetalTextureAsPNG: failed to create readback buffer");
+        return false;
+    }
+
+    // Encode blit onto the existing command buffer (render + present already encoded)
+    MTL::BlitCommandEncoder* pBlit = pCommandBuffer->blitCommandEncoder();
+    pBlit->copyFromTexture(
+        pTexture,
+        0, 0,
+        MTL::Origin::Make(0, 0, 0),
+        MTL::Size::Make(width, height, 1),
+        readbackBuffer.get(),
+        0,
+        bytesPerRow,
+        bufferSize);
+    pBlit->endEncoding();
+
+    // Commit and wait — render, present, and blit all complete together
+    pCommandBuffer->commit();
+    pCommandBuffer->waitUntilCompleted();
+
+    // Texture is BGRA8 — swap B and R channels into an RGBA bitmap
+    BitmapRGBA8u bitmap(width, height);
+    const uint8_t* pSrc = static_cast<const uint8_t*>(readbackBuffer->contents());
+    uint8_t*       pDst = reinterpret_cast<uint8_t*>(bitmap.GetPixels());
+    for (uint32_t i = 0; i < width * height; ++i)
+    {
+        pDst[i * 4 + 0] = pSrc[i * 4 + 2]; // R <- B
+        pDst[i * 4 + 1] = pSrc[i * 4 + 1]; // G <- G
+        pDst[i * 4 + 2] = pSrc[i * 4 + 0]; // B <- R
+        pDst[i * 4 + 3] = pSrc[i * 4 + 3]; // A <- A
+    }
+
+    return BitmapRGBA8u::Save(absPath, &bitmap);
+}

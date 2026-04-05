@@ -1,9 +1,12 @@
 #pragma once
 
 #include "config.h"
+#include "bitmap.h"
 
 #include <Metal/Metal.hpp>
 #include <QuartzCore/CAMetalLayer.hpp>
+
+#include <filesystem>
 
 #define GREX_DEFAULT_RTV_FORMAT MTL::PixelFormatBGRA8Unorm
 #define GREX_DEFAULT_DSV_FORMAT MTL::PixelFormatDepth32Float
@@ -168,3 +171,7 @@ NS::Error* CreateGraphicsPipeline2(
     MetalPipelineRenderState* pPipeline,
     MetalDepthStencilState*   pDepthStencilState,
     uint32_t*                 pOptionalStrides);
+
+// Encodes a blit readback onto pCommandBuffer, commits it, waits, then saves pTexture as PNG.
+// pCommandBuffer must not yet be committed. presentDrawable should be scheduled before calling.
+bool SaveMetalTextureAsPNG(MetalRenderer* pRenderer, MTL::CommandBuffer* pCommandBuffer, MTL::Texture* pTexture, const std::filesystem::path& absPath);
