@@ -1046,7 +1046,15 @@ int main(int argc, char** argv)
         pRenderEncoder->endEncoding();
 
         pCommandBuffer->presentDrawable(pDrawable);
-        pCommandBuffer->commit();
+        if (!args.screenshotPath.empty())
+        {
+            SaveMetalTextureAsPNG(renderer.get(), pCommandBuffer, pDrawable->texture(), args.screenshotPath);
+            args.screenshotPath.clear();
+        }
+        else
+        {
+            pCommandBuffer->commit();
+        }
     }
 
     return 0;

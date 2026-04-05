@@ -6,6 +6,8 @@ add_executable(
     002_basic_procedural_metal
     002_basic_procedural_metal.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
+    ${GREX_PROJECTS_COMMON_DIR}/bitmap.h
+    ${GREX_PROJECTS_COMMON_DIR}/bitmap.cpp
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer.cpp
     ${GREX_PROJECTS_COMMON_DIR}/mtl_renderer_utils.h
@@ -23,6 +25,7 @@ target_include_directories(
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
            ${GREX_THIRD_PARTY_DIR}/glm
            ${GREX_THIRD_PARTY_DIR}/metal-cpp
+    ${GREX_THIRD_PARTY_DIR}/stb
 )
 
 FIND_LIBRARY(FOUNDATION_LIBRARY Foundation)

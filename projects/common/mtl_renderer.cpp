@@ -1494,7 +1494,8 @@ bool SaveMetalTextureAsPNG(MetalRenderer* pRenderer, MTL::CommandBuffer* pComman
     pCommandBuffer->commit();
     pCommandBuffer->waitUntilCompleted();
 
-    // Texture is BGRA8 — swap B and R channels into an RGBA bitmap
+    // Texture is BGRA8 — swap B and R channels into an RGBA bitmap.
+    // Force alpha to 255: swapchain alpha is shader-defined and often 0.
     BitmapRGBA8u bitmap(width, height);
     const uint8_t* pSrc = static_cast<const uint8_t*>(readbackBuffer->contents());
     uint8_t*       pDst = reinterpret_cast<uint8_t*>(bitmap.GetPixels());
@@ -1503,7 +1504,7 @@ bool SaveMetalTextureAsPNG(MetalRenderer* pRenderer, MTL::CommandBuffer* pComman
         pDst[i * 4 + 0] = pSrc[i * 4 + 2]; // R <- B
         pDst[i * 4 + 1] = pSrc[i * 4 + 1]; // G <- G
         pDst[i * 4 + 2] = pSrc[i * 4 + 0]; // B <- R
-        pDst[i * 4 + 3] = pSrc[i * 4 + 3]; // A <- A
+        pDst[i * 4 + 3] = 255;              // A <- 1 (swapchain alpha is meaningless)
     }
 
     return BitmapRGBA8u::Save(absPath, &bitmap);
