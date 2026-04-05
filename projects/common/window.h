@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include "bitmap.h"
+#include "Timer.h"
 
 #if defined(GREX_ENABLE_VULKAN) || defined(ENABLE_IMGUI_VULKAN)
 #include "vk_renderer.h"
@@ -89,6 +90,9 @@ public:
 
     bool IsKeyDown(int key);
 
+    void   ResetTimer();
+    double GetElapsedSeconds() const;
+
 #if defined(ENABLE_IMGUI_D3D12)
     bool InitImGuiForD3D12(DxRenderer* pRenderer);
     void ImGuiNewFrameD3D12();
@@ -127,6 +131,7 @@ private:
 
     int               mMouseButtons = 0;
     std::vector<bool> mKeyDownState;
+    Timer             mTimer;
 
     void WindowMoveEvent(int x, int y);
     void WindowResizeEvent(int width, int height);
@@ -141,6 +146,13 @@ private:
     VkDescriptorPool mDescriptorPool = VK_NULL_HANDLE;
 #endif // defined(ENABLE_IMGUI_VULKAN)
 };
+
+struct GrexCommandLineArgs
+{
+    int autoExitSeconds = -1; // -1 means no auto-exit
+};
+
+GrexCommandLineArgs ParseCommandLineArgs(int argc, char** argv);
 
 fs::path GetExecutablePath();
 uint32_t GetProcessId();

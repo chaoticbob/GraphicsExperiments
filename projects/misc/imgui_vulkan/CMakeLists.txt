@@ -8,6 +8,8 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/config.h
     ${GREX_PROJECTS_COMMON_DIR}/window.h
     ${GREX_PROJECTS_COMMON_DIR}/window.cpp
+    ${GREX_PROJECTS_COMMON_DIR}/Timer.h
+    ${GREX_PROJECTS_COMMON_DIR}/Timer.cpp
     ${IMGUI_VULKAN_FILES}
 )
 

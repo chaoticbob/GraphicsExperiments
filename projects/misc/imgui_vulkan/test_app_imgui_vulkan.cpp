@@ -70,6 +70,8 @@ void KeyUp(int key)
 // =============================================================================
 int main(int argc, char** argv)
 {
+    auto args = ParseCommandLineArgs(argc, argv);
+
     // *************************************************************************
     // Window
     // *************************************************************************
@@ -89,8 +91,14 @@ int main(int argc, char** argv)
     window->AddKeyDownCallbacks(KeyDown);
     window->AddKeyUpCallbacks(KeyUp);
 
+    window->ResetTimer();
+
     while (window->PollEvents())
     {
+        if (args.autoExitSeconds >= 0 && window->GetElapsedSeconds() >= args.autoExitSeconds)
+        {
+            break;
+        }
     }
 
     return 0;
