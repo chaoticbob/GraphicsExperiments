@@ -157,6 +157,7 @@ struct GrexCommandLineArgs
 GrexCommandLineArgs ParseCommandLineArgs(int argc, char** argv);
 
 fs::path GetExecutablePath();
+fs::path GetExecutableDir();
 uint32_t GetProcessId();
 
 std::vector<char> LoadFile(const fs::path& absPath);
