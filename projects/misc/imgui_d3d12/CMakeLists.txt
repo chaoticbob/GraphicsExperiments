@@ -10,6 +10,8 @@ add_executable(
     ${GREX_PROJECTS_COMMON_DIR}/window.cpp
     ${GREX_PROJECTS_COMMON_DIR}/Timer.h
     ${GREX_PROJECTS_COMMON_DIR}/Timer.cpp
+    ${GREX_PROJECTS_COMMON_DIR}/bitmap.h
+    ${GREX_PROJECTS_COMMON_DIR}/bitmap.cpp
     ${GREX_PROJECTS_COMMON_DIR}/dx_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/dx_renderer.cpp
     ${IMGUI_D3D12_FILES}
@@ -26,6 +28,7 @@ target_include_directories(
     test_app_imgui_d3d12
     PUBLIC  ${GREX_PROJECTS_COMMON_DIR}
             ${IMGUI_INC_DIR}
+            ${GREX_THIRD_PARTY_DIR}/stb
 )
 
 target_link_libraries(

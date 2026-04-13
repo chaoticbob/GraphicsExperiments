@@ -1,4 +1,5 @@
 #include "dx_renderer.h"
+#include "bitmap.h"
 
 bool     IsCompressed(DXGI_FORMAT fmt);
 bool     IsVideo(DXGI_FORMAT fmt);
@@ -1075,6 +1076,111 @@ HRESULT CreateTexture(
     }
 
     return S_OK;
+}
+
+bool SaveDxTextureAsPNG(DxRenderer* pRenderer, ID3D12Resource* pTexture, const std::filesystem::path& absPath)
+{
+    D3D12_RESOURCE_DESC texDesc = pTexture->GetDesc();
+    const uint32_t      width   = static_cast<uint32_t>(texDesc.Width);
+    const uint32_t      height  = static_cast<uint32_t>(texDesc.Height);
+
+    // Get copyable footprint to determine the GPU-aligned row pitch
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint  = {};
+    UINT64                             totalBytes = 0;
+    pRenderer->Device->GetCopyableFootprints(&texDesc, 0, 1, 0, &footprint, nullptr, nullptr, &totalBytes);
+
+    // Create CPU-readable readback buffer
+    ComPtr<ID3D12Resource> readbackBuffer;
+    HRESULT                hr = CreateBuffer(pRenderer, static_cast<size_t>(totalBytes), D3D12_HEAP_TYPE_READBACK, &readbackBuffer);
+    if (FAILED(hr))
+    {
+        GREX_LOG_ERROR("SaveDxTextureAsPNG: failed to create readback buffer");
+        return false;
+    }
+
+    // Create a temporary command allocator and command list
+    ComPtr<ID3D12CommandAllocator>    cmdAlloc;
+    ComPtr<ID3D12GraphicsCommandList> cmdList;
+    hr = pRenderer->Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAlloc));
+    if (FAILED(hr))
+    {
+        GREX_LOG_ERROR("SaveDxTextureAsPNG: failed to create command allocator");
+        return false;
+    }
+    hr = pRenderer->Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, cmdAlloc.Get(), nullptr, IID_PPV_ARGS(&cmdList));
+    if (FAILED(hr))
+    {
+        GREX_LOG_ERROR("SaveDxTextureAsPNG: failed to create command list");
+        return false;
+    }
+
+    // Transition: PRESENT -> COPY_SOURCE
+    D3D12_RESOURCE_BARRIER barrierToCopy         = {};
+    barrierToCopy.Type                            = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrierToCopy.Transition.pResource            = pTexture;
+    barrierToCopy.Transition.Subresource          = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrierToCopy.Transition.StateBefore          = D3D12_RESOURCE_STATE_PRESENT;
+    barrierToCopy.Transition.StateAfter           = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    cmdList->ResourceBarrier(1, &barrierToCopy);
+
+    // Copy texture to readback buffer
+    D3D12_TEXTURE_COPY_LOCATION dst = {};
+    dst.pResource                   = readbackBuffer.Get();
+    dst.Type                        = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    dst.PlacedFootprint             = footprint;
+
+    D3D12_TEXTURE_COPY_LOCATION src = {};
+    src.pResource                   = pTexture;
+    src.Type                        = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    src.SubresourceIndex            = 0;
+
+    cmdList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+
+    // Transition: COPY_SOURCE -> PRESENT
+    D3D12_RESOURCE_BARRIER barrierToPresent        = {};
+    barrierToPresent.Type                           = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrierToPresent.Transition.pResource           = pTexture;
+    barrierToPresent.Transition.Subresource         = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrierToPresent.Transition.StateBefore         = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    barrierToPresent.Transition.StateAfter          = D3D12_RESOURCE_STATE_PRESENT;
+    cmdList->ResourceBarrier(1, &barrierToPresent);
+
+    cmdList->Close();
+
+    ID3D12CommandList* pList = cmdList.Get();
+    pRenderer->Queue->ExecuteCommandLists(1, &pList);
+
+    if (!WaitForGpu(pRenderer))
+    {
+        GREX_LOG_ERROR("SaveDxTextureAsPNG: WaitForGpu failed");
+        return false;
+    }
+
+    // Map and convert BGRA -> RGBA, force alpha = 255
+    void* pMapped = nullptr;
+    readbackBuffer->Map(0, nullptr, &pMapped);
+
+    BitmapRGBA8u   bitmap(width, height);
+    uint8_t*       pDst     = reinterpret_cast<uint8_t*>(bitmap.GetPixels());
+    const uint8_t* pSrc     = static_cast<const uint8_t*>(pMapped);
+    const uint32_t rowPitch = footprint.Footprint.RowPitch;
+
+    for (uint32_t y = 0; y < height; ++y)
+    {
+        const uint8_t* pSrcRow = pSrc + y * rowPitch;
+        uint8_t*       pDstRow = pDst + y * width * 4;
+        for (uint32_t x = 0; x < width; ++x)
+        {
+            pDstRow[x * 4 + 0] = pSrcRow[x * 4 + 2]; // R <- B
+            pDstRow[x * 4 + 1] = pSrcRow[x * 4 + 1]; // G <- G
+            pDstRow[x * 4 + 2] = pSrcRow[x * 4 + 0]; // B <- R
+            pDstRow[x * 4 + 3] = 255;                 // A <- 1 (swapchain alpha is meaningless)
+        }
+    }
+
+    readbackBuffer->Unmap(0, nullptr);
+
+    return BitmapRGBA8u::Save(absPath, &bitmap);
 }
 
 HRESULT CreateTexture(

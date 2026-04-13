@@ -222,3 +222,5 @@ HRESULT CompileHLSL(
     std::string*       pErrorMsg);
 
 HRESULT CopyDataToBuffer(size_t dataSize, void* pData, ID3D12Resource* pBuffer);
+
+bool SaveDxTextureAsPNG(DxRenderer* pRenderer, ID3D12Resource* pTexture, const std::filesystem::path& absPath);

@@ -6,6 +6,8 @@ add_executable(
     000_raygen_uv_d3d12
     000_raygen_uv_d3d12.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
+    ${GREX_PROJECTS_COMMON_DIR}/bitmap.h
+    ${GREX_PROJECTS_COMMON_DIR}/bitmap.cpp
     ${GREX_PROJECTS_COMMON_DIR}/dx_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/dx_renderer.cpp
     ${GREX_PROJECTS_COMMON_DIR}/window.h
@@ -20,6 +22,7 @@ target_include_directories(
     000_raygen_uv_d3d12
     PUBLIC ${GREX_PROJECTS_COMMON_DIR}
            ${GREX_THIRD_PARTY_DIR}/glm
+           ${GREX_THIRD_PARTY_DIR}/stb
 )
 
 target_link_libraries(
