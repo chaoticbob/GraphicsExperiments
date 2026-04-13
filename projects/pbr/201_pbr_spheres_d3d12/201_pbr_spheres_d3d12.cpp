@@ -357,11 +357,13 @@ int main(int argc, char** argv)
     // *************************************************************************
     // Main loop
     // *************************************************************************
+    uint32_t frameIndex = 0;
+
     window->ResetTimer();
 
     while (window->PollEvents())
     {
-        if (args.autoExitSeconds >= 0 && window->GetElapsedSeconds() >= args.autoExitSeconds)
+        if (args.screenshotFrame < 0 && args.autoExitSeconds >= 0 && window->GetElapsedSeconds() >= args.autoExitSeconds)
         {
             break;
         }
@@ -563,6 +565,15 @@ int main(int argc, char** argv)
             assert(false && "WaitForGpu failed");
             break;
         }
+        if (!args.screenshotPath.empty() && (args.screenshotFrame < 0 || (int)frameIndex == args.screenshotFrame))
+        {
+            SaveDxTextureAsPNG(renderer.get(), swapchainBuffer.Get(), args.screenshotPath);
+            args.screenshotPath.clear();
+            if (args.screenshotFrame >= 0)
+            {
+                break;
+            }
+        }
 
         // Present
         if (!SwapchainPresent(renderer.get()))
@@ -570,6 +581,8 @@ int main(int argc, char** argv)
             assert(false && "SwapchainPresent failed");
             break;
         }
+
+        ++frameIndex;
     }
 
     return 0;

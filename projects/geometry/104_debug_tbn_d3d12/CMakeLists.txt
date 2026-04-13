@@ -6,6 +6,8 @@ add_executable(
     104_debug_tbn_d3d12
     104_debug_tbn_d3d12.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
+    ${GREX_PROJECTS_COMMON_DIR}/bitmap.h
+    ${GREX_PROJECTS_COMMON_DIR}/bitmap.cpp
     ${GREX_PROJECTS_COMMON_DIR}/dx_renderer.h
     ${GREX_PROJECTS_COMMON_DIR}/dx_renderer.cpp
     ${GREX_PROJECTS_COMMON_DIR}/window.h
