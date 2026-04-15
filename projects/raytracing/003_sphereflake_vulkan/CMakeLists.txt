@@ -8,6 +8,8 @@ add_executable(
     ${TARGET_NAME}
     ${TARGET_NAME}.cpp
     ${GREX_PROJECTS_COMMON_DIR}/config.h
+    ${GREX_PROJECTS_COMMON_DIR}/bitmap.h
+    ${GREX_PROJECTS_COMMON_DIR}/bitmap.cpp
     ${GREX_PROJECTS_COMMON_DIR}/sphereflake.h
     ${GREX_PROJECTS_COMMON_DIR}/sphereflake.cpp
     ${GREX_PROJECTS_COMMON_DIR}/vk_renderer.h
@@ -34,6 +36,7 @@ target_include_directories(
            ${VULKAN_INCLUDE_DIR}
            ${GREX_THIRD_PARTY_DIR}/VulkanMemoryAllocator/include
            ${GREX_THIRD_PARTY_DIR}/glm
+           ${GREX_THIRD_PARTY_DIR}/stb
 )
 
 target_link_libraries(

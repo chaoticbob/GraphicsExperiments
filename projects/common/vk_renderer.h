@@ -1,11 +1,13 @@
 #pragma once
 
 #include "config.h"
+#include "bitmap.h"
 
 #include <vulkan/vulkan.h>
 #include "vk_mem_alloc.h"
 
 #include <dxcapi.h>
+#include <filesystem>
 
 #define GREX_ALL_SUBRESOURCES 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS
 
@@ -583,3 +585,10 @@ extern PFN_vkCmdSetDescriptorBufferOffsetsEXT         fn_vkCmdSetDescriptorBuffe
 extern PFN_vkCmdDrawMeshTasksEXT                      fn_vkCmdDrawMeshTasksEXT;
 extern PFN_vkCmdPushDescriptorSetKHR                  fn_vkCmdPushDescriptorSetKHR;
 extern PFN_vkCmdDrawMeshTasksNV                       fn_vkCmdDrawMeshTasksNV;
+
+bool SaveVulkanImageAsPNG(
+    VulkanRenderer*              pRenderer,
+    VkImage                      image,
+    uint32_t                     width,
+    uint32_t                     height,
+    const std::filesystem::path& absPath);

@@ -4149,3 +4149,111 @@ uint32_t BitsPerPixel(VkFormat fmt)
             return 0;
     }
 }
+
+bool SaveVulkanImageAsPNG(
+    VulkanRenderer*              pRenderer,
+    VkImage                      image,
+    uint32_t                     width,
+    uint32_t                     height,
+    const std::filesystem::path& absPath)
+{
+    const size_t bufferSize = width * height * 4;
+
+    // Create a CPU-readable staging buffer
+    VulkanBuffer readbackBuffer = {};
+    VkResult     vkres          = CreateBuffer(
+        pRenderer,
+        bufferSize,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VMA_MEMORY_USAGE_GPU_TO_CPU,
+        0,
+        &readbackBuffer);
+    if (vkres != VK_SUCCESS)
+    {
+        return false;
+    }
+
+    // Create a transient command buffer
+    CommandObjects cmdBuf = {};
+    vkres                 = CreateCommandBuffer(pRenderer, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, &cmdBuf);
+    if (vkres != VK_SUCCESS)
+    {
+        DestroyBuffer(pRenderer, &readbackBuffer);
+        return false;
+    }
+
+    VkCommandBufferBeginInfo vkbi = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    vkbi.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkres                         = vkBeginCommandBuffer(cmdBuf.CommandBuffer, &vkbi);
+    if (vkres != VK_SUCCESS)
+    {
+        DestroyCommandBuffer(pRenderer, &cmdBuf);
+        DestroyBuffer(pRenderer, &readbackBuffer);
+        return false;
+    }
+
+    // Transition: PRESENT -> TRANSFER_SRC
+    CmdTransitionImageLayout(
+        cmdBuf.CommandBuffer,
+        image,
+        GREX_ALL_SUBRESOURCES,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        RESOURCE_STATE_PRESENT,
+        RESOURCE_STATE_TRANSFER_SRC);
+
+    // Copy image to staging buffer
+    VkBufferImageCopy region                    = {};
+    region.bufferOffset                         = 0;
+    region.bufferRowLength                      = 0;
+    region.bufferImageHeight                    = 0;
+    region.imageSubresource.aspectMask          = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel            = 0;
+    region.imageSubresource.baseArrayLayer      = 0;
+    region.imageSubresource.layerCount          = 1;
+    region.imageOffset                          = {0, 0, 0};
+    region.imageExtent                          = {width, height, 1};
+
+    vkCmdCopyImageToBuffer(
+        cmdBuf.CommandBuffer,
+        image,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        readbackBuffer.Buffer,
+        1,
+        &region);
+
+    // Transition: TRANSFER_SRC -> PRESENT
+    CmdTransitionImageLayout(
+        cmdBuf.CommandBuffer,
+        image,
+        GREX_ALL_SUBRESOURCES,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        RESOURCE_STATE_TRANSFER_SRC,
+        RESOURCE_STATE_PRESENT);
+
+    vkEndCommandBuffer(cmdBuf.CommandBuffer);
+    ExecuteCommandBuffer(pRenderer, &cmdBuf);
+    vkQueueWaitIdle(pRenderer->Queue);
+    DestroyCommandBuffer(pRenderer, &cmdBuf);
+
+    // Map the buffer and convert BGRA -> RGBA (swapchain is B8G8R8A8_UNORM)
+    void* pMapped = nullptr;
+    vmaMapMemory(pRenderer->Allocator, readbackBuffer.Allocation, &pMapped);
+
+    BitmapRGBA8u    bitmap(width, height);
+    const uint8_t*  pSrc = static_cast<const uint8_t*>(pMapped);
+    uint8_t*        pDst = reinterpret_cast<uint8_t*>(bitmap.GetPixels());
+
+    for (uint32_t i = 0; i < width * height; ++i)
+    {
+        pDst[i * 4 + 0] = pSrc[i * 4 + 2]; // R <- B
+        pDst[i * 4 + 1] = pSrc[i * 4 + 1]; // G <- G
+        pDst[i * 4 + 2] = pSrc[i * 4 + 0]; // B <- R
+        pDst[i * 4 + 3] = 255;              // A <- 1 (force opaque)
+    }
+
+    vmaUnmapMemory(pRenderer->Allocator, readbackBuffer.Allocation);
+
+    bool ok = BitmapRGBA8u::Save(absPath, &bitmap);
+    DestroyBuffer(pRenderer, &readbackBuffer);
+    return ok;
+}
